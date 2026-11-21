@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setSearch } from "../url";
 import { Filters } from "./Filters";
+import { ScopeBar } from "./ScopeBar";
 import { renderApp, renderRouter } from "../testing";
 import context from "../__fixtures__/context";
 import errors from "../__fixtures__/errors";
@@ -89,24 +90,27 @@ describe("Filters", () => {
       screen.queryByRole("group", { name: "Source" }) && "source", screen.queryByRole("checkbox", { name: "Include automated sessions" }) && "automated",
     ].filter(Boolean);
     const order = () => [...document.querySelectorAll(".filters > *")].map(e => (e.id === "fRange" ? "range" : e.id === "fSource" ? "source"
-      : e.classList.contains("filters-project") ? "project" : e.classList.contains("chk") ? "automated" : "")).filter(Boolean);
+      : e.classList.contains("filters-project") ? "project" : e.classList.contains("filters-auto") ? "automated" : e.classList.contains("filters-brief") ? "brief" : "")).filter(Boolean);
+    const ALL = ["project", "range", "source", "automated"];
 
+    // The scope bar picks them from the path (and Activity's view), whatever the page has loaded.
     it.each([
-      ["Activity's Overview, Cost, Context and the Project page", "/usage", <Filters key="a" projects={["foo"]} automated />, ["project", "range", "source", "automated"]],
-      ["Activity's Judgments view, which judges Claude Code sessions only", "/usage?view=judgments", <Filters key="b" projects={["foo"]} automated source={false} />, ["project", "range", "automated"]],
-      ["Errors, which is never filtered by automated sessions", "/errors", <Filters key="c" projects={["foo"]} />, ["project", "range", "source"]],
-      ["Limits, which is per account and ranges one section", "/limits", <Filters key="d" projects={[]} project={false} range={false} />, ["source"]],
-      ["Live, which has no range", "/live", <Filters key="e" projects={["foo"]} automated range={false} />, ["project", "source", "automated"]],
-    ])("shows the filters of %s, in the shared order", (_page, url, ui, filters) => {
+      ["Activity's Overview", "/usage", ALL], ["Cost", "/cost", ALL], ["Context", "/context", ALL], ["the Project page", "/project?project=foo", ALL],
+      ["Activity's Judgments view, which judges Claude Code sessions only", "/usage?view=judgments", ["project", "range", "automated"]],
+      ["Activity with the judgments of Codex asked for, which shows Overview", "/usage?view=judgments&source=codex", ALL],
+      ["Errors, which is never filtered by automated sessions", "/errors", ["project", "range", "source"]],
+      ["Limits, which is per account and ranges one section", "/limits", ["source"]],
+      ["Live, which has no range", "/live", ["project", "source", "automated"]],
+    ])("shows the filters of %s, in the shared order", (_page, url, filters) => {
       history.replaceState(null, "", url);
-      renderApp(ui);
+      renderApp(<ScopeBar />);
       expect(shown()).toEqual(filters);
       expect(order()).toEqual(filters);
     });
 
     it("keeps a hidden filter's value in the URL for the other pages, and never writes it", async () => {
       history.replaceState(null, "", "/usage?range=30&source=claude&view=judgments");
-      renderApp(<Filters projects={["foo"]} automated source={false} />);
+      renderApp(<ScopeBar />);
       expect(screen.queryByRole("button", { name: "Codex" })).toBeNull();
       await userEvent.click(screen.getByRole("button", { name: "7d" }));
       expect(location.search).toBe("?range=7&source=claude&view=judgments");
@@ -132,18 +136,19 @@ describe("Filters", () => {
   });
 });
 
-describe("Filters project link and clear button", () => {
-  const link = () => screen.queryByRole("link", { name: "foo project page" });
+describe("Filters Brief link and clear button", () => {
+  const link = () => screen.queryByRole("link", { name: "Brief, foo project page" });
   const clear = () => screen.queryByRole("button", { name: "Clear project filter" });
   afterEach(() => { vi.unstubAllGlobals(); });
 
-  it("links the project to its page with the range and source kept", async () => {
+  it("links the project to its page with the range and source kept, after the other filters", async () => {
     history.replaceState(null, "", "/errors?project=foo&range=7&source=codex&session=s1");
-    renderApp(<Filters projects={["foo"]} />);
+    renderApp(<Filters projects={["foo"]} automated />);
     const a = link()!;
     expect(a.getAttribute("href")).toBe("/project?project=foo&range=7&source=codex");
-    expect(a.textContent).toBe("Project page →");
-    expect(a.className).toContain("filters-projectpage");
+    expect(a.textContent).toBe("Brief→");
+    expect(a.className).toContain("filters-brief");
+    expect(screen.getByRole("group", { name: "Filters" }).lastElementChild).toBe(a);
     expect(clear()!.getAttribute("title")).toBe("Show all projects");
     await userEvent.click(a);
     await waitFor(() => expect(location.pathname).toBe("/project"));
@@ -196,7 +201,7 @@ describe("Filters project link and clear button", () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(bodies[new URL(url, "http://x").pathname] ?? usage) } as Response)));
     history.replaceState(null, "", "/cost?project=foo&range=30&source=claude");
     renderRouter();
-    const a = await screen.findByRole("link", { name: "foo project page" });
+    const a = await screen.findByRole("link", { name: "Brief, foo project page" });
     expect(document.querySelectorAll('a[href^="/project"]').length).toBe(1);
     expect(a.hasAttribute("title")).toBe(false);
     expect(a.getAttribute("aria-current")).toBeNull();

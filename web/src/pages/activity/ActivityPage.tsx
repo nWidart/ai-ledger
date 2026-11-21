@@ -2,7 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { usageUrl, viewOf, type SessionSort, type Span, type Totals, type UsagePayload, type View } from "../../api";
 import { setOrder } from "../../colors";
 import { motion, useCountUp } from "../../components/chart";
-import { agentName, Filters, viewName } from "../../components/Filters";
+import { agentName, viewName } from "../../components/Filters";
+import { useScopeProjects } from "../../components/ScopeBar";
 import { InsightCard, type Insight, type InsightItem } from "../../components/InsightCard";
 import { ProjectDot } from "../../components/ProjectDot";
 import type { SortBy } from "../../components/Sort";
@@ -160,6 +161,7 @@ function Overview({ views }: { views: ReactNode }) {
   const want: View = viewOf(h), url = usageUrl(want), viewKey = url;
   const { data, error, loading, previous, retry } = useApi(queries.usage(want), { keepPrevious: true });
   useEffect(() => { if (data) setOrder(data.project_order); }, [data]);
+  useScopeProjects(data?.projects ?? []);
 
   // Page-only state: flaky tools first resets when the view changes; the sorts stay.
   const sel = selectionOf(search), sess = sessOf(search, sel), tab: WorkTab = search.tab ?? "sessions";
@@ -242,7 +244,6 @@ function Overview({ views }: { views: ReactNode }) {
         <header className="top sect" id="overview">
           <div>{d ? <Lede d={d} before={before} /> : <h1 className="lede" id="lede" tabIndex={-1}>Activity could not be loaded.</h1>}
             {d && has && <Interrupted d={d} />}</div>
-          <div className="top-side"><Filters projects={d?.projects ?? []} automated /></div>
         </header>
       </>}
       {error && <div className="banner" role="alert"><b>Could not load {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(d)}.` : ""}</b>{" "}

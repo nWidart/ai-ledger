@@ -3,7 +3,6 @@
 /* Briefing: the period's answer as the page heading, its comparison and trend, then filters */
 .pg-cost .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 32px; align-items: end; margin-bottom: 20px; }
 .pg-cost .top-side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 0; max-width: 600px; }
-.pg-cost .top-side .filters { justify-content: flex-end; }
 .pg-cost .lede { margin: 0; max-width: 24ch; font-size: clamp(1.625rem, 4.2vw, 2.625rem); line-height: 1.12;
   font-weight: 400; letter-spacing: -.025em; text-wrap: balance; color: var(--text-secondary); }
 .pg-cost .lede:focus { outline: none; }
@@ -20,14 +19,13 @@
 /* Stack before the filters squeeze the heading into a narrow column. */
 @media (max-width: 65em) {
   .pg-cost .top { grid-template-columns: minmax(0, 1fr); align-items: start; }
-  .pg-cost .top-side { max-width: none; align-items: stretch; flex-direction: column-reverse; }
-  .pg-cost .top-side .filters { justify-content: flex-start; }
+  .pg-cost .top-side { max-width: none; align-items: stretch; }
 }
 .pg-cost h2 { font-size: 1rem; font-weight: 600; margin: 0; letter-spacing: -.005em; }
 .pg-cost .pending { margin: -12px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: .8125rem; }
 .pg-cost .pending:empty { visibility: hidden; }
-.pg-cost.loading > :not(.top):not(.secidx) { opacity: .55; }
-@media (prefers-reduced-motion: no-preference) { .pg-cost > :not(.top):not(.secidx) { transition: opacity .2s; } }
+.pg-cost.loading > :not(.top) { opacity: .55; }
+@media (prefers-reduced-motion: no-preference) { .pg-cost > :not(.top) { transition: opacity .2s; } }
 .pg-cost .banner code { overflow-wrap: anywhere; }
 
 /* Plan gauge: the month so far (solid) and its pace (light) on one track, a tick at the plan's monthly price, the multiple as a badge. */

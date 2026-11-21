@@ -80,6 +80,25 @@ describe("plan gauge", () => {
     expect(screen.queryByRole("figure", { name: /^This month/ })).toBeNull();
     expect(how()).not.toMatch(/pace/);
   });
+
+  it("stays in the header, beside the heading, while the filters sit in the scope bar", async () => {
+    await show({ ...usage, plans: [max], run_rate: rate(840) });
+    const header = document.querySelector("main header.top")!;
+    expect(header.contains(gauge())).toBe(true);
+    expect(header.querySelector(".filters")).toBeNull();
+    expect(screen.getByRole("group", { name: "Filters" }).closest(".scopebar")).toBeTruthy();
+  });
+});
+
+describe("sections", () => {
+  it("has no sticky section index: every section keeps its heading", async () => {
+    await show(usage, []);
+    expect(screen.queryByRole("navigation", { name: "Page sections" })).toBeNull();
+    expect(document.querySelector(".secidx, .jump")).toBeNull();
+    const headings = screen.getAllByRole("heading", { level: 2 }).map(h => h.textContent);
+    for (const h of ["Models and effort"]) expect(headings).toContain(h);
+    for (const id of ["spend", "d-tokens", "d-top"]) expect(document.getElementById(id)?.querySelector("h2")).toBeTruthy();
+  });
 });
 
 describe("cost figures", () => {
@@ -125,7 +144,7 @@ describe("CostPage", () => {
     const codex: UsagePayload = { ...usage, source: "codex", previous: null, totals: { ...usage.totals, cost: 2 } };
     mockApi({ "/api/usage": q => (q.get("source") === "codex" ? codex : usage), "/api/sessions": () => sessions, "/api/session": () => session });
     at();
-    renderApp(<CostPage />);
+    renderPage(<CostPage />);
     await loaded();
     await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
     expect(location.search).toBe("?range=30&source=codex");

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { viewOf } from "../../api";
 import { setOrder } from "../../colors";
-import { Filters } from "../../components/Filters";
+import { useScopeProjects } from "../../components/ScopeBar";
 import { ProjectName } from "../../components/ProjectDot";
 import { useLanding } from "../../components/useLanding";
 import { queries } from "../../queries";
@@ -47,13 +47,12 @@ export function ProjectPage() {
   // a snapshot to measure from, and the other requests their own figures or failures.
   const idle = !!d && d.totals.requests === 0;
   // The picker lists the projects of any payload that came, so one failed request does not empty it.
-  const projects = d?.projects ?? limits.data?.projects ?? insights.data?.projects ?? [];
+  useScopeProjects(d?.projects ?? limits.data?.projects ?? insights.data?.projects ?? []);
 
   return (
     <main id="content" className="wrap pg-project">
       <header className="top sect" id="overview">
         <h1 className="lede" id="lede" tabIndex={-1}><ProjectName project={project} /></h1>
-        <div className="top-side"><Filters projects={projects} automated /></div>
       </header>
       {idle && <p className="empty none" role="status">No use of {project} in this view. Pick a longer range, another source or include automated sessions.</p>}
       <div className="cols">

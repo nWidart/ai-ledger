@@ -1,12 +1,14 @@
 .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; max-width: 100%; }
-/* The picker with its Project page link and clear button, kept on one line: on a narrow row the picker shrinks (the
-   project name truncates in the field), the link and the button never do. */
+/* The picker with its clear button, kept on one line: on a narrow row the picker shrinks (the project name truncates in the
+   field), the button never does. The automated toggle keeps its hint beside it. */
 .filters-project { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
 .filters-project .pick-project { flex: 0 1 15rem; }
-.filters-projectpage { flex: none; display: inline-flex; align-items: center; white-space: nowrap; font-size: .8125rem; font-weight: 500;
+.filters-auto { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+/* Brief: the link to the selected project's page. */
+.filters-brief { flex: none; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-size: .8125rem; font-weight: 500;
   text-decoration: none; color: var(--accent-ink); padding: 6px 8px; border-radius: 8px; }
-.filters-projectpage:hover { background: var(--accent-soft); }
-.filters-projectpage:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.filters-brief:hover { background: var(--accent-soft); }
+.filters-brief:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .filters-clear { flex: none; display: inline-flex; align-items: center; justify-content: center; border-color: transparent; background: none;
   padding: 6px 8px; font-size: .75rem; color: var(--text-secondary); }
 .filters-clear:hover { background: var(--surface-2); color: var(--text-primary); }
@@ -16,5 +18,5 @@
   .filters select, .filters .pick-field { padding-top: 5px; padding-bottom: 5px; font-size: .8125rem; }
   .filters .long { display: none; }
   .filters label.chk { font-size: .78125rem; }
-  .filters-projectpage, .filters-clear { min-height: 32px; min-width: 32px; padding-top: 0; padding-bottom: 0; }
+  .filters-brief, .filters-clear { min-height: 32px; min-width: 32px; padding-top: 0; padding-bottom: 0; }
 }

@@ -1,12 +1,12 @@
 import { Fragment, useEffect, useId, useState, type ReactNode } from "react";
 import { insightsUrl, viewOf, type FrictionFamily, type FrictionWeight, type InsightSession, type InsightsPayload, type View } from "../../../api";
-import { Drawer } from "../../../components/Drawer";
+import { Drawer, jumpTo } from "../../../components/Drawer";
 import { label, outcomeLabel, outcomeTone } from "../../../components/facets";
-import { Filters, viewName } from "../../../components/Filters";
+import { viewName } from "../../../components/Filters";
+import { useScopeProjects } from "../../../components/ScopeBar";
 import { HowMeasured } from "../../../components/HowMeasured";
 import { Ledger, LedgerRow } from "../../../components/Ledger";
 import { ProjectName } from "../../../components/ProjectDot";
-import { jumpTo, SectionIndex } from "../../../components/SectionIndex";
 import { sessionLink, sessionSheetHref, sessName, shortId } from "../../../components/sheets/session";
 import { PageSkeleton } from "../../../components/PageSkeleton";
 import { useLanding } from "../../../components/useLanding";
@@ -361,6 +361,7 @@ export function Judgments({ views }: { views: ReactNode }) {
   // The URL's source stays for the other pages and for this view's links; the request names none.
   const here = viewOf(h), want: View = { ...here, source: "" };
   const url = insightsUrl(want), { data: d, error, loading, retry } = useApi(queries.insights(want), { keepPrevious: true });
+  useScopeProjects(d?.projects ?? []);
   const [shown, setShown] = useState(want);
   // Held here, not in Sessions or Friction: they unmount for a view with no analysed session, and the choices last the page visit.
   const [sort, setSort] = useState<SortId>("newest"), [weight, setWeight] = useState<Weight>("cost");
@@ -378,8 +379,6 @@ export function Judgments({ views }: { views: ReactNode }) {
       {first ? <PageSkeleton title="Loading judgments…" /> : <>
         <header className="top sect" id="overview">
           <div>{d ? <Lede d={d} /> : <h1 className="lede" id="lede" tabIndex={-1}>Judgments could not be loaded.</h1>}</div>
-          {/* No source filter: it would change nothing here. */}
-          <div className="top-side"><Filters projects={d?.projects ?? []} automated source={false} /></div>
         </header>
       </>}
       {error && <div className="banner" role="alert"><b>Could not load judgments for {judgedName(want)} ({error.message}).{d ? ` Still showing ${judgedName(shown)}.` : ""}</b>{" "}
@@ -388,16 +387,6 @@ export function Judgments({ views }: { views: ReactNode }) {
       {d && <>
         <Sub d={d} view={shown} />
         <Coverage d={d} drawer={!!figures} />
-        {(figures || howto || counted) && <SectionIndex groups={[
-          // "Summary", not "Overview": that names Activity's other view.
-          figures ? [{ id: "overview", label: "Summary" }, { id: "outcomes", label: "Outcomes" }, { id: "friction", label: "Friction" },
-            ...(d.trend.length > 1 ? [{ id: "trend", label: "Trend" }] : []),
-            { id: "satisfaction", label: "Satisfaction", long: "Satisfaction and helpfulness" }, { id: "log", label: "Sessions", long: "Analysed sessions" }]
-            : [{ id: "overview", label: "Summary" }],
-          [...(figures ? [{ id: "d-goals", label: "Goals" }, { id: "d-types", label: "Session types" }] : []),
-            ...(counted ? [{ id: "d-figures", label: "Session figures" }] : []), ...(figures ? [{ id: "d-coverage", label: "Coverage" }] : []),
-            ...(howto ? [{ id: "d-how", label: "How this works" }] : [])],
-        ]} />}
         {figures && <>
           <Vitals d={d} />
           <div className="grid2">

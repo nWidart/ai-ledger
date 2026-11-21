@@ -168,7 +168,7 @@ describe("router", () => {
       act(() => { location.hash = "#project=foo"; });
       await waitFor(() => expect(location.search).toBe("?project=foo"));
       expect(location.hash).toBe("");
-      expect(await screen.findByRole("link", { name: "foo project page" })).toBeTruthy();
+      expect(await screen.findByRole("link", { name: "Brief, foo project page" })).toBeTruthy();
     });
   });
 
@@ -214,7 +214,7 @@ describe("the Project page", () => {
     act(() => setSearch({ project: "foo" }));
     await userEvent.click(tabs().getByRole("link", { name: "Cost" }));
     await loaded("/cost");
-    await userEvent.click(await screen.findByRole("link", { name: "foo project page" }));
+    await userEvent.click(await screen.findByRole("link", { name: "Brief, foo project page" }));
     await loaded("/project");
     expect(here()).toBe("/project?project=foo&range=7&source=claude");
     await screen.findByRole("heading", { level: 1, name: "foo" });
@@ -239,7 +239,7 @@ describe("a key no page knows", () => {
   it("is ignored: the page shows as it would without it", async () => {
     open("/cost?project=foo&nosuchkey=1");
     await loaded("/cost");
-    expect((await screen.findByRole("link", { name: "foo project page" })).getAttribute("href")).toBe("/project?project=foo");
+    expect((await screen.findByRole("link", { name: "Brief, foo project page" })).getAttribute("href")).toBe("/project?project=foo");
     expect(screen.getByRole("link", { name: "Cost" }).getAttribute("aria-current")).toBe("page");
   });
 });

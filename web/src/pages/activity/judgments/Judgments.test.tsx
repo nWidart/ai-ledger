@@ -102,8 +102,8 @@ describe("Judgments view", () => {
     expect(screen.queryByRole("region", { name: /Outcomes/ })).toBeNull();
   });
 
-  it("shows only the filters that change it: project, range and the automated toggle, in the header beside the heading, and no source", async () => {
-    const f = show(fixture, "?project=demo-app&range=7&source=claude&auto=1");
+  it("shows only the filters that change it in the scope bar: project, range and the automated toggle, and no source", async () => {
+    const f = show(fixture, "?project=demo-app&range=7&source=claude&auto=1&view=judgments");
     await lede();
     // The URL's source stays for the other pages; the request names none, since only Claude Code sessions are judged.
     expect(f.mock.calls[0]![0]).toBe("/api/insights?project=demo-app&range=7&automated=1");
@@ -113,12 +113,14 @@ describe("Judgments view", () => {
     expect(within(filters).getByRole("checkbox", { name: "Include automated sessions" })).toBeTruthy();
     expect(screen.queryByRole("group", { name: "Source" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Codex" })).toBeNull();
-    // Placed as on Overview: the heading, then the filters, in one header.
+    // In the shell's bar, the same place as on Overview; the header holds the heading alone.
+    expect(filters.closest(".scopebar")).toBeTruthy();
     const header = document.querySelector("header.top")!;
     expect(header.querySelector(":scope > div > #lede")).toBeTruthy();
-    expect(header.querySelector(":scope > .top-side > .filters")).toBe(filters);
+    expect(header.querySelector(".filters")).toBeNull();
     await userEvent.click(within(filters).getByRole("button", { name: "30d" }));
-    expect(location.search).toBe("?project=demo-app&range=30&source=claude&auto=1"); // the hidden filter's value is kept
+    expect(location.search).toBe("?project=demo-app&range=30&source=claude&auto=1&view=judgments"); // the hidden filter's value is kept
+    expect(document.activeElement).toBe(within(filters).getByRole("button", { name: "30d" }));
     // The view in words names no source of the URL's: it is always Claude Code sessions.
     await waitFor(() => expect(screen.getByText(/Model-judged/).textContent).toMatch(/^demo-app, last 30 days, Claude Code sessions\./));
   });
@@ -155,7 +157,7 @@ describe("Judgments view", () => {
     show(fixture, "?range=0", []);
     await lede();
     const wrap = document.querySelector(".pg-judgments")!, at = (sel: string) => [...wrap.querySelectorAll("*")].indexOf(wrap.querySelector(sel)!);
-    const order = [".secidx", ".vitals", "#outcomes", "#friction", "#satisfaction", "#log", "#d-goals", "#d-types", "#d-figures", "#d-coverage", "#d-how"].map(at);
+    const order = [".vitals", "#outcomes", "#friction", "#satisfaction", "#log", "#d-goals", "#d-types", "#d-figures", "#d-coverage", "#d-how"].map(at);
     expect(order.every(i => i >= 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
     expect(document.querySelector("#outcomes")!.parentElement).toBe(document.querySelector("#friction")!.parentElement);
@@ -167,14 +169,13 @@ describe("Judgments view", () => {
     for (const id of ["lede", "coverage", "friction", "outcomes", "log"]) expect(document.getElementById(id)).toBeTruthy();
   });
 
-  it("indexes the sections and opens a drawer on a jump", async () => {
+  it("has no sticky section index: sections are reached by their headings, and the coverage link opens its drawer", async () => {
     show(fixture, "?range=0", []);
     await lede();
-    const nav = screen.getByRole("navigation", { name: "Page sections" });
-    // "Summary", not "Overview": that is the name of Activity's other view.
-    expect(within(nav).getAllByRole("link").map(a => a.textContent)).toEqual(["Summary", "Outcomes", "Friction", "Satisfaction", "Sessions", "Goals", "Session types", "Session figures", "Coverage", "How this works"]);
-    await userEvent.click(within(nav).getByRole("link", { name: "Session types" }));
-    expect(isOpen("d-types")).toBe(true);
+    expect(screen.queryByRole("navigation", { name: "Page sections" })).toBeNull();
+    expect(document.querySelector(".secidx, .jump")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "by project and run" }));
+    expect(isOpen("d-coverage")).toBe(true);
     expect(isOpen("d-goals")).toBe(false);
   });
 
@@ -203,7 +204,6 @@ describe("Judgments view", () => {
     show({ ...none, coverage: { ...fixture.coverage, facets: 0, analysed: 0, not_analysed: 0 } }, "?project=nope");
     await lede();
     expect(drawer("d-how")).toBeTruthy();
-    expect(within(screen.getByRole("navigation", { name: "Page sections" })).getAllByRole("link").map(a => a.textContent)).toEqual(["Summary", "How this works"]);
   });
 
   it("hides How this works for Codex and without stored facets", async () => {
@@ -224,10 +224,9 @@ describe("Judgments view", () => {
     const tip = () => within(panel()).getByRole("tooltip", { hidden: true });
     const up = async () => { show({ ...fixture, trend }); await lede(); };
 
-    it("sits under outcomes and friction with two weeks or more, in the index, and is left out with one", async () => {
+    it("sits under outcomes and friction with two weeks or more, and is left out with one", async () => {
       await up();
       expect(panel().previousElementSibling).toBe(document.querySelector(".grid2"));
-      expect(within(screen.getByRole("navigation", { name: "Page sections" })).getAllByRole("link").map(a => a.textContent)).toContain("Trend");
       expect(panel().querySelector("ol.ledger")).toBeNull(); // bars, no more ledger rows
     });
 
@@ -367,7 +366,6 @@ describe("Judgments view", () => {
     await lede();
     expect(fixture.trend.length).toBe(1);
     expect(document.getElementById("trend")).toBeNull();
-    expect(within(screen.getByRole("navigation", { name: "Page sections" })).queryByRole("link", { name: "Trend" })).toBeNull();
   });
 
   it("breaks the coverage down by project, a project with none analysed marked, and by run", async () => {
@@ -416,10 +414,9 @@ describe("Judgments view", () => {
     expect(within(document.getElementById("coverage")!).queryByRole("button")).toBeNull();
   });
 
-  it("shows no section index without figures", async () => {
+  it("shows no Goals drawer without figures", async () => {
     show(none);
     await lede();
-    expect(screen.queryByRole("navigation", { name: "Page sections" })).toBeNull();
     expect(document.getElementById("d-goals")).toBeNull();
   });
 
@@ -900,14 +897,13 @@ describe("Judgments view", () => {
       show(figures({ sessions: 0 }));
       await lede();
       expect(document.getElementById("d-figures")).toBeNull();
-      expect(within(screen.getByRole("navigation", { name: "Page sections" })).queryByRole("link", { name: "Session figures" })).toBeNull();
     });
 
-    it("stays in a view with no analysed session, with its place in the index", async () => {
+    it("stays in a view with no analysed session, before How this works", async () => {
       show({ ...none, meta: fixture.meta, coverage: { ...fixture.coverage, facets: 0, analysed: 0, not_analysed: 3 } }, "?project=nope", []);
       await lede();
       expect(isOpen("d-figures")).toBe(false);
-      expect(within(screen.getByRole("navigation", { name: "Page sections" })).getAllByRole("link").map(a => a.textContent)).toEqual(["Summary", "Session figures", "How this works"]);
+      expect([...document.querySelectorAll(".drawers > .drawer")].map(d => d.id)).toEqual(["d-figures", "d-how"]);
     });
   });
 

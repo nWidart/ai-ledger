@@ -20,13 +20,6 @@ export interface DrawerProps {
 // Mounted drawers by id, so openDrawer() can open one (and ask it to scroll and focus once its body shows), and an opening
 // drawer can close the rest: one page is mounted at a time, so these are the page's drawers.
 const drawers = new Map<string, { open: (scroll: boolean, focus: boolean) => void; close: () => void }>();
-// Called after any drawer opens or closes, once its body is laid out: what is in view moves with it (SectionIndex).
-const toggles = new Set<() => void>();
-/** Calls f after any drawer opens or closes; returns a function that stops it. */
-export function onDrawerToggle(f: () => void): () => void {
-  toggles.add(f);
-  return () => { toggles.delete(f); };
-}
 
 /** A full table folded behind a title line: the title is a heading and its button the disclosure (aria-expanded), as the heading
  *  must not sit inside a <summary>. The body renders once the drawer has been open, and stays after, so a closed drawer
@@ -47,9 +40,6 @@ export function Drawer({ id, title, after, count, description, bodyClassName, on
     drawers.set(id, { open: (scroll, focus) => { set(true); setGo({ scroll, focus }); }, close: () => set(false) });
     return () => { drawers.delete(id); };
   }, [id, set]);
-  // After the change is laid out, not on mount: every drawer starts closed.
-  const was = useRef(open);
-  useLayoutEffect(() => { if (was.current === open) return; was.current = open; toggles.forEach(f => f()); }, [open]);
   // openDrawer(): the body has rendered by now, so its first input exists.
   useLayoutEffect(() => { if (go) { reveal(id, go.scroll, go.focus); setGo(null); } }, [go, id]);
   const body = id + "-body";
@@ -81,6 +71,17 @@ export function openDrawer(id: string, scroll = false, focus = true) {
 }
 /** Whether the element is a drawer (a Drawer's root). */
 export const isDrawer = (el: Element | null): boolean => !!el?.classList.contains("drawer");
+
+/** Scrolls to a section, or opens a drawer, without touching the URL, which holds the view, and focuses its first control.
+ *  focus: false only scrolls, for a link the page was loaded with: a direct load does not move focus. The page's scroll
+ *  padding keeps the target clear of the navigation and the scope bar (base.css). */
+export function jumpTo(id: string, focus = true) {
+  const el = document.getElementById(id);
+  if (!el || el.hidden) return;
+  if (isDrawer(el)) return openDrawer(id, true, focus);
+  el.scrollIntoView?.({ behavior: motion() ? "smooth" : "auto", block: "start" });
+  if (focus) el.querySelector<HTMLElement>("button, a, [tabindex]")?.focus({ preventScroll: true });
+}
 
 /** Brings an open drawer into view and focuses its first input (or its toggle). Rows that load after the jump would leave it
  *  short of the top, so it follows them until the user scrolls, for 3 s at most. */

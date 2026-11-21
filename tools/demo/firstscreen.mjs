@@ -1,12 +1,14 @@
 // Checks in a real browser that Context's tabs and first plotted mark are on the first screen at 1440 x 900, with every tip rule
-// firing, before and after "Show N more" expands the strip; and that Activity's work chart and workbench tab list are, over 30 days
-// (bars by day) and all time (bars by week). The jsdom tests cannot lay a page out; this can. It runs locally, not in
+// firing, before and after "Show N more" expands the strip; that Activity's work chart and workbench tab list are, over 30 days
+// (bars by day) and all time (bars by week); and that the first chart of Cost, Errors, Limits, the Judgments view and Live starts
+// there. The jsdom tests cannot lay a page out; this can. It runs locally, not in
 // CI. It needs the demo server and the pinned Playwright:
 //   cd web && npm ci && npm run build;  cd tools/demo && npm ci && uv run seed.py && uv run serve.py   (DEMO_PORT moves it)
 //   node firstscreen.mjs        exits 1, naming what falls outside the window
 // The demo store fires five rules; the context payload is answered with the sixth added, so the strip holds the most tips the rules give.
 // CHROMIUM=<path> uses that Chromium instead of Playwright's own.
 import { chromium } from "playwright";
+import { readFileSync } from "node:fs";
 
 const PORT = Number(process.env.DEMO_PORT || 8799);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -16,6 +18,20 @@ const TITLES = {
   large_start: "Sessions start with a large context", frequent_compactions: "Sessions compact repeatedly", near_limit: "Sessions reach the limit of the window",
   large_results: "Tool results fill the context", cache_breaks: "The prompt cache breaks within sessions", long_tier: "Requests are priced on the long-prompt tier",
 };
+
+/** The other pages: the first chart of each, which must start on the first screen. Live's is its stream's first event, from the
+ *  web tests' fixtures, so it does not depend on a replay. */
+const FIRST = [
+  ["Cost's daily cost chart", "/cost?range=30", "#spend .chart"],
+  ["Errors' rate chart", "/errors?range=30", ".chart-card"],
+  ["Limits' first open window chart", "/limits?range=30", ".lim-grid .lim-chart"],
+  ["the Judgments view's Outcomes ledger", "/usage?view=judgments&range=30", "#outcomes"],
+  ["Live's first stream event", "/live?session=s1", ".pg-live .stream .ev"],
+];
+const FIX = new URL("../../web/src/__fixtures__/", import.meta.url).pathname;
+/** A generated fixture's object: the JSON between `export default` and `satisfies`. */
+const fixture = name => JSON.parse(readFileSync(FIX + name, "utf8").replace(/^[\s\S]*?export default /, "").replace(/\s*satisfies \w+;\s*$/, ""));
+const live = fixture("live.ts"), liveSession = fixture("live-session.ts");
 
 /** Where the tablist and the first plotted mark (the first range bar of Starting context) sit, in px from the window's top. */
 const measure = page => page.evaluate(() => {
@@ -41,6 +57,8 @@ try {
       for (const id of RULES) if (!have.has(id)) d.tips.push({ ...base, id, severity: "warn", title: TITLES[id] });
       await route.fulfill({ response: res, json: d });
     });
+    await page.route(/\/api\/live(\?|$)/, route => route.fulfill({ json: { ...live, sessions: live.sessions.map((s, i) => (i ? s : { ...s, session_id: "s1" })) } }));
+    await page.route(/\/api\/live\/session\?/, route => route.fulfill({ json: { ...liveSession, session_id: "s1" } }));
     await page.goto(`${BASE}/context?range=30`);
     await page.waitForSelector("#starting .rng-bar");
     const tips = await page.locator("#tips .tip-btn").count();
@@ -66,6 +84,15 @@ try {
       const v = verdict(got, `${scheme}, Activity over ${range === "0" ? "all time" : `${range} days`}`);
       console.log(v.line.replace("first plotted mark", "work chart"));
       failed ||= !v.ok;
+    }
+    // Every other page's first chart starts on the first screen, under the nav and the scope bar.
+    for (const [what, path, sel] of FIRST) {
+      await page.goto(BASE + path);
+      await page.waitForSelector(sel);
+      const top = await page.evaluate(sel => document.querySelector(sel).getBoundingClientRect().top, sel);
+      const ok = top >= 0 && top < H;
+      console.log(`${scheme}, ${what}: starts at ${Math.round(top)}px of ${H}: ${ok ? "ok" : "OUTSIDE THE WINDOW"}`);
+      failed ||= !ok;
     }
     await page.context().close();
   }

@@ -15,6 +15,7 @@ import { mockApi } from "../../components/sheets/testing";
 import { usd } from "../../format";
 import { barName, caption, capText, historyStrips, pace, paceRates, recentText, shareText, span, stripSummary, surfacesText, usedHint, whenDay, windowName } from "./limits";
 import { LimitsPage } from "./LimitsPage";
+import { ScopeBar } from "../../components/ScopeBar";
 import { ingested, renderApp, renderPage, renderRouter } from "../../testing";
 
 const fixture = limits as LimitsPayload;
@@ -30,11 +31,11 @@ const details = (name: string) => {
 };
 /** The Past windows table sits behind its toggle. */
 const openTable = () => fireEvent.click(within(document.getElementById("history")!).getByRole("button", { name: "Show data table" }));
-const show = (d: LimitsPayload, hash = "?range=30") => {
+const show = (d: LimitsPayload, hash = "?range=30", bar = false) => {
   openDrawers();
   const f = mockApi({ "/api/limits": () => d });
   history.replaceState(null, "", "/limits" + hash);
-  renderApp(<LimitsPage />);
+  renderApp(bar ? <><ScopeBar /><LimitsPage /></> : <LimitsPage />);
   return f;
 };
 /** A window's panel (not the table's scroll region, which is named for the table). */
@@ -366,7 +367,7 @@ describe("LimitsPage", () => {
   });
 
   it("sends the source filter", async () => {
-    const f = show(fixture);
+    const f = show(fixture, "?range=30", true);
     await lede();
     await userEvent.click(screen.getByRole("button", { name: "Codex" }));
     expect(location.search).toBe("?range=30&source=codex");
@@ -943,7 +944,7 @@ describe("past windows strips", () => {
       "/api/limits/window": () => ({ ...curve, window: claudeRow }) });
     openDrawers();
     history.replaceState(null, "", "/limits?range=30");
-    renderApp(<LimitsPage />);
+    renderApp(<><ScopeBar /><LimitsPage /></>);
     await lede();
     await userEvent.click(row(claudeRow));
     await hist().findByRole("img", { name: /used when it ended/ });
@@ -958,7 +959,7 @@ describe("past windows strips", () => {
       "/api/limits/window": () => curve });
     openDrawers();
     history.replaceState(null, "", "/limits?range=30");
-    renderApp(<LimitsPage />);
+    renderApp(<><ScopeBar /><LimitsPage /></>);
     await lede();
     await userEvent.click(row(early));
     await hist().findByRole("img", { name: /used when it ended/ });

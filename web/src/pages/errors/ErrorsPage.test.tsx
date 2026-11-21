@@ -2381,7 +2381,7 @@ describe("type table: sort and filter", () => {
     const rem = (c: string) => Number(top.match(new RegExp(`\\.types col\\.${c} \\{ width: ([\\d.]+)rem; \\}`))![1]);
     // The numbers the budget rests on, where they are set.
     const base = readFileSync("src/base.css", "utf8");
-    expect(base).toContain(".wrap { max-width: 1240px; margin: 0 auto; padding: 20px 16px 72px; }");
+    expect(base).toContain(".wrap { max-width: 1240px; margin: 0 auto; padding: 12px 16px 72px; }");
     expect(base).toContain(".panel { padding: 18px 20px; }");
     expect(top).toContain(".pg-errors .grid2 { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 16px;");
     const pane = (Math.min(1280, 1240) - 32 - 16) * 1.05 / 2.05 - 2 * 20 - 2;
@@ -2897,18 +2897,21 @@ describe("ErrorsPage render cost", () => {
       history.replaceState(null, "", "/errors?cat=x");
       await page();
       expect(document.querySelectorAll("#exList .ex")).toHaveLength(6);
-      // The Detail's own header observer is one; the examples add none of their own (the shared one may predate this test).
-      expect(made).toBeLessThanOrEqual(2);
+      // The Detail's own header observer is one and the scope bar's another; the examples add none of their own (the shared one
+      // may predate this test).
+      expect(made).toBeLessThanOrEqual(3);
     } finally { vi.stubGlobal("ResizeObserver", Real); }
   });
 });
 
 describe("controls where they act", () => {
-  it("keeps only the page-level filters in the header", async () => {
+  it("keeps only the page-level filters in the scope bar, and none in the header", async () => {
     await page();
-    const top = document.querySelector("header.top")!;
-    for (const id of ["fGran", "fSub", "fNoise"]) expect(top.querySelector("#" + id), id).toBeNull();
-    expect(top.querySelector("#fRange")).not.toBeNull();
+    const top = document.querySelector("header.top")!, bar = document.querySelector(".scopebar")!;
+    for (const id of ["fGran", "fSub", "fNoise"]) expect(bar.querySelector("#" + id), id).toBeNull();
+    for (const id of ["fProject", "fRange", "fSource"]) expect(bar.querySelector("#" + id), id).not.toBeNull();
+    expect(bar.querySelector("#fAuto")).toBeNull();
+    expect(top.querySelector(".filters")).toBeNull();
   });
 
   it("puts Day and Week in the chart's header, writing gran to the URL", async () => {

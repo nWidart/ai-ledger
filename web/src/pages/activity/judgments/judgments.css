@@ -11,8 +11,8 @@
 .pg-judgments .sub { color: var(--text-muted); font-size: .8125rem; margin: 0 0 8px; max-width: 90ch; }
 .pg-judgments .pending { margin: -12px 0 8px; min-height: 1.5em; color: var(--text-secondary); font-size: .8125rem; }
 .pg-judgments .pending:empty { visibility: hidden; }
-.pg-judgments.loading > :not(.top):not(.views):not(.secidx) { opacity: .55; }
-@media (prefers-reduced-motion: no-preference) { .pg-judgments > :not(.top):not(.views):not(.secidx) { transition: opacity .2s; } }
+.pg-judgments.loading > :not(.top):not(.views) { opacity: .55; }
+@media (prefers-reduced-motion: no-preference) { .pg-judgments > :not(.top):not(.views) { transition: opacity .2s; } }
 
 /* The outcome trend: every bar fills the plot, so a half-width bar is the cue that few sessions stand behind it. It keeps its
    colors, so its parts stand off the surface as a full bar's do. The key is a half-width swatch. */

@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type M
 import { limitsUrl, viewOf, type LimitHistoryRow, type LimitsPayload, type LimitWindow, type View, type WindowUsedRow } from "../../api";
 import { ChartTable, DataTable } from "../../components/DataTable";
 import { Drawer } from "../../components/Drawer";
-import { Filters, RangeFilter, SOURCE_LABELS } from "../../components/Filters";
+import { RangeFilter, SOURCE_LABELS } from "../../components/Filters";
 import { HowMeasured } from "../../components/HowMeasured";
 import { subjectAttrs } from "../../components/menu/subject";
 import { PageSkeleton } from "../../components/PageSkeleton";
@@ -323,7 +323,6 @@ export function LimitsPage() {
             its {d.suggestion.label} limit would go unused.</p>}
           {d && <Freshness d={d} />}
         </div>
-        <div className="top-side"><Filters projects={[]} project={false} range={false} /></div>
       </header>}
       {error && <div className="banner" role="alert"><b>Could not load limits for {limitsName(want)} ({error.message}).{d ? ` Still showing ${limitsName(shown)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}

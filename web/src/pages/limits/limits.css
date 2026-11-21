@@ -1,7 +1,5 @@
 /* Limits: the binding window as the heading, one card per open window, then past windows, with value in a drawer. */
 .pg-limits .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 32px; align-items: start; margin-bottom: 20px; }
-.pg-limits .top-side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 0; max-width: 600px; }
-.pg-limits .top-side .filters { justify-content: flex-end; }
 .pg-limits .lede { margin: 0; max-width: 28ch; font-size: clamp(1.5rem, 3.6vw, 2.375rem); line-height: 1.15;
   font-weight: 400; letter-spacing: -.025em; text-wrap: balance; color: var(--text-secondary); }
 .pg-limits .lede:focus { outline: none; }
@@ -15,8 +13,6 @@
 /* Stack before the filters squeeze the heading into a narrow column. */
 @media (max-width: 65em) {
   .pg-limits .top { grid-template-columns: minmax(0, 1fr); }
-  .pg-limits .top-side { max-width: none; align-items: stretch; flex-direction: column-reverse; }
-  .pg-limits .top-side .filters { justify-content: flex-start; }
 }
 .pg-limits .pending { margin: -12px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: .8125rem; }
 .pg-limits .pending:empty { visibility: hidden; }

@@ -1,8 +1,8 @@
 /* Live (/live): every rule sits under .pg-live, since every page's CSS is loaded at once. */
-.pg-live { max-width: 1400px; }
-.pg-live .top { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; margin-bottom: 10px; position: relative; }
+/* Tighter than the other pages at top and bottom: the stream page fits the viewport under two bars, and the rail keeps 8 sessions. */
+.pg-live { max-width: 1400px; padding-top: 8px; }
+.pg-live .top { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; margin-bottom: 6px; position: relative; }
 .pg-live h1 { font-size: 1.375rem; letter-spacing: -.02em; margin: 0 6px 0 0; }
-.pg-live .top .filters { margin: 0; }
 .pg-live .spacer { flex: 1; }
 .pg-live .conn { margin: 0; font-size: .75rem; color: var(--text-muted); white-space: nowrap; }
 /* Full text: the toggle keeps a warning tint while on, with the same box either way, and the warning opens over the page
@@ -211,9 +211,9 @@
 .pg-live .pin > .stream { height: 60dvh; }
 
 /* From tablet width up the stream page fits the viewport: the rail and the stream scroll inside themselves, so the document
-   does not (--appnav-h is the nav's height, set by Nav). Below that, the page scrolls as any other. */
+   does not (--bars-h is the height of the nav and the scope bar, base.css). Below that, the page scrolls as any other. */
 @media (min-width: 45.0625em) {
-  .pg-live:has(> .grid) { display: flex; flex-direction: column; box-sizing: border-box; height: calc(100dvh - var(--appnav-h, 56px)); padding-bottom: 16px; }
+  .pg-live:has(> .grid) { display: flex; flex-direction: column; box-sizing: border-box; height: calc(100dvh - var(--bars-h)); padding-bottom: 6px; }
   .pg-live > .grid { flex: 1; min-height: 420px; align-items: stretch; }
   .pg-live .rail { overflow: auto; min-height: 0; }
   .pg-live .main { display: flex; flex-direction: column; min-height: 0; }
@@ -221,7 +221,7 @@
 }
 /* The Wall with pins fits the viewport as the stream page does, where the pins stand beside the tiles. */
 @media (min-width: 68.8125em) {
-  .pg-live:has(> .wallgrid.pinned) { display: flex; flex-direction: column; box-sizing: border-box; height: calc(100dvh - var(--appnav-h, 56px)); padding-bottom: 16px; }
+  .pg-live:has(> .wallgrid.pinned) { display: flex; flex-direction: column; box-sizing: border-box; height: calc(100dvh - var(--bars-h)); padding-bottom: 16px; }
   .pg-live > .wallgrid.pinned { flex: 1; min-height: 420px; align-items: stretch; }
   .pg-live .wallgrid.pinned .walls { overflow: auto; min-height: 0; padding: 2px; }
   .pg-live .pin { min-height: 0; }
