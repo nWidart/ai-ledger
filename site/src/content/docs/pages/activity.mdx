@@ -172,7 +172,7 @@ The Sessions, Project metrics and Tools tables sort by a column: select a header
 - The search text and near-limit filter are kept in the URL and restored on reload. The sort and the selection are not kept.
 - With a day or week selected, every figure is those days', except Model, Tok/s, Peak context and Compactions, which stay whole-session figures; a tooltip says so.
 
-**Compare sessions**
+#### Compare sessions
 
 With two or more sessions selected, **Compare** in the selection bar shows a "Session comparison" table between the bar and the Sessions table. Select it again to hide it. The table has one column per selected session, in the order you selected them, and one row per figure: Project, Start, then every Sessions column from Active to Tests. A column you hid, or one the window's width hides, still has its row. Each figure reads as its Sessions cell does, in the same format. A figure a session does not record reads "–", and when a compared session records no model time, a note under the table says what that "–" means.
 
