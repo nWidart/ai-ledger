@@ -85,7 +85,7 @@ jobs:
         with:
           version: "0.13.x"
       - run: uv sync --locked
-      - run: uv run python -m unittest discover -s tests
+      - run: uv run pytest
 
   web-typecheck:
     name: Web · typecheck

@@ -28,7 +28,7 @@ Run these before you commit:
 
 ```bash
 uv run ruff check                          # lint Python
-uv run python -m unittest discover -s tests
+uv run pytest                              # Python tests, in parallel across cores
 cd web && npm run check                    # typecheck, lint, test and build
 openspec validate --specs --strict         # after a change under openspec/specs/
 ```
