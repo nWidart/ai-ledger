@@ -69,13 +69,15 @@ The probe's cancelled headless turn wrote `session_end` and no `turn_completed`.
 ### One request per model call, the turn's usage split by context size
 A call is a distinct `streamStartMs` among the lines of one `promptId`. Its context size is the largest `totalTokens` on its lines. When `turn_completed` arrives, the deriver makes one request per call:
 
-- key `grok:<session>:<streamStartMs>`, time `streamStartMs`, model the turn's one `modelUsage` key;
+- key `grok:<session>:<prompt_id>:<streamStartMs>`, time `streamStartMs`, model the turn's one `modelUsage` key;
 - each of uncached input, cache read, cache write, output and thinking is the turn's figure times the call's share of the summed context sizes, rounded so that the rows add up to the turn's figure (largest remainder);
 - `reported_cost` is split the same way, the last row taking the remainder.
 
 When the calls cannot be told (no line of the turn has a `streamStartMs`) or the turn names more than one model, the turn makes one request per model at the turn's end, key `grok:<session>:<prompt_id>:<model>`.
 
-An incremental chunk can hold a `turn_completed` whose call lines came in an earlier chunk. The deriver then reads the turn's stored lines back from `raw_lines`, as `CodexDeriver.thread_lines` does.
+An incremental chunk can hold a `turn_completed` whose call lines came in an earlier chunk. So the deriver always reads a turn's calls from `raw_lines`, which already holds the chunk being derived. It counts only the lines between the file's previous `turn_completed` and this one. That makes the rows the same however the file was cut into ingests (a line written late lands after the turn's end and counts nowhere), and a prompt id used by two turns counts no call twice.
+
+The peak context is the largest context size a call states. The `tokens_used` of a compaction notice is not used: it would set a peak in a chunk that does not know the model yet.
 
 Alternatives:
 - *One request per turn* (the earlier plan). Exact, but a row with 10 million input tokens at the turn's end breaks every reader of a request as a call: the context curves and cache breaks on Context, the gauge and pulse on Live, the session timeline, active time, the long-prompt count, requests per prompt. Each would need a Grok exception.

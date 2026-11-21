@@ -76,8 +76,8 @@ Each request of a Grok turn SHALL carry a share of the cost the turn reports (`c
 A Grok session's peak context SHALL be the largest context size of its main-thread model calls. Each completed automatic compaction SHALL count as a compaction of the session, and the context window a compaction notice states SHALL be the session's context window.
 
 #### Scenario: Compacted session
-- **WHEN** a session reaches 204,942 tokens, Grok says it compacts at a window of 256,000 and completes the compaction
-- **THEN** the session has 1 compaction, a context window of 256,000 and a peak context of at least 204,942
+- **WHEN** a session's largest model call states 204,851 tokens, Grok says it compacts at a window of 256,000 and completes the compaction
+- **THEN** the session has 1 compaction, a context window of 256,000 and a peak context of 204,851
 
 ### Requirement: Record Grok model time
 Each finished Grok turn SHALL add a run to its session with the API time the turn reports. A Grok run SHALL state no tool time and no lines added or removed.
