@@ -411,8 +411,8 @@ class CostStateTest(StoreCase):
 class OtherDeriver(store.Deriver):
     """A second source's parser: Claude's line shapes under its own session ids."""
 
-    def add(self, d):
-        super().add(dict(d, sessionId="other-" + d["sessionId"]))
+    def add(self, d, key=None):
+        super().add(dict(d, sessionId="other-" + d["sessionId"]), key)
 
 
 class TwoSourceRebuildTest(StoreCase):

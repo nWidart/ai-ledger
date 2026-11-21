@@ -323,7 +323,10 @@ class GrokDeriver(store.Deriver):
         self.prompt = None  # the prompt id of the newest user_prompt_submit line read
         self.prompt_known = False  # self.prompt is set by a line of this pass, or read back from raw_lines
 
-    def add(self, d):
+    def add(self, d, line=None):
+        """Derive line d, stored under raw_lines key line: a line with no event id is keyed by its offset, which the
+        line does not hold, so its turn and prompt find it by that key."""
+        self.line = line or key(d, self.path, 0)
         u, m = update(d), meta(d)
         ts = iso(m.get("agentTimestampMs"))
         when = store.ts_of(ts)
@@ -456,7 +459,7 @@ class GrokDeriver(store.Deriver):
             row = self.cur.execute(
                 "SELECT json_extract_string(h.json, '$.params.update.prompt_id') FROM raw_lines c JOIN raw_lines h "
                 "ON h.file = c.file AND h.type = 'user_prompt_submit' AND h.parsed AND h.byte_offset < c.byte_offset "
-                "WHERE c.key = ? ORDER BY h.byte_offset DESC LIMIT 1", [key(d, self.path, 0)]).fetchone()
+                "WHERE c.key = ? ORDER BY h.byte_offset DESC LIMIT 1", [self.line]).fetchone()
             self.prompt = row[0] if row else None
         return self.prompt
 
@@ -473,7 +476,7 @@ class GrokDeriver(store.Deriver):
         Only lines between the file's previous turn_completed line and this one (d) count: the result is then the same
         however the file was cut into ingests, and a prompt id used again counts no call twice. raw_lines already holds
         the chunk being derived."""
-        (end,) = self.cur.execute("SELECT byte_offset FROM raw_lines WHERE key = ?", [key(d, self.path, 0)]).fetchone() or (None,)
+        (end,) = self.cur.execute("SELECT byte_offset FROM raw_lines WHERE key = ?", [self.line]).fetchone() or (None,)
         if end is None:
             return []
         (start,) = self.cur.execute("SELECT coalesce(max(byte_offset), -1) FROM raw_lines WHERE file = ? AND type = 'turn_completed' "
@@ -501,7 +504,7 @@ class GrokDeriver(store.Deriver):
         billed = model_costs(usage, models)
         if not calls:
             for model, mu in models.items():
-                mid = f"{key(d, self.path, 0)}:{model or ''}"
+                mid = f"{self.line}:{model or ''}"
                 self.request(mid, ts, model, counts(mu), billed[model], stop)
             return
         (model, mu), = models.items()

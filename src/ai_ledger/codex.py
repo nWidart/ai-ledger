@@ -294,7 +294,7 @@ class CodexDeriver(store.Deriver):
         if latest:
             self.turn = p.get("turn_id")
 
-    def add(self, d):
+    def add(self, d, key=None):
         t, p = d.get("type"), d.get("payload")
         if indexed(self.path):
             name = d.get("thread_name")

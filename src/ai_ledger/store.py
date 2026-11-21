@@ -427,7 +427,7 @@ def ingest_chunk(cur, projects, name, path, data, offset, lines, seq, st, whole=
         der = src.deriver(cur, projects, name, path, sub, seq)
         for r in rows:
             if r[0] in new and r[0] in parsed:
-                der.add(parsed[r[0]])
+                der.add(parsed[r[0]], r[0])
         der.flush()
         insert(cur, "files", ["path", "size", "read_offset", "lines", "seq", "mtime", "last_ingest", "source"],
                [(path, st.st_size, st.st_size if whole else pos, lines, der.seq, st.st_mtime, datetime.now(timezone.utc).replace(tzinfo=None), name)],
@@ -501,7 +501,8 @@ class Deriver:
                 s[k] = d[src]
         return s
 
-    def add(self, d):
+    def add(self, d, key=None):
+        """Derive line d. key is its raw_lines key, for a source whose rows name the line they came from (Grok's)."""
         t = d.get("type")
         if t in TITLE_LINES:  # written by /rename and by Claude Code itself; a subagent's title is not its session's
             title = d.get(TITLE_LINES[t][0])
@@ -925,8 +926,8 @@ def rebuild(con, log=None):
             if session is not None:  # lines stored before a source placed its files by their own records
                 cur.execute("UPDATE raw_lines SET session_id = ?, subagent = ? WHERE file = ?", [session, sub, path])
             der = src.deriver(cur, projects, name, path, sub, 0)
-            for (text,) in cur.execute("SELECT json FROM raw_lines WHERE file = ? AND parsed ORDER BY byte_offset", [path]).fetchall():
-                der.add(json.loads(text))
+            for key, text in cur.execute("SELECT key, json FROM raw_lines WHERE file = ? AND parsed ORDER BY byte_offset", [path]).fetchall():
+                der.add(json.loads(text), key)
             der.flush()
             cur.execute("UPDATE files SET seq = ? WHERE path = ?", [der.seq, path])
             cur.execute("COMMIT")

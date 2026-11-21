@@ -292,6 +292,31 @@ class UsageTest(GrokCase):
         self.assertNotEqual(got, [r[0] for r in self.q("SELECT input + cache_read + cache_5m + cache_1h FROM requests "
                                                        f"WHERE input + cache_read >= {context.START_MIN_TOKENS} ORDER BY ts")])
 
+    def test_turns_without_an_event_id_are_two_requests(self):
+        # A line with no eventId is stored under <path>:<offset>: each turn keeps its own identity, in ingest and rebuild.
+        for cut_calls in (True, False):
+            with self.subTest(cut_calls=cut_calls):
+                shutil.rmtree(self.home, ignore_errors=True)
+                for t in ("raw_lines", "files", *store.DERIVED):
+                    self.con.execute(f"DELETE FROM {t}")
+                path, = self.put("long-turn")
+                with open(path) as fh:
+                    lines = [json.loads(x) for x in fh if not cut_calls or not any(f'"{t}"' in x for t in grok.CALL_TYPES)]
+                end = next(d for d in lines if grok.update(d).get("sessionUpdate") == "turn_completed")
+                again = json.loads(json.dumps(end))
+                for d in (end, again):
+                    del grok.meta(d)["eventId"]
+                with open(path, "w") as fh:
+                    fh.writelines(json.dumps(d) + "\n" for d in lines + [again])
+                self.ingest()
+                self.assertEqual(self.q("SELECT count(*) FROM raw_lines WHERE type = 'turn_completed'"), [(2,)])
+                self.assertSums(SESSION["long-turn"], reported(turns(path)))
+                if not cut_calls:  # the first turn's calls are found through its stored line
+                    self.assertEqual(self.q("SELECT count(*) FROM requests WHERE context_tokens > 0"), [(5,)])
+                before = self.q("SELECT * FROM requests ORDER BY 1")
+                store.rebuild(self.con)
+                self.assertEqual(self.q("SELECT * FROM requests ORDER BY 1"), before)
+
     def test_cost_of_the_turn_when_its_model_states_none(self):
         path, = self.put("long-turn")
 
