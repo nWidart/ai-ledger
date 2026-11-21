@@ -1,10 +1,11 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { prevented } from "../../testing";
 import { setTheme } from "../../theme";
 import { EChart, type EChartProps } from "./EChart";
 import type { EChartsOption } from "./echarts";
-import { drawn, fakeECharts } from "./testing";
+import { drawn, fakeECharts, type FakeChart } from "./testing";
 import type { ChartEnv } from "./tokens";
 
 const LABEL = "Estimated cost per day, 3 days.";
@@ -18,9 +19,20 @@ const option = (env: ChartEnv): EChartsOption => ({
   yAxis: { type: "value" },
   series: [{ type: "line", data: [1, 2, 3], lineStyle: { color: env.color("var(--proj-1)") } }],
 });
-const show = (props: Partial<EChartProps> = {}) => <EChart label={LABEL} height={240} option={option} {...props} />;
+const DAYS = ["Mon", "Tue", "Wed"];
+const read = (i: number) => `${DAYS[i]}: $${i + 1}.00`;
+const tip = (i: number) => <b>{DAYS[i]} tip</b>;
+const show = (props: Partial<EChartProps> = {}) => <EChart label={LABEL} height={240} option={option} points={DAYS.length} read={read} tip={tip} {...props} />;
 const box = () => screen.getByLabelText(LABEL); // a hidden group has no accessible name to find it by
 const plot = () => box().querySelector(".echart-plot")!;
+/** The live region's text: the point being read, or "". */
+const readout = () => document.querySelector(".sr[aria-live=polite]")!.textContent;
+/** The tooltip, while it shows. */
+const tooltip = () => screen.queryByRole("tooltip");
+const key = (k: string, on: Element = box()) => fireEvent.keyDown(on, { key: k });
+/** The band actions the chart was sent, as "at <point>" (read back from the pixel) or "leave". */
+const bands = (chart: FakeChart) => chart.actions.filter(a => a.type === "updateAxisPointer")
+  .map(a => (a.currTrigger === "leave" ? "leave" : `at ${chart.convertFromPixel({ xAxisIndex: 0 }, Number(a.x))}`));
 
 // The probe's computed color by theme; jsdom resolves no var().
 function themedColors() {
@@ -187,5 +199,244 @@ describe("EChart", () => {
     expect(plot().getAttribute("aria-hidden")).toBe("true");
     expect(plot().contains(screen.getByText(FAILED))).toBe(false); // the words are not hidden with the plot
     expect(fakeECharts.charts).toEqual([]);
+  });
+});
+
+describe("EChart reading", () => {
+  it("reads the first point on the first Right and the last on the first Left", async () => {
+    const { unmount } = render(show());
+    await drawn();
+    expect(readout()).toBe("");
+    expect(tooltip()).toBeNull();
+    expect(key("ArrowRight")).toBe(false); // the page does not scroll
+    expect(readout()).toBe("Mon: $1.00");
+    expect(tooltip()!.textContent).toBe("Mon tip");
+    unmount();
+
+    render(show());
+    await drawn();
+    key("ArrowLeft");
+    expect(readout()).toBe("Wed: $3.00");
+    expect(tooltip()!.textContent).toBe("Wed tip");
+  });
+
+  it("steps with Left and Right and stops at each end, and jumps with Home and End", async () => {
+    render(show());
+    await drawn();
+    const reads = (keys: string[]) => keys.map(k => { key(k); return readout(); });
+    expect(reads(["ArrowRight", "ArrowRight", "ArrowRight", "ArrowRight"])).toEqual(["Mon: $1.00", "Tue: $2.00", "Wed: $3.00", "Wed: $3.00"]);
+    expect(reads(["Home", "ArrowLeft", "End", "ArrowLeft"])).toEqual(["Mon: $1.00", "Mon: $1.00", "Wed: $3.00", "Tue: $2.00"]);
+    expect(key("Home")).toBe(false);
+    expect(key("End")).toBe(false);
+  });
+
+  it("leaves keys with a modifier to the browser, and keys it does not read", async () => {
+    render(show({ onActivate: () => {} }));
+    await drawn();
+    expect(prevented(box())).toEqual([]);
+    expect(readout()).toBe("");
+    expect(key("a")).toBe(true);
+    expect(key("ArrowDown")).toBe(true);
+    key("ArrowRight");
+    expect(prevented(box())).toEqual([]);
+    expect(readout()).toBe("Mon: $1.00"); // Alt+Escape did not close it, Ctrl+Enter did not activate it
+  });
+
+  it("reads nothing in a chart with no points", async () => {
+    render(show({ points: 0 }));
+    await drawn();
+    expect(key("ArrowRight")).toBe(true);
+    expect(readout()).toBe("");
+  });
+
+  it("activates the point being read on Enter, and only with a reading open", async () => {
+    const onActivate = vi.fn<(i: number) => void>();
+    render(show({ onActivate }));
+    await drawn();
+    expect(key("Enter")).toBe(true);
+    expect(onActivate).not.toHaveBeenCalled();
+    key("ArrowRight");
+    key("ArrowRight");
+    expect(key("Enter")).toBe(false);
+    expect(onActivate.mock.calls).toEqual([[1]]);
+    expect(readout()).toBe(""); // the reading ends with the selection, as it does today
+  });
+
+  it("leaves Enter alone in a chart that selects nothing", async () => {
+    render(show());
+    await drawn();
+    key("ArrowRight");
+    expect(key("Enter")).toBe(true);
+    expect(readout()).toBe("Mon: $1.00");
+  });
+
+  it("clears the reading on Escape, on the box and anywhere in the document, and not with a modifier", async () => {
+    render(<>{show()}<button type="button">Elsewhere</button></>);
+    await drawn();
+    key("ArrowRight");
+    key("Escape");
+    expect(readout()).toBe("");
+    expect(tooltip()).toBeNull();
+
+    key("ArrowRight");
+    const other = screen.getByRole("button", { name: "Elsewhere" });
+    fireEvent.keyDown(other, { key: "Escape", altKey: true });
+    expect(readout()).toBe("Mon: $1.00");
+    fireEvent.keyDown(other, { key: "Escape" });
+    expect(readout()).toBe("");
+    expect(tooltip()).toBeNull();
+  });
+
+  it("clears the reading on blur", async () => {
+    render(show());
+    await drawn();
+    key("ArrowRight");
+    fireEvent.blur(box());
+    expect(readout()).toBe("");
+    expect(tooltip()).toBeNull();
+  });
+
+  it("reads the point under the pointer inside the grid, with the tooltip beside the pointer, and none outside it", async () => {
+    render(show());
+    const chart = await drawn();
+    chart.fire("mousemove", chart.pointAt(1));
+    expect(readout()).toBe("Tue: $2.00");
+    expect(tooltip()!.textContent).toBe("Tue tip");
+    // tipAt: 14px from the pointer and 10px above it (the fake's point 1 is at 240, 110). jsdom's box has no width, so
+    // tipAt takes the pointer for the right edge and puts the tooltip on its left.
+    expect([tooltip()!.style.left, tooltip()!.style.top]).toEqual(["226px", "100px"]);
+    chart.fire("mousemove", [250, 60]); // the same point: the tooltip follows the pointer
+    expect(readout()).toBe("Tue: $2.00");
+    expect([tooltip()!.style.left, tooltip()!.style.top]).toEqual(["236px", "50px"]);
+
+    chart.fire("mousemove", [20, 110]); // left of the grid, over the value labels
+    expect(readout()).toBe("");
+    expect(tooltip()).toBeNull();
+    chart.fire("mousemove", chart.pointAt(2));
+    expect(readout()).toBe("Wed: $3.00");
+    chart.fire("globalout");
+    expect(readout()).toBe("");
+  });
+
+  it("puts the tooltip over the point a key reads, under the top of the grid", async () => {
+    render(show());
+    const chart = await drawn();
+    key("End");
+    // The fake's last point is at x 373.33 and its grid starts at y 10: found within 4px, 20px lower, then tipAt's 14 and 10.
+    expect(parseFloat(tooltip()!.style.left)).toBeCloseTo(chart.pointAt(2)[0] - 14, 2);
+    expect(tooltip()!.style.top).toBe("22px");
+  });
+
+  it("activates the point clicked inside the grid, and none outside it", async () => {
+    const onActivate = vi.fn<(i: number) => void>();
+    render(show({ onActivate }));
+    const chart = await drawn();
+    chart.fire("click", [20, 110]);
+    expect(onActivate).not.toHaveBeenCalled();
+    chart.fire("mousemove", chart.pointAt(2));
+    chart.fire("click", chart.pointAt(2));
+    expect(onActivate.mock.calls).toEqual([[2]]);
+    expect(readout()).toBe("");
+  });
+
+  it("moves the band with the cursor: one action a move, one leave a clear", async () => {
+    render(show());
+    const chart = await drawn();
+    expect(bands(chart)).toEqual([]);
+    key("ArrowRight");
+    expect(bands(chart)).toEqual(["at 0"]);
+    expect(chart.band).toBe(0);
+    key("End");
+    key("End"); // already there: nothing to move
+    expect(bands(chart)).toEqual(["at 0", "at 2"]);
+    expect(chart.band).toBe(2);
+    key("Escape");
+    key("Escape");
+    expect(bands(chart)).toEqual(["at 0", "at 2", "leave"]);
+    expect(chart.band).toBeNull();
+
+    chart.fire("mousemove", chart.pointAt(1));
+    chart.fire("mousemove", [250, 60]);
+    expect(bands(chart).slice(3)).toEqual(["at 1"]);
+    expect(chart.band).toBe(1);
+    fireEvent.blur(box());
+    chart.fire("globalout");
+    expect(bands(chart).slice(3)).toEqual(["at 1", "leave"]);
+    expect(chart.band).toBeNull();
+  });
+
+  it("reads before the runtime resolves, and the band joins the cursor once the chart has drawn", async () => {
+    const load = fakeECharts.hold();
+    const onActivate = vi.fn<(i: number) => void>();
+    render(show({ onActivate }));
+    key("ArrowRight");
+    key("ArrowRight");
+    expect(readout()).toBe("Tue: $2.00");
+    expect(tooltip()!.textContent).toBe("Tue tip");
+    // No grid yet: the point's share of the box (the middle of 800px), under its top.
+    expect([tooltip()!.style.left, tooltip()!.style.top]).toEqual(["386px", "10px"]);
+    key("Escape");
+    expect(readout()).toBe("");
+    key("End");
+    key("Enter");
+    expect(onActivate.mock.calls).toEqual([[2]]);
+    key("Home");
+    fireEvent.blur(box());
+    expect(readout()).toBe("");
+    expect(fakeECharts.charts).toEqual([]);
+
+    key("ArrowRight");
+    await load.resolve();
+    const chart = await drawn();
+    expect(readout()).toBe("Mon: $1.00");
+    expect(bands(chart)).toEqual(["at 0"]);
+    expect(chart.band).toBe(0);
+  });
+
+  it("ends the reading on a new option function, and keeps it on a theme change, with the band back on its point", async () => {
+    const { rerender } = render(show());
+    const chart = await drawn();
+    key("End");
+    act(() => setTheme("dark"));
+    expect(readout()).toBe("Wed: $3.00");
+    expect(tooltip()!.textContent).toBe("Wed tip");
+    expect(bands(chart)).toEqual(["at 2", "at 2"]); // the redraw may have dropped the band: it is sent again
+    expect(chart.band).toBe(2);
+
+    // Two points now: the old reading names a point the new drawing does not have.
+    const fewer = (env: ChartEnv): EChartsOption => ({ ...option(env), xAxis: { type: "category", data: DAYS.slice(0, 2) } });
+    const tips: number[] = [];
+    rerender(show({ option: fewer, points: 2, tip: i => { tips.push(i); return tip(i); } }));
+    expect(readout()).toBe("");
+    expect(tooltip()).toBeNull();
+    expect(tips).toEqual([]); // never asked for a point of the old drawing
+    expect(bands(chart).at(-1)).toBe("leave");
+    expect(chart.band).toBeNull();
+    key("ArrowLeft");
+    expect(readout()).toBe("Tue: $2.00");
+  });
+
+  it("has no tooltip without a tip, and still reads", async () => {
+    render(show({ tip: undefined }));
+    await drawn();
+    key("ArrowRight");
+    expect(box().querySelector(".tip")).toBeNull();
+    expect(readout()).toBe("Mon: $1.00");
+  });
+
+  it("listens to the chart's pointer once, and lets go of the document when the reading ends", async () => {
+    const { unmount } = render(<StrictMode>{show()}</StrictMode>);
+    const chart = await drawn();
+    expect(["mousemove", "click", "globalout"].map(n => chart.zr.listening(n))).toEqual([1, 1, 1]);
+    const on = vi.spyOn(document, "addEventListener"), off = vi.spyOn(document, "removeEventListener");
+    const count = (spy: typeof on) => spy.mock.calls.filter(([name]) => name === "keydown").length;
+    key("ArrowRight");
+    key("ArrowRight");
+    key("Escape");
+    expect(count(off)).toBe(count(on));
+    key("ArrowRight");
+    unmount();
+    expect(count(off)).toBe(count(on));
+    expect(chart.disposed).toBe(true);
   });
 });
