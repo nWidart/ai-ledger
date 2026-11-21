@@ -11,7 +11,7 @@ import usageAll from "../../__fixtures__/usage-all";
 import { EV_TOP, timelineModel } from "./session";
 import { mockApi } from "./testing";
 import { UsageSheets } from "./UsageSheets";
-import { renderApp } from "../../testing";
+import { MODIFIED_KEYS, prevented, renderApp } from "../../testing";
 
 const at = (hash: string) => history.replaceState(null, "", "/usage" + hash);
 const sheet = () => within(document.querySelector("dialog")!);
@@ -40,6 +40,24 @@ describe("SessionSheet", () => {
     expect(evs.map(b => b.textContent)).toEqual([expect.stringMatching(/Edit failed 4× in a row/), expect.stringMatching(/^.*Commit/),
       expect.stringMatching(/Bash, mcp__srv__q failed 2× in a row/)]);
     expect(sheet().getAllByRole("link", { name: "Open the first of these failures in Errors" })[0]!.getAttribute("href")).toBe("/errors?project=foo&ex=t01");
+  });
+
+  it("leaves modified keys to the browser on the timeline, but for Shift+Left and Shift+Right, its ten-request step", async () => {
+    // 15 main-thread requests, a minute apart.
+    const req = session.requests[0]!, reqs = Array.from({ length: 15 }, (_, i) => ({ ...req, ts: `2026-11-04T10:${String(i + 1).padStart(2, "0")}:00.000Z` }));
+    mockApi({ "/api/session": () => ({ ...session, requests: reqs }) });
+    at("?session=s1");
+    renderApp(<UsageSheets />);
+    const svg = await sheet().findByRole("group", { name: /^Session timeline/ });
+    const read = () => sheet().queryByText(/^Request \d+ of 15/)?.textContent?.match(/^Request (\d+)/)?.[1];
+    expect(prevented(svg, [...MODIFIED_KEYS.filter(k => !("shiftKey" in k)), { key: "Home", shiftKey: true }, { key: "End", shiftKey: true }])).toEqual([]);
+    expect(read()).toBeUndefined();
+    expect(prevented(svg, [{ key: "ArrowRight", shiftKey: true }])).toEqual(["Shift+ArrowRight"]);
+    expect(read()).toBe("10"); // from no reading, ten requests in
+    expect(prevented(svg, [{ key: "ArrowRight", shiftKey: true }])).toEqual(["Shift+ArrowRight"]);
+    expect(read()).toBe("15"); // ten more, held at the last
+    expect(prevented(svg, [{ key: "ArrowLeft", shiftKey: true }])).toEqual(["Shift+ArrowLeft"]);
+    expect(read()).toBe("5");
   });
 
   it("reads requests with the arrow keys and marks a selected event on the timeline", async () => {

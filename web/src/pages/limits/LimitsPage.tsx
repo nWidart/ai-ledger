@@ -4,6 +4,7 @@ import { ChartTable, DataTable } from "../../components/DataTable";
 import { Drawer } from "../../components/Drawer";
 import { RangeFilter, SOURCE_LABELS } from "../../components/Filters";
 import { HowMeasured } from "../../components/HowMeasured";
+import { modified } from "../../components/keys";
 import { subjectAttrs } from "../../components/menu/subject";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { Toggletip } from "../../components/Toggletip";
@@ -161,7 +162,7 @@ function HistoryStrip({ strip, unused, selected, onPick, refs }: { strip: Strip;
   const stop = [at(active), at(selected), bars.length - 1].find(i => i >= 0)!;
   const onKey = (ev: KeyboardEvent) => {
     settle();
-    if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return; // Alt+Left is history: not ours
+    if (modified(ev)) return; // Alt+Left is history: not ours
     const to = ev.key === "ArrowLeft" ? stop - 1 : ev.key === "ArrowRight" ? stop + 1 : ev.key === "Home" ? 0 : ev.key === "End" ? bars.length - 1 : null;
     if (to == null) return;
     ev.preventDefault();

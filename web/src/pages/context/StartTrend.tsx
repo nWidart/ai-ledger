@@ -4,6 +4,7 @@ import { scaleMargins, textScale, useWidth } from "../../components/chart";
 import { ChartTable, DataTable } from "../../components/DataTable";
 import { dayLabel, niceStep, num, plural } from "../../format";
 import { short, START_LARGE_TOKENS, TREND_MIN_SESSIONS } from "./context";
+import { modified } from "../../components/keys";
 import "./StartTrend.css";
 
 type Trend = ContextPayload["starting"]["trend"];
@@ -52,6 +53,7 @@ export function StartTrend({ trend }: { trend: Trend }) {
     return best;
   };
   const onKey = (ev: KeyboardEvent) => {
+    if (modified(ev)) return; // Alt+Left is history, Ctrl+Home the page: not ours
     if (ev.key === "Escape") return setAt(null);
     const d = ({ ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity } as Record<string, number>)[ev.key];
     if (d == null) return;

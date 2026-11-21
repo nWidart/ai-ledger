@@ -3,6 +3,7 @@ import type { Source, UsagePayload } from "../../api";
 import { useColors } from "../../colors";
 import { dayAxis, peakLabelAt, roomForLabels, stackHeights, textScale, tipAt, useWidth } from "../../components/chart";
 import { ChartTable, DataTable } from "../../components/DataTable";
+import { modified } from "../../components/keys";
 import { big, dayLabel, niceStep, pct, plural, usd, usd0 } from "../../format";
 import { costDays, costKinds, isOther, KINDS, SCALES, shares, STACKS, STACK_WORD, type CostDay, type Kind, type Stack, type TokenScale } from "./cost";
 
@@ -93,6 +94,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScal
     if (i === at) place(); else setAt(i); // a new bar: the layout effect places the tooltip once it shows that bar
   };
   const onKey = (ev: KeyboardEvent) => {
+    if (modified(ev)) return; // Alt+Left is history, Ctrl+Home the page: not ours
     if (ev.key === "Escape") return setAt(null);
     if (ev.key === "Enter" && at != null) { ev.preventDefault(); return pick(at); }
     const step = ({ ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity } as Record<string, number>)[ev.key];

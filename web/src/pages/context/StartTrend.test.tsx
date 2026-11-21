@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { dayLabel } from "../../format";
+import { prevented } from "../../testing";
 import { readWeek, StartTrend } from "./StartTrend";
 
 const wk = (week: string, median: number, sessions = 9) => ({ week, median, p25: median * .8, p75: median * 1.3, sessions });
@@ -25,6 +26,12 @@ describe("StartTrend", () => {
     expect(text).toBe(readWeek(trend[1]!));
     expect(text).toContain(`Week of ${dayLabel("2026-11-16")}: median 20k tokens (25th to 75th percentile 16k to 26k), 2 sessions`);
     expect(text).toContain("rests on few sessions");
+  });
+
+  it("leaves keys with Alt, Ctrl, Meta or Shift to the browser", () => {
+    render(<StartTrend trend={trend} />);
+    expect(prevented(screen.getByRole("group"))).toEqual([]);
+    expect(document.querySelector(".readout")!.textContent).toBe("");
   });
 
   it("steps with the arrow keys, Home and End, and clears with Escape", () => {

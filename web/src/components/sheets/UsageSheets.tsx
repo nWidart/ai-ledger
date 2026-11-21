@@ -13,10 +13,11 @@ import { TOOL_KINDS, ToolSheet } from "./ToolSheet";
 import "./sheets.css";
 
 // The page's control for item v, so focus can return to a re-rendered row: a row or ledger item (data-v), or a session button or link.
+// Else the page's heading: every page gives it id="lede" (focusLede), not every page the lede class (Live's is a plain h1).
 const twin = (v: string) => {
   const e = CSS.escape(v);
   return document.querySelector<HTMLElement>(`.wrap :is([data-v="${e}"] button, [data-session="${e}"])`)
-    ?? document.querySelector<HTMLElement>(".wrap .lede");
+    ?? document.querySelector<HTMLElement>(".wrap #lede");
 };
 
 /** The pages that show automated sessions whatever the URL says, so their sheets do too. */

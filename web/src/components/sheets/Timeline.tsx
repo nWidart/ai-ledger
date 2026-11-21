@@ -2,6 +2,7 @@ import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, typ
 import type { SessionDetail } from "../../api";
 import { big, dur, num, plural } from "../../format";
 import { textScale } from "../chart";
+import { modified } from "../keys";
 import { appLink, errorsHref, EV_TOP, nearestIndex, readRequest, timelineModel, type TimelineModel, type TlEvent } from "./session";
 
 const evTime = (tl: TimelineModel, e: TlEvent) =>
@@ -92,6 +93,8 @@ export function Timeline({ s, project }: { s: SessionDetail; project: string | n
     if (Math.abs(x(events[best]!.t) - px) <= 16) setSel(best);
   };
   const onKey = (ev: KeyboardEvent) => {
+    // Alt+Left is history, Ctrl+Home the page: not ours. Shift+Left and Shift+Right are the longer step; Shift+Home is not ours.
+    if (modified(ev, ev.key === "ArrowLeft" || ev.key === "ArrowRight")) return;
     const step = ({ ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity } as Record<string, number>)[ev.key];
     if (step == null || !reqs.length) return;
     ev.preventDefault();

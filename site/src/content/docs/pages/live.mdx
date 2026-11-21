@@ -109,7 +109,7 @@ The filters combine, stay on when you open another session, and change only what
 
 - Select a tool row to open its detail.
 - Select a lane header to fold or unfold the lane.
-- **Follow.** With Follow on, the stream keeps the newest event in view. Scrolling up or opening a tool row turns Follow off. While Follow is off and new events arrive, **Jump to latest ↓** appears and a status says "N new events". The status announces the count once it has held still for 1.5 seconds. Jump to latest turns Follow on again. With Follow on, the page announces nothing for new events.
+- **Follow.** With Follow on, the stream keeps the newest event in view. Scrolling up or opening a tool row turns Follow off. While Follow is off and new events arrive, **Jump to latest ↓** appears with "N new events" beside it, in a polite status. It counts the events since Follow turned off, however you turned it off. The count shows at once, then changes at most once every 5 seconds. Jump to latest turns Follow on again. With Follow on, the page announces nothing for new events.
 
 ### Status strip
 
@@ -155,7 +155,7 @@ The strip shows no request count or model: the model is in the stream's head, an
 
 A tile's border follows its state: your turn, approval? and running a tool each have a colored border, and ended has a dashed one. Thinking and idle tiles have the panel's usual border.
 
-**Controls** Selecting a tile pins its stream beside the tiles, and selecting it again unpins it. A pinned tile says **Pinned**, and a screen reader reads it as a pressed button named "Pin" and the session. The Wall holds two pinned streams at most: pinning a third unpins the oldest, and a status says so, such as "Pinned graft. Unpinned notes: 2 pins at most."
+**Controls** Selecting a tile pins its stream beside the tiles, and selecting it again unpins it. A pinned tile says **Pinned**, and a screen reader reads it as a pressed button. Its name is "Pin" and the session, then all the tile shows, in words: the project (when a title names the tile), the state and its detail, the latest action, the context, tools, errors and cost, then the branch, source and model. The name follows each update. The Wall holds two pinned streams at most: pinning a third unpins the oldest, and a status says so, such as "Pinned graft. Unpinned notes: 2 pins at most."
 
 A pinned stream shows its head, a status strip without the directory and Copy resume, and its stream, with its own stream filters and its own Follow, on when pinned. Its head has:
 

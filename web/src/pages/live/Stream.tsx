@@ -82,8 +82,8 @@ const Ev = memo(function Ev({ e, today, now, text, open, toggle, mark }: {
 
 /** Tool rows a running lane shows, unless the user asks for all of them. */
 const LAST = 5;
-/** How long the count of new events must hold still before it is announced. */
-const NEWS_MS = 1500;
+/** The count of new events changes at most this often, so a busy stream is not read out arrival by arrival. */
+const NEWS_MS = 5000;
 /** Follow: the room left around a row scrolled into view. */
 const PAD = 8;
 /** How far a box can scroll: another reach means the box or what it draws changed size. */
@@ -127,10 +127,15 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
   const hint = useId(); // two pinned streams share the page
   const put = useRef({ top: 0, reach: 0 });
   const [open, setOpen] = useState(() => new Set<string>());
-  const [seenAt, setSeenAt] = useState(s.events.length);
+  // The events held when Follow last turned off, by key, whichever way it turned off (a scroll, an opened row, the Follow
+  // checkbox): the events not in it are the new ones. By key, not by count: at the buffer's cap a new event drops the oldest
+  // and the count stays the same. null while Follow is on. Set while rendering, so the first render without Follow has it.
+  const keysOf = (events: readonly LiveEvent[]): ReadonlySet<string> => new Set(events.map(e => e.key));
+  const [seen, setSeen] = useState<ReadonlySet<string> | null>(() => (follow ? null : keysOf(s.events))), [wasFollow, setWasFollow] = useState(follow);
+  if (wasFollow !== follow) { setWasFollow(follow); setSeen(follow ? null : keysOf(s.events)); }
   // What the stable handlers below read, so the rows they reach keep the same props from one render to the next.
-  const cur = useRef({ c, setChoices, follow, setFollow, count: s.events.length });
-  cur.current = { c, setChoices, follow, setFollow, count: s.events.length };
+  const cur = useRef({ c, setChoices, follow, setFollow });
+  cur.current = { c, setChoices, follow, setFollow };
   const today = dayKey(now), wide = useMemo(() => s.events.some(e => dated(e.ts, today)), [s.events, today]);
   const rows = useMemo(() => streamRows(s.events), [s.events]);
   // Everything the rows draw that no tick changes: it is worked out again only when the events, the filters or the
@@ -163,8 +168,8 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
   const mark = (key: string) => (key === target ? newest : undefined);
   const toggle = useCallback((k: string) => {
     setOpen(o => { const n = new Set(o); if (!n.delete(k)) n.add(k); return n; });
-    const { follow, setFollow, count } = cur.current;
-    if (follow) { setFollow(false); setSeenAt(count); }
+    const { follow, setFollow } = cur.current;
+    if (follow) setFollow(false);
   }, []);
   const fold = useCallback((id: string, folded: boolean) => {
     const { c, setChoices } = cur.current;
@@ -189,7 +194,12 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
     }
     put.current = { top: el.scrollTop, reach: reachOf(el) };
   }, [follow, foot]);
-  const newer = !follow && s.events.length > seenAt;
+  // The events that came since Follow turned off, and how many of them are rows.
+  const { newer, fresh } = useMemo(() => {
+    if (follow || !seen) return { newer: false, fresh: 0 };
+    const added = s.events.filter(e => !seen.has(e.key));
+    return { newer: added.length > 0, fresh: added.filter(isRow).length };
+  }, [follow, seen, s.events]);
   // The box takes its place when what it draws changes (the rows, an open row, the text, the date column, the jump
   // button), not on each tick of the clock, which moves no row; and whenever the box or what it draws changes size with
   // no render: a web font that loads, a window resized, a row that wraps anew, a duration that grows a digit.
@@ -205,16 +215,19 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
   // on the row it showed: place sets it right, before the scroll event or after it.
   const onScroll = () => {
     const el = box.current!, { top, reach } = put.current;
-    if (follow && reachOf(el) === reach && Math.abs(el.scrollTop - top) > 1) { setFollow(false); setSeenAt(s.events.length); }
+    if (follow && reachOf(el) === reach && Math.abs(el.scrollTop - top) > 1) setFollow(false);
   };
-  // One polite status for the rows that came while Follow is off, said once the count has held still, so a busy stream is not
-  // read out tick by tick (the stream itself is a log that stays silent). told is the count the timer last saw settle.
-  const fresh = newer ? s.events.slice(seenAt).filter(isRow).length : 0, [told, setTold] = useState(0);
+  // One polite status, shown beside Jump to latest, for the rows that came while Follow is off (the stream itself is a log that
+  // stays silent). It takes the count at once, then at most once every NEWS_MS: a count that changes sooner waits for the rest
+  // of the interval. told is the count it shows, toldAt when it took it; Follow on empties it.
+  const [told, setTold] = useState(0), toldAt = useRef(-Infinity);
+  if (!fresh && told) setTold(0); // set while rendering, so the next count starts from none
   useEffect(() => {
-    const t = setTimeout(() => setTold(fresh), NEWS_MS);
+    if (!fresh) { toldAt.current = -Infinity; return; }
+    const t = setTimeout(() => { toldAt.current = Date.now(); setTold(fresh); }, Math.max(0, toldAt.current + NEWS_MS - Date.now()));
     return () => clearTimeout(t);
   }, [fresh]);
-  const said = fresh && told === fresh ? plural(fresh, "new event") : "";
+  const said = fresh && told ? plural(told, "new event") : "";
   return <>
     <div className="stream-filters" role="group" aria-label="Stream filters">
       <button type="button" aria-pressed={f.errors} aria-describedby={hint} onClick={() => setFilters({ ...f, errors: !f.errors })}>{plural(s.errors, "error")}</button>
@@ -223,7 +236,6 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
       <label className="chk"><input type="checkbox" checked={f.quiet} onChange={e => setFilters({ ...f, quiet: e.target.checked })} /> Hide read-only</label>
       {hidden > 0 && <span className="hid muted">{plural(hidden, "row")} hidden</span>}
     </div>
-    <span className="sr" role="status">{said}</span>
     <div className={"stream" + (wide ? " dated" : "")} ref={box} onScroll={onScroll} tabIndex={0} role="log" aria-live="off" aria-label="Session events"><div ref={drawn}>
       {s.truncated && <p className="older muted">Older events are not shown. The <a href={sheet} {...sessionLink(s.session_id)}>session sheet</a> has
         the whole session.</p>}
@@ -242,7 +254,11 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
       {hidden > 0 && hidden === held.length && <p className="older muted">{f.errors && !held.some(e => isTool(e) && e.failed)
         ? "No failed calls in the events held." : "The filters hide every row."}</p>}
       {s.state.kind === "you" && <div className="ev"><span className="t" /><span className="note">waiting for your next prompt</span></div>}
-      {newer && <button type="button" className="jump" onClick={() => setFollow(true)}>Jump to latest ↓</button>}
+      {/* Always drawn, so the status is in place before it first speaks; its own politeness inside the silent log. */}
+      <div className="news">
+        {newer && <button type="button" className="jump" onClick={() => setFollow(true)}>Jump to latest ↓</button>}
+        <span className="news-n" role="status" aria-live="polite">{said}</span>
+      </div>
     </div></div>
   </>;
 }

@@ -1,6 +1,7 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { FEW_CALLS, LOW_CALLS, lowVolume, textScale } from "../../components/chart";
 import { ChartTable, DataTable } from "../../components/DataTable";
+import { modified } from "../../components/keys";
 import { num as fmt, niceStep } from "../../format";
 import { useErrors } from "./context";
 import { bucketLabel, bucketOf, chartData, idle, incSummary, label, linePath, noCalls, pointRows, pointText, pointWhen, selectable, shortLabel, sumCalls, TOPN, typeColor } from "./model";
@@ -115,6 +116,7 @@ export const RateChart = memo(function RateChart() {
     say(on ? "Selection cleared: the table and detail cover the whole range." : `Selected ${pointWhen(v, p)}: the table and detail show only its errors.`);
   };
   const key = (ev: KeyboardEvent<HTMLDivElement>) => {
+    if (modified(ev)) return; // Alt+Left is history, Shift+Space scrolls up: not ours
     if (ev.key === "Escape") return blur();
     const pick = ev.key === "Enter" || ev.key === " ";
     if (pick) ev.preventDefault(); // Space would scroll the page

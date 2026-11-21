@@ -163,7 +163,7 @@ dialog.sheet::backdrop { background: var(--scrim); }
     .appnav a[aria-current=page],
     .pal-opt[aria-selected=true],
     dialog.sheet .evbtn[aria-pressed=true], dialog.sheet .sheet-wide[aria-pressed=true],
-    .pg-live .stream-filters button[aria-pressed=true], .pg-live .kv .fig[aria-pressed=true],
+    .pg-live .stream-filters button[aria-pressed=true], .pg-live .strip .fig[aria-pressed=true],
     .pg-live .rail li button[aria-current=true],
     .pg-errors .legend button[aria-pressed=true],
     .pg-errors .byset li button[aria-pressed="true"],
@@ -171,7 +171,7 @@ dialog.sheet::backdrop { background: var(--scrim); }
     .pg-context .growth .legend button.key[aria-pressed=true],
     .pg-context .pressure .band[aria-pressed=true],
     .pg-context .cache-chart .legend .toggle[aria-pressed=true],
-    .pg-context .tablist [role=tab][aria-selected=true], .pg-context .tip-btn[aria-expanded=true],
+    :is(.pg-context, .pg-activity) .tablist [role=tab][aria-selected=true], .pg-context .tip-btn[aria-expanded=true],
     .pg-judgments .ledger li.pick.on > .rowbtn, .pg-judgments .ledger li.on:not(.pick),
     .pg-judgments button.chip.on, .pg-judgments button.badge.on,
     .pg-limits .hs-bar[aria-pressed="true"],
@@ -189,8 +189,11 @@ dialog.sheet::backdrop { background: var(--scrim); }
   .ledger .bar, :is(.pg-activity, .pg-cost) .ibar, .pg-context :is(.pressure .band, .pressure .pkey i, .rng-bar, .rng-med, .ctr-bar i, .ctr-rbar, .ctr-med, .ctr-split-bar > span, .ctr-key), .pg-errors .bar, .pg-live .meter { forced-color-adjust: none; outline: 1px solid CanvasText; }
   /* The frame above outranks the pressure segments' own focus ring; restore it in a system color. */
   .pg-context .pressure .band:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
-  .pg-cost .daystrip .cells i { forced-color-adjust: none; background: GrayText; }
-  .pg-cost .daystrip .cells i.on { background: CanvasText; }
+  /* Last 24 h pace, pressed: the system selection pair, as a pressed segment, so it reads as pressed with the focus ring too
+     (the theme's inset shadow is dropped in this mode). The ring sits outside, on the page color. `:root` outranks
+     limits.css's pressed rule, which the build places after this file. */
+  :root .pg-limits .lim-toggle[aria-pressed="true"] { forced-color-adjust: none; background: Highlight; color: HighlightText; border-color: Highlight; box-shadow: none; }
+  .pg-limits .lim-toggle[aria-pressed="true"]:focus-visible { outline-color: CanvasText; }
   .pg-limits .hs-bar i { forced-color-adjust: none; }
   .pg-limits .hk { forced-color-adjust: none; outline: 1px solid CanvasText; }
   /* The Limits chart in system colors: the line in the text color (estimated stretches dimmed), the cone as an outline (dashed
@@ -207,8 +210,9 @@ dialog.sheet::backdrop { background: var(--scrim); }
   .pg-limits .lim-chart .plan line:not(.hit) { stroke: LinkText; }
   .pg-limits .lim-chart :is(.ax, .plan text) { fill: CanvasText; }
   .pg-limits .lim-chart .pick { fill: Highlight; stroke: Canvas; }
-  /* The charts' stacked bars: series colors kept, each segment edged in the text color. */
-  :is(.pg-activity, .pg-cost, .pg-judgments) .chart .bar-seg, .pg-context .cache-chart svg rect[class^="seg-"], .pg-errors #chart .layer { forced-color-adjust: none; stroke: CanvasText; stroke-width: .75px; }
+  /* The charts' stacked bars: series colors kept, each segment edged in the text color. Context's cache chart edges its own
+     segments (CacheChart.css). */
+  :is(.pg-activity, .pg-cost, .pg-judgments) .chart .bar-seg, .pg-errors #chart .layer { forced-color-adjust: none; stroke: CanvasText; stroke-width: .75px; }
   /* Keys and dots that name a series or a project by color alone. */
   .pdot, :is(.pg-activity, .pg-cost, .pg-judgments) .legend i:not(.line), .pg-context .legend i:not(.line), .pg-errors .sw:not(.line), .pg-judgments .key .sw { forced-color-adjust: none; outline: 1px solid CanvasText; }
 }

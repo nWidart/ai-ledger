@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { GrowthPoint } from "../../api";
 import { setOrder } from "../../colors";
 import { GrowthChart, readShare, readTurn } from "./GrowthChart";
-import { renderApp } from "../../testing";
+import { prevented, renderApp } from "../../testing";
 
 const pt = (turn: number, median: number, sessions = 9): GrowthPoint => ({ turn, median, p25: median * .7, p75: median * 1.4, sessions });
 const view = [1, 2, 3, 4, 5].map(t => pt(t, 20_000 + t * 10_000));
@@ -35,6 +35,12 @@ describe("GrowthChart", () => {
     expect(label).toContain("30k tokens at turn 1");
     expect(label).toContain("1 project drawn separately");
     expect(label).toContain("9 sessions");
+  });
+
+  it("leaves keys with Alt, Ctrl, Meta or Shift to the browser", () => {
+    renderApp(<GrowthChart curve={view} projects={[foo]} />);
+    expect(prevented(screen.getByRole("group"))).toEqual([]);
+    expect(document.querySelector(".readout")!.textContent).toBe("");
   });
 
   it("reads a turn with the arrow keys", () => {

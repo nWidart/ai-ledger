@@ -2,6 +2,7 @@
 // selection (automatic activation: the panels draw from the payload already loaded), and a tabpanel per tab. Only the selected
 // panel renders its content; the others stay empty and hidden, so every tab's aria-controls names a panel.
 import { useLayoutEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { modified } from "../../components/keys";
 
 export interface TabDef<T extends string> { id: T; label: string }
 
@@ -18,6 +19,7 @@ export function Tabs<T extends string>({ tabs, current, onChange, label, childre
     else if (el.offsetLeft + el.offsetWidth > l.scrollLeft + l.clientWidth) l.scrollLeft = el.offsetLeft + el.offsetWidth - l.clientWidth;
   }, [current]);
   const onKey = (ev: KeyboardEvent) => {
+    if (modified(ev)) return; // Alt+Left is history: not ours
     const i = tabs.findIndex(t => t.id === current), n = tabs.length;
     const next = ({ ArrowRight: (i + 1) % n, ArrowLeft: (i - 1 + n) % n, Home: 0, End: n - 1 } as Record<string, number>)[ev.key];
     if (next == null) return;

@@ -7,6 +7,7 @@ import { ChartTable, DataTable } from "../../components/DataTable";
 import { HowMeasured } from "../../components/HowMeasured";
 import type { Kind } from "../cost/cost";
 import { busy, failRate, METRICS, monday, workBuckets, workKinds, workStack, type WorkMetric } from "./work";
+import { modified } from "../../components/keys";
 
 const H = 216;
 // The rate track under the bars: its height and the gap between the two tracks, before scaling with the text.
@@ -93,7 +94,7 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, selected, 
   // Escape dismisses an open tooltip wherever the focus is: the pointer can open it while the focus is elsewhere.
   useEffect(() => {
     if (at == null) return;
-    const off = (ev: globalThis.KeyboardEvent) => { if (ev.key === "Escape") setAt(null); };
+    const off = (ev: globalThis.KeyboardEvent) => { if (ev.key === "Escape" && !modified(ev)) setAt(null); };
     document.addEventListener("keydown", off);
     return () => document.removeEventListener("keydown", off);
   }, [at]);
@@ -138,6 +139,7 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, selected, 
     if (i === at) place(); else setAt(i); // a new bar: the layout effect places the tooltip once it shows that bar
   };
   const onKey = (ev: KeyboardEvent) => {
+    if (modified(ev)) return; // Alt+Left is history, Ctrl+Home the page: not ours
     // Escape ends a reading first, then clears the selection. Handled here only: Escape elsewhere (a sheet) keeps it.
     if (ev.key === "Escape") {
       if (at != null) return setAt(null);

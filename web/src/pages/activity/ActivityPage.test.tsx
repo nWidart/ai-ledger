@@ -15,7 +15,7 @@ import { mockApi } from "../../components/sheets/testing";
 import { ActivityPage } from "./ActivityPage";
 import { setSearch } from "../../url";
 import { hookCommand, workDays } from "./work";
-import { ingested, refreshed, renderApp, renderPage } from "../../testing";
+import { ingested, prevented, refreshed, renderApp, renderPage } from "../../testing";
 import { queries } from "../../queries";
 
 const REFRESHED_STATUS = { ingesting: false, last_ingest: null, last_stats: null, error: null, last_change: null, counts: {}, interval: 60, project_order: [] };
@@ -352,6 +352,33 @@ describe("workbench tabs", () => {
     await userEvent.keyboard("{ArrowRight} ");
     expect(selectedTab()).toBe("Tools and MCP");
     expect(location.search).toContain("tab=tools");
+    // Tab leaves the tablist for the selected panel, as on Context.
+    await userEvent.tab();
+    expect(document.activeElement).toBe(screen.getByRole("tabpanel"));
+    expect(screen.getByRole("tabpanel").tabIndex).toBe(0);
+  });
+
+  it("leave keys with Alt, Ctrl, Meta or Shift to the browser, as the work chart does", async () => {
+    serve(usage);
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    const first = screen.getAllByRole("tab")[0]!;
+    act(() => first.focus());
+    expect(prevented(first)).toEqual([]);
+    expect(document.activeElement).toBe(first);
+    const chart = screen.getByRole("group", { name: /^Commits/ });
+    expect(prevented(chart)).toEqual([]);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    // A modified Escape keeps an open reading, on the chart and anywhere else on the page.
+    act(() => chart.focus());
+    fireEvent.keyDown(chart, { key: "ArrowRight" });
+    expect(screen.getByRole("tooltip")).toBeTruthy();
+    fireEvent.keyDown(chart, { key: "Escape", altKey: true });
+    fireEvent.keyDown(document.body, { key: "Escape", ctrlKey: true });
+    expect(screen.getByRole("tooltip")).toBeTruthy();
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
   it("restore the tab from the URL, and read an unknown one as Sessions", async () => {

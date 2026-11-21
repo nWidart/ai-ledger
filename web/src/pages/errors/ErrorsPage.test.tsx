@@ -17,7 +17,7 @@ import { sessionHref, typeRows } from "./model";
 import { when } from "../../format";
 import { lostPayload } from "./lostData";
 import { VIEW_KEY } from "./view";
-import { ingested, refreshed, renderApp, renderPage } from "../../testing";
+import { ingested, prevented, refreshed, renderApp, renderPage } from "../../testing";
 
 // typeRows and sessionHref (one call per example render) run through their own implementation; the mock only counts the calls.
 vi.mock("./model", async orig => { const a = await orig<typeof import("./model")>(); return { ...a, typeRows: vi.fn(a.typeRows), sessionHref: vi.fn(a.sessionHref) }; });
@@ -1701,6 +1701,16 @@ describe("ErrorsPage bucket selection", () => {
     expect(document.getElementById("atClr")).toBeNull();
     expect(document.getElementById("atMark")).toBeNull();
     expect(rows()).toEqual([["x", "6"]]);
+  });
+
+  it("leaves keys with Alt, Ctrl, Meta or Shift to the browser on the chart", async () => {
+    await open("?range=30");
+    keys();
+    const chart = document.getElementById("chart")!;
+    expect(prevented(chart)).toEqual([]);
+    expect(fireEvent.keyDown(chart, { key: " ", shiftKey: true })).toBe(true); // Shift+Space still scrolls the page up
+    expect(location.search).toBe("?range=30");
+    expect(document.getElementById("chartLive")!.textContent).toBe("");
   });
 
   it("selects and clears from the keyboard with Enter and Space", async () => {

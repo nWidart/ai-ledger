@@ -8,7 +8,7 @@ import { mockApi } from "../../components/sheets/testing";
 import { openDrawer } from "../../components/Drawer";
 import { ContextPage } from "./ContextPage";
 import { TIP_STRIP_MAX, TipStrip } from "./tips";
-import { renderApp, renderPage, renderRouter } from "../../testing";
+import { prevented, renderApp, renderPage, renderRouter } from "../../testing";
 
 const fixture: ContextPayload = context;
 const serve = (d: ContextPayload) => mockApi({ "/api/context": () => d, "/api/session": () => session });
@@ -138,6 +138,16 @@ describe("ContextPage", () => {
       expect(panel.getAttribute("aria-labelledby")).toBe(t.id);
       expect(panel.hidden).toBe(t.getAttribute("aria-selected") !== "true");
     }
+  });
+
+  it("leaves keys with Alt, Ctrl, Meta or Shift to the browser on its tabs and charts", async () => {
+    await show();
+    expect(prevented(tabOf("Overhead and pressure"))).toEqual([]);
+    expect(hash().has("tab")).toBe(false);
+    expect(prevented(section("pressure").getByRole("group", { name: /^Session map/ }))).toEqual([]);
+    await openTab("Cache health");
+    expect(prevented(section("cost").getByRole("group", { name: /^Cache waste/ }))).toEqual([]);
+    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
   it("draws every chart from the fixture", async () => {
