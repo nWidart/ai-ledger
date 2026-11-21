@@ -13,7 +13,7 @@ class LiveSmokeTest(GrokCase):
         sid = SESSION["probe"]
         (last,) = cur.execute("SELECT last_ts FROM sessions WHERE session_id = ?", [sid]).fetchone()
         now = live.aware(last) + timedelta(seconds=1)
-        listed = live.sessions(cur, automated=True, now=now, prices={})  # with no prompt derived yet, the scope takes it for a helper
+        listed = live.sessions(cur, now=now, prices={})
         self.assertEqual([(s["session_id"], s["source"]) for s in listed["sessions"]], [(sid, "grok")])
         self.assertIsInstance(live.waiting(cur, now=now), int)
         one = live.session(cur, sid, now=now, prices={}, text=True)
