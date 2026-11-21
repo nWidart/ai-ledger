@@ -1,7 +1,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Source, UsagePayload } from "../../api";
 import { useColors } from "../../colors";
-import { ChartTable, DataTable } from "../../components/DataTable";
+import { ChartTable } from "../../components/DataTable";
+import { Table, type Column } from "../../components/table/Table";
 import { EChart, type EChartHandle, type Shown } from "../../components/echart/EChart";
 import type { ChartEnv } from "../../components/echart/tokens";
 import { big, dayLabel, pct, plural, usd } from "../../format";
@@ -11,6 +12,9 @@ import { costModel, costOption, SLIDER_ROOM, type CostMetric } from "./costDaily
 export type { CostMetric } from "./costDaily";
 
 const H = 240;
+
+/** A row of the chart's data table: a day and its index in the chart. */
+interface TableRow { p: CostDay; i: number }
 
 export interface CostChartProps {
   d: UsagePayload;
@@ -81,6 +85,14 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScal
   const frac = (p: CostDay, k: Kind) => shares(p.v, kinds)[k.k] ?? 0;
   const fy = cost ? usd : big;
   const pk = peak != null ? pts[peak] : undefined;
+  // The data table: a day and its index (for its total and "so far"), paired only; the figures are formatted in the cells, when the table is open.
+  const tableRows = useMemo(() => pts.map((p, i): TableRow => ({ p, i })), [pts]);
+  const columns = useMemo((): Column<TableRow>[] => [
+    { id: "day", header: "Day", cell: ({ p, i }) => `${dayLabel(p.day, true)}${i === live ? " so far" : ""}` },
+    ...kinds.map((k): Column<TableRow> => ({ id: `kind:${k.k}`, header: k.label, align: "num",
+      cell: ({ p, i }) => share ? (totals[i]! ? pct(shares(p.v, kinds)[k.k] ?? 0, 1) : "–") : (cost ? usd : big)(p.v[k.k] ?? 0) })),
+    { id: "total", header: "Total", align: "num", cell: ({ p, i }) => cost ? usd(p.cost) : big(totals[i]!) },
+  ], [kinds, share, cost, totals, live]);
   // Enter or a click on a day lists its sessions. A day with nothing in it has none to list: the activation is declined, and
   // the reading stays open.
   const pick = (i: number) => {
@@ -183,11 +195,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScal
       <EChart ref={box} label={label} hidden={none} height={H + (zoom ? SLIDER_ROOM : 0)} option={option} view={view} points={pts.length} tip={tip} read={read}
         onActivate={pick} zoom={zoom} onZoom={onZoom} readZoom={readZoom} />
       {/* The chart's text alternative: a figure per day and series in the current stacking, in the chart's units. */}
-      {!none && <ChartTable><DataTable name={`${what} per day`} region="scroll tall">
-        <thead><tr><th scope="col">Day</th>{kinds.map(k => <th key={k.k} scope="col" className="num">{k.label}</th>)}<th scope="col" className="num">Total</th></tr></thead>
-        <tbody>{pts.map((p, i) => <tr key={p.day}><th scope="row">{dayLabel(p.day, true)}{soFar(i)}</th>
-          {kinds.map(k => <td key={k.k} className="num">{share ? (total(i) ? pct(frac(p, k), 1) : "–") : fy(p.v[k.k] ?? 0)}</td>)}<td className="num">{cost ? usd(p.cost) : big(total(i))}</td></tr>)}</tbody>
-      </DataTable></ChartTable>}
+      {!none && <ChartTable><Table name={`${what} per day`} region="scroll tall" rows={tableRows} columns={columns} rowId={r => r.p.day} /></ChartTable>}
     </section>
   );
 }
