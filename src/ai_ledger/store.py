@@ -832,6 +832,21 @@ def read_from(path, offset, size):
         return fh.read(size - offset), False
 
 
+def agent_lane(path):
+    """The id of the Claude Code subagent whose lines file path holds: the <id> of agent-<id>.jsonl."""
+    name = path.rsplit("/", 1)[-1]
+    return name[len("agent-"):-len(".jsonl")] if name.startswith("agent-") and name.endswith(".jsonl") else name
+
+
+class Turns(NamedTuple):
+    """The lines a source writes at a turn's start and end, as Source.turns. Each line is told by a value: its
+    raw_lines.type or, for a source whose marks share one type, the string at a JSON path of the line."""
+    start: tuple  # the values of a turn start
+    end: tuple  # the values of a turn end
+    type: str | None = None  # with path: the raw_lines.type the mark lines share
+    path: str | None = None  # the JSON path of a line's value; None when the value is the line's raw_lines.type
+
+
 class Source(NamedTuple):
     files: Callable  # root -> transcript paths
     key: Callable  # (line, path, offset) -> dedup key
@@ -848,6 +863,22 @@ class Source(NamedTuple):
     # cost-state (no timestamp) when it exits; a resumed session writes on after it.
     close_type: str | None = "cost-state"
     type: Callable = line_type  # line ({} when it is not a JSON object) -> its raw_lines type
+    # The lines that start and end a turn, or None for a source that writes none (Claude Code): the Live page then
+    # reads a thread's state from its prompts, replies and tool results. live_items gives turn_start and turn_end for them.
+    turns: Turns | None = None
+    lane: Callable = agent_lane  # path of a file of subagent lines -> the subagent's id, the lane of its Live events
+    # (raw_lines.type, text in the line) of the lines whose live_items give an agent item: the id of a spawn call and
+    # the subagent it started. None for a source that writes none: Claude Code names the call in agent-<id>.meta.json
+    # beside the subagent's lines.
+    spawn: tuple | None = None
+    compaction: tuple = ("system", '"compact_boundary"')  # (raw_lines.type, text in the line, '' for any) of a compaction line
+
+
+def compaction_filter(alias=""):
+    """(SQL condition, params) that holds for a raw_lines row that marks a compaction, in any source. alias is the
+    table's alias with its dot, when the query gives it one."""
+    marks = sorted({src.compaction for src in SOURCES.values()})
+    return ("(" + " OR ".join(f"{alias}type = ? AND contains({alias}json, ?)" for _ in marks) + ")", [x for mark in marks for x in mark])
 
 
 from . import codex  # noqa: E402  (it subclasses Deriver)
@@ -857,7 +888,10 @@ from . import insights  # noqa: E402  (it reads usage data through this module)
 
 SOURCES = {"claude": Source(transcript_files, line_key, Deriver, lambda cur, path, lines: (None, "/subagents/" in path)),
            "codex": Source(codex.files, codex.key, codex.CodexDeriver, codex.placement, codex.fields, codex.read,
-                            codex.prompt_text, "event_msg", codex.live_items, None),
+                            codex.prompt_text, "event_msg", codex.live_items, None,
+                            turns=Turns(("task_started",), ("task_complete", "turn_aborted"), "event_msg", "$.payload.type"),
+                            lane=lambda path: codex.ids(path)[1], spawn=("event_msg", '"SubAgentActivity"'),
+                            compaction=("compacted", "")),
            "grok": Source(grok.files, grok.key, grok.GrokDeriver, grok.placement, grok.fields,
                           prompt_text=grok.prompt_text, prompt_type="user_message_chunk", live_items=grok.live_items,
                           close_type="session_end", type=grok.line_type)}

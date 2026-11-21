@@ -989,9 +989,11 @@ def session_timeline(cur, sid, allq, p):
         r["ts"] = iso(r["ts"])
     for c in calls:
         c["start_ts"], c["end_ts"] = iso(c["start_ts"]), iso(c["end_ts"])
-    # Claude Code marks a compaction with a compact_boundary system line, Codex with a compacted line.
-    compactions = [r[0] for r in cur.execute("""SELECT ts FROM raw_lines WHERE session_id = ? AND (type = 'compacted'
-        OR type = 'system' AND json LIKE '%"compact_boundary"%') ORDER BY ts""", [sid]).fetchall()]
+    # Each source marks a compaction with a line of its own (Source.compaction): Claude Code with a compact_boundary
+    # system line, Codex with a compacted line.
+    where, params = store.compaction_filter()
+    compactions = [r[0] for r in cur.execute(f"SELECT ts FROM raw_lines WHERE session_id = ? AND {where} ORDER BY ts",
+                                             [sid] + params).fetchall()]
     full = titles.first_prompts(cur, [sid]).get(sid)
     return dict(requests=reqs, calls=calls, compaction_ts=compactions, first_prompt=titles.cap_prompt(full),
                 first_prompt_cut=bool(full and len(full) > titles.FIRST_PROMPT_CAP), title=titles.titles(cur, [sid]).get(sid, (None,))[0],

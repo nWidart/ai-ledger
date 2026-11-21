@@ -117,6 +117,8 @@ A `user_message_chunk` belongs to the newest `user_prompt_submit` hook's `prompt
 ### Live reads a Grok turn from its lines
 `grok.live_items` gives `prompt` and `turn_start` for a prompt line, `turn_end` for `turn_completed` (with `interrupt` when cancelled), `tool_use` and `tool_result`, `reply`, `compaction`, and `agent` for a spawn. The turn marks that `live.recent` and `live.state` now read with Codex's raw types become a property of the source, not a `source == "codex"` test. `close_type` is `session_end`.
 
+`store.Source` holds four fields for this. `turns` is a `Turns` value, or None for a source with no turn marks (Claude Code): the values of a turn's start and end lines, which are raw types, or the strings at a JSON path when the marks share one raw type (Codex). `lane` maps the path of a file of subagent lines to the subagent's id. `spawn` is the raw type and a text of the lines whose `live_items` give an `agent` item, or None for a source that names the spawn call beside the subagent's file (Claude Code). `compaction` is the raw type and a text of a compaction line; `store.compaction_filter` builds the SQL filter of Live and of the session timeline from it.
+
 ### "Not Claude" is said as "not Claude"
 Web and Python code that means "this source has no judgments" or "no `/context`" tests `=== "codex"` today. It becomes a test for Claude Code. Text that names the agent takes the picked source's label.
 

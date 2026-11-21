@@ -33,7 +33,7 @@ Each task names the model that does it: Sonnet for mechanical edits, Opus for st
 
 ## 5. Live (after 3)
 
-- [ ] 5.1 (Fable) Make the turn marks a property of the source: `live.recent`, `live.state`, `subagent_work`, `lane_of`, `started_by`, `spawned` and the compaction filters (also `metrics.session_timeline`) read them from `store.SOURCES`, not from `source == "codex"`. Codex behaviour must not change. Verify that `test_live` passes unchanged before any Grok case is added.
+- [x] 5.1 (Fable) Make the turn marks a property of the source: `live.recent`, `live.state`, `subagent_work`, `lane_of`, `started_by`, `spawned` and the compaction filters (also `metrics.session_timeline`) read them from `store.SOURCES`, not from `source == "codex"`. Codex behaviour must not change. Verify that `test_live` passes unchanged before any Grok case is added.
 - [ ] 5.2 (Opus) Implement `grok.live_items` and `close_type`; add `run_terminal_command` to the approval and read-only rules. Verify the live-sessions delta scenarios in `test_live` with the Grok fixtures: working during a turn, your turn after `turn_completed`, interrupt on `cancelled`, a subagent lane, closed after `session_end`.
 
 ## 6. Web (after 4.4)

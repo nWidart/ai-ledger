@@ -78,13 +78,15 @@ def aware(t):
     return t.replace(tzinfo=timezone.utc) if t else None
 
 
+def source_of(name):
+    """The store.Source named name; Claude Code's for a name that is none."""
+    return store.SOURCES.get(name) or store.SOURCES["claude"]
+
+
 def lane_of(path, source):
-    """The id of the subagent whose lines file path holds: Claude Code's agent-<id>.jsonl, a Codex thread."""
-    if source == "codex":
-        from . import codex
-        return codex.ids(path)[1]
-    name = path.rsplit("/", 1)[-1]
-    return name[len("agent-"):-len(".jsonl")] if name.startswith("agent-") and name.endswith(".jsonl") else name
+    """The id of the subagent whose lines file path holds, as its source tells it (Source.lane): Claude Code's
+    agent-<id>.jsonl, a Codex thread."""
+    return source_of(source).lane(path)
 
 
 def quiet(tool, summary):
@@ -252,7 +254,7 @@ def state(events, now, source, last, closed=False):
         p = max(pending, key=lambda e: e["start"] or now)
         return st("tool", p["start"], p["tool"], long=p["long"])
     main = [e for e in events if e["lane"] is None]  # a subagent's turn or reply says nothing of the main thread's
-    if source == "codex":
+    if source_of(source).turns:  # the source writes each turn's start and end
         turns = [e for e in main if e["k"] in ("turn_start", "turn_end")]
         if turns and turns[-1]["k"] == "turn_start":
             return st("thinking", turns[-1]["ts"])
@@ -284,13 +286,14 @@ def newest(events):
 
 
 def subagent_work(events, source, since):
-    """The time of the newest evidence of a subagent at work that is newer than `since`, or None. At work: for Codex the
-    lane's newest turn mark is a turn start; for Claude Code its newest event is a finished tool call, as the reply that
-    follows has not come."""
+    """The time of the newest evidence of a subagent at work that is newer than `since`, or None. At work: for a source
+    that writes turn marks (Source.turns, as Codex) the lane's newest turn mark is a turn start; for Claude Code its
+    newest event is a finished tool call, as the reply that follows has not come."""
+    marked = source_of(source).turns
     worked = []
     for lane in {e["lane"] for e in events if e["lane"]}:
         mine = [e for e in events if e["lane"] == lane]
-        if source == "codex":
+        if marked:
             turns = [e for e in mine if e["k"] in ("turn_start", "turn_end")]
             at_work = bool(turns) and turns[-1]["k"] == "turn_start"
         else:
@@ -409,27 +412,37 @@ def title_of(found, sid):
     return dict(title=title, title_from=origin)
 
 
-TURN_MARKS = ("task_started", "task_complete", "turn_aborted")  # the event_msg types of a Codex turn's start and end
+def turn_mark_rows(cur, sids, turns):
+    """The newest turn start and the newest turn end of each file of the sessions sids, as the store.Turns `turns` tells
+    them, in recent's row shape."""
+    marks = list(turns.start + turns.end)
+    if turns.path:  # the marks share one raw type: the value at the path tells them. The text test spares most lines a JSON read.
+        value, vparams = "json_extract_string(r.json, ?)", [turns.path]
+        where = f"r.type = ? AND list_bool_or(list_transform(?, lambda x: contains(r.json, x))) AND list_contains(?, {value})"
+        params = [turns.type, [f'"{m}"' for m in marks], marks] + vparams
+    else:
+        value, vparams, where, params = "r.type", [], "list_contains(?, r.type)", [marks]
+    return cur.execute(f"""SELECT r.session_id, {ROW_COLS}, r.line_no FROM {ROW_FROM}
+            WHERE list_contains(?, r.session_id) AND r.ts IS NOT NULL AND r.parsed AND {where}
+            QUALIFY row_number() OVER (PARTITION BY r.session_id, r.file, list_contains(?, {value})
+              ORDER BY r.ts DESC, r.line_no DESC) = 1""", [sids] + params + [list(turns.start)] + vparams).fetchall()
 
 
 def recent(cur, sids):
     """The newest STATE_LINES lines of each session's main thread and, apart, of its subagents, in line order: enough to
-    tell what it is doing now, and subagent traffic never pushes the main thread out. The newest turn mark of a Codex
-    session's main thread and of each of its subagent files is read too, whatever its age: a long turn still reads
-    thinking, and a subagent in one still counts as at work. So is the newest turn start, which states the window."""
+    tell what it is doing now, and subagent traffic never pushes the main thread out. For a source that writes turn
+    marks (Source.turns, as Codex), the newest turn mark of a session's main thread and of each of its subagent files is
+    read too, whatever its age: a long turn still reads thinking, and a subagent in one still counts as at work. So is
+    the newest turn start, which states the window."""
     lines = {}
     if sids:
         rows = cur.execute(f"""SELECT r.session_id, {ROW_COLS}, r.line_no FROM {ROW_FROM}
                 WHERE list_contains(?, r.session_id) AND r.ts IS NOT NULL AND r.parsed
                 QUALIFY row_number() OVER (PARTITION BY r.session_id, r.subagent ORDER BY r.ts DESC, r.file, r.line_no DESC) <= {STATE_LINES}""",
                            [sids]).fetchall()
-        rows += cur.execute(f"""SELECT r.session_id, {ROW_COLS}, r.line_no FROM {ROW_FROM}
-                WHERE list_contains(?, r.session_id) AND r.ts IS NOT NULL AND r.parsed AND r.type = 'event_msg'
-                AND list_bool_or(list_transform(?, lambda x: contains(r.json, x)))
-                AND list_contains(?, json_extract_string(r.json, '$.payload.type'))
-                QUALIFY row_number() OVER (PARTITION BY r.session_id, r.file, json_extract_string(r.json, '$.payload.type') = 'task_started'
-                  ORDER BY r.ts DESC, r.line_no DESC) = 1""",
-                            [sids, [f'"{m}"' for m in TURN_MARKS], list(TURN_MARKS)]).fetchall()
+        for src in store.SOURCES.values():
+            if src.turns:
+                rows += turn_mark_rows(cur, sids, src.turns)
         seen = set()
         for row in sorted(rows, key=lambda r: (r[0], r[3], r[2], r[7])):
             if row[1] not in seen:  # a turn mark can be among the newest lines already
@@ -543,18 +556,22 @@ def tool_input(e, text):
 def started_by(rows, events):
     """For the subagents among the rows that no call in events names yet: the id of the call that started each, mapped
     to the subagent's lane id. Claude Code's call result names a subagent only when it ends; at its start it writes
-    agent-<id>.meta.json beside its lines, with that call's toolUseId. Codex writes a SubAgentActivity start item in the
-    parent's transcript, with the call's id and the subagent's thread (CLI 0.156 and later)."""
+    agent-<id>.meta.json beside its lines, with that call's toolUseId. A source with spawn lines (Source.spawn) says it
+    in an agent item: Codex writes a SubAgentActivity start item in the parent's transcript, with the call's id and the
+    subagent's thread (CLI 0.156 and later)."""
     named = {e["agent"] for e in events if e["k"] == "tool" and e["agent"]}
     out, seen = {}, set()
     for _, path, _, sub, source, text in rows:
-        if source == "codex":
-            if '"SubAgentActivity"' in text:
-                for it in store.SOURCES["codex"].live_items(json.loads(text)):
+        src = store.SOURCES.get(source)
+        if src is None:
+            continue
+        if src.spawn:
+            if src.spawn[1] in text:
+                for it in src.live_items(json.loads(text)):
                     if it["k"] == "agent":
                         out[it["id"]] = it["agent"]
             continue
-        if not sub or source != "claude" or path in seen or not path.endswith(".jsonl"):
+        if not sub or path in seen or not path.endswith(".jsonl"):
             continue
         seen.add(path)
         lane = lane_of(path, source)
@@ -571,17 +588,23 @@ def started_by(rows, events):
 
 
 def spawned(cur, sid, rows, events, started):
-    """The spawn calls of Codex subagent lanes among the rows that no call names yet, as started_by tells them: the
-    SubAgentActivity item of such a call can be older than the rows, and in any thread of the session, as a subagent can
-    spawn one."""
+    """The spawn calls of the subagent lanes among the rows that no call names yet, for a source with spawn lines
+    (Source.spawn, as Codex), as started_by tells them: the spawn line of such a call (Codex's SubAgentActivity item)
+    can be older than the rows, and in any thread of the session, as a subagent can spawn one."""
     named = set(started.values()) | {e["agent"] for e in events if e["k"] == "tool" and e["agent"]}
-    unnamed = sorted({lane_of(path, source) for _, path, _, sub, source, _ in rows if sub and source == "codex"} - named)
+    by_source = {}  # source name -> its subagent lanes among the rows
+    for _, path, _, sub, source, _ in rows:
+        if sub and source in store.SOURCES and store.SOURCES[source].spawn:
+            by_source.setdefault(source, set()).add(lane_of(path, source))
     out = {}
-    if unnamed:
-        for (text,) in cur.execute("""SELECT json FROM raw_lines WHERE session_id = ? AND type = 'event_msg' AND parsed
-                AND contains(json, '"SubAgentActivity"') AND list_bool_or(list_transform(?, lambda x: contains(json, x)))""",
-                                   [sid, unnamed]).fetchall():
-            for it in store.SOURCES["codex"].live_items(json.loads(text)):
+    for source, found in by_source.items():
+        src, unnamed = store.SOURCES[source], sorted(found - named)
+        if not unnamed:
+            continue
+        for (text,) in cur.execute("""SELECT json FROM raw_lines WHERE session_id = ? AND type = ? AND parsed
+                AND contains(json, ?) AND list_bool_or(list_transform(?, lambda x: contains(json, x)))""",
+                                   [sid, *src.spawn, unnamed]).fetchall():
+            for it in src.live_items(json.loads(text)):
                 if it["k"] == "agent" and it["agent"] in unnamed:
                     out[it["id"]] = it["agent"]
     return out
@@ -620,9 +643,10 @@ def lanes(cur, sid, prices):
 def compactions(cur, sid):
     """Every compaction of the session: when, and the context before it when the source says."""
     out = []
-    for path, ts, source, text in cur.execute("""SELECT r.file, r.ts, coalesce(f.source, 'claude'), r.json FROM raw_lines r
+    where, params = store.compaction_filter("r.")
+    for path, ts, source, text in cur.execute(f"""SELECT r.file, r.ts, coalesce(f.source, 'claude'), r.json FROM raw_lines r
             LEFT JOIN files f ON f.path = r.file WHERE r.session_id = ? AND r.parsed AND NOT r.subagent
-            AND (r.type = 'compacted' OR r.type = 'system' AND contains(r.json, '"compact_boundary"')) ORDER BY r.ts""", [sid]).fetchall():
+            AND {where} ORDER BY r.ts""", [sid] + params).fetchall():
         for it in store.SOURCES[source].live_items(json.loads(text)):
             if it["k"] == "compaction":
                 out.append(dict(ts=iso(parse_ts(ts)), pre=it["pre"]))
