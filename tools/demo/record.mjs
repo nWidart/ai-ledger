@@ -277,12 +277,13 @@ const SCENES = {
     await h.scrollTo(page.locator("#spend"));
     await h.wait(1200);
     await h.click(page.getByRole("link", { name: "Context", exact: true }), { pause: 1800 });
-    await h.scrollTo(page.locator("#growth"), 20);
+    await h.scrollTo(page.locator("#pressure"), 20); // on the first tab: #growth is behind Growth and bloat
     await h.wait(1500);
     await h.click(page.getByRole("link", { name: "Errors", exact: true }), { pause: 1800 });
     await h.scrollTo(page.locator("#chartTitle"), 20);
     await h.wait(1500);
-    await h.click(page.getByRole("link", { name: "Limits", exact: true }), { pause: 300 });
+    // The tab's name goes on with its pill's words ("Limits Highest open window: …", "Limits alert: …").
+    await h.click(page.getByRole("navigation", { name: "Dashboards" }).getByRole("link", { name: /^Limits\b/ }), { pause: 300 });
     await page.locator(".lim-grid svg").first().waitFor(); await h.wait(2500);
     await h.scrollTo(page.locator("#history"));
     await h.wait(1500);
