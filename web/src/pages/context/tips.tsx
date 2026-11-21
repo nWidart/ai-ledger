@@ -23,8 +23,11 @@ const SEV_MARK: Record<Tip["severity"], string> = { critical: "●", warn: "▲"
  *  strip, one at a time; past TIP_STRIP_MAX the rest wait behind "Show N more". */
 export function TipStrip({ tips, onSessions }: { tips: Tip[]; onSessions: (id: TipId) => void }) {
   const [open, setOpen] = useState<TipId | null>(null), [all, setAll] = useState(false);
-  const cur = tips.find(t => t.id === open) ?? null;
   const shown = all ? tips : tips.slice(0, TIP_STRIP_MAX), more = tips.length - TIP_STRIP_MAX;
+  // The open tip is one of the items shown: when it leaves the strip (a filter change moves it past the fourth, or Show fewer
+  // hides it), its details close with it, so they never stay open with no toggle to close them.
+  const cur = shown.find(t => t.id === open) ?? null;
+  if (open != null && !cur) setOpen(null);
   return (
     <section className="tips" id="tips" aria-labelledby="tipsTitle">
       <h2 id="tipsTitle">Tips</h2>
@@ -37,7 +40,7 @@ export function TipStrip({ tips, onSessions }: { tips: Tip[]; onSessions: (id: T
           </button>
         </li>)}
         {more > 0 && <li><button type="button" className="linkish tip-more" aria-expanded={all}
-          onClick={() => { setAll(!all); if (all && cur && tips.indexOf(cur) >= TIP_STRIP_MAX) setOpen(null); }}>{all ? "Show fewer" : `Show ${num(more)} more`}</button></li>}
+          onClick={() => setAll(!all)}>{all ? "Show fewer" : `Show ${num(more)} more`}</button></li>}
       </ul> : <p className="empty">Nothing stands out in this view.</p>}
       {cur && <div className={`tip-detail ${cur.severity}`} id="tip-detail" role="region" aria-label={cur.title}>
         <div className="tip-k">{TIP_KICKERS[cur.id] ?? "Tip"} · {SEV_WORD[cur.severity]}</div>

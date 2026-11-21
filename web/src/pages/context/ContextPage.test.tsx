@@ -7,7 +7,7 @@ import session from "../../__fixtures__/session";
 import { mockApi } from "../../components/sheets/testing";
 import { openDrawer } from "../../components/Drawer";
 import { ContextPage } from "./ContextPage";
-import { TIP_STRIP_MAX } from "./tips";
+import { TIP_STRIP_MAX, TipStrip } from "./tips";
 import { renderApp, renderRouter } from "../../testing";
 
 const fixture: ContextPayload = context;
@@ -111,10 +111,33 @@ describe("ContextPage", () => {
     expect(document.activeElement).toBe(screen.getByRole("tabpanel"));
   });
 
-  it("opens the tab that holds a section a link names", async () => {
+  it("opens the tab that holds a section a link names, keeping the fragment and leaving focus where it is", async () => {
     await show(fixture, "?range=0#d-breaks");
     await waitFor(() => expect(tabOf("Cache health").getAttribute("aria-selected")).toBe("true"));
     await waitFor(() => expect(isOpen("d-breaks")).toBe(true));
+    // A reload opens it again: the fragment stays with the tab.
+    expect(location.hash).toBe("#d-breaks");
+    expect(hash().get("tab")).toBe("cache");
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("follows a change of the fragment alone to the tab that holds it", async () => {
+    await show(fixture, "?range=0&tab=growth");
+    act(() => { location.hash = "pressure"; });
+    await waitFor(() => expect(tabOf("Overhead and pressure").getAttribute("aria-selected")).toBe("true"));
+    expect(location.hash).toBe("#pressure");
+    expect(hash().has("tab")).toBe(false);
+    expect(document.getElementById("pressure")).toBeTruthy();
+  });
+
+  it("points every tab, the hidden ones included, at its panel", async () => {
+    await show();
+    for (const t of within(screen.getByRole("tablist")).getAllByRole("tab")) {
+      const panel = document.getElementById(t.getAttribute("aria-controls")!)!;
+      expect(panel.getAttribute("role")).toBe("tabpanel");
+      expect(panel.getAttribute("aria-labelledby")).toBe(t.id);
+      expect(panel.hidden).toBe(t.getAttribute("aria-selected") !== "true");
+    }
   });
 
   it("draws every chart from the fixture", async () => {
@@ -249,6 +272,21 @@ describe("tips", () => {
     expect(screen.getByRole("region", { name: "Sessions compact repeatedly" })).toBeTruthy();
     await userEvent.click(tipItem("Sessions compact repeatedly"));
     expect(screen.queryByRole("region", { name: "Sessions compact repeatedly" })).toBeNull();
+  });
+
+  it("closes an open tip's details when a new view moves it out of the visible strip", async () => {
+    const { rerender } = renderApp(<TipStrip tips={fixture.tips} onSessions={() => {}} />);
+    const first = fixture.tips[0]!;
+    await userEvent.click(tipItem(first.title));
+    expect(screen.getByRole("region", { name: first.title })).toBeTruthy();
+    // The same tips in another order: the open one is now fifth, behind Show 1 more.
+    rerender(<TipStrip tips={[...fixture.tips.slice(1), first]} onSessions={() => {}} />);
+    expect(screen.queryByRole("button", { name: new RegExp(first.title) })).toBeNull();
+    expect(screen.queryByRole("region", { name: first.title })).toBeNull();
+    // Shown again, it is closed: no details reappear unasked.
+    await userEvent.click(screen.getByRole("button", { name: "Show 1 more" }));
+    expect(tipItem(first.title).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("region", { name: first.title })).toBeNull();
   });
 
   it("sets code spans of the advice in code", async () => {
@@ -464,6 +502,24 @@ describe("window pressure", () => {
     const p = section("pressure");
     expect(p.getByRole("heading", { level: 3, name: "Sessions by start and peak" })).toBeTruthy();
     expect(p.getByText(/^12 sessions\./)).toBeTruthy();
+  });
+
+  it("narrows the bars to a selected quadrant and restores them when it is cleared", async () => {
+    await show();
+    const p = section("pressure");
+    const bars = () => p.getAllByRole("group", { name: /window, \d+ sessions?, by peak share of the window$/ }).map(g => g.getAttribute("aria-label"));
+    const all = bars();
+    expect(all).toContain("200k window, 10 sessions, by peak share of the window");
+    const lean = fixture.sessions_map.points.filter(x => x.start < 30_000 && x.peak / x.window < .8);
+    await userEvent.click(p.getByRole("button", { name: /^Lean/ }));
+    expect(p.getByRole("status").textContent).toMatch(new RegExp(`^Narrowed to Lean: ${lean.length} sessions? on the map`));
+    const narrowed = bars();
+    expect(narrowed).not.toEqual(all);
+    const count = (labels: (string | null)[]) => labels.reduce((n, l) => n + Number(/, (\d+) sessions?,/.exec(l!)![1]), 0);
+    expect(count(narrowed)).toBe(lean.filter(x => x.window).length);
+    await userEvent.click(p.getByRole("button", { name: "Clear" }));
+    expect(bars()).toEqual(all);
+    expect(p.queryByRole("status")).toBeNull();
   });
 
   it("says no session has a known window, and no session is on the map", async () => {

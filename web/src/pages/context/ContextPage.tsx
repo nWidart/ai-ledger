@@ -9,7 +9,7 @@ import { UsageSheets } from "../../components/sheets/UsageSheets";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
 import { num, plural } from "../../format";
-import { setSearch, useSearchOf, useView } from "../../url";
+import { currentRaw, setSearch, useSearchOf, useView } from "../../url";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { rebuildFacts, share } from "./context";
@@ -68,15 +68,21 @@ export function ContextPage() {
   // The tab is part of the view, as a filter is: changing it replaces the history entry.
   const tab: ContextTab = search.tab ?? "overhead";
   const setTab = (t: ContextTab) => setSearch({ tab: t === "overhead" ? null : t }, { push: false });
-  // A link to a section from before the tabs (#pressure, #d-breaks) opens the tab that holds it, then goes to it.
+  // A link to a section from before the tabs (#pressure, #d-breaks) opens the tab that holds it, keeping the fragment so a reload
+  // opens it again, then scrolls to it, without moving focus (a direct load does not). Once the page has figures, and again
+  // whenever only the fragment changes.
   const loaded = !!d;
   useEffect(() => {
-    const id = location.hash.slice(1), t = TAB_OF[id];
-    if (!loaded || !t) return;
-    if (t !== tab) setTab(t);
-    requestAnimationFrame(() => jumpTo(id));
-    // Once, when the page first has figures.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!loaded) return;
+    const go = () => {
+      const id = location.hash.slice(1), t = TAB_OF[id];
+      if (!t) return;
+      if (t !== (validateSearch(currentRaw()).tab ?? "overhead")) setSearch({ tab: t === "overhead" ? null : t }, { push: false, keepHash: true });
+      requestAnimationFrame(() => jumpTo(id, false));
+    };
+    go();
+    addEventListener("hashchange", go);
+    return () => removeEventListener("hashchange", go);
   }, [loaded]);
   // The first load shows the placeholder; the loading look (dimmed figures) belongs to a page that has figures.
   const first = !d && !error;

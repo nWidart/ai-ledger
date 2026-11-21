@@ -49,7 +49,8 @@
 .pg-context .tip-detail .advice { margin-bottom: 6px; max-width: 90ch; }
 
 /* Tabs: the WAI-ARIA tabs; the selected one is marked by weight and an underline, not colour alone */
-.pg-context .tablist { display: flex; gap: 4px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+/* position: the tabs' offsets are the strip's, so Tabs can scroll the selected one into it */
+.pg-context .tablist { position: relative; display: flex; gap: 4px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
 .pg-context .tablist [role=tab] { font: inherit; font-size: .875rem; color: var(--text-secondary); background: none; border: 0; cursor: pointer; white-space: nowrap;
   padding: 8px 12px; margin-bottom: -1px; border-bottom: 2px solid transparent; }
 .pg-context .tablist [role=tab]:hover { color: var(--text-primary); }

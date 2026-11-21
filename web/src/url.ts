@@ -143,8 +143,9 @@ export const currentSheetKey = () => sheetKey(here().pathname);
 const sheetDepth = (): number | undefined => (here().state as { sheets?: number } | undefined)?.sheets;
 
 /** Changes the view. Pushes when a filter or sheet key changes (or push: true), else replaces; a no-op when nothing changes.
- *  Never moves the scroll position: the page is the same page. */
-export function setSearch(patch: SearchPatch, opts: { push?: boolean } = {}) {
+ *  Never moves the scroll position: the page is the same page. keepHash keeps the URL's fragment (a link to a section), which a
+ *  view change otherwise drops. */
+export function setSearch(patch: SearchPatch, opts: { push?: boolean; keepHash?: boolean } = {}) {
   const loc = here(), was = parseSearch(loc.search), next = applyPatch(was, patch), s = formatSearch(next);
   if (s === formatSearch(was)) {
     // The same view spelled another way (keys in another order): rewrite it in the canonical spelling, as a replace. The
@@ -164,7 +165,7 @@ export function setSearch(patch: SearchPatch, opts: { push?: boolean } = {}) {
     const keys = sheetKeys(loc.pathname), before = keys.some(k => was[k]) ? sheets : 0;
     sheets = keys.some(k => next[k]) && changed.every(k => keys.includes(k)) && before != null ? before + 1 : undefined;
   }
-  void router.navigate({ to: loc.pathname, search: next, replace: !push, resetScroll: false, state: sheets ? { sheets } : {} } as never);
+  void router.navigate({ to: loc.pathname, search: next, ...(opts.keepHash ? { hash: true } : {}), replace: !push, resetScroll: false, state: sheets ? { sheets } : {} } as never);
   router.history.flush();
 }
 
