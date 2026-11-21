@@ -184,11 +184,12 @@ def assemble(rows, copied=None):
     LONG; a background call is not, as it returns at once. Lines of a subagent thread of `copied` (as forked tells) below
     its first line of its own give no event. A prompt or reply item with join (Grok's chunks) adds its text, after the
     join text, to its lane's newest event when that is a joining one of the same kind; a turn start between them does
-    not part them. A joined event's text is trimmed once whole, as other sources' prompts and replies are, and one with
-    no text left is dropped. Returns (events, results), where results maps a tool id to its result item when the use is
-    not among the rows."""
+    not part them. An item with a group joins its group's event wherever that is, and the event's key is the group's
+    (group_key), so a later query that reads the same group sends the event again under the same key. A joined event's
+    text is trimmed once whole, as other sources' prompts and replies are, and one with no text left is dropped.
+    Returns (events, results), where results maps a tool id to its result item when the use is not among the rows."""
     events, tools, results, joins = [], {}, {}, {}  # joins: lane -> its newest event when that can take a chunk
-    joined = []
+    joined, groups = [], {}  # groups: group key -> its event
     for key, path, ts, sub, source, text in rows:
         src = store.SOURCES.get(source or "claude")
         try:
@@ -206,11 +207,20 @@ def assemble(rows, copied=None):
             if k not in ("request", "agent", "turn_start"):
                 prev, joins[lane] = joins.get(lane), None
                 if "join" in it:
-                    if prev is not None and prev["k"] == k:
+                    gk = group_key(it, lane)
+                    if gk is not None:  # a grouped event takes only its group's chunks
+                        if gk in groups:
+                            groups[gk]["text"] += it["join"] + it["text"]
+                            continue
+                        ev = groups[gk] = {x: v for x, v in it.items() if x not in ("join", "group")} | dict(
+                            key=gk, ts=t, lane=lane, since=parse_ts(it.get("since")))
+                    elif prev is not None and prev["k"] == k:
                         prev["text"] += it["join"] + it["text"]
                         joins[lane] = prev
                         continue
-                    joins[lane] = ev = {x: v for x, v in it.items() if x != "join"} | dict(key=f"{key}#{i}", ts=t, lane=lane)
+                    else:
+                        joins[lane] = ev = {x: v for x, v in it.items() if x not in ("join", "group", "since")} | dict(
+                            key=f"{key}#{i}", ts=t, lane=lane)
                     events.append(ev)
                     joined.append(ev)
                     continue
@@ -236,6 +246,37 @@ def assemble(rows, copied=None):
         if not ev["text"]:
             empty.add(id(ev))
     return [e for e in events if id(e) not in empty] if empty else events, results
+
+
+def group_key(it, lane):
+    """The key of the joined event live item it belongs to, the same in every query, or None for an item with no group:
+    its group, in its lane."""
+    group = it.get("group")
+    return None if group is None else group if lane is None else f"{group}@{lane}"
+
+
+def head_rows(cur, sid, rows, events):
+    """The lines before the rows that hold the head of a joined event among the events: chunks of its group from before
+    the rows' first line (a reply whose model call began earlier). Read from the group's earliest time (since)."""
+    first = parse_ts(rows[0][2]) if rows else None
+    want = {e["key"]: e["since"] for e in events if e.get("since") and first and e["since"] < first}
+    if not want:
+        return []
+    seen, out = {r[0] for r in rows}, []
+    for row in cur.execute(f"""SELECT {ROW_COLS} FROM {ROW_FROM} WHERE r.session_id = ? AND r.ts >= ? AND r.ts <= ? AND r.parsed
+            ORDER BY r.ts, r.file, r.line_no""", [sid, iso(min(want.values())), rows[0][2]]).fetchall():
+        key, path, _, sub, source, text = row
+        src = store.SOURCES.get(source)
+        if key in seen or src is None:
+            continue
+        try:
+            d = json.loads(text)
+        except ValueError:
+            continue
+        lane = lane_of(path, source) if sub else None
+        if isinstance(d, dict) and any(group_key(it, lane) in want for it in src.live_items(d) if "join" in it):
+            out.append(row)
+    return out
 
 
 def inner_call(r):
@@ -509,6 +550,10 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
         rows = [r[:6] for r in rows[-FIRST_LINES:]]
     copied = forked(cur, [sid])
     events, results = assemble(rows, copied)
+    heads = head_rows(cur, sid, rows, events)
+    if heads:  # a reply begun before the rows: sent whole, under the key an earlier poll gave it
+        rows = heads + rows
+        events, results = assemble(rows, copied)
     started = started_by(rows, events)
     started |= spawned(cur, sid, rows, events, started)
     missing = set(results) | (set(started) - {e["id"] for e in events if e["k"] == "tool"})
@@ -549,7 +594,7 @@ def earlier_uses(cur, sid, before, ids):
 def public(e, text):
     """Event e as sent: times as ISO strings, and text only when asked for (counts otherwise). A tool event is quiet when
     it only reads: told here, as the active list sends no event."""
-    out = {k: iso(v) if isinstance(v, datetime) else v for k, v in e.items()}
+    out = {k: iso(v) if isinstance(v, datetime) else v for k, v in e.items() if k != "since"}  # since: for head_rows only
     if e["k"] in ("prompt", "reply"):
         out["words"] = len(e["text"].split())
         if not text:

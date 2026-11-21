@@ -248,18 +248,22 @@ def live_items(d):
 
     A turn starts at its prompt line (user_message_chunk) and ends at turn_completed, which a cancelled turn writes too.
     A prompt can come as several chunk lines, and a reply as many: each chunk is an item with join, the text that goes
-    between it and the chunk before, so live.assemble makes one event of a run of them. Grok states its window only in
+    between it and the chunk before, so live.assemble makes one event of a run of them. A chunk's group names the
+    event it belongs to whatever lines a query reads (a reply's model call, a prompt's time), and since the time of
+    the group's earliest possible chunk, so that Live reads a reply's head again. Grok states its window only in
     a compaction notice, so turn_start has none. The spawn_subagent call names its subagent (the child session) from
     its result, as no line ties the call to the child while it runs. A background shell call has no timeout: it
     returns at once. Thought chunks give nothing, and no request: Grok's usage comes once a turn ends."""
-    u = update(d)
+    u, m = update(d), meta(d)
     t, tid = u.get("sessionUpdate"), string(u.get("toolCallId"))
-    if t == "user_message_chunk":
+    if t == "user_message_chunk":  # a prompt's chunks share their line's time, which no catch-up window parts
         text = chunk_text(u)
-        return [dict(k="turn_start", window=None)] + ([dict(k="prompt", text=text, join="\n")] if text else [])
+        group = f"prompt:{m['agentTimestampMs']}" if store.is_int(m.get("agentTimestampMs")) else None
+        return [dict(k="turn_start", window=None)] + ([dict(k="prompt", text=text, join="\n", group=group, since=None)] if text else [])
     if t == "agent_message_chunk":  # a chunk of only a space still parts two words: live.assemble trims the whole
-        text = chunk_text(u)
-        return [dict(k="reply", text=text, join="")] if text else []
+        text, stream = chunk_text(u), m.get("streamStartMs")
+        group, since = (f"reply:{stream}", iso(stream)) if store.is_int(stream) else (None, None)  # one reply per model call
+        return [dict(k="reply", text=text, join="", group=group, since=since)] if text else []
     if t == "turn_completed":
         return ([dict(k="interrupt")] if u.get("stop_reason") == "cancelled" else []) + [dict(k="turn_end")]
     if t == "auto_compact_completed":

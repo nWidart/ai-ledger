@@ -80,6 +80,37 @@ class TurnStateTest(GrokLiveCase):
         self.assertEqual(replies[0], grok.chunk_text(grok.update(lines[i])) + " and more")
         self.assertEqual(len(replies), sum(kind(d) == "agent_message_chunk" for d in lines))
 
+    def test_reply_across_the_catch_up_window_is_one_event(self):
+        # A reply's chunks 65 s apart (one model call): the second poll's window starts after the first chunk, and still
+        # sends the reply whole under the key the first poll gave it, so the page replaces it.
+        lines = self.until(self.lines("long-turn"), "session_end")
+        i = next(i for i, d in enumerate(lines) if kind(d) == "agent_message_chunk")
+        head, start = lines[i], grok.meta(lines[i])["agentTimestampMs"]
+
+        def chunk(base, n, ms, text=None):
+            d = copy.deepcopy(base)
+            grok.meta(d).update(eventId=grok.meta(d)["eventId"] + n, agentTimestampMs=start + ms)
+            if text is not None:
+                grok.update(d)["content"]["text"] = text
+            return d
+        thought = chunk(next(d for d in lines if kind(d) == "agent_thought_chunk"), "7", 61_000)
+        grok.meta(thought)["streamStartMs"] = grok.meta(head)["streamStartMs"]
+        tail = chunk(head, "8", 65_000, " and more")
+        first = [d for d in lines[:i + 1] if grok.meta(d)["agentTimestampMs"] <= start] + [thought]
+        self.store("long-turn", first)
+        cur = self.con.cursor()
+        poll1 = live.session(cur, SESSION["long-turn"], now=self.at(tail, 5), prices=PRICES, text=True)
+        self.assertGreater(live.parse_ts(poll1["cursor"]) - live.OVERLAP, self.at(head))  # the head is out of the next window
+        self.store("long-turn", first + [tail])
+        poll2 = live.session(cur, SESSION["long-turn"], after=poll1["cursor"], now=self.at(tail, 5), prices=PRICES, text=True)
+        merged = {e["key"]: e for e in poll1["events"]}  # as the page merges a catch-up: by key
+        merged.update({e["key"]: e for e in poll2["events"]})
+        whole = grok.chunk_text(grok.update(head)) + " and more"
+        self.assertEqual([e["text"] for e in merged.values() if e["k"] == "reply"].count(whole), 1)
+        self.assertNotIn(" and more", [e["text"] for e in merged.values() if e["k"] == "reply"])
+        self.assertEqual([e["text"] for e in poll2["events"] if e["k"] == "reply"], [whole])
+        self.assertNotIn("since", poll2["events"][0])
+
     def test_cancelled_turn_is_an_interrupt_and_your_turn(self):
         lines = self.until(self.lines("cancelled"), "session_end")
         self.store("cancelled", lines)
