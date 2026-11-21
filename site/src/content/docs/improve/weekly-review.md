@@ -111,7 +111,7 @@ First read the coverage note at the top, such as "150 of 400 Claude Code session
 Every figure here is **model-judged**: a model's reading of the transcript, not a measurement. The app sets no threshold on this page, so these are rules of thumb. The stop is off when:
 
 - **Not achieved** or **Dissatisfied**, in **Outcomes at a glance**, is higher than in your last note.
-- The newest week's bar in **Outcome trend** has a smaller fully and mostly achieved part than the week before. A week with few sessions swings: read the figure over the bar, the week's sessions. A faint bar has fewer than 5.
+- The newest week's bar in **Outcome trend** has a smaller fully and mostly achieved part than the week before. A week with few sessions swings: read the figure over the bar, the week's sessions. A half-width bar has fewer than 5.
 - One family leads **Friction categories** two reviews in a row. Read it by **Cost** to see which friction the costliest sessions had, and by **Reports** to see which comes most often.
 
 For any of these, open [Get sessions to finish](/ai-ledger/improve/finish-sessions/).

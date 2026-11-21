@@ -113,7 +113,7 @@ Limits lists no sessions and no tools of its own. A session or a tool you open f
 
 ## Navigation pill
 
-The Limits tab, on every page, carries a pill with the percent of the fullest open window, for example "42%". "≈" before the percent marks an estimate. With no open window that has a percent, there is no pill.
+The Limits tab, on every page, carries a pill with the percent of the fullest open window, for example "42%". "≈" before the percent marks an estimate. The pill keeps one width from "7%" to "≈100%", so no tab moves when the percent changes. With no open window that has a percent, there is no pill.
 
 The pill is quiet until an open window is in alert. The alert names the one worst open window, in this order. The pill's tone is in brackets; a pill in alert also has a ring.
 
@@ -125,7 +125,7 @@ The 90% threshold applies only to High: a window at its limit or forecast to run
 
 Hover the tab to read the alert's sentence, for example "Claude Code weekly is forecast to run out Sat, Nov 7, 2:00 PM". It ends with "(and 2 more)" when other windows are in alert too. A figure that is an estimate says so ("is estimated to be at its limit", "is at an estimated 92%"). With no alert, the hover text names the fullest window: "Highest open window: Codex weekly at 42%". A screen reader reads the same words after the tab name, as "Limits alert: …" or "Limits Highest open window: …".
 
-On a narrow window, the page chooser's button carries the pill only while a window is in alert. Its Limits link always carries it.
+On a narrow window, the page chooser's button carries the pill only while a window is in alert, and keeps room for it otherwise, so the button does not grow when an alert starts. Its Limits link always carries it. With forced colors on, a pill in alert is drawn in the system's reverse colors.
 
 ## Where the data comes from
 

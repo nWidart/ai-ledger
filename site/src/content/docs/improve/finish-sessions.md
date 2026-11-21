@@ -13,7 +13,7 @@ Open Activity, select [Judgments](/ai-ledger/pages/insights/) in the view switch
 
 - Rule of thumb: in **Outcomes at a glance**, **Fully or mostly achieved** is under 80%.
 - Rule of thumb: **Not achieved** or **Dissatisfied** is higher than in your last note of the [Weekly 15-minute review](/ai-ledger/improve/weekly-review/#keep-a-note-of-each-review).
-- Rule of thumb: the newest week's bar in **Outcome trend** has a smaller fully and mostly achieved part than the week before, on at least 5 sessions. The figure over a bar is the week's sessions; a faint bar has fewer than 5, and swings.
+- Rule of thumb: the newest week's bar in **Outcome trend** has a smaller fully and mostly achieved part than the week before, on at least 5 sessions. The figure over a bar is the week's sessions; a half-width bar has fewer than 5, and swings.
 - Rule of thumb: one family leads **Friction categories**, by **Reports**, two reviews in a row. The heading names it: "…; **tooling** caused the most friction" (an example).
 
 The same judgments show for one project in the **Session judgments** block of the [Project](/ai-ledger/pages/project/) page.

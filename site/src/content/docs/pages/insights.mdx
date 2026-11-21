@@ -83,7 +83,7 @@ In page order, when the view has analysed sessions.
 
 **Shows** (model-judged) what got in the way, weighed by the sessions that reported it. A session can carry several labels. Similar labels are grouped into **families** by keyword (the How measured toggletip says so), in a fixed order where the first matching rule wins; a label no rule matches is a family of its own.
 
-**Figures** Each row shows three figures of the sessions that reported it, and how many they are: their estimated **cost**, their **active time**, and the **reports** (the times the friction was reported). The weight you pick orders the rows, sets the bar and is the row's main figure, as in "$42", "1.5h · 1 session". The cost and the active time are those of the whole sessions, not of the friction alone. Each session counts once in a row, over its whole length, whatever the range. A session with no transcript in the store, or with no price, adds no cost or time.
+**Figures** Each row shows three figures of the sessions that reported it, and how many they are: their estimated **cost**, their **active time**, and the **reports** (the times the friction was reported). The weight you pick orders the rows, sets the bar and is the row's main figure; the other two and the sessions follow it, as in "$42", "1.5h · 2 reports · 1 session". The cost and the active time are those of the whole sessions, not of the friction alone. Each session counts once in a row, over its whole length, whatever the range. A session with no transcript in the store adds no cost or time. A session with no price adds no cost, but its active time counts.
 
 A family of two or more labels shows an expander, "N labels", that lists the labels as `/insights` wrote them, weighed the same way. A family's reports are the sum of its labels' reports, and its sessions are the distinct sessions that carry any of them. Names read with spaces, not underscores. The list shows the first 12 rows and "Show all N friction families". With none, it reads "No friction reported in this view."
 
@@ -99,13 +99,13 @@ Selecting a family row filters the session list by the family (`frf`); selecting
 
 **Shows** (model-judged) one bar per week of session start. Every bar is as tall as the plot: it is 100% of that week's analysed sessions, split by outcome. From the bottom: fully achieved, mostly achieved, partially achieved, not achieved, then no clear outcome. A key names the parts.
 
-**Figures** The figure over a bar is the week's analysed sessions. Read it with the bar: a week of 4 sessions is as tall as a week of 40. A week with fewer than 5 sessions is drawn faint, and the key then shows "Under 5 sessions". Weeks start on Monday. Weeks with no session are left out, and at most the newest 26 weeks show. The panel shows only when the analysed sessions span two or more weeks.
+**Figures** The figure over a bar is the week's analysed sessions. Read it with the bar: a week of 4 sessions is as tall as a week of 40. A week with fewer than 5 sessions is drawn at half width, and the key then shows "Under 5 sessions". Every outcome with a session shows, however thin: 1 session in 150 still draws a line. On a narrow chart the figures show over every few bars; the data table has each week's. Weeks start on Monday. Weeks with no session are left out, and at most the newest 26 weeks show. The panel shows only when the analysed sessions span two or more weeks.
 
 **Controls**
 
 | Control | What it does |
 | --- | --- |
-| Hover, or Left and Right on the focused chart | Reads one week: its analysed sessions, and each outcome's count and share, as "7 fully achieved (58%)". Home and End read the first and last week. Esc closes the readout. |
+| Hover, or Left and Right on the focused chart | Reads one week: its analysed sessions, and each outcome's count and share, as "7 fully achieved (58%)". Home and End read the first and last week. Esc closes the readout. A key with Alt, Ctrl, Cmd or Shift is left to the browser. |
 | **Show data table** | Lists every week with its sessions and each outcome's count and share. |
 
 ### Satisfaction and helpfulness

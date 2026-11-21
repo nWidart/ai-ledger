@@ -14,19 +14,19 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - Errors' rate chart has a "Show data table" disclosure, as on Activity and Cost.
 - Cost's tokens chart has a Scale switch, Volume or Share. Share draws each day as a 100% bar split by token kind, so each kind's daily share is readable beside the cache reads that dominate Volume. It drops the 7-day average and the peak label, and the tooltip, screen-reader text and data table give each kind's share and the day's total.
 - The Live tab shows a badge with the sessions that wait for you (a likely approval wait, or your turn), on every page. It shows nothing at 0 and "9+" above nine, and the tab's name says the count for a screen reader.
-- The Limits tab shows the percent of your fullest open limit window, on every page ("≈" marks an estimate). It replaces the alert dot: the pill turns amber or red, with a ring, when a window is nearly full, at its limit or forecast to run out.
+- The Limits tab shows the percent of your fullest open limit window, on every page ("≈" marks an estimate). It replaces the alert dot: the pill turns amber or red, with a ring, when a window is nearly full, at its limit or forecast to run out. It keeps one width from "7%" to "≈100%", so no tab moves.
 - Judgments' session cards show what the store measured of each session: its estimated cost, its peak context as a share of the window, and its failed tool calls.
-- Judgments' Friction categories can be weighed by the cost or the active time of the sessions that reported each friction, or by reports. Cost is the default.
+- Judgments' Friction categories can be weighed by the cost or the active time of the sessions that reported each friction, or by reports. Cost is the default, and each row shows the other two beside it. A session with no price adds its active time but no cost.
 - The command palette opens Activity's Judgments view with `>judgments`; `>insights` finds the same row.
 
 ### Changed
 
 - The navigation has two groups: **Now** (Live, Limits) and **Review** (Activity, Cost, Context, Errors). The page chooser on narrow screens lists the same groups. Every tab uses the same active style; Errors no longer has a red one.
-- Insights is now the **Judgments** view of Activity, picked with a switch above the heading and kept in the address (`/usage?view=judgments`). The Insights tab is gone. An old `/insights` link opens the view with its filters, its judgment filters and its open session.
-- Judgments shows no source filter, and no longer says "/insights analyses only Claude Code sessions" on an empty page. With Codex as the source, Activity shows Overview, and the Judgments button says why it cannot be picked.
-- Judgments' Outcome trend is a chart: one bar per week, each 100% of that week and split by outcome, with the week's sessions over it. A week with fewer than 5 sessions is drawn faint. The arrow keys read each week, and a data table lists them.
-- Sessions, tools, MCP servers, skills and projects open their sheet over every page, Limits included. From Limits, the command palette and the right-click menu no longer send you to Activity.
-- Each page shows only the filters that change it, in the header beside the heading.
+- Insights is now the **Judgments** view of Activity, picked with a switch above the heading and kept in the address (`/usage?view=judgments`). The Insights tab is gone. An old `/insights` link opens the view with its filters, its judgment filters, its open session and its section anchor (`#d-goals`).
+- Judgments shows no source filter, and no longer says "/insights analyses only Claude Code sessions" on an empty page. With Codex as the source, Activity shows Overview, and the Judgments button says why it cannot be picked; so does the Project page's Session judgments block, in place of its link. A judged session's sheet over a Codex view links to Judgments for every source.
+- Judgments' Outcome trend is a chart: one bar per week, each 100% of that week and split by outcome, with the week's sessions over it. A week with fewer than 5 sessions is drawn at half width. Every outcome with a session shows, even 1 in 150, and on a phone the counts thin out instead of overlapping. The arrow keys read each week (Alt, Ctrl, Meta and Shift keys stay the browser's), and a data table lists them.
+- Sessions, tools, MCP servers, skills and projects open their sheet over every page, Limits included. From Limits, the command palette and the right-click menu no longer send you to Activity, and the projects in What used this window and Commits a point, by project open the right-click menu.
+- Each page shows only the filters that change it: those of the whole page in the header beside the heading, and a section's own (Limits' range) in that section's header.
 - The docs site lists the pages in the navigation's order, and the Insights page is now Judgments, at the same address.
 
 - Context is shorter and leads with what to act on:
