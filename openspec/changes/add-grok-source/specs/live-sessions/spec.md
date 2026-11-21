@@ -197,7 +197,7 @@ The app SHALL take as evidence of a close the `cost-state` line Claude Code writ
 - **THEN** the state is ended until its first timed line, a known limit: Claude Code writes such lines at exit as well, so none marks a resume
 
 ### Requirement: Mark tool calls that only read
-The app SHALL mark a tool call as read-only when its tool is `Read`, `Grep` or `Glob`, or when it is a shell call (Claude Code `Bash`, Codex `exec_command`, Grok `run_terminal_command` by its `command`) whose every command, named without a path, is `grep`, `cat`, `ls`, `head`, `tail`, `wc`, `nl`, `cd`, `pwd` or `echo`, or is `rg`, `sort` or `find` with only flags the app lists as reading, or is `sed -n` with a script that only prints lines by number.
+The app SHALL mark a tool call as read-only when its tool is `Read`, `Grep` or `Glob`, or Grok's `read_file`, `grep` or `list_dir`, or when it is a shell call (Claude Code `Bash`, Codex `exec_command`, Grok `run_terminal_command` by its `command`) whose every command, named without a path, is `grep`, `cat`, `ls`, `head`, `tail`, `wc`, `nl`, `cd`, `pwd` or `echo`, or is `rg`, `sort` or `find` with only flags the app lists as reading, or is `sed -n` with a script that only prints lines by number.
 
 #### Scenario: Read-only call
 - **WHEN** a session makes a `Grep` call and a `Bash` call that runs `git commit`
@@ -210,6 +210,10 @@ The app SHALL mark a tool call as read-only when its tool is `Read`, `Grep` or `
 #### Scenario: Grok read-only call
 - **WHEN** a Grok `run_terminal_command` call's `command` is `rg TODO src` and another's is `rg TODO src && rm notes.md`
 - **THEN** the first is marked as read-only and the second is not
+
+#### Scenario: Grok read tool
+- **WHEN** a Grok session makes a `read_file` call and a `search_replace` call
+- **THEN** the `read_file` event is marked as read-only and the `search_replace` event is not
 
 #### Scenario: Read-only shell call of several commands
 - **WHEN** a `Bash` call runs `cd web && rg -n 'a|b' src | head -5`
