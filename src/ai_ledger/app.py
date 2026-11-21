@@ -102,6 +102,17 @@ def parse_span(query):
     return int(got[0])
 
 
+def parse_sort(query):
+    """The sort= of a /api/sessions query string: "" when the key is absent (the default order), else its first value. A blank
+    value, whichever of several, raises ValueError (parse_qs would drop it, and the request would read as unsorted)."""
+    got = parse_qs(query, keep_blank_values=True).get("sort")
+    if got is None:
+        return ""
+    if "" in got:
+        raise ValueError("empty sort key")
+    return got[0]
+
+
 def parse_fix(body, today):
     """(error type, day) from the JSON body of POST /api/errors/fix; day None removes the marker. Raises ValueError."""
     if not isinstance(body, dict):
@@ -467,7 +478,7 @@ def handler(app, port=PORT):
                     self.json(metrics.session_list(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("q", ""),
                                                    q.get("near") == "1", int(q.get("offset") or 0), max(1, int(q.get("limit") or 100)),
                                                    day=q.get("day", ""), automated=q.get("automated") == "1", source=q.get("source", ""),
-                                                   sort=q.get("sort", ""), desc=q.get("desc") == "1", days=parse_span(url.query)))
+                                                   sort=parse_sort(url.query), desc=q.get("desc") == "1", days=parse_span(url.query)))
                 elif url.path == "/api/day":
                     self.json(metrics.day_view(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("day", ""),
                                                automated=q.get("automated") == "1", source=q.get("source", ""), days=parse_span(url.query) or 1))

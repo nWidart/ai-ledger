@@ -823,6 +823,39 @@ class MetricsTest(unittest.TestCase):
             httpd.shutdown()
             httpd.server_close()
 
+    def test_api_sessions_sort_list(self):
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(self.con, dict(claude=self.tmp))))
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            def get(path):
+                h = http.client.HTTPConnection("127.0.0.1", httpd.server_address[1])
+                h.request("GET", path, headers={"Host": f"{app.HOST}:{app.PORT}"})
+                r = h.getresponse()
+                return r.status, json.loads(r.read())
+            ids = lambda path: [x["session_id"] for x in get(path)[1]["sessions"]]
+            self.assertEqual(get("/api/sessions?sort=-tokens,cost")[0], 200)
+            self.assertEqual(ids("/api/sessions?sort=-tokens,cost"), ["s1", "s2", "s3"])
+            # s2 and s3 tie on failed calls: the second key puts s3 (130 tokens) before s2 (200), against the list's order.
+            self.assertEqual(ids("/api/sessions?sort=-errors,tokens"), ["s1", "s3", "s2"])
+            self.assertEqual(ids("/api/sessions?sort=cost&desc=1"), ids("/api/sessions?sort=-cost"))
+            # No sort key keeps the default order (newest first); a blank one is refused.
+            self.assertEqual(get("/api/sessions")[0], 200)
+            self.assertEqual(ids("/api/sessions"), ["s2", "s1", "s3"])
+            self.assertEqual(get("/api/sessions?sort="), (400, dict(error="empty sort key")))
+            self.assertEqual(get("/api/sessions?sort=&desc=1"), (400, dict(error="empty sort key")))
+            # A blank among several sort values is refused wherever it stands; otherwise the first value counts.
+            for path in ("sort=cost&sort=", "sort=&sort=cost"):
+                self.assertEqual(get(f"/api/sessions?{path}"), (400, dict(error="empty sort key")), path)
+            self.assertEqual(ids("/api/sessions?sort=-tokens&sort=cost"), ["s1", "s2", "s3"])
+            for path, error in (("sort=cost,cost", "repeated sort key: cost"), ("sort=cost,-cost", "repeated sort key: cost"),
+                                ("sort=cost,tokens,prompts,errors", "too many sort keys: at most 3"), ("sort=cost,", "empty sort key"),
+                                ("sort=cost,title", "unknown sort: title"), ("sort=-cost,prompts&desc=1", "desc cannot go with a sort list or a - key"),
+                                ("sort=-cost&desc=1", "desc cannot go with a sort list or a - key")):
+                self.assertEqual(get(f"/api/sessions?{path}"), (400, dict(error=error)), path)
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+
     def test_palette(self):
         c = self.con.cursor()
         pal = lambda *a, **k: metrics.palette(c, *a, today=TODAY, **k)
@@ -871,6 +904,102 @@ class MetricsTest(unittest.TestCase):
     def test_unlisted_codex_model_unpriced(self):
         m = self.codex_models(("gpt-5.5", None, False, 1_000, 10, 0, 0, 0, 0))  # seen in Codex sessions, not in prices.json
         self.assertIsNone(m["gpt-5.5"]["cost"])
+
+
+class SessionSortKeysTest(unittest.TestCase):
+    """Sessions sorted by one to three keys. Fixture rows are (id, first_ts, compactions, prompts, model, output in millions):
+    a request costs its output in millions times $10, and m-x has no price. The list's own order is newest first, e before f."""
+
+    ROWS = [("f", "2026-11-05 09:00:00", 0, 2, "m-a", 1), ("e", "2026-11-05 09:00:00", 0, 2, "m-a", 1),
+            ("d", "2026-11-04 09:00:00", 1, 2, "m-x", 3), ("c", "2026-11-03 09:00:00", 2, 3, "m-a", 5),
+            ("b", "2026-11-02 09:00:00", 1, 1, "m-a", 2), ("a", "2026-11-01 09:00:00", 1, 2, "m-a", 1)]
+
+    def store(self, rows):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        con = store.open_store(os.path.join(tmp, "x.duckdb"))
+        self.addCleanup(con.close)
+        c = con.cursor()
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts", "compactions", "peak_context", "peak_model"],
+                     [(i, "p", ts, ts, comp, 10, "m-a") for i, ts, comp, _, _, _ in rows])
+        store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "effort", "subagent", "input", "output", "thinking",
+                                     "cache_read", "cache_5m", "cache_1h", "thinking_ms"],
+                     [(f"r-{i}", i, ts, model, None, False, 0, out * 1_000_000, 0, 0, 0, 0, 0) for i, ts, _, _, model, out in rows])
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"],
+                     [(f"p-{i}-{n}", i, ts, False) for i, ts, _, prompts, _, _ in rows for n in range(prompts)])
+        return con
+
+    def ids(self, con, **k):
+        return [x["session_id"] for x in metrics.session_list(con.cursor(), prices=PRICES, today=TODAY, **k)["sessions"]]
+
+    def test_two_keys_in_both_directions(self):
+        con = self.store(self.ROWS)
+        self.assertEqual(self.ids(con), list("efdcba"))
+        # Ties after the last key keep the list's order (d is newer than a).
+        self.assertEqual(self.ids(con, sort="-compactions,prompts"), list("cbdaef"))
+        self.assertEqual(self.ids(con, sort="-compactions,-prompts"), list("cdabef"))
+        self.assertEqual(self.ids(con, sort="compactions,prompts"), list("efbdac"))
+        self.assertEqual(self.ids(con, sort="compactions,-prompts"), list("efdabc"))
+
+    def test_three_keys(self):
+        con = self.store(self.ROWS)
+        self.assertEqual(self.ids(con, sort="-compactions,-prompts,tokens"), list("cadbef"))
+        self.assertEqual(self.ids(con, sort="-compactions,-prompts,-tokens"), list("cdabef"))
+        self.assertEqual(self.ids(con, sort="prompts,-tokens,compactions"), list("bdefac"))
+        self.assertEqual(self.ids(con, sort="-prompts,tokens,-compactions"), list("caefdb"))
+
+    def test_no_value_comes_last_for_each_key(self):
+        con = self.store(self.ROWS)
+        # d is unpriced: last under the second key and under the first, in either direction.
+        self.assertEqual(self.ids(con, sort="-compactions,cost"), list("cabdef"))
+        self.assertEqual(self.ids(con, sort="-compactions,-cost"), list("cbadef"))
+        self.assertEqual(self.ids(con, sort="cost"), list("efabcd"))
+        self.assertEqual(self.ids(con, sort="-cost"), list("cbefad"))
+        self.assertEqual(self.ids(con, sort="-cost,-compactions"), list("cbaefd"))
+
+    def test_earlier_form_equals_list_form(self):
+        con = self.store(self.ROWS)
+        for key in metrics.SESSION_SORTS:
+            self.assertEqual(self.ids(con, sort=key, desc=True), self.ids(con, sort=f"-{key}"), key)
+            self.assertEqual(self.ids(con, sort=key), self.ids(con, sort=key, desc=False), key)
+        self.assertEqual(self.ids(con, sort="cost", desc=True), list("cbefad"))
+
+    def test_ties_keep_the_lists_order_then_session_id(self):
+        con = self.store(self.ROWS)
+        # Nobody has a failed call: the list's own order stands, and e before f though f was stored first.
+        self.assertEqual(self.ids(con, sort="-errors"), list("efdcba"))
+        self.assertEqual(self.ids(con, sort="errors,-commits"), list("efdcba"))
+        # On a selected day the list's order is costliest first; e and f cost the same, so the session id decides.
+        self.assertEqual(self.ids(con, day="2026-11-05"), ["e", "f"])
+        self.assertEqual(self.ids(con, day="2026-11-05", sort="-errors"), ["e", "f"])
+
+    def test_session_id_never_reorders_sessions_that_start_apart(self):
+        # Half a second is no tie: z started later than a, so it comes first, though a's id sorts first.
+        con = self.store([("a", "2026-11-05 09:00:00.000", 0, 1, "m-a", 1), ("z", "2026-11-05 09:00:00.500", 0, 1, "m-a", 1),
+                          ("m", "2026-11-05 09:00:00.000", 0, 1, "m-a", 1)])
+        for sort in ("", "-errors", "-compactions,-cost"):
+            self.assertEqual(self.ids(con, sort=sort), ["z", "a", "m"], sort)
+
+    def test_a_fully_tied_list_pages_without_repeats(self):
+        ids = [f"t{n:02d}" for n in reversed(range(25))]
+        con = self.store([(i, "2026-11-05 09:00:00", 0, 1, "m-a", 1) for i in ids])
+        for sort in ("-errors", "errors,-compactions", "-prompts,-cost,tokens", ""):
+            pages = [self.ids(con, sort=sort, offset=o, limit=10) for o in (0, 10, 20)]
+            self.assertEqual([len(p) for p in pages], [10, 10, 5], sort)
+            self.assertEqual(sum(pages, []), sorted(ids), sort)
+
+    def test_refusals(self):
+        con = self.store(self.ROWS)
+        for sort, desc, error in (("title", False, "unknown sort: title"), ("-title", False, "unknown sort: title"),
+                                  ("cost,cost", False, "repeated sort key: cost"), ("cost,-cost", False, "repeated sort key: cost"),
+                                  ("cost,", False, "empty sort key"), (",cost", False, "empty sort key"), ("-", False, "empty sort key"),
+                                  (",", False, "empty sort key"),
+                                  ("cost,tokens,prompts,errors", False, "too many sort keys: at most 3"),
+                                  ("-cost,prompts", True, "desc cannot go with a sort list or a - key"),
+                                  ("cost,prompts", True, "desc cannot go with a sort list or a - key"),
+                                  ("-cost", True, "desc cannot go with a sort list or a - key")):
+            with self.assertRaisesRegex(ValueError, error, msg=sort):
+                metrics.session_list(con.cursor(), sort=sort, desc=desc, prices=PRICES, today=TODAY)
 
 
 class RunRateTest(unittest.TestCase):
