@@ -646,7 +646,7 @@ describe("past windows strips", () => {
   const early = curve.window; // the Codex weekly window a plan change ended early
   const row = (h: LimitHistoryRow) => screen.getByRole("button", { name: barName(h) });
   const hist = () => within(document.getElementById("history")!);
-  const showCurve = (d: LimitsPayload = fixture, answer: () => unknown = () => curve, open = true) => {
+  const showCurve = (d: LimitsPayload = fixture, answer: (q: URLSearchParams) => unknown = () => curve, open = true) => {
     toOpen = open;
     const f = mockApi({ "/api/limits": () => d, "/api/limits/window": answer });
     history.replaceState(null, "", "/limits?range=30");
@@ -677,19 +677,73 @@ describe("past windows strips", () => {
     expect(hist().getByRole("button", { name: /, ended / }).querySelector("i")!.style.height).toBe("6%");
   });
 
-  it("lists two closed windows that share a bar key as their own rows, and marks the selected window's rows", async () => {
-    const error = vi.spyOn(console, "error").mockImplementation(() => {}); // the strip's bars share a key too
+  // Two windows of one limit and scope that one poll reported with different resets: with no known duration, both start
+  // at the poll, so only their reset (and close) tells them apart.
+  const later = (t: string) => new Date(Date.parse(t) + 3_600_000).toISOString();
+  const twin = (h: LimitHistoryRow): LimitHistoryRow => ({ ...h, resets_at: later(h.resets_at), closed_at: later(h.closed_at), final: 41 });
+  const rows = () => [...hist().getByRole("table", { name: "Closed windows" }).querySelectorAll("tbody tr")];
+  const marks = () => rows().map(r => [r.className, r.getAttribute("aria-current")]);
+
+  it("lists two closed windows that share a start as their own rows, and marks only the selected window's row", async () => {
+    const error = vi.spyOn(console, "error");
     try {
-      const again = { ...early, closed_at: new Date(Date.parse(early.closed_at) + 3_600_000).toISOString(), final: 41 };
-      showCurve({ ...fixture, history: [early, again, { ...early, start: "2026-01-01T00:00:00Z", closed_at: "2026-01-02T00:00:00Z" }] });
+      showCurve({ ...fixture, history: [early, twin(early), { ...early, start: "2026-01-01T00:00:00Z", closed_at: "2026-01-02T00:00:00Z" }] });
       await lede();
       openTable();
-      const rows = () => [...hist().getByRole("table", { name: "Closed windows" }).querySelectorAll("tbody tr")];
       expect(rows().map(r => r.children[3]!.textContent)).toEqual(["22%", "41%", "22%"]);
-      expect(rows().map(r => [r.className, r.getAttribute("aria-current")])).toEqual([["", null], ["", null], ["", null]]);
+      expect(marks()).toEqual([["", null], ["", null], ["", null]]);
       fireEvent.click(hist().getAllByRole("button", { name: barName(early) })[0]!);
-      await waitFor(() => expect(rows().map(r => [r.className, r.getAttribute("aria-current")])).toEqual([["sel", "true"], ["sel", "true"], ["", null]]));
+      await waitFor(() => expect(marks()).toEqual([["sel", "true"], ["", null], ["", null]]));
+      expect(error).not.toHaveBeenCalled(); // no two bars, and no two rows, share a key
     } finally { error.mockRestore(); }
+  });
+
+  it("makes each of two windows that share a start its own bar, focus stop and pick", async () => {
+    const error = vi.spyOn(console, "error");
+    try {
+      const two = [{ ...early, window_minutes: null }, twin({ ...early, window_minutes: null })];
+      showCurve({ ...fixture, history: two });
+      await lede();
+      openTable();
+      const bars = within(hist().getByRole("group", { name: /past windows/ })).getAllByRole("button");
+      expect(bars.map(b => b.getAttribute("aria-label"))).toEqual(two.map(barName));
+      expect(bars.map(b => b.tabIndex)).toEqual([-1, 0]);
+      act(() => bars[1]!.focus());
+      await userEvent.keyboard("{ArrowLeft}");
+      expect(document.activeElement).toBe(bars[0]);
+      expect(bars.map(b => b.tabIndex)).toEqual([0, -1]);
+      await userEvent.keyboard("{ArrowRight}");
+      expect(document.activeElement).toBe(bars[1]);
+      await userEvent.keyboard("{Enter}");
+      expect(bars.map(b => b.getAttribute("aria-pressed"))).toEqual(["false", "true"]);
+      expect(within(hist().getByRole("region", { name: WINDOW })).getByText("41%")).toBeTruthy();
+      expect(marks()).toEqual([["", null], ["sel", "true"]]);
+      expect(error).not.toHaveBeenCalled();
+    } finally { error.mockRestore(); }
+  });
+
+  it("asks for, and draws, each of two windows that share a start by its own reset", async () => {
+    const two = [{ ...early, window_minutes: null }, twin({ ...early, window_minutes: null })];
+    const own = (h: LimitHistoryRow, mid: number): LimitWindowCurve => ({ window: h, events: [], series: [
+      { t: h.start, pct: 0, measured: true }, { t: new Date(Date.parse(h.start) + 3_600_000).toISOString(), pct: mid, measured: true },
+      { t: h.closed_at, pct: h.final, measured: false }] });
+    const curves = new Map([[two[0]!.resets_at, own(two[0]!, 13)], [two[1]!.resets_at, own(two[1]!, 37)]]);
+    const f = showCurve({ ...fixture, history: two }, p => curves.get(p.get("resets_at") ?? "")); // no reset, or another: not found
+    await lede();
+    const bars = within(hist().getByRole("group", { name: /past windows/ })).getAllByRole("button");
+    const used = async () => {
+      const panel = hist().getByRole("region", { name: WINDOW });
+      await within(panel).findByRole("img", { name: /used when it ended/ });
+      await userEvent.click(within(panel).getByRole("button", { name: "Show data table" }));
+      return within(within(panel).getByRole("table", { name: /chart data$/ })).getAllByRole("row").slice(1).map(r => r.children[1]!.textContent);
+    };
+    for (const [i, mid] of [[0, "13% · measured"], [1, "37% · measured"]] as const) {
+      await userEvent.click(bars[i]!);
+      const url = new URL(vi.mocked(f).mock.calls.at(-1)![0] as string, "http://localhost");
+      expect([url.searchParams.get("start"), url.searchParams.get("resets_at")]).toEqual([two[i]!.start, two[i]!.resets_at]);
+      expect(await used()).toContain(mid);
+      await userEvent.click(bars[i]!); // close it again
+    }
   });
 
   it("heads each closed window's row with the window's name", async () => {
@@ -778,7 +832,7 @@ describe("past windows strips", () => {
     expect(hist().queryByRole("region", { name: /Codex weekly/ })).toBeNull();
     await userEvent.click(row(early));
     expect(row(early).getAttribute("aria-pressed")).toBe("true");
-    expect(vi.mocked(f).mock.calls.at(-1)![0]).toBe(`/api/limits/window?provider=codex&limit_id=codex_10080&start=${encodeURIComponent(early.start)}`);
+    expect(vi.mocked(f).mock.calls.at(-1)![0]).toBe(`/api/limits/window?provider=codex&limit_id=codex_10080&start=${encodeURIComponent(early.start)}&resets_at=${encodeURIComponent(early.resets_at)}`);
     const panel = hist().getByRole("region", { name: /Codex weekly/ });
     expect(within(panel).getByText("Loading the curve…")).toBeTruthy();
     expect(within(panel).getByText(/22%/)).toBeTruthy();

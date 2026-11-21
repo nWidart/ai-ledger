@@ -95,6 +95,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - Accessibility: each row of the Error loops, Failed test runs, Closed windows and Errors' Error types tables now has a row header (the session, the window or the type), so a screen reader names the row as you move down a column. Session is now the first column of Error loops and Failed test runs, before When, because a row header names only the cells after it.
+- Limits draws two past windows from the same poll as separate bars: each can be focused and picked on its own, picking one marks only its row in the Closed windows table, and its panel draws that window's own readings. Past windows no longer list an estimated window over the span of a measured one.
 - Judgments' Session types bar shows in a forced-colors (high contrast) mode, where its parts used to vanish.
 - The Activity work chart no longer lets one quiet day set the scale of its errors-per-100-calls line. A day or week with fewer than 50 tool calls draws its rate as a hollow dot, is left out of the right-hand axis, and says "too few calls for a steady rate" in its tooltip and data table, as the Errors chart does. A legend key explains the hollow dot.
 - Escape closes the Activity work chart's tooltip that the pointer opened while the focus is elsewhere, such as on the metric switch.

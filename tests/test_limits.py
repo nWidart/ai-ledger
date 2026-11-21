@@ -1310,7 +1310,7 @@ class WindowCurveTest(AnalysisCase):
     def curve(self, start, now, **kw):
         cur = self.con.cursor()
         return limits.window_curve(cur, kw.pop("provider", "claude"), kw.pop("limit_id", "weekly_all"), kw.pop("scope", ""), start,
-                                   now=now, prices=PRICES)
+                                   kw.pop("resets_at", ""), now=now, prices=PRICES)
 
     def measured_week(self):
         """A weekly window at 8 dollars a point, read at 40%, 50% and 70%."""
@@ -1358,6 +1358,59 @@ class WindowCurveTest(AnalysisCase):
         self.assertEqual(ask("2026-11-06T10:00:00.000Z")["window"]["final"], 10.0)  # the closed one
         self.assertIsNone(ask("2026-11-06T10:01:00.000Z"))  # the open one: not the closed one a minute away
         self.assertEqual(ask("2026-11-06T10:00:30.000Z")["window"]["final"], 10.0)  # nearer the closed one
+
+    def test_two_windows_that_share_a_start_each_have_their_own_curve(self):
+        # Unknown window length: one poll that reports two resets of a limit starts both windows at that poll.
+        poll, soon, later = datetime(2026, 11, 6, 10), datetime(2026, 11, 6, 15), datetime(2026, 11, 6, 18)
+        self.snap("codex", "codex_x", poll, 10, resets=soon, minutes=None, plan="plus")
+        self.snap("codex", "codex_x", poll, 41, resets=later, minutes=None, plan="plus")
+        self.snap("codex", "codex_x", datetime(2026, 11, 6, 11), 30, resets=later, minutes=None, plan="plus")
+        now = datetime(2026, 11, 7)
+        history = self.payload(now)["history"]
+        self.assertEqual(sorted((h["start"], h["resets_at"], h["final"]) for h in history),
+                         [("2026-11-06T10:00:00.000Z", "2026-11-06T15:00:00.000Z", 10.0), ("2026-11-06T10:00:00.000Z", "2026-11-06T18:00:00.000Z", 30.0)])
+        ask = lambda resets: self.curve("2026-11-06T10:00:00.000Z", now, provider="codex", limit_id="codex_x", resets_at=resets)
+        for h in history:  # each row, asked for by its start and reset, is its own window with its own readings
+            got = ask(h["resets_at"])
+            self.assertEqual(got["window"], h)
+            self.assertEqual(got["series"][-1]["pct"], h["final"])
+        self.assertEqual([p["pct"] for p in ask("2026-11-06T18:00:00.000Z")["series"] if p["measured"]], [41, 30])
+        self.assertEqual(ask("2026-11-06T18:01:00Z")["window"]["resets_at"], "2026-11-06T18:00:00.000Z")  # drift within SAME_RESET
+        self.assertIsNone(ask("2026-11-06T20:00:00.000Z"))  # no window of that start resets then
+        self.assertEqual(ask("")["window"]["final"], 10.0)  # no reset given: the first match, as before
+        with self.assertRaises(ValueError):
+            ask("soon")
+
+    def test_no_estimated_window_over_a_measured_one(self):
+        # A Dec 1 poll lists the weekly limit's Dec 13 reset before its Dec 6 reset, and a new window starts Dec 2. The
+        # first window listed starts Dec 6, so the estimates step back from there: their first would end Dec 6, over the
+        # measured window that started Nov 29 and ended early on Dec 2.
+        day = lambda d, m=12: datetime(2026, m, d, 5)
+        self.spend("claude", "claude-opus-5-5", (day(30, 11), 40))
+        self.snap("claude", "weekly_all", day(1), 1, resets=day(13))
+        self.snap("claude", "weekly_all", day(1), 5, resets=day(6))
+        self.snap("claude", "weekly_all", day(2), 0, resets=day(9))
+        now = day(3)
+        history = self.payload(now)["history"]
+        keys = [(h["limit_id"], h["scope"], h["start"], h["resets_at"]) for h in history]
+        self.assertEqual(len(keys), len(set(keys)), history)
+        self.assertEqual([(h["start"], h["resets_at"], h["estimated"]) for h in history if h["resets_at"] == "2026-12-06T05:00:00.000Z"],
+                         [("2026-11-29T05:00:00.000Z", "2026-12-06T05:00:00.000Z", False)])  # the measured one, no estimate beside it
+        for h in history:
+            self.assertEqual(self.curve(h["start"], now, resets_at=h["resets_at"])["window"], h)
+
+    def test_estimated_windows_step_back_from_the_earliest_measured_one(self):
+        # A Dec 7 poll lists the Dec 13 reset (a window from Dec 6) before the Dec 10 one (from Dec 3, 3 days earlier). The
+        # estimates belong on the Dec 3 window's grid: Nov 26 to Dec 3, then Nov 19 to Nov 26, with no gap before Dec 3.
+        day = lambda d, m=12: datetime(2026, m, d, 5)
+        self.spend("claude", "claude-opus-5-5", (day(20, 11), 40), (day(28, 11), 40), (day(4), 40))
+        self.snap("claude", "weekly_all", day(7), 1, resets=day(13))
+        self.snap("claude", "weekly_all", day(7), 5, resets=day(10))
+        history = self.payload(day(11))["history"]
+        self.assertEqual([(h["start"], h["closed_at"]) for h in history if h["estimated"]],
+                         [("2026-11-26T05:00:00.000Z", "2026-12-03T05:00:00.000Z"), ("2026-11-19T05:00:00.000Z", "2026-11-26T05:00:00.000Z")])
+        measured = min(h["start"] for h in history if not h["estimated"])
+        self.assertEqual(measured, "2026-12-03T05:00:00.000Z")  # the last estimate ends where the earliest measured window starts
 
     def test_a_start_a_little_off_finds_the_window_and_a_far_one_does_not(self):
         self.measured_week()
@@ -1483,7 +1536,9 @@ class ApiTest(AnalysisCase):
             self.assertEqual(get(q + "2026-01-01T00:00:00Z")[0], 404)  # no window starts there
             self.assertEqual(get(q + "2026-01-12T00:00:00Z")[0], 404)  # that one is open or was never there
             self.assertEqual(get("/api/limits/window?provider=codex&limit_id=nope&scope=&start=" + row["start"])[0], 404)
-            for bad in (q + "soon", q, "/api/limits/window?provider=gemini&limit_id=codex_10080&start=" + row["start"],
+            self.assertEqual(get(q + row["start"] + "&resets_at=" + row["resets_at"])[1]["window"], row)
+            self.assertEqual(get(q + row["start"] + "&resets_at=2026-01-20T06:00:00Z")[0], 404)  # its start, another reset
+            for bad in (q + "soon", q, q + row["start"] + "&resets_at=soon", "/api/limits/window?provider=gemini&limit_id=codex_10080&start=" + row["start"],
                         "/api/limits/window?limit_id=codex_10080&start=" + row["start"]):
                 status, body = get(bad)
                 self.assertEqual((status, bool(body["error"])), (400, True), bad)

@@ -48,9 +48,9 @@ export const queries = {
   // The limits page ignores `automated`, so a toggle of it does not refetch.
   limits: (v: View) =>
     queryOptions({ queryKey: ["limits", { project: v.project, range: v.range, source: v.source }], queryFn: get<LimitsPayload>(limitsUrl(v)) }),
-  limitWindow: (h: Pick<LimitHistoryRow, "provider" | "limit_id" | "scope" | "start">) =>
+  limitWindow: (h: Pick<LimitHistoryRow, "provider" | "limit_id" | "scope" | "start" | "resets_at">) =>
     queryOptions({
-      queryKey: ["limits", "window", { provider: h.provider, limit_id: h.limit_id, scope: h.scope, start: h.start }],
+      queryKey: ["limits", "window", { provider: h.provider, limit_id: h.limit_id, scope: h.scope, start: h.start, resets_at: h.resets_at }],
       queryFn: get<LimitWindowCurve>(limitWindowUrl(h)),
     }),
   insights: (v: View) => queryOptions({ queryKey: ["insights", view(v)], queryFn: get<InsightsPayload>(insightsUrl(v)) }),

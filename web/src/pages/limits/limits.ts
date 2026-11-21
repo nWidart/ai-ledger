@@ -271,8 +271,10 @@ export const STRIP_BARS = 60;
 /** The shortest bar, as a percent of the strip's height: a window at 0% is still something to point at. */
 export const MIN_BAR = 6;
 
-/** A closed window's identity: a window is its limit and its start. */
-export const barKey = (h: LimitHistoryRow): string => `${h.provider}|${h.limit_id}|${h.scope}|${h.start}`;
+/** A closed window's identity: its limit, start and reset. The server makes one window of resets within minutes of each
+ *  other, so a limit's windows never share a reset; their starts can match, as when one poll reports two windows of
+ *  unknown duration. */
+export const barKey = (h: LimitHistoryRow): string => `${h.provider}|${h.limit_id}|${h.scope}|${h.start}|${h.resets_at}`;
 
 /** Why a window ended early, in the words of a bar's name: "a plan change" or "an early reset". */
 const earlyBy = (h: LimitHistoryRow): string => (h.reason?.startsWith("plan change") ? "a plan change" : "an early reset");
