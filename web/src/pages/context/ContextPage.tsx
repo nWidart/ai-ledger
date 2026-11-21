@@ -3,20 +3,22 @@ import { contextUrl, viewOf, type ContextPayload, type TipId } from "../../api";
 import { setOrder } from "../../colors";
 import { agentName, Filters, viewName } from "../../components/Filters";
 import { HowMeasured } from "../../components/HowMeasured";
-import { InsightCard } from "../../components/InsightCard";
 import { ProjectDot } from "../../components/ProjectDot";
-import { SectionIndex } from "../../components/SectionIndex";
+import { jumpTo } from "../../components/SectionIndex";
 import { UsageSheets } from "../../components/sheets/UsageSheets";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
-import { num, plural } from "../../format";import { setSearch, useSearchOf, useView } from "../../url";
+import { num, plural } from "../../format";
+import { currentRaw, setSearch, useSearchOf, useView } from "../../url";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { rebuildFacts, share } from "./context";
-import { validateSearch } from "./search";
+import { validateSearch, type ContextTab } from "./search";
 import { BreaksDrawer, LargestDrawer } from "./drawers";
+import { Grids } from "./Grids";
 import { CostSection, Fills, Growth, Pressure, Starting } from "./sections";
-import { tipInsight, TipSessions } from "./tips";
+import { Tabs, type TabDef } from "./Tabs";
+import { TipSessions, TipStrip } from "./tips";
 import "./context.css";
 
 /** The heading answers "how much context do sessions start with?": the view's median start and its share of the window, two
@@ -44,19 +46,44 @@ function RebuildNotice({ d }: { d: ContextPayload }) {
     Stop the app and run <code>ai-ledger rebuild</code> to fill the missing figures; the figures below cover the rows that have them.</div>;
 }
 
+const TAB_DEFS: TabDef<ContextTab>[] = [{ id: "overhead", label: "Overhead and pressure" }, { id: "growth", label: "Growth and bloat" }, { id: "cache", label: "Cache health" }];
+/** The tab of each section and drawer, for a link to one. */
+const TAB_OF: Record<string, ContextTab> = {
+  starting: "overhead", grids: "overhead", pressure: "overhead", growth: "growth", fills: "growth", "d-largest": "growth", cost: "cache", "d-breaks": "cache",
+};
+
 /** Context (/context): how much of the model's window sessions start with, how fast it grows, what fills it, what that costs,
- *  and the tips those figures give. Every source maps onto the same figures. */
+ *  and the tips those figures give, in three tabs under the tips. Every source maps onto the same figures. */
 export function ContextPage() {
   const [h] = useView();
   const search = useSearchOf(validateSearch);
   const want = viewOf(h), url = contextUrl(want);
   const { data: d, error, loading, retry } = useApi(queries.context(want), { keepPrevious: true });
   useEffect(() => { if (d) setOrder(d.project_order); }, [d]);
-  const { slow, grow, wrap, retryBtn } = useLanding(d, url, loading, error, ":scope > :is(.panel, .tips, .drawers)");
+  const { slow, grow, wrap, retryBtn } = useLanding(d, url, loading, error, ":scope > :is(.tips, .drawers), :scope .tabpanel > :is(.panel, .drawers)");
   // A tip the payload does not have (an old link, another view) shows nothing.
   const tip = d?.tips.find(t => t.id === search.tip);
   const openTip = (id: TipId) => setSearch({ tip: id }, { push: true });
   const closeTip = () => setSearch({ tip: null }, { push: false });
+  // The tab is part of the view, as a filter is: changing it replaces the history entry.
+  const tab: ContextTab = search.tab ?? "overhead";
+  const setTab = (t: ContextTab) => setSearch({ tab: t === "overhead" ? null : t }, { push: false });
+  // A link to a section from before the tabs (#pressure, #d-breaks) opens the tab that holds it, keeping the fragment so a reload
+  // opens it again, then scrolls to it, without moving focus (a direct load does not). Once the page has figures, and again
+  // whenever only the fragment changes.
+  const loaded = !!d;
+  useEffect(() => {
+    if (!loaded) return;
+    const go = () => {
+      const id = location.hash.slice(1), t = TAB_OF[id];
+      if (!t) return;
+      if (t !== (validateSearch(currentRaw()).tab ?? "overhead")) setSearch({ tab: t === "overhead" ? null : t }, { push: false, keepHash: true });
+      requestAnimationFrame(() => jumpTo(id, false));
+    };
+    go();
+    addEventListener("hashchange", go);
+    return () => removeEventListener("hashchange", go);
+  }, [loaded]);
   // The first load shows the placeholder; the loading look (dimmed figures) belongs to a page that has figures.
   const first = !d && !error;
   const cls = "wrap pg-context" + (slow && !first ? " loading" : "") + (grow ? " grow" : "");
@@ -72,25 +99,13 @@ export function ContextPage() {
       <p className="pending">{loading && d ? `Loading ${viewName(want)}…` : ""}</p>
       {d && <>
         <RebuildNotice d={d} />
-        <SectionIndex groups={[
-          [{ id: "overview", label: "Overview" }, { id: "tips", label: "Tips" }, { id: "starting", label: "Start", long: "Starting context" }, { id: "growth", label: "Growth" }, { id: "pressure", label: "Pressure", long: "Window pressure" },
-            { id: "fills", label: "Fills", long: "What fills context" }, { id: "cost", label: "Spend", long: "Cost" }],
-          [{ id: "d-largest", label: "Results", long: "Largest tool results" }, { id: "d-breaks", label: "Cache breaks", long: "Sessions where caching broke" }],
-        ]} />
-        <section className="tips sect" id="tips" aria-labelledby="tipsTitle">
-          <h2 id="tipsTitle">Tips</h2>
-          <div className="hint">Most severe first.<HowMeasured what="tips">From fixed rules over this view's figures: thresholds are set in the app, and nothing is learned or generated.</HowMeasured></div>
-          {d.tips.length
-            ? <div className="insights tip-cards">{d.tips.map(t => <InsightCard key={t.id} insight={tipInsight(t, openTip)} />)}</div>
-            : <p className="empty">Nothing stands out in this view.</p>}
-        </section>
+        <TipStrip tips={d.tips} onSessions={openTip} />
         {tip && <div className="drawers tip-drawer"><TipSessions tip={tip} onClose={closeTip} /></div>}
-        <Starting d={d} />
-        <Growth d={d} />
-        <Pressure d={d} />
-        <Fills d={d} />
-        <CostSection d={d} />
-        <div className="drawers"><LargestDrawer rows={d.fills.largest} /><BreaksDrawer cost={d.cost} /></div>
+        <Tabs tabs={TAB_DEFS} current={tab} onChange={setTab} label="Context">
+          {tab === "overhead" && <><Starting d={d} /><Grids d={d} /><Pressure d={d} /></>}
+          {tab === "growth" && <><Growth d={d} /><Fills d={d} /><div className="drawers"><LargestDrawer rows={d.fills.largest} /></div></>}
+          {tab === "cache" && <><CostSection d={d} /><div className="drawers"><BreaksDrawer cost={d.cost} /></div></>}
+        </Tabs>
       </>}
       <UsageSheets data={undefined} />
     </main>

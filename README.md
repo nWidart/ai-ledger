@@ -22,7 +22,7 @@ Needs [uv](https://docs.astral.sh/uv/). Runs on macOS and Linux. Your data stays
 | --- | --- |
 | **Activity** | What got done per day or week, by project, and what needs your attention. It also shows the output speed per model second and how long a median session waits on the model and tools. |
 | **Cost** | Estimated spend at API list prices per day, and the month's pace against your plan. One table shows each project's trend, spend, change, cost per commit and cache hit. The tokens chart can show each day's share by token kind, and the Tokens and cache drawer sets each kind's share of tokens beside its share of cost. |
-| **Context** | How full the context window gets, how fast it grows, and what fills it. |
+| **Context** | How full the context window gets, how fast it grows, what fills it, and what the prompt cache wastes. |
 | **Errors** | Failed tool calls by type, the time they cost, a fix to paste into `CLAUDE.md` or `AGENTS.md`, and whether each fix worked. |
 | **Limits** | Each plan limit window with its forecast cone and the safe pace to its reset, what used it, and how past windows ended. |
 | **Insights** | How Claude Code's `/insights` judged your sessions. |

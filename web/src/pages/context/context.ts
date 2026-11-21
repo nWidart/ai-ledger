@@ -1,5 +1,5 @@
 // Context's figures from the payload: labels, byte sizes and the rebuild notice. Pure helpers; the page and the tips use them.
-import type { ContextPayload, TipId } from "../../api";
+import type { ContextPayload, SessionPoint, TipId } from "../../api";
 import { big, num, pct, plural } from "../../format";
 
 /** The five peak-fill bins of `growth.fill`, as the API orders them. */
@@ -51,6 +51,19 @@ export function causesText(r: { model_switch: number; expired: number; other: nu
   const parts = BREAK_CAUSES.filter(([k]) => r[k] > 0).map(([k, name]) => (k === "model_switch" ? plural(r[k], "model switch", "model switches") : `${num(r[k])} ${name}`));
   return parts.join(", ") || "–";
 }
+
+/** The session map's quadrants, cut by the large-start line (START_LARGE_TOKENS) and the near-limit line (NEAR_LIMIT). */
+export type Quad = "lean" | "heavy" | "full" | "both";
+export const QUADS: readonly { id: Quad; label: string; what: string; heavy: boolean; full: boolean }[] = [
+  { id: "lean", label: "Lean", what: "a light start and room left", heavy: false, full: false },
+  { id: "heavy", label: "Heavy start", what: "a heavy start and room left", heavy: true, full: false },
+  { id: "full", label: "Grew full", what: "a light start and a peak at 80% or more", heavy: false, full: true },
+  { id: "both", label: "Heavy and full", what: "a heavy start and a peak at 80% or more", heavy: true, full: true },
+];
+/** The quadrant of a start (tokens) and a peak share of the window. */
+export const quadAt = (start: number, peakShare: number): Quad =>
+  QUADS.find(q => q.heavy === start >= START_LARGE_TOKENS && q.full === peakShare >= NEAR_LIMIT)!.id;
+export const quadOf = (p: SessionPoint): Quad => quadAt(p.start, p.peak / p.window);
 
 /** The rebuild notice's facts, or null when every figure the page leans on is filled. */
 export function rebuildFacts(c: ContextPayload["coverage"]): { calls: number; withBytes: number; compacted: number; withFirst: number } | null {

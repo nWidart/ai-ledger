@@ -1,0 +1,46 @@
+/* The grid of a typical session, as in Claude Code's /context: on the Project page's Context block and in Context's window grids */
+.ctx-grid { display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: flex-start; margin-bottom: 16px; --cg-start: var(--series-1); --cg-added: var(--series-4); --cg-free: var(--text-muted); }
+.cg-defs { position: absolute; }
+.ctx-grid .cg-cells { display: grid; gap: 1px; width: 100%; max-width: 360px; flex: 0 1 360px; min-width: 0; }
+.ctx-grid .cg-cells .cg-cell { display: block; width: 100%; height: auto; aspect-ratio: 1; }
+/* A snapshot splits the start: one color per overhead category, none the peak's (series-4), and the rest of the start a tint of
+   the start's color. */
+.ctx-grid { --cg-p0: var(--series-1); --cg-p1: var(--series-3); --cg-p2: var(--series-2); --cg-p3: var(--series-5);
+  --cg-p4: var(--proj-4); --cg-p5: var(--series-6); --cg-p6: var(--proj-2); --cg-rest: color-mix(in srgb, var(--cg-start) 38%, var(--surface-1)); }
+.ctx-grid .cg-start { color: var(--cg-start); }
+.ctx-grid .cg-p0 { color: var(--cg-p0); } .ctx-grid .cg-p1 { color: var(--cg-p1); }
+.ctx-grid .cg-p2 { color: var(--cg-p2); } .ctx-grid .cg-p3 { color: var(--cg-p3); }
+.ctx-grid .cg-p4 { color: var(--cg-p4); } .ctx-grid .cg-p5 { color: var(--cg-p5); }
+.ctx-grid .cg-p6 { color: var(--cg-p6); }
+.ctx-grid .cg-rest { color: var(--cg-rest); }
+.ctx-grid .cg-added { color: var(--cg-added); }
+.ctx-grid .cg-free { color: var(--cg-free); opacity: .6; }
+.ctx-grid .cg-side { flex: 1 1 16.25rem; min-width: 0; }
+.ctx-grid .cg-title { margin: 0; font-size: .875rem; color: var(--text-primary); }
+.ctx-grid .cg-sub { margin: 2px 0 10px; font-size: .78125rem; }
+.ctx-grid .cg-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: .8125rem; color: var(--text-secondary); }
+.ctx-grid .cg-legend li { display: grid; grid-template-columns: 1rem auto 1fr; column-gap: 8px; align-items: center; }
+.ctx-grid .cg-legend .cg-key { width: 1rem; height: 1rem; }
+.ctx-grid .cg-name { color: var(--text-primary); }
+.ctx-grid .cg-fig { font-variant-numeric: tabular-nums; }
+.ctx-grid .cg-note { grid-column: 2 / -1; font-size: .75rem; }
+.ctx-grid p.cg-note { margin: 10px 0 0; max-width: 60ch; }
+.ctx-grid .cg-top { margin-top: 12px; font-size: .8125rem; color: var(--text-secondary); }
+.ctx-grid .cg-top summary { cursor: pointer; color: var(--text-primary); }
+.ctx-grid .cg-top h4 { margin: 10px 0 4px; font-size: .75rem; font-weight: 600; color: var(--text-muted); }
+.ctx-grid .cg-top ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.ctx-grid .cg-top li { display: flex; justify-content: space-between; gap: 12px; min-width: 0; }
+.ctx-grid .cg-top .cg-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-grid .cg-top .cg-fig { flex: none; }
+@media (max-width: 40em) { .ctx-grid { flex-direction: column; } .ctx-grid .cg-cells, .ctx-grid .cg-side { flex-basis: auto; } }
+
+/* Compact: one of several small grids, the cells over three figures */
+.ctx-grid.cg-compact { flex-direction: column; flex-wrap: nowrap; gap: 8px; margin: 0; min-width: 0; }
+.ctx-grid.cg-compact .cg-cells { max-width: none; flex: none; }
+.ctx-grid.cg-compact .cg-side { flex: none; width: 100%; }
+.ctx-grid.cg-compact .cg-sub { margin: 0 0 6px; }
+.ctx-grid.cg-compact .cg-figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 8px; margin: 0; font-size: .75rem; }
+.ctx-grid.cg-compact .cg-figs div { min-width: 0; }
+.ctx-grid.cg-compact .cg-figs dt { display: flex; align-items: center; gap: 4px; color: var(--text-muted); }
+.ctx-grid.cg-compact .cg-figs dt svg { width: .75rem; height: .75rem; flex: none; }
+.ctx-grid.cg-compact .cg-figs dd { margin: 0; color: var(--text-primary); font-weight: 500; font-variant-numeric: tabular-nums; }

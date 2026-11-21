@@ -15,14 +15,15 @@ const pin = (id: string) => {
   pins.forEach(f => f());
 };
 
-/** Scrolls to a section (opening a drawer) without touching the URL, which holds the view. */
-export function jumpTo(id: string) {
+/** Scrolls to a section (opening a drawer) without touching the URL, which holds the view, and focuses it. focus: false only
+ *  scrolls, for a link the page was loaded with: a direct load does not move focus. */
+export function jumpTo(id: string, focus = true) {
   const el = document.getElementById(id);
   if (!el || el.hidden) return;
   pin(id);
-  if (isDrawer(el)) return openDrawer(id, true);
+  if (isDrawer(el)) return openDrawer(id, true, focus);
   el.scrollIntoView?.({ behavior: motion() ? "smooth" : "auto", block: "start" });
-  el.querySelector<HTMLElement>("button, a, [tabindex]")?.focus({ preventScroll: true });
+  if (focus) el.querySelector<HTMLElement>("button, a, [tabindex]")?.focus({ preventScroll: true });
 }
 
 /** Section links, sticky under the nav on wide screens and marking the section in view; a jump select stands in on narrow ones.

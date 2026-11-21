@@ -22,21 +22,49 @@
 .pg-context h3 { font-size: .8125rem; font-weight: 600; margin: 20px 0 2px; color: var(--text-secondary); }
 .pg-context .pending { margin: -12px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: .8125rem; }
 .pg-context .pending:empty { visibility: hidden; }
-.pg-context.loading > :not(.top):not(.secidx) { opacity: .55; }
-@media (prefers-reduced-motion: no-preference) { .pg-context > :not(.top):not(.secidx) { transition: opacity .2s; } }
+.pg-context.loading > :not(.top) { opacity: .55; }
+@media (prefers-reduced-motion: no-preference) { .pg-context > :not(.top) { transition: opacity .2s; } }
 .pg-context .banner code { overflow-wrap: anywhere; }
 .pg-context .panel { margin-top: 16px; }
 .pg-context .panel > .hint { max-width: 90ch; }
 .pg-context .empty { padding: 16px 0; }
 
-/* Tips: small cards in one row, the evidence and advice folded under each title */
-.pg-context .tips { margin: 0 0 4px; }
-.pg-context .tips .insights { margin-top: 10px; }
-.pg-context .tip-cards { grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr)); align-items: start; }
-.pg-context .tip-cards .insight { padding: 10px 12px 10px 16px; }
-.pg-context .tip-more summary { cursor: pointer; color: var(--link); font-size: .75rem; }
-.pg-context .tip-more[open] summary { margin-bottom: 6px; }
-.pg-context .insight .v:empty { display: none; }
+/* Tips: one strip of short items beside the heading; the open item's evidence and advice under it, full width */
+.pg-context .tips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 12px; }
+.pg-context .tips h2 { font-size: .8125rem; color: var(--text-secondary); }
+.pg-context .tips .empty { padding: 0; margin: 0; color: var(--text-muted); font-size: .8125rem; }
+.pg-context .tip-strip { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; min-width: 0; }
+.pg-context .tip-item.warn { --sev: var(--warning-text); }
+.pg-context .tip-item.critical { --sev: var(--critical-text); }
+.pg-context .tip-btn { font: inherit; font-size: .78125rem; color: var(--text-primary); background: var(--surface-1); cursor: pointer; max-width: 22rem;
+  border: 1px solid var(--control-border); border-left: 3px solid var(--sev); border-radius: 6px; padding: 3px 8px; display: inline-flex; gap: 6px; align-items: baseline; text-align: left; }
+.pg-context .tip-btn .mk { color: var(--sev); font-size: .6875rem; }
+.pg-context .tip-btn[aria-expanded="true"] { background: var(--surface-2); border-color: var(--text-primary); border-left-color: var(--sev); }
+.pg-context .tip-btn:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; }
+.pg-context .tip-more { font-size: .78125rem; }
+.pg-context .tip-detail { flex: 1 0 100%; border: 1px solid var(--border); border-left: 3px solid var(--sev); border-radius: 6px; padding: 10px 12px; background: var(--surface-1); }
+.pg-context .tip-detail.warn { --sev: var(--warning-text); }
+.pg-context .tip-detail.critical { --sev: var(--critical-text); }
+.pg-context .tip-detail .tip-k { font-size: .71875rem; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
+.pg-context .tip-detail .advice { margin-bottom: 6px; max-width: 90ch; }
+
+/* Tabs: the WAI-ARIA tabs; the selected one is marked by weight and an underline, not colour alone */
+/* position: the tabs' offsets are the strip's, so Tabs can scroll the selected one into it */
+.pg-context .tablist { position: relative; display: flex; gap: 4px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+.pg-context .tablist [role=tab] { font: inherit; font-size: .875rem; color: var(--text-secondary); background: none; border: 0; cursor: pointer; white-space: nowrap;
+  padding: 8px 12px; margin-bottom: -1px; border-bottom: 2px solid transparent; }
+.pg-context .tablist [role=tab]:hover { color: var(--text-primary); }
+.pg-context .tablist [role=tab][aria-selected="true"] { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--text-primary); }
+.pg-context .tablist [role=tab]:focus-visible { outline: 2px solid var(--text-primary); outline-offset: -2px; border-radius: 4px; }
+.pg-context .tabpanel:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 4px; border-radius: 4px; }
+.pg-context .tabpanel > .panel:first-child { margin-top: 12px; }
+
+/* Window grids: small multiples, as many per row as fit */
+.pg-context .grid-multiples { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 20px 24px; margin-top: 10px; }
+.pg-context .grid-multiples .cg-title { font-size: .8125rem; margin: 0; }
+.pg-context #grids .ctx-grid:not(.cg-compact) { margin-top: 10px; }
+.pg-context .quad-note { margin: 6px 0 8px; }
+
 .pg-context .evidence { display: grid; grid-template-columns: repeat(auto-fill, minmax(13.125rem, 1fr)); gap: 6px 20px; margin: 0 0 8px; }
 .pg-context .evidence div { min-width: 0; }
 .pg-context .evidence dt { font-size: .75rem; color: var(--text-muted); }

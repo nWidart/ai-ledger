@@ -19,7 +19,7 @@ export interface DrawerProps {
 
 // Mounted drawers by id, so openDrawer() can open one (and ask it to scroll and focus once its body shows), and an opening
 // drawer can close the rest: one page is mounted at a time, so these are the page's drawers.
-const drawers = new Map<string, { open: (scroll: boolean) => void; close: () => void }>();
+const drawers = new Map<string, { open: (scroll: boolean, focus: boolean) => void; close: () => void }>();
 // Called after any drawer opens or closes, once its body is laid out: what is in view moves with it (SectionIndex).
 const toggles = new Set<() => void>();
 /** Calls f after any drawer opens or closes; returns a function that stops it. */
@@ -33,7 +33,7 @@ export function onDrawerToggle(f: () => void): () => void {
  *  costs no table. Pages that fetch on open use onToggle. Every drawer starts closed, and a page shows one open at a time:
  *  opening one closes the others. */
 export function Drawer({ id, title, after, count, description, bodyClassName, onToggle, children }: DrawerProps) {
-  const [open, setOpen] = useState(false), [seen, setSeen] = useState(false), [go, setGo] = useState<{ scroll: boolean } | null>(null);
+  const [open, setOpen] = useState(false), [seen, setSeen] = useState(false), [go, setGo] = useState<{ scroll: boolean; focus: boolean } | null>(null);
   const now = useRef(false), keep = useRef({ onToggle });
   keep.current = { onToggle };
   const set = useCallback((o: boolean) => {
@@ -44,14 +44,14 @@ export function Drawer({ id, title, after, count, description, bodyClassName, on
     keep.current.onToggle?.(o);
   }, [id]);
   useEffect(() => {
-    drawers.set(id, { open: scroll => { set(true); setGo({ scroll }); }, close: () => set(false) });
+    drawers.set(id, { open: (scroll, focus) => { set(true); setGo({ scroll, focus }); }, close: () => set(false) });
     return () => { drawers.delete(id); };
   }, [id, set]);
   // After the change is laid out, not on mount: every drawer starts closed.
   const was = useRef(open);
   useLayoutEffect(() => { if (was.current === open) return; was.current = open; toggles.forEach(f => f()); }, [open]);
   // openDrawer(): the body has rendered by now, so its first input exists.
-  useLayoutEffect(() => { if (go) { reveal(id, go.scroll); setGo(null); } }, [go, id]);
+  useLayoutEffect(() => { if (go) { reveal(id, go.scroll, go.focus); setGo(null); } }, [go, id]);
   const body = id + "-body";
   return (
     <div className="drawer" id={id} data-open={open || undefined}>
@@ -75,21 +75,21 @@ export function onUserScroll(f: () => void): () => void {
   GESTURES.forEach(t => addEventListener(t, go, { capture: true, passive: true }));
   return off;
 }
-/** Opens a drawer; scroll: also bring it into view and focus its first input (or its toggle). */
-export function openDrawer(id: string, scroll = false) {
-  drawers.get(id)?.open(scroll);
+/** Opens a drawer; scroll: also bring it into view and, unless focus is false, focus its first input (or its toggle). */
+export function openDrawer(id: string, scroll = false, focus = true) {
+  drawers.get(id)?.open(scroll, focus);
 }
 /** Whether the element is a drawer (a Drawer's root). */
 export const isDrawer = (el: Element | null): boolean => !!el?.classList.contains("drawer");
 
 /** Brings an open drawer into view and focuses its first input (or its toggle). Rows that load after the jump would leave it
  *  short of the top, so it follows them until the user scrolls, for 3 s at most. */
-function reveal(id: string, scroll: boolean) {
+function reveal(id: string, scroll: boolean, focus: boolean) {
   const d = document.getElementById(id);
   if (!d || !scroll) return;
   const go = () => d.scrollIntoView?.({ behavior: motion() ? "smooth" : "auto", block: "start" });
   go();
-  (d.querySelector<HTMLElement>(".drawer-body input") || d.querySelector<HTMLElement>(".drawer-toggle"))?.focus({ preventScroll: true });
+  if (focus) (d.querySelector<HTMLElement>(".drawer-body input") || d.querySelector<HTMLElement>(".drawer-toggle"))?.focus({ preventScroll: true });
   let h = d.offsetHeight;
   const ro = new ResizeObserver(() => { if (d.offsetHeight !== h) { h = d.offsetHeight; go(); } });
   const stop = () => { ro.disconnect(); off(); clearTimeout(timer); };

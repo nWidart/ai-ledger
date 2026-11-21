@@ -144,7 +144,7 @@ class ContextPayloadTest(unittest.TestCase):
                    dict(project="bar", range_days=30, source="claude")):
             p = b.payload(**kw)
             self.assertEqual(sorted(p), sorted(["project", "range", "automated", "source", "start", "end", "projects", "project_order",
-                                                "automated_file", "coverage", "starting", "growth", "sessions_map", "fills", "cost", "tips",
+                                                "automated_file", "coverage", "starting", "growth", "grids", "sessions_map", "fills", "cost", "tips",
                                                 "overhead"]), kw)
         with self.assertRaises(ValueError):
             b.payload(source="grok")
@@ -364,6 +364,28 @@ class GrowthTest(unittest.TestCase):
             b.turn(sid, 0, 5_000, model="m-nowin")
         self.assertEqual(b.payload()["growth"]["peak"], dict(sessions=2, median=80_000, window_share=None))
 
+    def test_grids_rank_and_measure_the_sessions_with_a_start_a_window_and_a_peak(self):
+        b = Builder(self)
+        # foo: three sessions with a start, a window and a peak (10%/40%, 20%/50%, 30%/60% of 200,000).
+        for sid, start, peak in (("a", 20_000, 80_000), ("b", 40_000, 100_000), ("c", 60_000, 120_000)):
+            b.session(sid, "foo", peak=peak)
+            b.turn(sid, 0, start)
+        # bar: five measured starts, but only one with a known window and a peak; the others take no part.
+        b.session("w", "bar", peak=150_000)
+        b.turn("w", 0, 100_000)
+        for i in range(2):
+            b.session(f"nw{i}", "bar", peak=10_000, peak_model="m-nowin")
+            b.turn(f"nw{i}", 0, 9_000, model="m-nowin")
+            b.session(f"np{i}", "bar", peak=None)
+            b.turn(f"np{i}", 0, 9_000)
+        rows = b.payload()["grids"]
+        self.assertEqual([(r["project"], r["sessions"], r["window"]) for r in rows], [("foo", 3, 200_000), ("bar", 1, 200_000)])
+        foo, bar = rows
+        self.assertEqual((foo["start"], foo["peak"]), (40_000, 100_000))
+        self.assertAlmostEqual(foo["start_share"], 0.2)
+        self.assertAlmostEqual(foo["peak_share"], 0.5)
+        self.assertEqual((bar["start"], bar["peak"]), (100_000, 150_000))  # the one eligible session's, not the median of all five starts
+
     def test_fill_bins_by_window(self):
         b = Builder(self)
         for i, peak in enumerate((40_000, 50_000, 100_000, 160_000, 180_000, 240_000)):  # 20%, 25%, 50%, 80%, 90%, 120%
@@ -380,7 +402,7 @@ class GrowthTest(unittest.TestCase):
 
 
 class SessionsMapTest(unittest.TestCase):
-    def test_eligible_sessions_only_and_no_title(self):
+    def test_eligible_sessions_only_with_their_title(self):
         b = Builder(self)
         b.session("ok", "foo", peak=100_000, compactions=2)
         b.turns("ok", [10_000, 20_000, 30_000])
@@ -394,7 +416,7 @@ class SessionsMapTest(unittest.TestCase):
         m = b.payload()["sessions_map"]
         self.assertEqual(m["total"], 1)
         self.assertEqual(m["points"], [dict(session_id="ok", project="foo", source="claude", first_ts="2026-11-04T09:00:00.000Z", start=10_000, peak=100_000,
-                                            window=200_000, turns=3, compactions=2)])
+                                            window=200_000, turns=3, compactions=2, title="A title")])
         self.assertEqual(Builder(self).payload()["sessions_map"], dict(total=0, points=[]))
 
     def test_the_newest_points_are_kept_and_total_counts_all(self):
@@ -682,6 +704,27 @@ class TipsTest(unittest.TestCase):
         b.session("c", "foo", peak=10_000, compactions=6)
         b.turn("c", 0, 10_000)
         self.assertEqual(self.tip(b.payload(), "frequent_compactions")["severity"], "critical")
+
+    def test_advice_names_the_commands_of_the_matching_sessions_agents(self):
+        b = Builder(self)
+        b.session("x", "cdx", source="codex", peak=10_000, compactions=3, window=258_400)
+        b.turn("x", 0, 40_000)
+        b.session("n", "foo", peak=10_000)  # a Claude Code session that matches no tip
+        b.turn("n", 0, 10_000)
+        for advice in (self.tip(b.payload(), "frequent_compactions")["advice"], self.tip(b.payload(source="codex"), "frequent_compactions")["advice"]):
+            self.assertIn("`/new`", advice)
+            self.assertIn("`/compact`", advice)
+            self.assertNotIn("`/clear`", advice)
+            self.assertNotIn("subagent", advice)
+        start = self.tip(b.payload(source="codex"), "large_start")["advice"]
+        self.assertIn("`codex mcp list`", start)
+        self.assertNotIn("claude mcp list", start)
+        self.assertNotIn("CLAUDE.md", start)
+        b.session("c", "foo", peak=10_000, compactions=4)  # a Claude Code session joins the matching ones
+        b.turn("c", 0, 10_000)
+        both = self.tip(b.payload(), "frequent_compactions")["advice"]
+        self.assertIn("`/clear` in Claude Code, `/new` in Codex", both)
+        self.assertEqual(self.tip(b.payload(source="claude"), "frequent_compactions")["advice"].count("`/new`"), 0)
 
     def test_near_limit(self):
         b = Builder(self)

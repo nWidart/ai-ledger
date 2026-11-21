@@ -157,14 +157,10 @@ const SCENES = {
     const { page } = h;
     await start("/context?range=30");
     await h.wait(2200);
-    await h.scrollTo(page.locator("#tips"), 20);
-    await h.wait(2000);
-    await h.scrollTo(page.locator("#starting"), 20);
+    await h.click(page.locator("#tips .tip-btn").first(), { pause: 2200 });
+    await h.click(page.locator("#tips .tip-btn").first(), { pause: 600 });
+    await h.scrollTo(page.locator("#grids"), 20);
     await h.wait(1800);
-    await h.scrollTo(page.locator("#growth"), 20);
-    await h.click(btn(page, "Share of window"), { pause: 1500 });
-    await h.click(page.locator("#growth .key.proj"), { pause: 1500 });
-    await h.click(page.locator("#growth .key.proj"), { pause: 600 });
     await h.scrollTo(page.locator("#pressure"), 20);
     await h.click(page.locator("#pressure .band[aria-label*=\"272k\"]").nth(3), { pause: 1500 });
     const map = page.locator("#pressure rect.hit");
@@ -173,11 +169,22 @@ const SCENES = {
     for (const [x, y] of [[0.4, 0.6], [0.55, 0.35], [0.65, 0.15]]) { await h.move(box.x + box.width * x, box.y + box.height * y); await h.wait(500); }
     await h.click(map, { dx: 0.65, dy: 0.15, pause: 2400 });
     await page.keyboard.press("Escape"); await h.wait(600);
+    await h.click(page.locator("#pressure .quads button[data-quad=both]"), { pause: 2000 });
+    await h.scrollTo(page.locator("#pressure"), 20);
+    await h.wait(1500);
+    await h.click(page.locator("#pressure .quads button[data-quad=both]"), { pause: 600 });
+    await page.evaluate(() => scrollTo({ top: 0 }));
+    await h.click(page.getByRole("tab", { name: "Growth and bloat" }), { pause: 1200 });
+    await h.click(btn(page, "Share of window"), { pause: 1500 });
+    await h.click(page.locator("#growth .key.proj"), { pause: 1500 });
+    await h.click(page.locator("#growth .key.proj"), { pause: 600 });
     await h.scrollTo(page.locator("#fills"), 20);
-    await h.wait(1200);
     await h.click(btn(page, "By MCP server"), { pause: 1500 });
+    await page.evaluate(() => scrollTo({ top: 0 }));
+    await h.click(page.getByRole("tab", { name: "Cache health" }), { pause: 1500 });
     await h.scrollTo(page.locator("#cost"), 20);
-    await h.wait(2200);
+    await h.click(page.locator("#cost .cache-chart .toggle"), { pause: 2000 });
+    await h.click(page.locator("#cost .cache-chart .toggle"), { pause: 1200 });
   },
   async project(h, start) {
     const { page } = h;
@@ -298,7 +305,7 @@ async function quantize(path) {
 // A screenshot of a page or a locator, quantized: `target` is a Playwright page or locator.
 const shoot = async (target, path, options = {}) => { await target.screenshot({ path, ...options }); await quantize(path); };
 
-// [panel name, selector, { drawer: id of the drawer to open first, max: crop height }]
+// [panel name, selector, { drawer: id of the drawer to open first, max: crop height, url: another path to open first (a tab) }]
 const SHOT_PAGES = {
   activity: { url: "/usage?range=30", panels: [
     ["attention", "#attention"], ["vitals", "#vitals"], ["work", "#work"], ["hours", "#hours", { drawer: "d-hours" }]] },
@@ -306,7 +313,9 @@ const SHOT_PAGES = {
     ["overview", "#overview"], ["spend", "#spend"], ["projects", "#projects"], ["highlights", "#insights"],
     ["models", ".split > section.panel"], ["tokens", "#d-tokens", { drawer: "d-tokens" }]] },
   context: { url: "/context?range=30", panels: [
-    ["tips", "#tips"], ["starting", "#starting"], ["growth", "#growth"], ["pressure", "#pressure"], ["fills", "#fills"], ["cost", "#cost"]] },
+    ["tips", "#tips"], ["starting", "#starting"], ["grids", "#grids"], ["pressure", "#pressure"],
+    ["growth", "#growth", { url: "/context?range=30&tab=growth" }], ["fills", "#fills", { url: "/context?range=30&tab=growth" }],
+    ["cost", "#cost", { url: "/context?range=30&tab=cache" }]] },
   errors: { url: "/errors?range=30", panels: [
     ["summary", "#kpis"], ["chart", ".chart-card"], ["types", ".panel.types"], ["detail", "#detail"]] },
   limits: { url: "/limits?range=30", panels: [
@@ -352,7 +361,9 @@ async function pageShots(b, key, scheme) {
   const spec = SHOT_PAGES[key], page = await newPage(b, scheme);
   await settle(page, spec.url);
   if (key === "activity") await shoot(page, shotPath("tour-overview", scheme)); // the tour GIF's still: the first screen
+  let at = spec.url;
   for (const [name, selector, o = {}] of spec.panels) {
+    if (o.url && o.url !== at) { at = o.url; await settle(page, at); }
     if (o.drawer) await openDrawer(page, o.drawer);
     await snap(page, shotPath(`${key}-${name}`, scheme), page.locator(selector), o.max);
   }
