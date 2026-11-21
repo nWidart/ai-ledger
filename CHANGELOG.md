@@ -32,6 +32,14 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - The wheel scrolls the page again with the pointer over the tabs on Context and Activity. The tab strip scrolled a pixel up and down and held the wheel.
+### Added
+
+- Errors' rate chart zooms in views of 14 points or more, with a slider or the plus and minus keys.
+
+### Changed
+
+- Errors:
+  - The rate chart uses the shared chart component. It follows theme changes without a reload, frames the selected day or week and keeps the reading on it, so the same key clears it, keeps the point you are reading when new data lands, and keeps both panels' height at larger text sizes.
 
 ## [0.5.0] - 2026-11-21
 

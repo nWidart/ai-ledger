@@ -69,12 +69,13 @@ On a narrow screen the vitals show two to a row. Every line and vital shows at e
 
 <ThemedImage dark={chart} light={chartLight} alt="Errors by type: the error rate as a line over failed calls per day, on one time axis." />
 
-**Shows** two panels on one time axis. The upper panel is the error rate (errors per 100 tool calls) as a line; the lower panel is the failed calls per day or week as stacked bars. Without calls or without errors the chart is replaced by a message.
+**Shows** two panels on one time axis. The upper panel is the error rate (errors per 100 tool calls) as a line; the lower panel is the failed calls per day or week as stacked bars. Without calls or without errors the chart is replaced by a message. In a view of 14 points or more, a zoom slider sits under the date labels.
 
 **Figures**
 
 - **Legend**: the five types with the most errors, each with its count, then **Other types**. The legend also names the rate line, **Under 50 calls** (a bucket with too few calls for a steady rate: a hollow dot, left out of the rate scale) and **No activity** (a band over buckets with no tool call; a stretch of 8 or more buckets with no call folds into a break marked `//`).
-- **Fix markers**: a dashed green line at the day a fix was marked, labelled with the type.
+- **Fix markers**: a dashed green line at the day a fix was marked, labelled with the type. The label sits right of the line, left of it near the right edge, and is left out when neither side has room. Fixes on one day stack their labels one under the other.
+- **Size**: the box is 320px tall at the default text size, 28px more with the zoom slider. At a larger browser text size the box grows and both panels keep their height.
 - **Reading**: a failed call counts on the day it started and its error on the day it ended, so a bucket can have errors and no calls; the reading says that no tool call started in it.
 
 **Controls**
@@ -82,8 +83,12 @@ On a narrow screen the vitals show two to a row. Every line and vital shows at e
 - **Day / Week**, in the chart's header, sets the bucket size.
 - Select a type in the legend to open it and draw its own rate line.
 - **Show data table**, under the chart, lists each bucket: its tool calls, failed calls, the rate the line draws (the open type's, when one is open) and the failed calls of each type in the legend and Other.
-- **Reading**: hover, or the left and right arrow keys, Home and End, read a bucket: its rate, errors, calls and errors by type, and "too few calls for a steady rate" for a hollow point. Escape clears the reading.
-- **Selecting a bucket**: a click, or Enter or Space on the current point, selects one day or week; the same action clears it. A chip by the Error types heading also clears it. A folded stretch cannot be selected. A selected bucket narrows the type table and the open type's detail to its errors. The summary, the chart, Trend and Change stay range-wide.
+- **Reading**: hover, or the left and right arrow keys, Home and End, read a bucket: its rate, errors, calls and errors by type, and "too few calls for a steady rate" for a hollow point. Escape ends the reading, from a tooltip the pointer opened too, and never clears a selection.
+- **Selecting a bucket**: a click, or Enter or Space on the point you are reading, selects one day or week; the same action clears it. A chip by the Error types heading also clears it. A folded stretch cannot be selected. A selected bucket narrows the type table and the open type's detail to its errors. The summary, the chart, Trend and Change stay range-wide.
+- **The selected bucket** is a tinted band with an accent frame across both panels. After a key selects it, the reading and its tooltip stay on the point, so the same key clears it. A selection the zoom leaves out marks no point, and the chip still names it.
+- **What a screen reader hears.** After a selection or a clear, one sentence: "Selected Nov 4, 2026: the table and detail show only its errors." (a week reads "Selected Week of Nov 2, 2026: …"), and "Selection cleared: the table and detail cover the whole range." On a folded stretch it says "A stretch without tool calls cannot be selected.", and "This stretch has no tool calls to select." for the next press. A selection changed outside the chart, such as by the chip, says nothing in the chart. A reading with the arrow keys replaces the sentence.
+- **Zoom.** In a view of 14 points or more, a slider sits under the date labels. A folded stretch counts as one point. Drag the slider or its handles to narrow the days or weeks the chart draws. With the chart focused, plus (or `=`) halves the points shown and minus doubles them, around the point you are reading (the newest when you read none), down to 7 and up to every point. While the chart is zoomed, a **Show all days** button (**Show all weeks** on a chart by week) ends the legend row. It shows every point again and returns focus to the chart. After each change the chart says which days or weeks are shown, such as "Showing Oct 11 to Oct 20, 10 of 30 days." or "Showing all 30 days.", for a screen reader. A folded stretch counts every day or week it stands for. The arrow keys, Home and End still reach every point: when one reads a point outside those shown, the points shown move to include it. Views of fewer than 14 points have no slider and no zoom keys. Both panels keep the scales of the whole view. Zooming changes nothing else: the range, the selection, the type table, the detail and the URL stay as they are, and the data table still lists every point.
+- **When the zoom resets.** It resets when the view changes: the range, Day / Week, the project, the source, **Include subagents** or **Hide noise and muted**, or when the first point moves or a folded stretch appears, grows or opens. It stays when you select a bucket, open or close a type, and when new data arrives. New data of the same view keeps the point you are reading too. A screen reader hears that point again only when you read it with the keyboard and its figures changed.
 
 ### Error types
 
