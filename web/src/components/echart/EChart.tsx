@@ -51,7 +51,8 @@ export interface EChartProps {
   points: number;
   /** The tooltip for point i. Without it, the chart has no tooltip. */
   tip?: (i: number) => ReactNode;
-  /** The sentence the live region says for point i. */
+  /** The sentence the live region says for point i, when a key or the pointer reads it. A reading a key made is said
+   *  again when newer data of the same view changes its words; the pointer's is not, and its tooltip shows them. */
   read: (i: number) => string;
   /** Enter on the point being read, or a click on a point. The reading ends with it, unless the handler returns false:
    *  the point has nothing to open, and the reading stays, so the user is not left with silence. The pointer is a hand
@@ -63,11 +64,15 @@ export interface EChartProps {
    *  category x axis (one band per point): a value or time axis gives values, not indexes, and is not supported. */
   zoom?: boolean;
   /** The points shown changed, by a key, the slider, `reset()`, a new view, or a redraw that left the zoom no slider or
-   *  no room: null when every point shows. A redraw of the same view that keeps the points shown is not a change. */
+   *  no room: null when every point shows. A redraw of the same view that keeps the points shown is not a change.
+   *  A control that leaves with the zoom (a "Show all" button) can lose the focus here with no one pressing it: the
+   *  caller moves it to the box (`focus()`), as its own press does. */
   onZoom?: (shown: Shown | null) => void;
-  /** The sentence the live region says after the user changes the points shown: null when every point shows. It is
-   *  said alone after a zoom key, the slider or `reset()`, and after the reading (`read(i)`, then this) when an arrow
-   *  key, Home or End moved the points shown to include the point it reads. */
+  /** The sentence the live region says after the points shown change: null when every point shows. It is said alone
+   *  after a zoom key, the slider or `reset()`, and once after the reading (`read(i)`, then this) when an arrow key,
+   *  Home or End moved the points shown to include the point it reads. It is also said, with null, when the zoom ends
+   *  in the same view with no one asking (the slider or the room for it is gone). A sentence that a redraw makes
+   *  untrue is dropped, never said again with other words. */
   readZoom?: (shown: Shown | null) => string;
   /** `reset()` shows every point again; `focus()` focuses the box. */
   ref?: Ref<EChartHandle>;
@@ -117,6 +122,8 @@ function zoomAround(s: Shown | null, n: number, f: number, c: number): Shown | n
   const from = Math.max(0, Math.min(n - next, at));
   return { from, to: from + next - 1 };
 }
+/** What the live region holds: a reading's sentence, with the zoom sentence said after it, or the zoom sentence alone. */
+type Said = { of: "reading"; keyed: boolean; text: string; zoom: string | null } | { of: "zoom"; text: string };
 /** A key's tooltip points this far under the top of the grid, as the hand-written charts have it. */
 const KEY_DROP = 20;
 
@@ -151,9 +158,10 @@ export function EChart({
   // The points shown, as the chart last reported them: null while every point shows.
   const [zoomed, setZoomed] = useState<Shown | null>(null);
   const shown = zoom && zoomed && zoomed.to < points ? zoomed : null;
-  // The zoom sentence the live region says, until the next reading: alone, or after the reading when the key that read
-  // the point also moved the points shown. Kept as it was worded, so a redraw of the same view says nothing again.
-  const [status, setStatus] = useState<{ text: string; after: boolean } | null>(null);
+  // What the live region holds: the last thing said, as it was worded. It is set when something is said and never
+  // derived from the chart, so a redraw of the same view says nothing by itself. A reading holds its sentence, whether a
+  // key made it, and the zoom sentence said after it when that key also moved the points shown.
+  const [said, setSaid] = useState<Said | null>(null);
   // The view: the caller's key, or the option function when it gives none. A new view is another chart: nothing is read
   // on it yet, the old point may not exist, and it shows every point (the draw effect resets the chart's window).
   // Turning the zoom off shows every point too (the zoom effect). A point the same view no longer has cannot be read.
@@ -161,21 +169,44 @@ export function EChart({
   // point that comes back brings nothing back.
   const shows = view ?? option;
   const [drawing, setDrawing] = useState({ view: shows, zoom });
-  if (drawing.view !== shows || drawing.zoom !== zoom) {
-    if (drawing.view !== shows) setReading(null);
+  if (drawing.view !== shows) {
+    setDrawing({ view: shows, zoom });
+    setReading(null);
+    setZoomed(null);
+    setSaid(null);
+  } else if (drawing.zoom !== zoom) {
     setDrawing({ view: shows, zoom });
     setZoomed(null);
-    setStatus(null);
-  } else if (reading != null && reading >= points) setReading(null);
-  /** A new reading, or none: the live region says it in place of the zoom status. Ending no reading changes nothing, so
-   *  a pointer that moves over the slider leaves the status the slider's drag set. */
-  const readAt = (i: number | null) => {
+    if (zoomed && readZoom) setSaid({ of: "zoom", text: readZoom(null) }); // the zoom ended with no one asking: said once
+  } else if (reading != null && reading >= points) {
+    setReading(null);
+    if (said?.of === "reading") setSaid(null);
+  } else if (said?.of === "reading") {
+    // A redraw of the same view. The reading a key made, with the focus in the box, follows its figures: when its words
+    // changed it is said again, alone. The pointer's is not: the pointer can rest on a point while the user reads another
+    // part of the page, and its tooltip shows the newer figures. The zoom sentence after a reading is said once, and is
+    // dropped as soon as it is no longer true.
+    const text = said.keyed && at != null ? read(at) : said.text;
+    if (text !== said.text) setSaid({ ...said, text, zoom: null });
+    else if (said.zoom != null && readZoom?.(shown) !== said.zoom) setSaid({ ...said, zoom: null });
+  } else if (said && readZoom?.(shown) !== said.text) {
+    // The zoom sentence no longer describes the chart (a point more, another window): dropped, which says nothing. A
+    // sentence with the new count would be spoken with no one asking.
+    setSaid(null);
+  }
+  /** A new reading, or none: the live region says it in place of what it held. `keyed`: a key made it. Ending no reading
+   *  changes nothing, so a pointer that moves over the slider leaves the sentence the slider's drag set. */
+  const readAt = (i: number | null, keyed = false) => {
     if (i == null && reading == null) return;
     setReading(i);
-    setStatus(null);
+    setSaid(i == null ? null : { of: "reading", keyed, text: read(i), zoom: null });
   };
-  /** The live region says the points shown, when the caller words them: alone, or after the reading. */
-  const say = (now: Shown | null, after = false) => { if (readZoom) setStatus({ text: readZoom(now), after }); };
+  /** The live region says the points shown, when the caller words them: alone, or after the reading just made. */
+  const say = (now: Shown | null, after = false) => {
+    if (!readZoom) return;
+    const text = readZoom(now);
+    setSaid(was => (after && was?.of === "reading" ? { ...was, zoom: text } : { of: "zoom", text }));
+  };
   /** Moves the chart's window to `to` (null: every point) and keeps what the chart then shows. Silent: the datazoom
    *  listener is for the slider. The live region says the points shown, if they changed (ECharts may clamp the window
    *  to the one it had): alone, or with `after` behind the reading the same key just made. */
@@ -231,7 +262,7 @@ export function EChart({
     const from = at ?? (step > 0 ? -1 : points); // the first Right reads the first point, the first Left the last
     const i = Math.max(0, Math.min(points - 1, from + step));
     pointer.current = null;
-    readAt(i);
+    readAt(i, true);
     // The days shown move, by as little as they can, to include the point read. The one live region says both, the
     // reading first: the user asked for the point, and the move is what else changed.
     if (chart && shown && !inside(i, shown)) {
@@ -353,7 +384,10 @@ export function EChart({
       made.dispatchAction(shown ? { type: "dataZoom", startValue: shown.from, endValue: shown.to } : ALL, { silent: true });
       now = shownOn(made, points);
     }
-    if (!same(now, zoomed)) setZoomed(now);
+    if (same(now, zoomed)) return;
+    setZoomed(now);
+    // The zoom ended with no one asking: said once, so no one goes on believing the chart shows fewer days.
+    if (zoomed && !now) say(null);
   });
   // Reduced motion is the wrapper's to keep, so no option builder can forget it. A new view shows every point: its
   // slider merges into the old one by id and would keep the old window, so the window is reset.
@@ -411,7 +445,7 @@ export function EChart({
   }, []);
 
   // What the live region says: the zoom sentence alone, the reading, or the reading and then the zoom sentence.
-  const live = at != null && (!status || status.after) ? read(at) + (status ? ` ${status.text}` : "") : status?.text ?? "";
+  const live = !said ? "" : said.of === "reading" && said.zoom != null ? `${said.text} ${said.zoom}` : said.text;
 
   return (
     <>
@@ -421,8 +455,8 @@ export function EChart({
         {tip && <div ref={tipEl} className="tip" role="tooltip" style={{ display: at == null ? "none" : "block" }}>{at != null && tip(at)}</div>}
         {failed && <p className="echart-failed">The chart could not be drawn. The data table below has its figures.</p>}
       </div>
-      {/* One polite region for the reading and the zoom. Its text changes only when the words do, so a redraw of the
-          same view repeats nothing; a reading whose figures the newer data changed is said again, as the tooltip shows it. */}
+      {/* One polite region for the reading and the zoom. It holds what was last said, so a redraw of the same view
+          repeats nothing; only a key's reading whose figures the newer data changed is said again. */}
       <div className="sr" aria-live="polite">{live}</div>
     </>
   );

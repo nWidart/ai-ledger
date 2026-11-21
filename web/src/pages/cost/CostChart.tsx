@@ -59,14 +59,20 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScal
   const { cost, share, none, kinds, days: pts, totals, showAvg, zoom, avg, live, peak } = m;
   // The view: what the user chose, and the first day it draws. While it is the same, the reading and the zoom stay on
   // their days through newer data (a background ingest every minute while a session runs) and through a hidden kind.
-  // The first day is in it because a day keeps its index only while the view starts on the same one: a rolling range
-  // that moves on at midnight is another view, and an all-time view only gains days at its end.
+  // The first day is in it because a day keeps its index only while the view starts on the same one. A new day at the
+  // end keeps the view. A first day that moves makes another: later, when a rolling range moves on at midnight, or
+  // earlier, when an all-time view gains older days (older transcripts ingested, a filter that reaches further back).
   const view = [d.range, pts[0]?.day, d.project, d.source, d.automated, metric, stack, scale].join("|");
   // Whether the chart shows fewer than every day, as the wrapper reports it: it only shows "Show all days", and is no input
   // of the option, so keeping it leaves the zoom alone. A new view reports every day shown, which clears it.
-  const box = useRef<EChartHandle>(null);
+  const box = useRef<EChartHandle>(null), showAll = useRef<HTMLButtonElement>(null);
   const [zoomed, setZoomed] = useState(false);
-  const onZoom = useCallback((s: Shown | null) => setZoomed(s != null), []);
+  // "Show all days" leaves with the zoom. When the zoom ends with the focus on it and no one pressed it (the range moved
+  // on at midnight), the focus goes where the button sends it, to the chart, and not to the page's body.
+  const onZoom = useCallback((s: Shown | null) => {
+    if (!s && showAll.current && document.activeElement === showAll.current) box.current?.focus();
+    setZoomed(s != null);
+  }, []);
   const readZoom = (s: Shown | null) => (s
     ? `Showing ${dayLabel(pts[s.from]!.day)} to ${dayLabel(pts[s.to]!.day)}, ${s.to - s.from + 1} of ${pts.length} days.`
     : `Showing all ${pts.length} days.`);
@@ -168,7 +174,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScal
         {showAvg && !none && <span className="key"><i className="line" />7-day average</span>}
         {pts.length > 0 && !none && <span className="key"><i className="hatch" />Today so far</span>}
         {/* The reset leaves with the zoom: focus goes to the chart it showed every day of. */}
-        {zoom && zoomed && !none && <button type="button" className="show-all" onClick={() => { box.current?.reset(); box.current?.focus(); }}>Show all days</button>}
+        {zoom && zoomed && !none && <button ref={showAll} type="button" className="show-all" onClick={() => { box.current?.reset(); box.current?.focus(); }}>Show all days</button>}
       </div>
       {none && <div className="empty all-hidden" role="status">All token kinds are hidden.{" "}
         <button type="button" className="linkish" onClick={() => onHidden([])}>Show every kind</button></div>}

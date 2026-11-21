@@ -501,13 +501,75 @@ describe("cost chart: zoom", () => {
     expect(chart.band).toBe(25);
     expect(said()).toBe(0);
 
-    chart.fire("mousemove", chart.pointAt(29)); // today, whose cost the next refresh raises from $35 to $40
+    // The pointer rests on today, whose cost the next refresh raises from $35 to $40: the tooltip shows it, and the
+    // status says nothing, since the user may be reading another part of the page.
+    chart.fire("mousemove", chart.pointAt(29));
     expect(sr()).toContain(usd(35));
     said();
     rerender(<Host data={newer(month, 10)} />);
-    expect(sr()).toContain(usd(40));
-    expect(said()).toBe(1);
+    expect(screen.getByRole("tooltip").textContent).toContain(usd(40));
+    expect(sr()).toContain(usd(35));
+    expect(said()).toBe(0);
     expect(chart.shown).toEqual({ from: 20, to: 29 });
+
+    // The keyboard reads today with the focus on the chart: the next refresh, to $45, is said.
+    act(() => group().focus());
+    fireEvent.keyDown(group(), { key: "End" });
+    expect(sr()).toContain(usd(40));
+    said();
+    rerender(<Host data={newer(month, 15)} />);
+    expect(sr()).toContain(usd(45));
+    expect(said()).toBe(1);
+  });
+
+  it("says the days shown once after End reads past the zoom: a refresh that changes today's cost says the day alone", async () => {
+    const { rerender } = renderApp(<Host />);
+    const chart = await drawn();
+    await drag(5, 14);
+    act(() => group().focus());
+    fireEvent.keyDown(group(), { key: "End" });
+    expect(sr()).toMatch(/^Nov 4, 2026 so far: \$30 estimated.* Showing Oct 26 to Nov 4, 10 of 30 days\.$/);
+    rerender(<Host data={newer()} />);
+    expect(sr()).toMatch(/^Nov 4, 2026 so far: \$35 estimated/);
+    expect(sr()).not.toContain("Showing");
+    expect(chart.shown).toEqual({ from: 20, to: 29 });
+  });
+
+  it("never says a zoom sentence with an old count: a 31st day in an all-time view drops it", async () => {
+    const all = (to: string): UsagePayload => ({ ...view("2026-10-06", to), range: 0, start: null });
+    const { rerender } = renderApp(<Host data={all("2026-11-04")} />);
+    await drag(5, 14);
+    expect(sr()).toBe("Showing Oct 11 to Oct 20, 10 of 30 days.");
+    rerender(<Host data={all("2026-11-05")} />);
+    expect(sr()).toBe("");
+    expect(showAll()).toBeTruthy();
+  });
+
+  it("moves the focus from 'Show all days' to the chart when the zoom ends with no one pressing it", async () => {
+    const { rerender } = renderApp(<Host />);
+    await drag(5, 14);
+    act(() => showAll()!.focus());
+    rerender(<Host data={{ ...view("2026-10-07", "2026-11-05"), range: 30 }} />); // midnight: the range moved on a day
+    expect(showAll()).toBeNull();
+    expect(document.activeElement).toBe(group());
+
+    // With the focus elsewhere, it stays there.
+    await drag(5, 14);
+    const metric = screen.getByRole("button", { name: "Tokens" });
+    act(() => metric.focus());
+    rerender(<Host data={{ ...view("2026-10-08", "2026-11-06"), range: 30 }} />);
+    expect(showAll()).toBeNull();
+    expect(document.activeElement).toBe(metric);
+  });
+
+  it("shows every day again when an all-time view gains an earlier first day, as after an ingest of older transcripts", async () => {
+    const all = (from: string): UsagePayload => ({ ...view(from, "2026-11-04"), range: 0, start: null });
+    const { rerender } = renderApp(<Host data={all("2026-10-06")} />);
+    const chart = await drawn();
+    await drag(5, 14);
+    rerender(<Host data={all("2026-10-05")} />);
+    expect(chart.shown).toEqual({ from: 0, to: 30 });
+    expect(showAll()).toBeNull();
   });
 
   it("keeps the zoom on its days when an all-time view gains a day at its end", async () => {

@@ -778,9 +778,10 @@ describe("EChart zoom", () => {
     rerender(zoomed({ onZoom, zoom: false }));
     expect(chart.shown).toEqual({ from: 0, to: 29 });
     expect(onZoom.mock.calls.at(-1)).toEqual([null]);
+    expect(readout()).toBe("Showing all 30 days."); // the user did not ask for it: said once
     rerender(zoomed({ onZoom, zoom: true }));
     expect(onZoom.mock.calls.at(-1)).toEqual([null]);
-    expect(readout()).toBe("");
+    expect(readout()).toBe("Showing all 30 days.");
     key("+");
     expect(chart.shown).toEqual({ from: 15, to: 29 });
   });
@@ -949,29 +950,93 @@ describe("EChart zoom", () => {
     expect(readout()).toBe("Oct 26: $25.00");
     const reads: number[] = [];
     const counted = (i: number) => { reads.push(i); return readDay(i); };
-    rerender(viewed({ onZoom, option: fresh(22), points: 22, read: counted }));
-    expect(readout()).toBe("");
+    const all = (s: Shown | null) => (s ? "zoomed" : "Showing all 22 days.");
+    rerender(viewed({ onZoom, option: fresh(22), points: 22, read: counted, readZoom: all }));
+    // The reading is gone with its point, and the zoom ended with no one asking: that is said, once.
+    expect(readout()).toBe("Showing all 22 days.");
+    expect(tooltip()).toBeNull();
     expect(reads).toEqual([]); // never asked for a point the view no longer has
     expect(chart.band).toBeNull();
     expect(chart.shown).toEqual({ from: 0, to: 21 });
     expect(onZoom.mock.calls.at(-1)).toEqual([null]);
 
-    rerender(viewed({ onZoom, read: counted }));
-    expect(readout()).toBe("");
+    const said = spoken();
+    rerender(viewed({ onZoom, read: counted, readZoom: all }));
+    expect(readout()).toBe("Showing all 22 days."); // not derived again: nothing more is said
+    expect(said()).toBe(0);
     expect(chart.shown).toEqual({ from: 0, to: 29 });
     expect(onZoom.mock.calls.at(-1)).toEqual([null]);
+    expect(reads).toEqual([]);
   });
 
-  it("drops the zoom when the same view stops drawing the slider, and keeps the reading", async () => {
+  it("says the zoom sentence after a reading once: newer figures say the reading alone", async () => {
+    const { rerender } = render(viewed());
+    const chart = await drawn();
+    chart.zoomTo(10, 19);
+    key("End");
+    expect(readout()).toBe("Oct 30: $29.00 Showing Oct 21 to Oct 30, 10 of 30 days.");
+    const said = spoken();
+    rerender(viewed()); // the same words: nothing
+    expect(said()).toBe(0);
+    rerender(viewed({ read: i => `${MONTH[i]}: $${i + 1}.00` })); // today's figure grew
+    expect(readout()).toBe("Oct 30: $30.00");
+    expect(said()).toBe(1);
+    rerender(viewed()); // and the zoom sentence does not come back with a figure that does
+    expect(readout()).toBe("Oct 30: $29.00");
+    expect(chart.shown).toEqual({ from: 20, to: 29 });
+  });
+
+  it("drops a zoom sentence that a redraw made untrue, and never says it with the old count", async () => {
+    /** The wording for a view of n days. */
+    const of = (n: number) => (s: Shown | null) => (s ? `Showing ${MONTH[s.from]} to ${MONTH[s.to]}, ${s.to - s.from + 1} of ${n} days.` : `Showing all ${n} days.`);
+    const { rerender } = render(viewed());
+    const chart = await drawn();
+    key("+");
+    expect(readout()).toBe("Showing Oct 16 to Oct 30, 15 of 30 days.");
+    rerender(viewed({ option: fresh(31), points: 31, readZoom: of(31) })); // a 31st day arrives
+    expect(chart.shown).toEqual({ from: 15, to: 29 });
+    expect(readout()).toBe(""); // dropped, not reworded: a new sentence would be spoken with no one asking
+
+    key("Home"); // a key's reading, with the zoom sentence after it
+    expect(readout()).toBe("Oct 1: $0.00 Showing Oct 1 to Oct 15, 15 of 31 days.");
+    rerender(viewed({ option: fresh(32), points: 32, readZoom: of(32) }));
+    expect(readout()).toBe("Oct 1: $0.00");
+    expect(chart.shown).toEqual({ from: 0, to: 14 });
+  });
+
+  it("leaves a pointer's reading unsaid when newer figures change it, and shows them in the tooltip", async () => {
+    const tips = (more: number) => (i: number) => <b>{MONTH[i]} is ${i + more}</b>;
+    const { rerender } = render(viewed({ tip: tips(0) }));
+    const chart = await drawn();
+    chart.fire("mousemove", chart.pointAt(29));
+    expect(readout()).toBe("Oct 30: $29.00");
+    const said = spoken();
+    rerender(viewed({ tip: tips(1), read: i => `${MONTH[i]}: $${i + 1}.00` }));
+    expect(tooltip()!.textContent).toBe("Oct 30 is $30");
+    expect(readout()).toBe("Oct 30: $29.00"); // the pointer rests there while the user reads elsewhere: not a word
+    expect(said()).toBe(0);
+    chart.fire("mousemove", chart.pointAt(28)); // the next reading is said as ever
+    expect(readout()).toBe("Oct 29: $29.00");
+
+    box().focus();
+    key("End"); // the keyboard's reading, with the focus in the box, follows its figures
+    expect(readout()).toBe("Oct 30: $30.00");
+    rerender(viewed({ tip: tips(2), read: i => `${MONTH[i]}: $${i + 2}.00` }));
+    expect(readout()).toBe("Oct 30: $31.00");
+  });
+
+  it("drops the zoom when the same view stops drawing the slider, says so once, and keeps the reading open", async () => {
     const onZoom = zoomSpy();
-    const { rerender } = render(viewed({ onZoom }));
+    const { rerender } = render(viewed({ onZoom, tip: i => <b>{MONTH[i]}</b> }));
     const chart = await drawn();
     chart.zoomTo(10, 19);
     chart.fire("mousemove", chart.pointAt(12));
-    rerender(viewed({ onZoom, option: fresh(30, false) }));
+    rerender(viewed({ onZoom, option: fresh(30, false), tip: i => <b>{MONTH[i]}</b> }));
     expect(chart.option.dataZoom).toEqual([]);
     expect(onZoom.mock.calls.at(-1)).toEqual([null]);
-    expect(readout()).toBe("Oct 13: $12.00");
+    expect(readout()).toBe("Showing all 30 days.");
+    expect(tooltip()!.textContent).toBe("Oct 13");
+    expect(chart.band).toBe(12);
     expect(key("+")).toBe(true); // no slider: the key is the browser's
     rerender(viewed({ onZoom })); // the slider is back, on every point
     expect(chart.shown).toEqual({ from: 0, to: 29 });

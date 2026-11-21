@@ -351,7 +351,11 @@ try {
     await box.focus();
     for (let k = 0; k <= I; k++) await page.keyboard.press("ArrowRight");
     await page.keyboard.press("+");
-    const zoomed = await until(state, s => shownBy(s.readout) && s.band);
+    // ECharts draws the band on the frame after the zoom: wait for it at the day's new place, not for the band it had.
+    const zoomed = await until(state, s => {
+      const z = shownBy(s.readout);
+      return z && s.band && Math.abs((s.band.l + s.band.r) / 2 - centre(s.grid, I, z.from, z.to)) <= 1.5;
+    });
     const drawn = await ev(page, () => window.chartfit.days().length);
     const w = shownBy(zoomed.readout);
     const zm = w && onDay({ ...zoomed, readout: label(DAYS[I], true) }, I, centre(zoomed.grid, I, w.from, w.to));
