@@ -81,8 +81,9 @@ export interface EChartProps {
   /** The sentence the live region says after the points shown change: null when every point shows. It is said alone
    *  after a zoom key, the slider or `reset()`, and once after the reading (`read(i)`, then this) when an arrow key,
    *  Home or End moved the points shown to include the point it reads. It is also said, with null, when the zoom ends
-   *  in the same view with no one asking (the slider or the room for it is gone). A sentence that a redraw makes
-   *  untrue is dropped, never said again with other words. */
+   *  in the same view with no one asking (the slider or the room for it is gone), unless that render brings a new
+   *  `status`, which is then the one said. A sentence that a redraw makes untrue is dropped, never said again with
+   *  other words. */
   readZoom?: (shown: Shown | null) => string;
   /** `reset()` shows every point again; `focus()` focuses the box. */
   ref?: Ref<EChartHandle>;
@@ -186,8 +187,11 @@ export function EChart({
   // wrapper ends the reading, which empties the region, so the status is said by the render after both. The status at
   // mount is the one seen, and so is the one a new view comes with: neither is said.
   // One branch a render: each sets state, so React renders again and the next branch sees what this one left. The
-  // status comes before the branches for the same view, so what a redraw has to say (a zoom that ended, a key's reading
-  // with newer figures) replaces a status that arrives with it, as it replaces one the region already holds.
+  // status comes last, so a status that arrives in the same render as something a redraw has to say (a zoom that ended,
+  // a key's reading with newer figures) is the one said, alone: the status is what the user's own act did, the redraw's
+  // sentence came with no one asking, and the region says one thing. A redraw's sentence in a later render replaces
+  // the status as ever. The draw effect follows the same rule for the zoom it finds ended (`keep`): it runs after the
+  // status is in the region, so the other order would change the region twice, the status and then the zoom's end.
   const shows = view ?? option;
   const [drawing, setDrawing] = useState({ view: shows, zoom, status });
   if (drawing.view !== shows) {
@@ -195,12 +199,6 @@ export function EChart({
     setReading(null);
     setZoomed(null);
     setSaid(null);
-  } else if (drawing.status !== status) {
-    setDrawing({ ...drawing, status });
-    // A new text takes the region alone, with a reading open or not. An empty one is nothing to say: it only drops a
-    // status the region still holds, and leaves a reading or a zoom sentence that took the region since.
-    if (status) setSaid({ status, reading: null, zoom: null });
-    else if (said?.status != null) setSaid(null);
   } else if (drawing.zoom !== zoom) {
     setDrawing({ ...drawing, zoom });
     setZoomed(null);
@@ -220,6 +218,13 @@ export function EChart({
     // The zoom sentence no longer describes the chart (a point more, another window): dropped, which says nothing when
     // it stood alone. A sentence with the new count would be spoken with no one asking.
     setSaid(said.reading != null ? { reading: said.reading, zoom: null } : null);
+  } else if (drawing.status !== status) {
+    setDrawing({ ...drawing, status });
+    // A new text takes the region alone, with a reading open or not, whatever the branches above just said. An empty
+    // one is nothing to say: it only drops a status the region still holds, and leaves a reading or a zoom sentence
+    // that took the region since.
+    if (status) setSaid({ status, reading: null, zoom: null });
+    else if (said?.status != null) setSaid(null);
   }
   /** A new reading, or none: the live region says it in place of what it held. `keyed`: a key made it. Ending no reading
    *  changes nothing, so a pointer that moves over the slider leaves the sentence the slider's drag set. */
@@ -415,6 +420,9 @@ export function EChart({
   // while its box is hidden still has one. The first run repeats the size init() took, which changes nothing.
   useEffect(() => { chart?.resize({ width, height }); }, [chart, width, height]);
 
+  // The status as of the commit before this one. The draw effect runs before the effect that moves it on (below), so a
+  // status that differs from it there is one this render brought.
+  const settled = useRef(status);
   /** After a redraw of the same view, the window goes back on the points it showed. The slider merges into the old one
    *  by id and keeps its window, but as ECharts holds it: a drag's window is a share of the points, which is other
    *  points once their number changes. A redraw that leaves no slider, or no room for the window, leaves no zoom. */
@@ -427,8 +435,10 @@ export function EChart({
     }
     if (same(now, zoomed)) return;
     setZoomed(now);
-    // The zoom ended with no one asking: said once, so no one goes on believing the chart shows fewer days.
-    if (zoomed && !now) say(null);
+    // The zoom ended with no one asking: said once, so no one goes on believing the chart shows fewer days. Not when the
+    // render drawn here brought a new status: the region already says it, and the status is the one said (see the
+    // render's comparison). The zoom's end is then not said at all, as when the `zoom` prop ends it in such a render.
+    if (zoomed && !now && !(status && status !== settled.current)) say(null);
   });
   // The chart is given the caller's option with what the wrapper keeps for itself, so no option builder can forget it:
   // reduced motion, and the band. Only the wrapper's actions draw the band: left to its own triggers, ECharts also draws
@@ -453,6 +463,8 @@ export function EChart({
     unsaid.current = false; // a drag still going changed the old view: its release has nothing to say of this one
     unzoom(chart);
   }, [chart, option, env, shows, zoom]);
+  // After the draw effect, which must still see the status of the commit before.
+  useEffect(() => { settled.current = status; }, [status]);
   // The caller hears of every change to the points shown, whatever made it: a key, the slider, reset(), a new view, or
   // a redraw that left the zoom no slider or no room.
   const told = useRef<Shown | null>(null);

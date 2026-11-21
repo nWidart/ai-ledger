@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { createRef, StrictMode, useState, type ReactNode } from "react";
+import { createRef, Profiler, StrictMode, useState, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { prevented } from "../../testing";
 import { setTheme } from "../../theme";
@@ -40,6 +40,17 @@ const spoken = () => {
   seen.observe(document.querySelector(".sr[aria-live=polite]")!, { childList: true, characterData: true, subtree: true });
   return () => seen.takeRecords().length;
 };
+/** Every text the live region takes, in order: `around(chart)` is rendered in place of the chart, and `texts` gains one
+ *  entry for each commit that changed the region. A text that an effect replaces right after its commit is in the list,
+ *  where the region's last text alone would hide it. */
+function heard() {
+  const texts: string[] = [];
+  const note = () => {
+    const now = document.querySelector(".sr[aria-live=polite]")?.textContent ?? "";
+    if (now !== (texts.at(-1) ?? "")) texts.push(now);
+  };
+  return { texts, around: (el: ReactNode) => <Profiler id="chart" onRender={note}>{el}</Profiler> };
+}
 
 // The probe's computed color by theme; jsdom resolves no var().
 function themedColors() {
@@ -1301,25 +1312,64 @@ describe("EChart zoom", () => {
     expect(said()).toBe(0);
   });
 
-  it("says what a redraw has to say in place of a status that arrives in the same render, and not the status later", async () => {
+  // A status and a redraw's own sentence in one render: the status is the user's own act, so it is the one said, alone.
+  // The three ways a zoom ends with no one asking say the same, though two of them are only known once the chart has
+  // drawn, after the status is in the region.
+  it.each([
+    ["the view lost the points the zoom showed", (): Partial<EChartProps> => ({ option: fresh(22), points: 22 }), 22],
+    ["the option draws no slider any more", (): Partial<EChartProps> => ({ option: fresh(30, false) }), 30],
+    ["the zoom is turned off", (): Partial<EChartProps> => ({ zoom: false }), 30],
+  ])("says a status alone, in one change, when it arrives in the render that ends the zoom: %s", async (_, redraw, points) => {
+    const onZoom = zoomSpy(), { texts, around } = heard();
+    const { rerender } = render(around(viewed({ onZoom, status: "" })));
+    const chart = await drawn();
+    chart.zoomTo(20, 29);
+    expect(texts).toEqual(["Showing Oct 21 to Oct 30, 10 of 30 days."]);
+    const ended = redraw();
+    rerender(around(viewed({ onZoom, status: SELECTED, ...ended })));
+    expect(texts.slice(1)).toEqual([SELECTED]); // one change: the zoom's end is not said after it, nor in its place
+    expect(chart.shown).toEqual({ from: 0, to: points - 1 }); // the zoom did end
+    expect(onZoom.mock.calls.at(-1)).toEqual([null]);
+    rerender(around(viewed({ onZoom, status: SELECTED, ...ended })));
+    expect(texts.slice(1)).toEqual([SELECTED]); // and it is not said later
+  });
+
+  it.each([
+    ["the view lost the points the zoom showed", (): Partial<EChartProps> => ({ option: fresh(22), points: 22 })],
+    ["the option draws no slider any more", (): Partial<EChartProps> => ({ option: fresh(30, false) })],
+    ["the zoom is turned off", (): Partial<EChartProps> => ({ zoom: false })],
+  ])("says the zoom's end when the status that arrives with it is empty, or is the one already seen: %s", async (_, redraw) => {
+    const { texts, around } = heard();
+    const { rerender, unmount } = render(around(viewed({ status: "" })));
+    (await drawn()).zoomTo(20, 29);
+    rerender(around(viewed({ status: SELECTED })));
+    rerender(around(viewed({ status: "", ...redraw() }))); // nothing new to say but the zoom's end
+    expect(texts.at(-1)).toBe("Showing all 30 days.");
+    expect(texts.filter(t => t !== "")).toEqual(["Showing Oct 21 to Oct 30, 10 of 30 days.", SELECTED, "Showing all 30 days."]);
+    unmount();
+
+    const again = heard();
+    const next = render(again.around(viewed({ status: "" })));
+    await waitFor(() => expect(fakeECharts.charts).toHaveLength(2));
+    (await drawn()).zoomTo(20, 29);
+    next.rerender(again.around(viewed({ status: SELECTED })));
+    next.rerender(again.around(viewed({ status: SELECTED, ...redraw() }))); // the status came a render before
+    expect(again.texts).toEqual(["Showing Oct 21 to Oct 30, 10 of 30 days.", SELECTED, "Showing all 30 days."]);
+  });
+
+  it("says a status alone when it arrives in the render that changes the words of a key's reading", async () => {
     const grown = (i: number) => `${MONTH[i]}: $${i + 1}.00`;
-    const { rerender } = render(viewed({ status: "" }));
+    const { texts, around } = heard();
+    const { rerender } = render(around(viewed({ status: "", tip: i => <b>{grown(i)}</b> })));
     await drawn();
     key("End");
-    const said = spoken();
-    rerender(viewed({ status: SELECTED, read: grown })); // the day a key reads grew, and a status came with it
-    expect(readout()).toBe("Oct 30: $30.00");
-    expect(said()).toBe(1);
-    rerender(viewed({ status: SELECTED, read: grown })); // the status was seen then
-    expect(readout()).toBe("Oct 30: $30.00");
-    expect(said()).toBe(0);
-
-    key("+");
-    rerender(viewed({ status: CLEARED, read: grown, zoom: false })); // the zoom is turned off, and a status came with it
-    expect(readout()).toBe("Showing all 30 days.");
-    expect(said()).toBe(2);
-    rerender(viewed({ status: CLEARED, read: grown, zoom: false }));
-    expect(said()).toBe(0);
+    rerender(around(viewed({ status: SELECTED, read: grown, tip: i => <b>{grown(i)}</b> }))); // today's figure grew, and a status came with it
+    expect(texts).toEqual(["Oct 30: $29.00", SELECTED]);
+    expect(tooltip()!.textContent).toBe("Oct 30: $30.00"); // the reading goes on, with the newer figure
+    rerender(around(viewed({ status: SELECTED, read: grown })));
+    expect(texts).toEqual(["Oct 30: $29.00", SELECTED]); // the figure was taken in then: it is not said later
+    rerender(around(viewed({ status: SELECTED, read: i => `${MONTH[i]}: $${i + 2}.00` }))); // the next change is said as ever
+    expect(texts.at(-1)).toBe("Oct 30: $31.00");
   });
 });
 
