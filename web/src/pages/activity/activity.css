@@ -145,6 +145,6 @@
   .pg-activity #sessions :is(td, th).when .small { overflow-wrap: anywhere; }
 }
 .pg-activity #sessions :is(td, th).sorted { display: table-cell; }
-.pg-activity #projects th:first-child, .pg-activity #projects td:first-child { position: sticky; left: 0; background: var(--bg); z-index: 1; box-shadow: 1px 0 0 var(--border); }
-.pg-activity #projects th:first-child { z-index: 2; }
+.pg-activity #projects th:first-child, .pg-activity #projects td:first-child { position: sticky; left: 0; background: var(--bg); z-index: var(--z-raised); box-shadow: 1px 0 0 var(--border); }
+.pg-activity #projects th:first-child { z-index: var(--z-raised-2); }
 .pg-activity #projects tr.sel :is(td, th):first-child { background: color-mix(in srgb, var(--accent) 11%, var(--bg)); }

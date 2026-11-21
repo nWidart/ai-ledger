@@ -26,5 +26,5 @@
 }
 /* Bars grow in when new data lands (a page sets .grow on an ancestor for one render). */
 @media (prefers-reduced-motion: no-preference) {
-  .grow .ledger .bar span { transform-origin: left; animation: grow-x .6s cubic-bezier(.2,.7,.2,1) both; }
+  .grow .ledger .bar span { transform-origin: left; animation: grow-x .6s var(--ease-grow) both; }
 }

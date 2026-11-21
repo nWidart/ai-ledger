@@ -14,7 +14,7 @@
 :is(.pg-activity, .pg-cost, .pg-judgments) .tip .row { display: flex; gap: 16px; justify-content: space-between; }
 :is(.pg-activity, .pg-cost, .pg-judgments) .tip .tot { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
 @media (prefers-reduced-motion: no-preference) {
-  :is(.pg-activity, .pg-cost, .pg-judgments).grow .chart .bar-seg { transform-box: fill-box; transform-origin: 50% 100%; animation: grow-y .5s cubic-bezier(.2,.7,.2,1) both;
+  :is(.pg-activity, .pg-cost, .pg-judgments).grow .chart .bar-seg { transform-box: fill-box; transform-origin: 50% 100%; animation: grow-y .5s var(--ease-grow) both;
     animation-delay: calc(var(--i, 0) * 6ms); }
 }
 :is(.pg-activity, .pg-cost, .pg-judgments) .chart .hit.pick { cursor: pointer; }

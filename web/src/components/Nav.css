@@ -1,4 +1,4 @@
-.appnav { background: var(--surface-1); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 5; }
+.appnav { background: var(--surface-1); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: var(--z-nav); }
 /* One row at every width: nothing wraps. The steps at the end of this file take room away as the window narrows, so that every item
    keeps its own size; only the project name in the palette button may shrink further, to an ellipsis. */
 .appnav-in { max-width: 1240px; margin: 0 auto; padding: 8px 16px; display: flex; flex-wrap: nowrap; gap: 6px; align-items: center; }
@@ -46,7 +46,7 @@
 .appnav-chooser .appnav-caret { opacity: .7; }
 .appnav-chooser[aria-expanded=true] .appnav-caret { transform: rotate(180deg); }
 /* The list: over the page, below the bar, in the tabs' two groups; the badge and the pill follow their label in a row. */
-.appnav-chooser-pos { z-index: 40; }
+.appnav-chooser-pos { z-index: var(--z-tooltip); }
 .appnav-chooser-pop { box-sizing: border-box; min-width: max(var(--anchor-width), 11rem); max-height: var(--available-height); overflow-y: auto; padding: 4px;
   background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-pop); }
 .appnav-chooser-pop ul { list-style: none; margin: 0; padding: 0; }
@@ -66,7 +66,7 @@
 .appnav-scope b { min-width: 0; font-weight: 500; max-width: 14ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .appnav-palette kbd { flex: none; }
 .appnav-palette svg { flex: none; width: .875rem; height: .875rem; }
-.appnav-palette kbd { font: .6875rem/1.4 ui-monospace, "SF Mono", Menlo, monospace; color: var(--text-muted); padding: 0 5px;
+.appnav-palette kbd { font: .6875rem/1.4 var(--font-mono); color: var(--text-muted); padding: 0 5px;
   border: 1px solid var(--border); border-radius: 5px; background: var(--surface-2); }
 .appnav button { font-size: .8125rem; padding: 4px 10px; }
 /* The Docs link: a link drawn as the bar's buttons are, a book icon and "Docs", as tall as the palette button. */
@@ -106,7 +106,7 @@
    context, z-index 5), below the popups (40). Its tint is laid on the bar's surface, so the page under it does not show through:
    --good-text on --good-soft over --surface-1 clears 4.5:1 in both themes. */
 .appnav-fresh { position: relative; }
-.appnav-flash { position: absolute; top: calc(100% + 4px); right: 0; z-index: 1; pointer-events: none; white-space: nowrap;
+.appnav-flash { position: absolute; top: calc(100% + 4px); right: 0; z-index: var(--z-raised); pointer-events: none; white-space: nowrap;
   color: var(--good-text); background: linear-gradient(var(--good-soft), var(--good-soft)) var(--surface-1); border: 1px solid var(--border);
   border-radius: 999px; box-shadow: var(--shadow-pop); padding: 1px 8px; font-size: .75rem; font-weight: 500; line-height: 1.4; }
 @media (prefers-reduced-motion: no-preference) {
