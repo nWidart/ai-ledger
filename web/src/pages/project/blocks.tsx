@@ -22,7 +22,8 @@ import { subjectAttrs } from "../../components/menu/subject";
 import { Toggletip } from "../../components/Toggletip";
 import { ContextGrid } from "./ContextGrid";
 import { MeasureNow } from "./MeasureNow";
-import { contextGrid, errorsBlock, limitsBlock } from "./project";
+import { Table, type Column } from "../../components/table/Table";
+import { contextGrid, errorsBlock, limitsBlock, type LimitCommitRow } from "./project";
 
 /** The page's view in words and links: the project and the shared keys, as a query string for another page. */
 export interface Scope { project: string; range: number; source: Source | ""; auto: boolean; search: string }
@@ -157,6 +158,13 @@ export function SessionsBlock({ usage, scope }: { usage: ApiState<UsagePayload>;
   );
 }
 
+const COMMIT_COLUMNS: Column<LimitCommitRow>[] = [
+  { id: "limit", header: "Limit", cell: c => c.name },
+  { id: "points", header: "Points", align: "num", cell: c => num(c.points, 1) },
+  { id: "commits", header: "Commits", align: "num", cell: c => num(c.commits) },
+  { id: "perPoint", header: "Commits a point", align: "num", cell: c => num(c.commitsPerPoint, 2) },
+];
+
 /** The project's failed calls, their rate and the top error types, as the Errors page counts them by default. */
 export function ErrorsBlock({ errors, scope }: { errors: ApiState<ErrorsPayload>; scope: Scope }) {
   const model = useMemo(() => (errors.data ? makeModel(errors.data) : undefined), [errors.data]);
@@ -247,11 +255,7 @@ export function LimitsBlock({ limits, scope }: { limits: ApiState<LimitsPayload>
         </>}
         {l.commits.length > 0 && <>
           <h3>Commits per point</h3>
-          <DataTable name="Commits per point">
-            <thead><tr><th scope="col">Limit</th><th scope="col" className="num">Points</th><th scope="col" className="num">Commits</th><th scope="col" className="num">Commits a point</th></tr></thead>
-            <tbody>{l.commits.map(c => <tr key={c.key}><th scope="row">{c.name}</th><td className="num">{num(c.points, 1)}</td><td className="num">{num(c.commits)}</td>
-              <td className="num">{num(c.commitsPerPoint, 2)}</td></tr>)}</tbody>
-          </DataTable>
+          <Table name="Commits per point" rows={l.commits} columns={COMMIT_COLUMNS} rowId={c => c.key} />
         </>}
       </>}
     </Block>

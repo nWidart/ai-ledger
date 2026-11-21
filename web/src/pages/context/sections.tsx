@@ -4,6 +4,7 @@ import type { ContextPayload } from "../../api";
 import { DataTable } from "../../components/DataTable";
 import { HowMeasured } from "../../components/HowMeasured";
 import { openProjectSheet, pickRow } from "../../components/sheets/session";
+import { Table, type Column, type RowPick } from "../../components/table/Table";
 import { Toggletip } from "../../components/Toggletip";
 import { dur, num, pct, plural, usd, usd0 } from "../../format";
 import { Proj } from "./cells";
@@ -38,6 +39,20 @@ export function Starting({ d }: { d: D }) {
 const Tile = ({ v, unit, l, dsc }: { v: string; unit?: string; l: string; dsc: string }) =>
   <div className="vital"><div className="v">{v}{unit && <small> {unit}</small>}</div><div className="l">{l}</div><div className="d">{dsc}</div></div>;
 
+type GrowthRow = D["growth"]["by_project"][number];
+// Growth by project: a row opens the project's sheet; a row with no project opens nothing.
+const PROJECT_PICK: RowPick<{ project: string | null }> = {
+  value: p => p.project || null, open: v => openProjectSheet(v), subject: p => p.project ? { kind: "project", value: p.project } : undefined,
+};
+const GROWTH_COLUMNS: Column<GrowthRow>[] = [
+  { id: "project", header: "Project", cell: p => <Proj project={p.project} button={!!p.project} />, cellProps: () => ({ className: "name" }) },
+  { id: "sessions", header: "Sessions", align: "num", cell: p => num(p.sessions) },
+  { id: "added", header: "Added per prompt", align: "num", cell: p => num(p.added_per_prompt) },
+  { id: "compacted", header: "Compacted", align: "num", cell: p => num(p.compacted) },
+  { id: "turns", header: "Turns to first compaction", align: "num", cell: p => num(p.turns_to_compaction) },
+  { id: "minutes", header: "Active time to it", align: "num", cell: p => p.minutes_to_compaction == null ? "–" : dur(p.minutes_to_compaction * 60) },
+];
+
 /** How fast context grows and how far sessions get before the first compaction. */
 export function Growth({ d }: { d: D }) {
   const g = d.growth, tc = g.to_compaction, c = d.coverage, by = g.by_project;
@@ -62,14 +77,7 @@ export function Growth({ d }: { d: D }) {
       {!tiles && <p className="hint">{c.compacted > 0
         ? `${plural(c.compacted, "session")} compacted, but none has a recorded first compaction yet, so there is no way-to-compaction figure.`
         : "No session in this view compacted, so there is no figure for the way to a first compaction."}</p>}
-      {by.length > 1 && <DataTable name="Growth by project">
-        <thead><tr><th scope="col">Project</th><th scope="col" className="num">Sessions</th><th scope="col" className="num">Added per prompt</th><th scope="col" className="num">Compacted</th>
-          <th scope="col" className="num">Turns to first compaction</th><th scope="col" className="num">Active time to it</th></tr></thead>
-        <tbody>{by.map(p => <tr key={`project:${p.project ?? ""}`} {...(p.project ? pickRow(p.project, v => openProjectSheet(v), { kind: "project", value: p.project }) : {})}>
-          <th scope="row" className="name"><Proj project={p.project} button={!!p.project} /></th><td className="num">{num(p.sessions)}</td><td className="num">{num(p.added_per_prompt)}</td>
-          <td className="num">{num(p.compacted)}</td><td className="num">{num(p.turns_to_compaction)}</td>
-          <td className="num">{p.minutes_to_compaction == null ? "–" : dur(p.minutes_to_compaction * 60)}</td></tr>)}</tbody>
-      </DataTable>}
+      {by.length > 1 && <Table name="Growth by project" rows={by} columns={GROWTH_COLUMNS} rowId={p => `project:${p.project ?? ""}`} pick={PROJECT_PICK} />}
     </section>
   );
 }
