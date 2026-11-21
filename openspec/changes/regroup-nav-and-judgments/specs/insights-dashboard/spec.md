@@ -81,6 +81,15 @@ The Friction section's hint SHALL say the rows are weighed by the sessions that 
 - **WHEN** the user activates the Friction section's How measured toggletip
 - **THEN** it says cost and active time are those of the whole sessions that reported a friction, not of the friction alone
 
+## RENAMED Requirements
+
+- FROM: `### Requirement: Order the page`
+- TO: `### Requirement: Order the Judgments view`
+- FROM: `### Requirement: Index the page's sections`
+- TO: `### Requirement: Index the Judgments view's sections`
+- FROM: `### Requirement: Keep the drill-down filters in the page URL`
+- TO: `### Requirement: Keep the drill-down filters in the URL`
+
 ## MODIFIED Requirements
 
 ### Requirement: Filter by project, range, source and automated sessions
@@ -153,7 +162,7 @@ The Judgments view SHALL say, behind the sub line's How measured toggletip, that
 - **WHEN** the user opens the Judgments view with a view that has facets and activates the sub line's How measured toggletip
 - **THEN** the toggletip says a session counts by its start time and that Overview counts a session with a request in the range
 
-### Requirement: Order the page
+### Requirement: Order the Judgments view
 When the view has analysed sessions, the Judgments view SHALL show, in this order: Activity's view switch, the lede with the filters beside it, its sub line, the coverage note, the section index, the vitals, one row holding Outcomes and Friction categories, the Trend panel when it is shown, Satisfaction and helpfulness, the analysed sessions, then the drawers: Goals, Session types, Session figures, Coverage and How this works. Each drawer SHALL be closed by default.
 
 #### Scenario: Order with figures
@@ -164,8 +173,8 @@ When the view has analysed sessions, the Judgments view SHALL show, in this orde
 - **WHEN** the view holds analysed sessions from one week only
 - **THEN** the Trend panel is left out and the other sections keep their order
 
-### Requirement: Index the page's sections
-The Judgments view SHALL show a section index after the coverage note when the view has analysed sessions: Summary, Outcomes, Friction, Trend when it is shown, Satisfaction and Sessions, then the drawers. Without analysed sessions, it SHALL show one only for Summary and the drawers it has. Choosing a drawer SHALL open it and scroll to it. It SHALL NOT be shown for an empty store. Its first entry SHALL NOT be named Overview, which names Activity's other view.
+### Requirement: Index the Judgments view's sections
+With analysed sessions, the Judgments view SHALL show a section index after the coverage note: Summary, Outcomes, Friction, Trend when shown, Satisfaction, Sessions, then the drawers. With none, it SHALL list Summary and the drawers it has: Session figures for session-meta rows in the view, How this works for facets in the store. An empty store, with no facet and no session-meta row, SHALL show no index. Choosing a drawer SHALL open it and scroll to it. No entry SHALL be named Overview.
 
 #### Scenario: Jump to a drawer
 - **WHEN** the user chooses Goals in the section index
@@ -176,8 +185,12 @@ The Judgments view SHALL show a section index after the coverage note when the v
 - **THEN** no section index is shown
 
 #### Scenario: No analysed sessions
-- **WHEN** the store has facets but the view has no analysed session
+- **WHEN** the store has facets, and the view has no facet and no session-meta row
 - **THEN** the index lists Summary and How this works only
+
+#### Scenario: Session figures but no judgments
+- **WHEN** the store has facets, and the filtered view has session-meta rows but no facet
+- **THEN** the index lists Summary, Session figures and How this works
 
 ### Requirement: Sort analysed sessions
 The page SHALL let the user order the listed sessions by Newest (the default), Oldest or Outcome. Outcome SHALL put the worst first: not achieved, partially achieved, unclear or unknown, mostly achieved, fully achieved, and sessions with the same outcome newest first. The choice SHALL last for the page visit, also across a view with no list, and SHALL NOT be kept in the page URL. The list's description SHALL say the order in words.
@@ -258,8 +271,8 @@ The trend panel SHALL be shown only when the view's analysed sessions span 2 or 
 - **WHEN** all analysed sessions of the view started in one week
 - **THEN** the panel is not shown
 
-### Requirement: Keep the drill-down filters in the page URL
-The drill-down filters SHALL be kept in the page URL as `outcome=`, `help=`, `goal=` and `fr=`, one raw category name each, and `goalf=` and `frf=`, one family key each. Setting one SHALL add a history entry, so Back undoes it. All active filters, `friction=1` included, SHALL combine with AND and SHALL change the "N of M sessions" count. They SHALL survive a change of project, range or automated sessions. A switch to Overview SHALL drop them.
+### Requirement: Keep the drill-down filters in the URL
+The drill-down filters SHALL be kept in the URL as `outcome=`, `help=`, `goal=` and `fr=`, one raw category name each, and `goalf=` and `frf=`, one family key each. Setting one SHALL add a history entry, so Back undoes it. All active filters, `friction=1` included, SHALL combine with AND and SHALL change the "N of M sessions" count. They SHALL survive a change of project, range or automated sessions. A switch to Overview SHALL drop them.
 
 #### Scenario: Combined filters
 - **WHEN** the user opens `/usage?view=judgments&fr=buggy_code&goal=fix_bug`
@@ -285,7 +298,7 @@ The drawer SHALL appear, and be listed in the section index, only when the view 
 - **THEN** the drawer is shown beside the How this works drawer
 
 ### Requirement: Count a family from its labels
-A family's count SHALL be the sum of its labels' counts. Its sessions SHALL be the distinct sessions of the view that carry any of its labels, never the sum of its labels' sessions, and a friction family's cost and active time SHALL be summed over those same sessions. Labels SHALL be ordered most counted first, then by name; families by count, then sessions, then key. The raw goal and friction lists SHALL stay in the payload.
+A family's count SHALL be the sum of its labels' counts. Its sessions SHALL be the distinct sessions of the view with any of its labels, never the sum of its labels' sessions; a friction family's cost and active time SHALL be summed over those sessions. The payload SHALL order labels by count, then name, and families by count, then sessions, then key; on screen the Friction rows follow the selected weight. The raw goal and friction lists SHALL stay in the payload.
 
 #### Scenario: One session, two labels of a family
 - **WHEN** one session reports `create_pull_request` 2 times and `open_pr` once, and no other session does

@@ -91,7 +91,7 @@ The Limits tab SHALL show a pill with the percent of the status's `limits_peak`;
 - **THEN** the Limits tab shows no pill and is named "Limits"
 
 ### Requirement: Host the sheets once in the app shell
-The app SHALL mount the project, tool, MCP server, skill and session sheets once, in its shell, outside every page. Every page, Limits and the Project page included, SHALL open them in place from its URL. No page SHALL mount sheets of its own. On Errors the sheets SHALL include automated sessions, as that page does. The shell's host SHALL keep no page's answer in memory longer than the page would.
+The app SHALL mount the project, tool, MCP server, skill and session sheets once, in its shell, outside every page. Every page, Limits and the Project page included, SHALL open them in place from its URL. No page SHALL mount a second host of these sheets; a page's own sheet, as Errors' type sheet, stacks with them as sheets stack. On Errors the sheets SHALL include automated sessions, as that page does. The shell's host SHALL keep no page's answer in memory longer than the page would.
 
 #### Scenario: A session on Limits
 - **WHEN** the user on `/limits?range=30` opens session `abc`, from the palette or a session's menu
@@ -103,10 +103,10 @@ The app SHALL mount the project, tool, MCP server, skill and session sheets once
 
 #### Scenario: One host
 - **WHEN** the user moves between pages
-- **THEN** the page holds one sheet at most, the shell's, and no page mounts another
+- **THEN** the app holds one shared sheet host, the shell's, and no page mounts another; Errors' own type sheet still stacks with it as stacking allows
 
 ### Requirement: Show a page only the filters that change it
-Each page SHALL show a shared filter only when the filter changes what the page shows. A filter the page does not show SHALL keep its value in the URL for the other pages. The filters a page shows SHALL keep one order: project, range, source, then the automated toggle. On pages with a heading and filters, the filters SHALL sit in the page header beside the heading.
+Each page SHALL show a shared filter only when it changes what the page shows; a filter not shown SHALL keep its URL value for the other pages. The filters shown SHALL keep one order: project, range, source, then the automated toggle. A filter that applies to the whole page SHALL sit in the page header beside the heading; one that sets some sections only SHALL sit in the header of the section it sets, as Limits' range does. A page's own controls sit where they act, as on Errors.
 
 #### Scenario: Judgments has no source filter
 - **WHEN** the user opens Activity's Judgments view with `source=claude` in the URL
@@ -114,7 +114,11 @@ Each page SHALL show a shared filter only when the filter changes what the page 
 
 #### Scenario: Limits
 - **WHEN** the user opens Limits
-- **THEN** it shows the source filter and no project filter or automated toggle
+- **THEN** its header shows the source filter, Past windows' header shows the range, and there is no project filter or automated toggle
+
+#### Scenario: Errors
+- **WHEN** the user opens Errors
+- **THEN** its header holds only the project, range and source filters, and Day / Week sits in the rate chart's header
 
 #### Scenario: Live
 - **WHEN** the user opens Live
@@ -170,8 +174,8 @@ Every dashboard page SHALL show the same navigation with Live, Limits, Activity,
 - **THEN** the Limits page opens filtered to Codex and the last 30 days
 
 #### Scenario: Switch from Cost to Insights
-- **WHEN** the user views project `foo` for the last 30 days on Cost and looks for Insights
-- **THEN** the navigation has no Insights entry: Activity opens filtered to `foo` and the last 30 days, and its Judgments view holds what Insights showed
+- **WHEN** the user views project `foo` for the last 30 days on Cost, clicks Activity, then picks Judgments in its view switch
+- **THEN** the navigation has no Insights entry, and the Judgments view opens filtered to `foo` and the last 30 days, showing what Insights showed
 
 #### Scenario: Through Live and back
 - **WHEN** the user views project `foo` for the last 30 days on Cost, clicks Live, then clicks Cost
