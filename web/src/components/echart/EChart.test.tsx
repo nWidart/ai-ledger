@@ -699,14 +699,120 @@ describe("EChart zoom", () => {
     expect(chart.shown).toEqual({ from: 15, to: 29 });
   });
 
-  it("removes the slider when the option drops it", async () => {
-    const { rerender } = render(zoomed());
+  const short = (env: ChartEnv): EChartsOption => { const { dataZoom: _, ...rest } = month(env); return rest; };
+
+  it("removes the slider when the option drops it, and says nothing of the old zoom", async () => {
+    const onZoom = zoomSpy();
+    const { rerender } = render(zoomed({ onZoom }));
     const chart = await drawn();
     chart.zoomTo(10, 19);
-    const short = (env: ChartEnv): EChartsOption => { const { dataZoom: _, ...rest } = month(env); return rest; };
-    rerender(zoomed({ option: short }));
+    expect(readout()).toBe("Showing Oct 11 to Oct 20, 10 of 30 days.");
+    rerender(zoomed({ onZoom, option: short }));
     expect(chart.option.dataZoom).toEqual([]);
     expect(chart.shown).toEqual({ from: 0, to: 29 });
+    expect(onZoom.mock.calls.at(-1)).toEqual([null]);
+    expect(readout()).toBe("");
+  });
+
+  it("brings back no zoom, status or reading when the option goes back to a function it had", async () => {
+    const onZoom = zoomSpy();
+    const { rerender } = render(zoomed({ onZoom }));
+    const chart = await drawn();
+    key("+");
+    rerender(zoomed({ onZoom, option: short }));
+    rerender(zoomed({ onZoom, option: month }));
+    expect(chart.shown).toEqual({ from: 0, to: 29 });
+    expect(onZoom.mock.calls).toEqual([[{ from: 15, to: 29 }], [null]]);
+    expect(readout()).toBe("");
+
+    key("End");
+    rerender(zoomed({ onZoom, option: short }));
+    fireEvent.blur(box()); // nothing read on this drawing
+    rerender(zoomed({ onZoom, option: month }));
+    expect(readout()).toBe("");
+    expect(tooltip()).toBeNull();
+  });
+
+  it("leaves the zoom keys to the browser when the option draws no slider, with zoom set", async () => {
+    render(zoomed({ option: short }));
+    const chart = await drawn();
+    expect(key("+")).toBe(true);
+    expect(key("-")).toBe(true);
+    expect(zooms(chart)).toEqual([]);
+    expect(readout()).toBe("");
+  });
+
+  it("says nothing when the chart keeps the window it showed", async () => {
+    render(zoomed());
+    const chart = await drawn();
+    // ECharts clamps the window: the fake's action leaves it where it was, as a clamp to the same window does.
+    const dispatch = chart.dispatchAction.bind(chart);
+    vi.spyOn(chart, "dispatchAction").mockImplementation((p, opt) => { if (p.type !== "dataZoom") dispatch(p, opt); else chart.actions.push(p); });
+    expect(key("+")).toBe(false);
+    expect(chart.shown).toEqual({ from: 0, to: 29 });
+    expect(readout()).toBe("");
+  });
+
+  it("shows every point again when zoom turns off, and reads no zoom when it turns on again", async () => {
+    const onZoom = zoomSpy();
+    const { rerender } = render(zoomed({ onZoom }));
+    const chart = await drawn();
+    key("+");
+    rerender(zoomed({ onZoom, zoom: false }));
+    expect(chart.shown).toEqual({ from: 0, to: 29 });
+    expect(onZoom.mock.calls.at(-1)).toEqual([null]);
+    rerender(zoomed({ onZoom, zoom: true }));
+    expect(onZoom.mock.calls.at(-1)).toEqual([null]);
+    expect(readout()).toBe("");
+    key("+");
+    expect(chart.shown).toEqual({ from: 15, to: 29 });
+  });
+
+  it("reports each step of a slider drag, and says the days shown once, when the drag ends", async () => {
+    const onZoom = zoomSpy();
+    render(zoomed({ onZoom }));
+    const chart = await drawn();
+    chart.fire("mousedown", [200, 250]); // on the slider, under the grid
+    chart.zoomTo(10, 29);
+    chart.zoomTo(10, 24);
+    chart.zoomTo(10, 19);
+    expect(onZoom.mock.calls).toEqual([[{ from: 10, to: 29 }], [{ from: 10, to: 24 }], [{ from: 10, to: 19 }]]);
+    expect(readout()).toBe(""); // not while the drag goes on
+    fireEvent.pointerUp(document.body); // the pointer lets go anywhere in the page, over the chart or not
+    expect(readout()).toBe("Showing Oct 11 to Oct 20, 10 of 30 days.");
+    chart.fire("mousedown", [200, 250]);
+    fireEvent.pointerUp(document.body); // a press that moves nothing says nothing new
+    chart.fire("mousemove", chart.pointAt(12));
+    chart.fire("mousedown", chart.pointAt(12));
+    fireEvent.pointerCancel(document.body);
+    expect(readout()).toBe("Oct 13: $12.00");
+  });
+
+  it("lets go of the document once the pointer is up, and on unmount", async () => {
+    const { unmount } = render(zoomed());
+    const chart = await drawn();
+    const on = vi.spyOn(document, "addEventListener"), off = vi.spyOn(document, "removeEventListener");
+    const count = (spy: typeof on) => spy.mock.calls.filter(([name]) => String(name).startsWith("pointer")).length;
+    chart.fire("mousedown", [200, 250]);
+    expect(count(on)).toBe(2);
+    fireEvent.pointerUp(document.body);
+    expect(count(off)).toBe(2);
+    chart.fire("mousedown", [200, 250]);
+    unmount();
+    expect(count(off)).toBe(4);
+  });
+
+  it("keeps one handle across renders, which reads the chart as it is now", async () => {
+    const handles: (EChartHandle | null)[] = [];
+    const ref = (h: EChartHandle | null) => { handles.push(h); };
+    const { rerender } = render(zoomed({ ref }));
+    const chart = await drawn();
+    key("+");
+    rerender(zoomed({ ref, readZoom: s => (s ? "zoomed" : "every day") }));
+    expect(handles).toHaveLength(1);
+    act(() => handles[0]!.reset());
+    expect(chart.shown).toEqual({ from: 0, to: 29 });
+    expect(readout()).toBe("every day");
   });
 
   it("shows every point again on reset(), and focuses the box on focus()", async () => {
