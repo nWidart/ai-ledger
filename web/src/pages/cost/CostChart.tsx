@@ -173,8 +173,10 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScal
             onClick={() => onHidden(hidden.includes(k.k) ? hidden.filter(x => x !== k.k) : [...hidden, k.k])}><i style={{ background: k.c }} />{k.label}</button>)}
         {showAvg && !none && <span className="key"><i className="line" />7-day average</span>}
         {pts.length > 0 && !none && <span className="key"><i className="hatch" />Today so far</span>}
-        {/* The reset leaves with the zoom: focus goes to the chart it showed every day of. */}
-        {zoom && zoomed && !none && <button ref={showAll} type="button" className="show-all" onClick={() => { box.current?.reset(); box.current?.focus(); }}>Show all days</button>}
+        {/* The reset leaves with the zoom: focus goes to the chart it showed every day of. It shows by the wrapper's
+            report alone, not by `zoom`: a view that loses its slider would take the button away in this render, before
+            onZoom could move the focus off it. */}
+        {zoomed && !none && <button ref={showAll} type="button" className="show-all" onClick={() => { box.current?.reset(); box.current?.focus(); }}>Show all days</button>}
       </div>
       {none && <div className="empty all-hidden" role="status">All token kinds are hidden.{" "}
         <button type="button" className="linkish" onClick={() => onHidden([])}>Show every kind</button></div>}

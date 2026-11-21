@@ -562,6 +562,16 @@ describe("cost chart: zoom", () => {
     expect(document.activeElement).toBe(metric);
   });
 
+  it("moves the focus from 'Show all days' to the chart when the view falls under 14 days and loses its slider", async () => {
+    const { rerender } = renderApp(<Host />);
+    await drag(5, 14);
+    act(() => showAll()!.focus());
+    rerender(<Host data={view("2026-10-24", "2026-11-05")} />); // 13 days: no zoom any more
+    expect(showAll()).toBeNull();
+    expect(await slider()).toEqual([]);
+    expect(document.activeElement).toBe(group());
+  });
+
   it("shows every day again when an all-time view gains an earlier first day, as after an ingest of older transcripts", async () => {
     const all = (from: string): UsagePayload => ({ ...view(from, "2026-11-04"), range: 0, start: null });
     const { rerender } = renderApp(<Host data={all("2026-10-06")} />);
