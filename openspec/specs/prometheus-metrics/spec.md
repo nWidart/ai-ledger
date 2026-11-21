@@ -1,7 +1,8 @@
 # prometheus-metrics Specification
 
 ## Purpose
-TBD - created by archiving change add-prometheus-metrics. Update Purpose after archive.
+
+Serve the store's figures to Prometheus, so a self-hosted Grafana can chart and alert on spend, tokens, sessions, tool calls and plan limits for every machine that runs AI Ledger, with no transcript text leaving the store.
 
 ## Requirements
 
