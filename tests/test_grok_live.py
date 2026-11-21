@@ -154,22 +154,53 @@ class TurnStateTest(GrokLiveCase):
         self.assertEqual((one["state"]["kind"], one["state"]["inferred"]), ("you", False))
         self.assertEqual([e["k"] for e in one["events"] if e["lane"] is None][-2:], ["interrupt", "turn_end"])
 
-    def test_cancelled_turn_ends_its_open_calls(self):
-        # A call with only its in-progress update when the turn is cancelled is no running call: your turn.
+    def open_call_then_cancel(self):
+        """The cancelled fixture with its last call left open (only its in-progress update): (lines, the call, the index
+        of the cancelled turn_completed)."""
         lines = self.until(self.lines("cancelled"), "session_end")
         call = [d for d in lines if kind(d) == "tool_call"][-1]
         tid = grok.update(call)["toolCallId"]
         lines = [d for d in lines if not (kind(d) == "tool_call_update" and grok.update(d).get("toolCallId") == tid
                                           and grok.update(d).get("status"))]
-        ends = [i for i, d in enumerate(lines) if kind(d) == "turn_completed"]
-        self.assertGreater(ends[-1], lines.index(call))
+        end = [i for i, d in enumerate(lines) if kind(d) == "turn_completed"][-1]
+        self.assertGreater(end, lines.index(call))
         grok.update(call)["rawInput"] = dict(command="sleep 600")
         grok.update(call)["_meta"] = {"x.ai/tool": dict(name="run_terminal_command", kind="execute")}
+        return lines, call, end
+
+    def assertInterrupted(self, ev, end):
+        self.assertEqual((ev["end"], ev["failed"], ev["error"]), (live.iso(end), True, live.INTERRUPTED))
+
+    def test_cancelled_turn_ends_its_open_calls(self):
+        # A call with only its in-progress update when the turn is cancelled is no running call: your turn, and the
+        # call ends, failed, as the turn's interruption.
+        lines, call, end = self.open_call_then_cancel()
         self.store("cancelled", lines)
-        one = self.one("cancelled", self.at(lines[ends[-1]], 45))
+        one = self.one("cancelled", self.at(lines[end], 45))
         self.assertEqual((one["state"]["kind"], one["state"]["inferred"]), ("you", False))
         self.assertIn("interrupt", [e["k"] for e in one["events"]])
-        self.assertIn(tid, [e["id"] for e in one["events"] if e["k"] == "tool" and e["end"] is None])
+        ev, = [e for e in one["events"] if e.get("id") == grok.update(call)["toolCallId"]]
+        self.assertInterrupted(ev, self.at(lines[end]))
+
+    def test_cancelled_turn_ends_a_call_shown_open_on_an_earlier_poll(self):
+        lines, call, end = self.open_call_then_cancel()
+        tid = grok.update(call)["toolCallId"]
+        thought = copy.deepcopy(next(d for d in lines if kind(d) == "agent_thought_chunk"))
+        grok.meta(thought).update(eventId=grok.meta(thought)["eventId"] + "7", agentTimestampMs=grok.meta(call)["agentTimestampMs"] + 61_000)
+        before = [d for d in lines[:end] if grok.meta(d)["agentTimestampMs"] <= grok.meta(call)["agentTimestampMs"]] + [thought]
+        self.store("cancelled", before)
+        cur = self.con.cursor()
+        poll1 = live.session(cur, SESSION["cancelled"], now=self.at(thought, 1), prices=PRICES)
+        self.assertEqual([e["end"] for e in poll1["events"] if e.get("id") == tid], [None])
+        cancel = copy.deepcopy(lines[end])
+        grok.meta(cancel)["agentTimestampMs"] = grok.meta(thought)["agentTimestampMs"] + 5_000
+        self.assertGreater(live.parse_ts(poll1["cursor"]) - live.OVERLAP, self.at(call))  # the call is before the window
+        self.store("cancelled", before + [cancel])
+        poll2 = live.session(cur, SESSION["cancelled"], after=poll1["cursor"], now=self.at(cancel, 1), prices=PRICES)
+        ev, = [e for e in poll2["events"] if e.get("id") == tid]
+        self.assertEqual(ev["key"], next(e["key"] for e in poll1["events"] if e.get("id") == tid))  # replaces the open one
+        self.assertInterrupted(ev, self.at(cancel))
+        self.assertEqual(poll2["state"]["kind"], "you")
 
     def test_slow_shell_call_is_a_likely_approval_wait(self):
         lines = self.until(self.lines("probe"), "session_end", 2)  # turn 2's sleep 60 has only its in-progress update

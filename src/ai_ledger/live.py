@@ -240,12 +240,36 @@ def assemble(rows, copied=None):
                     results[it["id"]] = r
             elif k not in ("request", "agent"):
                 events.append(dict(it, key=f"{key}#{i}", ts=t, lane=lane))
+    if rows and source_of(rows[0][4]).turns:
+        close_interrupted(events, interrupt_cut(events))
     empty = set()
     for ev in joined:
         ev["text"] = ev["text"].strip()
         if not ev["text"]:
             empty.add(id(ev))
     return [e for e in events if id(e) not in empty] if empty else events, results
+
+
+INTERRUPTED = "Interrupted: its turn was cancelled"  # the error of a call a cancelled turn left open
+
+
+def interrupt_cut(events):
+    """{lane: the time of its newest interrupt} among events (None is the main thread)."""
+    cut = {}
+    for e in events:
+        if e["k"] == "interrupt" and e["ts"]:
+            cut[e["lane"]] = max(cut.get(e["lane"]) or e["ts"], e["ts"])
+    return cut
+
+
+def close_interrupted(events, cut):
+    """For a source with turn marks (Grok, Codex): a tool event with no result that started before an interrupt of its
+    thread (cut, from interrupt_cut) ended at it, failed with INTERRUPTED, as a Claude Code call the user interrupted
+    does: a cancelled turn's open call is no running call, in the state and on the page."""
+    for e in events:
+        lane = e.get("lane")
+        if e["k"] == "tool" and e["end"] is None and e["start"] and lane in cut and e["start"] <= cut[lane]:
+            e.update(end=cut[lane], failed=True, error=INTERRUPTED)
 
 
 def group_key(it, lane):
@@ -299,21 +323,15 @@ def finish(ev, r):
 def state(events, now, source, last, closed=False):
     """One session's state from its events (in order), now, its source, its newest line's time and whether its
     transcript shows it closed. kind: ended, idle, wait (likely waiting for approval), tool, thinking or you (your turn).
-    long: the running call is a long one, which never turns into a wait. For a source with turn marks, a call with no
-    result that started before an interrupt of its thread (a cancelled turn) is no running call."""
+    long: the running call is a long one, which never turns into a wait. A call a cancelled turn left open is no running
+    call: assemble ends it (close_interrupted)."""
     def st(kind, since, tool=None, inferred=False, long=False):
         return dict(kind=kind, tool=tool, since=iso(since), inferred=inferred, long=long)
     if closed:  # the close line has no time of its own
         return st("ended", last)
     if last is None or now - last > IDLE:
         return st("idle", last)
-    pending = [e for e in events if e["k"] == "tool" and e["end"] is None]
-    if pending and source_of(source).turns:  # a call still open when its thread's turn was cancelled (Grok, Codex) is over
-        cut = {}
-        for e in events:
-            if e["k"] == "interrupt" and e["ts"]:
-                cut[e["lane"]] = max(cut.get(e["lane"]) or e["ts"], e["ts"])
-        pending = [e for e in pending if not (e["start"] and e["lane"] in cut and cut[e["lane"]] >= e["start"])]
+    pending = [e for e in events if e["k"] == "tool" and e["end"] is None]  # assemble ended a cancelled turn's open calls
     if pending:  # a likely approval wait, the oldest first, else the newest call: a newer call in a subagent hides no wait
         waits = [e for e in pending if e["tool"] in APPROVAL_TOOLS and not e["long"] and e["start"] is not None and now - e["start"] > APPROVAL]
         if waits:
@@ -483,10 +501,10 @@ def title_of(found, sid):
     return dict(title=title, title_from=origin)
 
 
-def turn_mark_rows(cur, sids, turns):
+def turn_mark_rows(cur, sids, turns, starts=False, before=None):
     """The newest turn start and the newest turn end of each file of the sessions sids, as the store.Turns `turns` tells
-    them, in recent's row shape."""
-    marks = list(turns.start + turns.end)
+    them, in recent's row shape. starts: the turn starts only; before: only lines before that time."""
+    marks = list(turns.start if starts else turns.start + turns.end)
     if turns.path:  # the marks share one raw type: the value at the path tells them. The text test spares most lines a JSON read.
         value, vparams = "json_extract_string(r.json, ?)", [turns.path]
         where = f"r.type = ? AND list_bool_or(list_transform(?, lambda x: contains(r.json, x))) AND list_contains(?, {value})"
@@ -494,9 +512,9 @@ def turn_mark_rows(cur, sids, turns):
     else:
         value, vparams, where, params = "r.type", [], "list_contains(?, r.type)", [marks]
     return cur.execute(f"""SELECT r.session_id, {ROW_COLS}, r.line_no FROM {ROW_FROM}
-            WHERE list_contains(?, r.session_id) AND r.ts IS NOT NULL AND r.parsed AND {where}
+            WHERE list_contains(?, r.session_id) AND r.ts IS NOT NULL AND r.parsed AND {where} AND (CAST(? AS VARCHAR) IS NULL OR r.ts < ?)
             QUALIFY row_number() OVER (PARTITION BY r.session_id, r.file, list_contains(?, {value})
-              ORDER BY r.ts DESC, r.line_no DESC) = 1""", [sids] + params + [list(turns.start)] + vparams).fetchall()
+              ORDER BY r.ts DESC, r.line_no DESC) = 1""", [sids] + params + [before, before, list(turns.start)] + vparams).fetchall()
 
 
 def recent(cur, sids):
@@ -574,6 +592,12 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
                 events.append(ev)
         events += [inner_call(r) for r in results.values() if r.get("tool")]
         events.sort(key=lambda e: (e["ts"] or now))
+    if after:  # calls an earlier poll sent open that an interrupt in the window ends: sent again, ended
+        cut = interrupt_cut(events) if source_of(s["source"]).turns else {}
+        shown = {e["id"] for e in events if e["k"] == "tool"}
+        ended = [e for e in open_before(cur, sid, s["source"], window, cut, copied) if e["id"] not in shown]
+        if ended:
+            events = sorted(events + ended, key=lambda e: (e["ts"] or now))
     for ev in events:
         if ev["k"] == "tool" and ev["id"] in started:
             ev["agent"] = ev["agent"] or started[ev["id"]]
@@ -591,6 +615,23 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
                 events=[public(e, text) for e in events], lanes=lanes(cur, sid, prices),
                 window=window_of(f["model"], now_events, prices), compactions=compactions(cur, sid),
                 pulse=pulse(cur, sid, now), limits=plan_limits(cur, s["source"], now), **f)
+
+
+def open_before(cur, sid, source, before, cut, copied):
+    """The tool events an interrupt in a catch-up's window (cut, from interrupt_cut) ends whose calls started before the
+    window (before): an earlier poll sent them open, so they are sent again, ended. Read from the lines between the
+    newest turn start before the window and the window. Only a source with turn marks has such an interrupt."""
+    turns = source_of(source).turns
+    if not cut or not before or not turns:
+        return []
+    starts = [r[3] for r in turn_mark_rows(cur, [sid], turns, starts=True, before=before)]
+    if not starts:
+        return []
+    rows = cur.execute(f"""SELECT {ROW_COLS} FROM {ROW_FROM} WHERE r.session_id = ? AND r.ts >= ? AND r.ts < ? AND r.parsed
+        ORDER BY r.ts, r.file, r.line_no""", [sid, min(starts), before]).fetchall()
+    evs = [e for e in assemble(rows, copied)[0] if e["k"] == "tool" and e["end"] is None]
+    close_interrupted(evs, cut)
+    return [e for e in evs if e["end"] is not None]
 
 
 def earlier_uses(cur, sid, before, ids):

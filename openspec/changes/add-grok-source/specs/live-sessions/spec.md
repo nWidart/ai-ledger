@@ -42,6 +42,10 @@ The app SHALL give each active session one state, checked in this order:
 - **WHEN** a Grok session's newest main-thread turn ends with a `turn_completed` line whose stop reason is `cancelled`
 - **THEN** the turn counts as interrupted, and the state is your turn
 
+#### Scenario: Cancelled turn with a call still open
+- **WHEN** a Grok or Codex turn is cancelled while one of its tool calls has no result, and an earlier poll showed that call running
+- **THEN** the state is your turn, and the next poll sends the call ended at the interruption, failed as interrupted
+
 ### Requirement: Flag a likely approval wait
 When a shell tool call (Claude Code `Bash`, Codex `exec` or `exec_command`, Grok `run_terminal_command`) has had no result for more than 30 seconds, the app SHALL report the state as *likely waiting for approval*, with how long the call has been pending. A newer pending call, in the main thread or a subagent, SHALL NOT hide it; with several such calls, the oldest SHALL be reported.
 
