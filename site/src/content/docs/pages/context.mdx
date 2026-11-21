@@ -47,7 +47,7 @@ Under the heading and the tips, three tabs hold the panels and drawers:
 | **Growth and bloat** | [Growth](#growth), [What fills context](#what-fills-context), the [Largest tool results](#largest-tool-results) drawer |
 | **Cache health** | [Cost](#cost), with the cache chart, and the [Sessions where caching broke](#sessions-where-caching-broke) drawer |
 
-The URL keeps the tab as `tab=growth` or `tab=cache`; the first tab writes nothing. Changing the tab replaces the history entry, as a filter does. A link to a panel or drawer by its id, such as `/context#d-breaks`, opens the tab that holds it.
+The URL keeps the tab as `tab=growth` or `tab=cache`; the first tab writes nothing. Changing the tab replaces the history entry, as a filter does. A link to a panel or drawer by its id, such as `/context#d-breaks`, opens the tab that holds it and scrolls there. The URL keeps the id, so a reload opens the same place, and focus stays where it was.
 
 **Keyboard** Only the selected tab is a tab stop. The left and right arrow keys select the previous and next tab and wrap around; Home and End select the first and last. Tab moves on to the tab's panel.
 
@@ -76,7 +76,7 @@ With no measured session, the heading reads "No \{agent} session\{ in project} w
 
 **Shows** tips from six fixed rules, as one strip of short items under the heading. The app sets the thresholds; nothing is learned or generated. A tip shows only when its rule fires on the view. When none fires, the strip reads "Nothing stands out in this view." Each item carries its severity mark: **●** critical or **▲** warning. Tips run most severe first, and within a severity in the order below.
 
-**Figures** The strip shows at most four items, so the tabs and the first chart stay on the first screen of a 1440 × 900 window; **Show N more** reveals the rest. Selecting an item opens it under the strip: a label naming the kind of finding (Starting context, Compactions, Window limit, Tool results, Prompt cache or Long prompts) and the severity, the evidence, the advice and a count of the matching sessions. One item is open at a time; selecting it again closes it.
+**Figures** The strip shows at most four items, so the tabs and the first bar of [Starting context](#starting-context) stay on the first screen of a 1440 × 900 window, with the strip expanded too; **Show N more** reveals the rest. Selecting an item opens it under the strip: a label naming the kind of finding (Starting context, Compactions, Window limit, Tool results, Prompt cache or Long prompts) and the severity, the evidence, the advice and a count of the matching sessions. One item is open at a time; selecting it again closes it. When a new view moves the open item behind **Show N more**, it closes.
 
 | Tip (title) | Fires when | Severity |
 | --- | --- | --- |
@@ -126,10 +126,10 @@ When both agents' sessions match, the advice names each command for its agent.
 
 **Figures**
 
-- With no project selected, one small grid for each of the six projects with the most sessions that have a known start and peak share of the window. Each names its project, its most common window and its sessions, and gives **Start**, **Peak** and **Free** as shares of the window. The hint says how many projects of how many it shows.
+- With no project selected, one small grid for each of the six projects with the most sessions that have a measured start, a known window and a peak. Each names its project, its most common window and its sessions, and gives **Start**, **Peak** and **Free** as shares of the window. The cells and the three figures come from those same sessions, so they always agree. The hint says how many projects of how many it shows.
 - With one project selected, that project's full grid with its legend, split by its latest `/context` snapshot when there is one, as on the Project page.
 
-Sessions with no known window take no part. With no grid to draw, the panel is not shown.
+Sessions without a measured start, a known window or a peak take no part. With no grid to draw, the panel is not shown.
 
 ### Window pressure
 
@@ -153,8 +153,8 @@ Sessions with no known window take no part. With no grid to draw, the panel is n
 **Controls**
 
 - Selecting a segment lists its sessions, newest first, up to 20, each with its title, start, peak share and compactions. Selecting a session opens its session sheet. A table of the same counts is behind **Show data table**.
-- A dot opens its session sheet. Arrow keys step from the oldest to the newest session; Escape clears the reading.
-- A button under the map per quadrant gives its count. Selecting one, or clicking the map away from any dot, selects that quadrant: the bars count only its sessions on the map (a line says so), the other dots dim, and a list names its 20 newest sessions. Escape, **Clear**, **Show every session** or selecting it again clears it. The map's data table names each session's quadrant.
+- A dot opens its session sheet. Arrow keys step from the oldest to the newest session; Escape clears the reading and, in the same press, the selected quadrant.
+- A button under the map per quadrant gives its count. Selecting one, or clicking the map away from any dot, selects that quadrant: the bars count only its sessions on the map (a line says so), the other dots dim, and a list names its 20 newest sessions. Escape, **Clear**, **Show every session** or selecting it again clears it; after **Clear**, focus is on the quadrant's button. The map's data table names each session's quadrant.
 
 ### Growth
 
@@ -214,7 +214,7 @@ A request that carries no time is in no bucket of the chart, but it counts in th
 
 **Controls**
 
-- **Cache reads** in the chart's legend adds the cache reads on top of each bar and rescales the bars to all prompt tokens; selecting it again takes them away. The tooltip, the reading and the table always include cache reads.
+- **Cache reads** in the chart's legend adds the cache reads on top of each bar and rescales the bars to all prompt tokens; the track's title becomes **Prompt tokens** and its total counts them all. Selecting it again takes them away. The tooltip, the reading and the table always include cache reads.
 - Arrow keys, Home and End read a day or week; Escape clears the reading. **Show data table** lists each bucket: uncached input, cache write, cache read, cache-hit ratio and the breaks by cause.
 
 ## Drawers

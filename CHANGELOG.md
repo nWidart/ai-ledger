@@ -17,8 +17,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
   - The tips are one strip of short items under the heading, at most four before "Show N more"; an item opens its evidence, advice and sessions in place.
   - Three tabs replace the section index: Overhead and pressure, Growth and bloat, and Cache health. The URL keeps the tab (`tab=growth`, `tab=cache`), and arrow keys, Home and End move between tabs.
   - The cache chart draws the tokens not read from the cache (uncached input and cache writes) as its bars, the cache breaks by cause on a strip under them, and the cache-hit ratio on its own thin track. Cache reads join the bars only when you turn them on.
-  - The session map names its four quadrants (Lean, Heavy start, Grew full, Heavy and full). Selecting one narrows the window pressure bars to its sessions and lists them; Escape clears it. Sessions show their titles on the map and in the pressure lists.
-  - Overhead and pressure draws the Project page's window grid for each of the six busiest projects, or the one full grid with a project selected.
+  - The session map names its four quadrants (Lean, Heavy start, Grew full, Heavy and full). Selecting one narrows the window pressure bars to its sessions and lists them; one Escape clears it, with any reading. Sessions show their titles on the map and in the pressure lists.
+  - Overhead and pressure draws the Project page's window grid for each of the six projects with the most sessions that have a measured start, a known window and a peak, drawn from those sessions alone, or the one full grid with a project selected.
   - The compaction, long-prompt-tier and large-start tips name Codex's commands (`/new`, `/compact`, `codex mcp list`) for Codex sessions, and Claude Code's for Claude Code sessions.
 - New logo: a bound ledger whose page ends in an accountant's double rule, in place of the bar-chart tile. It shows in the app's navigation, as the app's favicon, and in the docs site's title bar and favicon.
 

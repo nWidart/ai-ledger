@@ -3,7 +3,7 @@
 ## 1. Payload
 
 - [x] 1.1 `sessions_map` points carry `title`, through the payload's one `titles.with_titles` call. Verify with `test_context.py` (`test_eligible_sessions_only_with_their_title`).
-- [x] 1.2 `growth.peak.by_project`: each project's sessions, median peak and median peak share of the window, most sessions first. Verify with `test_peak_per_project_most_sessions_first`.
+- [x] 1.2 `grids`: per project, most first, the sessions with a measured start, a known window and a peak, their most common window and the medians of their start and peak in tokens and shares (replaces the first cut's `growth.peak.by_project`, whose peaks and starts came from different sessions). Verify with `test_grids_rank_and_measure_the_sessions_with_a_start_a_window_and_a_peak`.
 - [x] 1.3 Tip advice takes the sources of the rule's matching sessions (`per_agent`): compactions, long tier and large start name Codex's commands for Codex sessions and both agents' for a mix. Verify with `test_advice_names_the_commands_of_the_matching_sessions_agents`.
 - [x] 1.4 `api.ts` types; regenerate `web/src/__fixtures__/`.
 
@@ -12,7 +12,7 @@
 - [x] 2.1 `search.ts` keeps `tab` (`growth`, `cache`; the default is never written). Verify with `search.test.ts`.
 - [x] 2.2 `Tabs.tsx`: WAI-ARIA tabs with a roving tab stop, arrow keys (wrapping), Home and End, one labelled tabpanel. `ContextPage` drops `SectionIndex`, puts each section and drawer in its tab, and opens the tab of a section a URL hash names. Verify with `ContextPage.test.tsx`: three tabs, URL, keyboard, hash link.
 - [x] 2.3 `TipStrip`: short items with a severity mark and word, at most four before "Show N more", one open at a time under the strip. Verify with `ContextPage.test.tsx`.
-- [x] 2.4 First screen: `tools/demo/firstscreen.mjs` checks in Chromium at 1440 × 900, with all six rules firing, that the tablist and the first chart start within the window, light and dark.
+- [x] 2.4 First screen: `tools/demo/firstscreen.mjs` checks in Chromium at 1440 × 900, with all six rules firing, that the tablist and the first plotted mark lie within the window, light and dark, with the strip closed and expanded. It runs locally.
 
 ## 3. Cache chart
 
@@ -29,9 +29,19 @@
 - [x] 5.1 `typicalGrid` builds a grid from one project's figures; `contextGrid` uses it. `ContextGrid` gets a compact form and `GridDefs`; its rules move to `ContextGrid.css`. Verify with `project.test.ts` and `ProjectPage.test.tsx` unchanged.
 - [x] 5.2 `Grids.tsx` on Overhead and pressure: six small grids, or the one full grid with a project selected. Verify with `Grids.test.tsx`.
 
-## 6. Specs, docs and build
+## 6. Review fixes
 
-- [x] 6.1 Delta spec for `context-dashboard`; every requirement's prose under 500 characters. `openspec validate context-tabs-cache-waste --strict`.
-- [x] 6.2 README, `CHANGELOG.md`, the docs site's Context page and first tour (`doc-coauthoring`).
-- [x] 6.3 `record.mjs`: Context shots and scene open the tab that holds each panel; a new `context-grids` shot. Regenerate the Context shots that changed (tips, grids, pressure, cost) and the Context GIF.
-- [x] 6.4 `uv run ruff check`, `uv run python -m unittest discover -s tests`, `cd web && npm run check`, `cd site && npm run check`, `openspec validate --specs --strict`.
+- [x] 6.1 Grids rank, draw and state one population per project (`grids`); `typicalGrid` states the free share the cells leave, so a median peak under the median start cannot mislabel. Verify with `Grids.test.tsx` (ranking, label versus cells) and `project.test.ts`, `ProjectPage.test.tsx`.
+- [x] 6.2 Cache chart: the waste track's total matches the bars in each mode; the read bucket is outlined, not the others dimmed; the cursor and outline are `Highlight` in forced colors; titles and dates fit at 320 and 390 px. Verify with `CacheChart.test.tsx` and a 320/390 px overlap check in Chromium.
+- [x] 6.3 Session map: one Escape dismisses the reading and clears the quadrant; Clear and Escape from Clear focus the quadrant's button; the count is said once in a button's name; the pressed button fills with `Highlight` in forced colors; corner labels wrap to the room beside the 30k line. Verify with `SessionMap.test.tsx`, including the newest-20 list, and `ContextPage.test.tsx` (select, bars narrowed, clear, bars restored).
+- [x] 6.4 Tabs: a legacy fragment keeps the hash, follows `hashchange` and moves no focus (`jumpTo(id, false)`, `openDrawer(id, true, false)`); every tab controls a panel; the selected tab scrolls into the strip. Verify with `ContextPage.test.tsx`.
+- [x] 6.5 Tips: the open item closes when a new view moves it out of the visible strip. Verify with `ContextPage.test.tsx`.
+- [x] 6.6 The pressure data table scrolls in its named region, and the pressure grid's column is `minmax(0, 1fr)` so it no longer widens the page at 320 px. Verify with `PressureBars.test.tsx`.
+- [x] 6.7 `firstscreen.mjs` asserts the tablist and the first plotted mark lie inside the window, with the strip closed and expanded; it runs locally.
+
+## 7. Specs, docs and build
+
+- [x] 7.1 Delta spec for `context-dashboard`; every requirement's prose under 500 characters. `openspec validate context-tabs-cache-waste --strict`.
+- [x] 7.2 README, `CHANGELOG.md`, the docs site's Context page and first tour (`doc-coauthoring`).
+- [x] 7.3 `record.mjs`: Context shots and scene open the tab that holds each panel; a new `context-grids` shot. Regenerate the Context shots that changed (tips, grids, pressure, cost) and the Context GIF.
+- [x] 7.4 `uv run ruff check`, `uv run python -m unittest discover -s tests`, `cd web && npm run check`, `cd site && npm run check`, `openspec validate --specs --strict`.
