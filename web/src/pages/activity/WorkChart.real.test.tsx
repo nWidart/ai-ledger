@@ -157,8 +157,29 @@ it("draws both tracks, one band over them, the selection apart from it, a zoom o
   expect(errors).not.toHaveBeenCalled(); // jsdom's "Not implemented" and React's warnings both come through here
 });
 
-// The outcome trend's known defect (the axis pointer lifts the colors of the bar under it, since the stack leaves ECharts'
-// emphasis on) does not show here: the pointer is the frame's axis, and the stack sits on a track's, so it is not lifted.
+// The pointer reads a day through the frame, which spans both tracks and the gap between them: over the bars, the gap and
+// the rate track it reads the day under it, with one band; under the frame, over the day labels, it reads nothing. The
+// fake runtime has one grid and cannot tell the tracks apart, so this is real ECharts' to show.
+it("reads the day under the pointer over the bars, the gap between the tracks and the rate track, and nothing under them", async () => {
+  const { unmount } = renderApp(panel(d));
+  await waitFor(() => expect(segments()).toHaveLength(60));
+  const root = plot().firstElementChild!, tip = () => screen.queryByRole("tooltip");
+  // Day 4's middle: the plot's 732px from x 52, in 20 bands. The bars run 20 to 140, the gap to 156, the rate track to 192.
+  const x = 52 + 4.5 * 732 / 20;
+  const over = (y: number) => act(() => { fireEvent.mouseMove(root, { clientX: x, clientY: y }); });
+  for (const y of [80, 148, 174]) {
+    over(205); // each from nothing read, so no reading is left over from the one before
+    await waitFor(() => expect(tip()).toBeNull());
+    await waitFor(() => expect(band()).toHaveLength(0));
+    over(y);
+    await waitFor(() => expect(tip()?.textContent).toContain("Oct 21, 2026"));
+    await waitFor(() => expect(band()).toHaveLength(1));
+  }
+  unmount();
+  expect(errors).not.toHaveBeenCalled();
+});
+
+// The bar being read keeps its kinds' colors: the shared stack turns ECharts' own highlight off.
 it("keeps the day read in its projects' colors", async () => {
   const { unmount } = renderApp(panel(d));
   await waitFor(() => expect(segments()).toHaveLength(60));
