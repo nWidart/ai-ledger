@@ -188,6 +188,29 @@ describe("ErrorsPage", () => {
       expect(location.search).toContain("cat=x");
       expect(document.activeElement?.id).toBe("detailTitle");
     });
+
+    it("lists a muted type's fix: only the open fixes and Rising fastest leave muted types out", async () => {
+      serve({ x: "2026-11-04" }, null, ["x"]);
+      await page();
+      expect([...screen.getByRole("table", { name: "Applied fixes" }).querySelectorAll("tbody tr")].map(r => r.getAttribute("data-c"))).toEqual(["x"]);
+      expect(document.querySelectorAll('#detail .pick[data-c="x"]')).toHaveLength(0);
+    });
+
+    // Before the Nov 4 fix: 20 errors of x in 1,000 calls on Oct 20 (2.00%), so the verdict waits for 250 calls since (5 errors at the old
+    // rate), more than the 200 floor. Since: the fixture's 6 errors of x on Nov 4, over `since` calls.
+    it.each([
+      [100, "6.00%", "Not enough calls yet"], // 100 of the 250 calls the gate needs: no verdict, even with a higher rate
+      [250, "2.40%", "Rate higher"], // exactly enough
+      [600, "1.00%", "Rate lower"],
+    ] as const)("gates the verdict on the calls since the fix: %i calls since", async (since, rate, verdict) => {
+      const old = Array.from({ length: 20 }, (_, i) => ({ ...fixture.errors[0]!, id: `old${i}`, ts: "2026-10-20T10:00:00.000Z", d: "2026-10-20", n: null }));
+      const api = serve({ x: "2026-11-04" });
+      api.payload = { ...withErrors([...old, ...fixture.errors]), calls: [["2026-10-20", "foo", 1000, 0, "claude"], ["2026-11-04", "foo", since, 0, "claude"]] };
+      history.replaceState(null, "", "/errors?range=30");
+      await page();
+      const rows = [...screen.getByRole("table", { name: "Applied fixes" }).querySelectorAll("tbody tr")].map(r => [...r.children].map(c => c.textContent));
+      expect(rows).toEqual([["x · Nov 4", "2.00%", rate, verdict]]);
+    });
   });
 
   it("shows the fix markers of the payload, with their before and after rate", async () => {
@@ -558,6 +581,18 @@ describe("ErrorsPage", () => {
       expect(document.querySelector(".vitals")?.textContent).toContain("2Fixes applied");
     });
 
+    it("drops a malformed day and moves the valid markers, with no crash on the first render", async () => {
+      localStorage.setItem(KEY, JSON.stringify({ legacy_review_only: "not-a-day", x: "2026-11-04" }));
+      const api = serve();
+      history.replaceState(null, "", hash);
+      await page();
+      // The scorecard reads each marker before the import has run: the valid one shows, the malformed one never reaches it.
+      expect([...screen.getByRole("table", { name: "Applied fixes" }).querySelectorAll("tbody tr")].map(r => r.getAttribute("data-c"))).toEqual(["x"]);
+      await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull());
+      expect(api.imports).toEqual([{ x: "2026-11-04" }]);
+      expect(api.store).toEqual({ x: "2026-11-04" });
+    });
+
     // Finding 1: the store's marker at the time of the import wins, not the one the page loaded.
     it("keeps a marker another tab stored while the import was on its way", async () => {
       localStorage.setItem(KEY, JSON.stringify({ x: "2026-11-04" }));
@@ -876,7 +911,7 @@ describe("ErrorsPage", () => {
       history.replaceState(null, "", "/errors?range=7&noise=0&cat=git");
       await page();
       await userEvent.click(muteBtn()); // git leaves the view while its write waits
-      await userEvent.click(within(rowOf("x") as HTMLElement).getByRole("button"));
+      await userEvent.click(rowOf("x")!.querySelector<HTMLElement>(".tbtn")!);
       await userEvent.click(muteBtn()); // x leaves it too: both pending
       await waitFor(() => expect(document.querySelectorAll("#muteNote .muted")).toHaveLength(2));
       expect([...document.querySelectorAll("#muteNote .muted")].map(e => e.textContent)).toEqual(["Muting git / gh error… Saving…", "Muting x… Saving…"]);
@@ -888,12 +923,12 @@ describe("ErrorsPage", () => {
       expect(lines()).toEqual(["Could not mute x. It is back in the list."]);
       // An unrelated write, a fix on git, clears nothing.
       api.refuseMute = null;
-      await userEvent.click(within(rowOf("git") as HTMLElement).getByRole("button"));
+      await userEvent.click(rowOf("git")!.querySelector<HTMLElement>(".tbtn")!);
       await mark();
       await waitFor(() => expect(api.store).toEqual({ git: "2026-11-05" }));
       expect(lines()).toEqual(["Could not mute x. It is back in the list."]);
       // A later mute of x that is saved clears its line.
-      await userEvent.click(within(rowOf("x") as HTMLElement).getByRole("button"));
+      await userEvent.click(rowOf("x")!.querySelector<HTMLElement>(".tbtn")!);
       await userEvent.click(muteBtn());
       await waitFor(() => expect([...api.muted]).toEqual(["x"]));
       await waitFor(() => expect(document.getElementById("muteNote")).toBeNull());
@@ -1021,7 +1056,7 @@ describe("ErrorsPage", () => {
       await userEvent.click(muteBtn());
       await waitFor(() => expect(document.getElementById("muteNote")).toBeTruthy());
       api.refuseMute = null;
-      await userEvent.click(within(rowOf("git") as HTMLElement).getByRole("button"));
+      await userEvent.click(rowOf("git")!.querySelector<HTMLElement>(".tbtn")!);
       await userEvent.click(muteBtn());
       await waitFor(() => expect([...api.muted]).toEqual(["git"]));
       await waitFor(() => expect(document.getElementById("muteNote")).toBeNull());
@@ -1819,7 +1854,7 @@ describe("ErrorsPage bucket selection", () => {
     await open("?range=30&at=2026-11-03");
     const chart = document.getElementById("chart")!;
     expect(chart.getAttribute("role")).toBe("group");
-    expect(chart.getAttribute("aria-roledescription")).toBe("chart");
+    expect(chart.hasAttribute("aria-roledescription")).toBe(false); // a group, read as one: no custom role name
     expect(chart.getAttribute("aria-describedby")).toBe("chartHint");
     expect(document.getElementById("chartHint")).toBeTruthy();
     expect(chart.getAttribute("aria-label")).toMatch(/^Errors by type and error rate\. Use the left and right arrow keys.*Selected: Nov 3\.$/);
@@ -2231,6 +2266,20 @@ describe("type table: sort and filter", () => {
     expect(document.querySelectorAll('#catBody tr[data-c="git"] .spark line')).toHaveLength(0);
   });
 
+  it("ticks a fix recorded before the view's first call: the trend starts on the range's first day", async () => {
+    // The range is Oct 7 to Nov 5 (30 days). Under project foo the first call is Oct 20; bar's Oct 8 call is out of the view. The fix is Oct 12.
+    const data = sortData();
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors")
+      ? { ...data, fixes: { tests: "2026-10-12" }, calls: [...data.calls, ["2026-10-08", "bar", 50, 0, "claude"]] } : {})));
+    history.replaceState(null, "", "/errors?range=30&project=foo");
+    await page();
+    const cell = document.querySelector('#catBody tr[data-c="tests"] td.c-trend')!, tick = cell.querySelectorAll(".spark line");
+    expect(tick).toHaveLength(1);
+    // Oct 12 is the sixth of the 30 days (index 5): x = (5 + .5) * 84 / 30.
+    expect(tick[0]!.getAttribute("x1")).toBe("15.4");
+    expect(cell.textContent).toContain("The trend marks the fix.");
+  });
+
   it("sorts from the keyboard: Enter and Space on a header button, focus staying on it", async () => {
     await open();
     head("Rate").focus();
@@ -2244,6 +2293,43 @@ describe("type table: sort and filter", () => {
     await userEvent.keyboard("{Enter}");
     expect(sortedHeads()).toEqual([["Time lost", "descending"]]);
     expect(document.querySelectorAll("thead th[aria-sort]")).toHaveLength(1);
+  });
+
+  it("shows the rates behind a change on demand, from the keyboard, without opening the row", async () => {
+    await open();
+    const chg = (c: string) => within(document.querySelector<HTMLElement>(`#catBody tr[data-c="${c}"] .c-change`)!).getByRole("button");
+    expect(chg("build").getAttribute("aria-label")).toBe("Change: 1 → 3");
+    chg("build").focus();
+    await userEvent.keyboard("{Enter}");
+    expect(chg("build").getAttribute("aria-expanded")).toBe("true");
+    expect(within(document.querySelector<HTMLElement>('#catBody tr[data-c="build"]')!).getByRole("tooltip").textContent)
+      .toBe("Error rate vs previous 30 days: 0.10% → 0.30% (1 → 3 errors)");
+    expect(location.search).not.toContain("cat="); // the row did not open
+    await userEvent.keyboard("{Escape}");
+    expect(chg("build").getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(chg("build"));
+  });
+
+  it("says why a change shows –, on demand", async () => {
+    history.replaceState(null, "", "/errors?range=30");
+    await page(); // the fixture: 10 calls, too few to compare
+    const btn = within(document.querySelector<HTMLElement>('#catBody tr[data-c="x"] .c-change')!).getByRole("button", { name: "Change: –" });
+    await userEvent.click(btn);
+    expect(within(btn.closest("td")!).getByRole("tooltip").textContent).toBe("Fewer than 200 tool calls in the 30 days before");
+    expect(location.search).not.toContain("cat=");
+  });
+
+  it("says which figure of a two-figure header sorts the table, not only its direction", async () => {
+    await open();
+    const th = document.querySelector("th.c-n")!, pressed = () => [head("Errors"), head("Rate")].map(b => b.getAttribute("aria-pressed"));
+    expect([th.getAttribute("aria-sort"), ...pressed()]).toEqual(["descending", "true", "false"]);
+    await userEvent.click(head("Rate"));
+    // The header's aria-sort reads the same: only the pressed button tells Rate from Errors.
+    expect([th.getAttribute("aria-sort"), ...pressed()]).toEqual(["descending", "false", "true"]);
+    await userEvent.click(head("Not recovered"));
+    expect([th.getAttribute("aria-sort"), ...pressed()]).toEqual([null, "false", "false"]);
+    expect(head("Not recovered").getAttribute("aria-pressed")).toBe("true");
+    expect(head("Time lost").getAttribute("aria-pressed")).toBe("false");
   });
 
   const ASC = ["build", "lint", "worktree", "git", "tests"]; // errors, fewest first: the tie of build and lint keeps the default order
@@ -2839,6 +2925,8 @@ describe("controls where they act", () => {
   });
 
   it("puts the subagent and noise toggles in the type table's toolbar, under their URL keys", async () => {
+    // Two of x's six errors, and 4 of the 10 calls, come from subagents.
+    stubErrors({ ...withErrors(fixture.errors.map(e => (e.id === "t07" || e.id === "t08" ? { ...e, sub: 1 } : e))), calls: [["2026-11-04", "foo", 10, 4, "claude"]] });
     history.replaceState(null, "", "/errors?range=30");
     await page();
     const tools = document.querySelector(".types .ttools")!;
@@ -2847,8 +2935,20 @@ describe("controls where they act", () => {
     expect(within(tools as HTMLElement).getByRole("checkbox", { name: /^Include ?subagents$/ })).toBe(sub);
     expect(within(tools as HTMLElement).getByRole("checkbox", { name: "Hide noise and muted" })).toBe(noise);
     expect(within(tools as HTMLElement).getByRole("button", { name: "About hiding noise and muted types" })).toBeTruthy();
+    // What the toggle filters: the type's count and rate in the table, its legend count, and the chart's day.
+    const counts = () => [document.querySelector('#catBody tr[data-c="x"] .c-count')!.textContent, document.querySelector('#catBody tr[data-c="x"] .c-rate')!.textContent,
+      document.querySelector('#legend [data-c="x"] em')!.textContent];
+    const nov4 = async () => {
+      if (!screen.queryByRole("table", { name: /per day$/ })) await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
+      const row = within(screen.getByRole("table", { name: /per day$/ })).getAllByRole("rowheader").find(h => h.textContent!.startsWith("Nov 4, 2026"))!.closest("tr")!;
+      return [...row.querySelectorAll("td")].slice(0, 3).map(c => c.textContent!.replace(/ \(.*\)$/, ""));
+    };
+    expect(counts()).toEqual(["6", "60.00%", "6"]);
+    expect(await nov4()).toEqual(["10", "6", "60.00%"]);
     await userEvent.click(sub);
     expect(location.search).toContain("sub=0");
+    expect(counts()).toEqual(["4", "66.67%", "4"]);
+    expect(await nov4()).toEqual(["6", "4", "66.67%"]);
     await userEvent.click(noise);
     expect(location.search).toContain("noise=0");
     // A link with the keys sets them.
@@ -2900,12 +3000,18 @@ describe("rate chart data table", () => {
   });
 
   it("follows the granularity and the selected type, and names the selected bucket", async () => {
-    history.replaceState(null, "", "/errors?range=30&gran=week&cat=x");
+    // Nov 4, 2026 is a Wednesday: its week starts on Monday Nov 2, and holds x's 6 errors of 10 calls.
+    history.replaceState(null, "", "/errors?range=30&gran=week&cat=x&at=2026-11-02");
     await page();
     await show();
     const table = screen.getByRole("table", { name: "Failed tool calls by type and x rate per week" });
     expect(within(table).getAllByRole("columnheader").map(h => h.textContent).slice(0, 4)).toEqual(["Week", "Tool calls", "Failed calls", "x rate"]);
     expect(within(table).getAllByRole("rowheader")[0]!.textContent).toMatch(/^Week of /);
+    const sel = within(table).getAllByRole("rowheader").filter(h => /\(selected\)$/.test(h.textContent!));
+    expect(sel.map(h => h.textContent)).toEqual(["Week of Nov 2, 2026 (selected)"]);
+    const cells = [...sel[0]!.closest("tr")!.querySelectorAll("td")].map(c => c.textContent!);
+    expect(cells.slice(0, 2)).toEqual(["10", "6"]);
+    expect(cells[2]).toMatch(/^60\.00%/); // x's rate: 6 errors per 10 calls
   });
 
   it("is absent when the chart shows a message instead", async () => {
@@ -2930,10 +3036,11 @@ describe("retry attempt strip", () => {
       expect(strip.querySelector(".sr")!.textContent).toMatch(n === 1 ? /^1 failed attempt, then / : new RegExp(`^${n} failed attempts over \\S+, \\S+ apart on average, then `));
     }
     // The text is part of the incident button's name, so the row reads its retry pattern.
-    const rec = rows.find(r => r.querySelector(".out.ok"));
-    if (rec) {
-      expect(rec.querySelectorAll(".strip path.ok")).toHaveLength(1);
-      expect(rec.textContent).toMatch(/then the next call succeeded \S+ later/);
-    }
+    // The fixture's third incident of x recovered: its strip ends on a ✓, and the others draw none.
+    const rec = rows.filter(r => r.querySelector(".out.ok"));
+    expect(rec).toHaveLength(1);
+    expect(rec[0]!.querySelectorAll(".strip path.ok")).toHaveLength(1);
+    expect(rec[0]!.textContent).toMatch(/then the next call succeeded \S+ later/);
+    expect(rows.filter(r => !r.querySelector(".out.ok")).every(r => r.querySelectorAll(".strip path.ok").length === 0)).toBe(true);
   });
 });

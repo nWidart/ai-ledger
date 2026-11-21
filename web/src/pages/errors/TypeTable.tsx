@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef } from "react";
+import { Fragment, memo, useMemo, useRef } from "react";
 import { DataTable } from "../../components/DataTable";
 import { sortRows, SortTh, type SortBy } from "../../components/Sort";
 import { Toggletip } from "../../components/Toggletip";
@@ -13,7 +13,11 @@ const ERRS = "Errors: the type's failed calls. Rate: its errors per 100 tool cal
 const LOST = "Time lost: time in retry loops, from each incident's first failure to its last. An incident counts whole when any of its failures is in the view. "
   + `Not recovered: the share of the type's incidents whose outcome is not recovered. ${RECOVERED_NOTE}`;
 const TREND = "Trend: the type's error rate over the range; a green tick marks the day its fix was applied. Change sorts by the change in error rate, "
-  + "in points: the rate after minus the rate before, also for the counts shown as 0 → 48. Only – (no comparison) sorts last.";
+  + "in points: the rate after minus the rate before, also for the counts shown as 0 → 48. Only – (no comparison) sorts last. "
+  + "Select a change for the rates behind it, or for why it shows –.";
+
+/** A count that may break after each thousands separator ("1,000,<wbr>000"), and nowhere else, when its cell is too narrow. */
+const breakable = (s: string) => s.split(",").map((p, i) => <Fragment key={i}>{i > 0 && <>,<wbr /></>}{p}</Fragment>);
 
 /** The view's types in four columns that fit the master pane: the type with its marks; errors and rate with the share bar; time lost with
  *  the share not recovered; the rate trend with the change. By errors until a header sorts them (ties keep that order; a type with no
@@ -79,13 +83,16 @@ export const TypeTable = memo(function TypeTable() {
                 <i className="sw" style={{ background: color }} aria-hidden="true" />{m.cats[cid]!.label}</button>
                 {isMuted || fix ? <span className="marks">{isMuted ? <span className="chip muted-type">Muted</span> : null}
                   {fix ? <span className="chip fixed">✓ Fix applied {yearLabel(m, fix)}</span> : null}</span> : null}</td>
-              <td className="num c-n"><div className="l1"><b className="c-count">{fmt(n)}</b> <span className="c-rate">{rate == null ? "–" : `${fmt(rate, 2)}%`}</span></div>
+              <td className="num c-n"><div className="l1"><b className="c-count">{breakable(fmt(n))}</b> <span className="c-rate">{rate == null ? "–" : `${fmt(rate, 2)}%`}</span></div>
                 <div className="share c-share"><div className="bar" aria-hidden="true"><i style={{ width: `${share * 100}%`, background: color }} />
                   {share < .03 ? <b className="tick" style={{ background: color }} /> : null}</div><span>{fmt(share * 100, share < .01 ? 1 : 0)}%<span className="sr"> of errors</span></span></div></td>
               <td className="num c-lost"><div className="l1">{lost ? dur(lost / 1000) : "–"}</div>
                 <div className="l2 c-unrec">{unrec == null ? "–" : `${fmt(unrec, 0)}% not recovered`}{inc > 0 && <span className="sr">, {fmt(bad)} of {fmt(inc)} incident{inc === 1 ? "" : "s"}</span>}</div></td>
+              {/* Change's rates, or why it shows –, behind a toggletip on the figure itself. The span keeps its clicks from opening the row. */}
               <td className="num c-trend"><Spark pts={pts} marks={tick >= 0 ? [tick] : []} />
-                <div className={"l2 c-change " + delta.cls}>{delta.text}{delta.title && <span className="sr">. {delta.title}</span>}{tick >= 0 && <span className="sr">. The trend marks the fix.</span>}</div></td>
+                <div className={"l2 c-change " + delta.cls}>{delta.title
+                  ? <span onClick={e => e.stopPropagation()}><Toggletip className="chg" label={delta.text} name={`Change: ${delta.text}`}>{delta.title}</Toggletip></span>
+                  : delta.text}{tick >= 0 && <span className="sr sparknote">. The trend marks the fix.</span>}</div></td>
             </tr>;
           }) : <tr><td colSpan={4} className="empty">{all.length ? `No types match “${typeQ.trim()}”.` : emptyTypes(m, v, f)}{typeQ !== "" && <> <button type="button" onClick={() => { filter(""); box.current?.focus(); }}>Clear filter</button></>}</td></tr>}
         </tbody>
@@ -95,7 +102,8 @@ export const TypeTable = memo(function TypeTable() {
 });
 
 /** A header that sorts its column by one figure or another, each a button on its own line (head: a plain label above them). The header
- *  carries aria-sort while either sorts the table; the sorting button carries its arrow. One toggletip explains the column. */
+ *  carries aria-sort while either sorts the table; the sorting button carries its arrow and aria-pressed, so a screen reader hears which
+ *  figure sorts it (aria-sort alone reads the same for Errors and Rate). One toggletip explains the column. */
 function SortCol({ cls, sort, onSort, keys, head, tip }: {
   cls: string; sort: SortBy<TypeKey>; onSort: (s: SortBy<TypeKey>) => void; keys: [TypeKey, string][]; head?: string; tip: string;
 }) {
@@ -106,7 +114,7 @@ function SortCol({ cls, sort, onSort, keys, head, tip }: {
     {keys.map(([k, label], i) => {
       const cur = sort.key === k;
       return <div key={k} className="sk">
-        <button type="button" className={"sortbtn" + (cur ? " on" : "")} data-sort={k} onClick={() => onSort({ key: k, desc: cur ? !sort.desc : true })}>{label}
+        <button type="button" className={"sortbtn" + (cur ? " on" : "")} data-sort={k} aria-pressed={cur} onClick={() => onSort({ key: k, desc: cur ? !sort.desc : true })}>{label}
           <span className="sortmark" aria-hidden="true">{cur ? (sort.desc ? "↓" : "↑") : ""}</span></button>
         {i === 0 && !head && tt}
       </div>;

@@ -3,10 +3,10 @@
 
 /** Every field is present only when valid; no default is filled in. A type, not an interface, so a value of it can be given
  *  to a page as it is. */
-export type ActivitySearch = { q?: string; near?: true; day?: string };
+import { isDay } from "../../url";
 
-// A real calendar day as YYYY-MM-DD: 2026-02-30 is not one.
-const isDay = (s: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s)) && new Date(s).toISOString().startsWith(s);
+export type ActivitySearch ={ q?: string; near?: true; day?: string };
+
 
 /** Keeps the valid values of the Activity keys. Never throws; an invalid value reads as absent. The router hands validators
  *  the URL's strings or values already typed, so near is "1" or true. */

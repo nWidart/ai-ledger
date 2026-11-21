@@ -150,7 +150,7 @@ export const RateChart = memo(function RateChart() {
       </div>
       {!noErrors && legend(pts.some(idle), low.some(Boolean))}
       {selOut()}
-      <div id="chart" ref={box} tabIndex={0} role="group" aria-roledescription="chart" aria-describedby="chartHint" aria-label={`Errors by type and error rate. Use the left and right arrow keys to read each point, Enter or Space to select the ${per} for the table and examples.${v.at ? ` Selected: ${bucketLabel(m, v)}.` : ""}`}
+      <div id="chart" ref={box} tabIndex={0} role="group" aria-describedby="chartHint" aria-label={`Errors by type and error rate. Use the left and right arrow keys to read each point, Enter or Space to select the ${per} for the table and examples.${v.at ? ` Selected: ${bucketLabel(m, v)}.` : ""}`}
         onKeyDown={key} onBlur={blur}>
         {bare ? <div className="empty">{empty ? "No tool calls in this range." : `No failed tool calls in this range, out of ${fmt(sumCalls(v, f.calls))}.`}</div>
           : <svg key={dataKey} ref={svg} viewBox={`0 0 ${W || 800} ${H}`} aria-hidden="true" className={"grow" + (cat ? " has-sel" : "")}>

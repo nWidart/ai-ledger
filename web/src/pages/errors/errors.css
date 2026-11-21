@@ -115,19 +115,25 @@
 .pg-errors .types th .hd { color: var(--text-muted); }
 .pg-errors .types td { vertical-align: top; }
 .pg-errors .types td.c-type { overflow-wrap: anywhere; }
-.pg-errors .types td .l1 { white-space: nowrap; }
+/* A wide count and rate (1,000,000 and 100.00%) wrap onto two lines rather than spill into the next cell (td.num is nowrap): the rate
+   stays whole, and the count breaks only after a thousands separator (TypeTable puts a <wbr> there), as on a phone. tools/demo/typefit.mjs checks it. */
+.pg-errors .types td .l1 { white-space: normal; }
+.pg-errors .types td .l1 .c-rate { white-space: nowrap; }
 .pg-errors .types td .l1 .c-rate { color: var(--text-secondary); margin-left: 6px; }
 .pg-errors .types td .l2 { font-size: .75rem; color: var(--text-muted); margin-top: 3px; white-space: normal; }
 .pg-errors .types td .l2.delta-up { color: var(--critical-text); } .pg-errors .types td .l2.delta-down { color: var(--good-text); }
 .pg-errors .types td .share { margin-top: 5px; }
 .pg-errors .types td .bar { min-width: 2rem; }
+/* Change's figure is a toggletip that shows the rates behind it: it keeps the cell's color, underlined as How measured is. */
+.pg-errors .types td .tt.chg { text-decoration: underline dotted; text-underline-offset: 2px; }
+.pg-errors .types td .tt.chg:hover, .pg-errors .types td .tt.chg[aria-expanded=true] { text-decoration-style: solid; }
 .pg-errors .types td .spark { width: 100%; max-width: 6.5rem; margin-left: auto; }
 /* Mid widths and phones: a narrower pane. The figures tighten, and the sparkline gives its room to the type (Change stays: it sorts). */
 @media (min-width: 56.3125em) and (max-width: 68.75em), (max-width: 32.5em) {
   .pg-errors .types col.c-n { width: 6.25rem; }
   .pg-errors .types col.c-lost { width: 6.5rem; }
   .pg-errors .types col.c-trend { width: 4.75rem; }
-  .pg-errors .types td .spark { display: none; }
+  .pg-errors .types td .spark, .pg-errors .types td .sparknote { display: none; }
   .pg-errors .types td .l1 .c-rate { display: block; margin: 2px 0 0; }
 }
 /* Phone: narrower still, the share's percent under its bar. */
@@ -157,7 +163,8 @@
 .pg-errors .inc-h .strip { grid-column: 2 / 4; display: flex; align-items: center; min-height: .75rem; }
 .pg-errors .inc-h .strip svg { display: block; overflow: visible; }
 .pg-errors .inc-h .strip .fail { stroke: var(--critical); }
-.pg-errors .inc-h .strip .ok { stroke: var(--good); }
+/* --good-text, not --good: the stroke keeps 3:1 or more on the row's --surface-2 hover in light mode (--good is 2.92:1 there). */
+.pg-errors .inc-h .strip .ok { stroke: var(--good-text); }
 /* Where to start */
 .pg-errors .pick .phead { display: flex; gap: 12px; justify-content: space-between; align-items: baseline; }
 .pg-errors .pick .phead b { min-width: 0; }

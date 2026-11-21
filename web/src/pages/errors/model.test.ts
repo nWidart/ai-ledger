@@ -358,6 +358,17 @@ describe("attempt strip", () => {
     expect(attemptStrip(group([0, 7200], "gave_up")).w).toBe(STRIP_MAX);
     expect(attemptStrip(group([0, 900], "gave_up")).w).toBeCloseTo(STRIP_MIN + (STRIP_MAX - STRIP_MIN) / 2);
   });
+  it("steps the recovering call STRIP_OK past the last plotted failure, a zero span included", () => {
+    for (const ts of [[0], [5, 5], [0, 2, 4], [0, 300, 600]]) {
+      const s = attemptStrip(group(ts, "recovered", ts[ts.length - 1]! + 2)), fails = s.marks.filter(k => !k.ok), ok = s.marks.find(k => k.ok)!;
+      expect(ok.x - fails[fails.length - 1]!.x, ts.join()).toBeCloseTo(STRIP_OK);
+      expect(s.w, ts.join()).toBeGreaterThanOrEqual(ok.x + 6); // the ✓ keeps the strip's end padding
+    }
+    // Zero span: every failure at the strip's start, the ✓ 12 units on, not at the far end of the 20-unit strip.
+    const zero = attemptStrip(group([5, 5], "recovered", 7));
+    expect(zero.marks.map(k => k.x)).toEqual([6, 6, 6 + STRIP_OK]);
+    expect(zero.w).toBe(6 + STRIP_OK + 6);
+  });
   it("puts the recovering call just after the last failure, so a late recovery does not stretch a tight loop", () => {
     const soon = attemptStrip(group([0, 2, 4], "recovered", 6)), late = attemptStrip(group([0, 2, 4], "recovered", 1800));
     expect(late.w).toBe(soon.w);
@@ -579,6 +590,9 @@ describe("hash and storage", () => {
     expect(loadMode()).toBe("inc");
     localStorage.setItem("claude-errors-fixes", "[1]");
     expect(loadFixes()).toEqual({});
+    // Only real calendar days: a malformed or impossible one is dropped, the rest kept.
+    localStorage.setItem("claude-errors-fixes", '{"a":"not-a-day","b":"2026-02-30","c":1,"x":"2026-11-04"}');
+    expect(loadFixes()).toEqual({ x: "2026-11-04" });
   });
 });
 
