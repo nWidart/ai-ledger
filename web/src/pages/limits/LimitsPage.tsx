@@ -316,13 +316,9 @@ export function LimitsPage() {
   const showRecent = recent && canRecent;
   // The first load shows the placeholder; the loading look (dimmed figures) belongs to a page that has figures.
   const first = !d && !error;
-  // A source with no plan limits (Grok): one line in place of the sections, naming the agent the data on screen answers.
-  const none = d && !d.plan_limits ? `${shown.source ? SOURCE_LABELS[shown.source] : "This agent"} reports no plan limits.` : null;
   return (
     <main id="content" className={"wrap pg-limits" + (slow && !first ? " loading" : "")} ref={wrap} aria-busy={loading || undefined}>
-      {first ? <PageSkeleton title="Loading limits…" /> : none ? <header className="top sect" id="overview">
-        <div><h1 className="lede" id="lede" tabIndex={-1}>{none}</h1></div>
-      </header> : <header className="top sect" id="overview">
+      {first ? <PageSkeleton title="Loading limits…" /> : <header className="top sect" id="overview">
         <div>
           {d ? <Lede d={d} /> : <h1 className="lede" id="lede" tabIndex={-1}>Limits could not be loaded.</h1>}
           {d?.suggestion && <p className="suggest">Send work to <b>{d.suggestion.provider_label}</b>: about {num(d.suggestion.unused_at_reset)}% of
@@ -333,7 +329,7 @@ export function LimitsPage() {
       {error && <div className="banner" role="alert"><b>Could not load limits for {limitsName(want)} ({error.message}).{d ? ` Still showing ${limitsName(shown)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button>{" "}<DocsLink docs="reference/troubleshooting">Troubleshooting</DocsLink></div>}
       <p className="pending">{loading && d ? `Loading limits for ${limitsName(want)}…` : ""}</p>
-      {d && !none && <>
+      {d && <>
         <div className="sect-head sect" id="windows">
           <h2>Open windows</h2>
           <p className="hint">Now, for the whole account. Hover or focus a chart for the value at a time.<HowForecast /></p>
@@ -341,7 +337,7 @@ export function LimitsPage() {
         </div>
         <section className="lim-grid" aria-label="Open windows">
           {d.windows.length ? d.windows.map(w => <WindowCard key={`${w.provider}-${w.limit_id}-${w.scope}`} w={w} d={d} recent={showRecent} />)
-            : <p className="empty">No open windows. Limits appear after a Codex session or the first Claude Code poll.</p>}
+            : <p className="empty">No open windows. Limits appear after a Codex session or the first Claude Code or Grok poll.</p>}
         </section>
         <PastWindows d={d} />
         <div className="drawers">

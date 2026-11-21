@@ -24,7 +24,7 @@ Compare like with like: the same project, the same range, and figures that the a
 3. On [Activity](/ai-ledger/pages/activity/), write down the heading's commits and prompts, the share of prompts interrupted in the line under the heading, and the **Work health** tile **Test runs passed**.
 4. On [Context](/ai-ledger/pages/context/), write down **Added per prompt** and **Sessions with a compaction** in **Growth**.
 5. Set the source to **Codex**, then to **Grok**, and read the same figures again on the same pages.
-6. Open [Limits](/ai-ledger/pages/limits/) with the source at **All**. Read the heading, the status in each card's header, and the suggestion if one shows. Grok reports no plan limits, so Limits has no Grok card.
+6. Open [Limits](/ai-ledger/pages/limits/) with the source at **All**. Read the heading, the status in each card's header, and the suggestion if one shows. Limits has a Grok card when the Grok CLI is signed in with grok.com.
 
 Compare only these figures. The others differ by what each agent records:
 
@@ -40,7 +40,7 @@ Compare only these figures. The others differ by what each agent records:
 | **Largest tool results** | No | Codex records no result size for `apply_patch` and `web_search`. | Grok records the size of every finished tool call's result, so no Grok tool is missing from the list. |
 | Model time, output speed | No | Codex records no model time. | Each Grok turn reports its API time. Grok reports no tool time and no lines added or removed. |
 | Outcomes, friction | No | Activity's [Judgments view](/ai-ledger/pages/insights/) covers Claude Code sessions only, and cannot be picked with Codex or Grok as the source. | Grok writes no facets. |
-| Points, percent of a limit | No | Each provider's plan sets its own limits. | Grok reports no plan limits. |
+| Points, percent of a limit | No | Each provider's plan sets its own limits. | Grok's limit is the percent of its period's credits used, weekly or monthly. |
 | **ended** on Live | No | Codex writes no close, so a Codex session never reads **ended**. | A Grok session reads **ended** after Grok exits. |
 Then read what you wrote down:
 
@@ -84,8 +84,7 @@ Then open [Errors](/ai-ledger/pages/errors/) with the project filter and the sou
 
 When the Limits heading names a window that runs out before its reset, start your next task in the agent that the suggestion "Send work to …" names. Without a suggestion, read the card headers and pick the provider whose windows read neither **at its limit** nor **runs out**.
 
-Do not move work to a provider whose limit already shows **at limit**. Limits never suggests it. Limits never names Grok either: Grok reports no plan limits.
-
+Do not move work to a provider whose limit already shows **at limit**. Limits never suggests it.
 ## Verify
 
 Before you act, keep the figures you wrote down in Diagnose, with the date. Also note **Cost / commit** of the project with the source at **All**, at **14d**. The app has no custom date range, so you need these to compare with.

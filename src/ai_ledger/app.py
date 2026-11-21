@@ -188,9 +188,9 @@ class App:
         """Poll each provider's plan limits that is due. A poller never raises, so ingest goes on whatever the endpoint does."""
         for p in self.pollers:
             if p.due():
-                was = p.state["last_ok"]
+                was = dict(p.state)
                 p.run(self.con, self.lock)
-                if p.state["last_ok"] != was:  # a stored reading changes Limits, so pages refetch
+                if p.state != was:  # a stored reading or a change in poll health changes Limits, so pages refetch
                     self.state["last_change"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     def refresh_alert(self):
