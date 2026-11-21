@@ -58,7 +58,7 @@ Open the playbook in the stop's row, and do its **Act** section for this project
 When the stop you picked is **Errors** or **Session judgments**, end the retro with one line in the project's `CLAUDE.md`, or `AGENTS.md` for Codex. For the other stops, the playbook you opened names the change.
 
 - From **Errors**: open the type that rises. In its detail, under **Potential fix**, select **Copy instruction line** and paste the line into the file. Then select **Mark fix applied**.
-- From **Session judgments**: select **Open in Insights**, filter by the top friction family, and read **Friction detail** on three cards. Write the rule that would have prevented it, such as:
+- From **Session judgments**: select **Open in Judgments**, filter by the top friction family, and read **Friction detail** on three cards. Write the rule that would have prevented it, such as:
 
   ```md
   - Run `npm test` before you say a task is done.

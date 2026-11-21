@@ -289,7 +289,8 @@ class PayloadTest(InsightsCase):
     def test_families_follow_the_view(self):
         self.ingest()
         d = self.payload(range_days=2)  # only the sketchbook session
-        self.assertEqual(d["friction_families"], [dict(family="buggy_code", n=2, sessions=1, members=[dict(name="buggy_code", n=2, sessions=1)])])
+        self.assertEqual(d["friction_families"], [dict(family="buggy_code", n=2, sessions=1, cost=0, active_s=0,  # no transcript: no weight
+                                                       members=[dict(name="buggy_code", n=2, sessions=1, cost=0, active_s=0)])])
         self.assertEqual(d["goal_families"], [dict(family="research", n=1, sessions=1, members=[dict(name="explore_idea", n=1, sessions=1)])])
 
     def test_families_empty_without_facets(self):
@@ -560,7 +561,8 @@ class RunSizesTest(InsightsCase):
 
 
 class TrendTest(InsightsCase):
-    """trend: the view's facets per week of session start, as [{week, n, achieved}], oldest first."""
+    """trend: the view's facets per week of session start, as [{week, n, achieved, fully, mostly, partially, not_achieved}],
+    oldest first. n less the four outcomes is the sessions with no clear outcome, or one /insights added later."""
 
     def setUp(self):
         super().setUp()
@@ -583,8 +585,16 @@ class TrendTest(InsightsCase):
         self.add(3, "2026-11-08 10:59:00", "not_achieved")  # Sunday 23:59 local
         self.add(4, "2026-11-08 11:00:00", "partially_achieved")  # Monday 00:00 local
         self.ingest()
-        self.assertEqual(self.trend(), [dict(week="2026-10-26", n=1, achieved=1), dict(week="2026-11-02", n=2, achieved=1),
-                                        dict(week="2026-11-09", n=1, achieved=0)])
+        week = lambda day, n, achieved, **by: dict(dict(week=day, n=n, achieved=achieved, fully=0, mostly=0, partially=0, not_achieved=0), **by)
+        self.assertEqual(self.trend(), [week("2026-10-26", 1, 1, fully=1), week("2026-11-02", 2, 1, mostly=1, not_achieved=1),
+                                        week("2026-11-09", 1, 0, partially=1)])
+
+    def test_an_unclear_or_unknown_outcome_counts_in_n_alone(self):
+        self.add(1, "2026-11-03 12:00:00", "unclear_from_transcript")
+        self.add(2, "2026-11-03 13:00:00", "abandoned")
+        self.add(3, "2026-11-03 14:00:00")
+        self.ingest()
+        self.assertEqual(self.trend(), [dict(week="2026-11-02", n=3, achieved=1, fully=1, mostly=0, partially=0, not_achieved=0)])
 
     def test_follows_the_view(self):
         self.add(1, "2026-10-20 12:00:00", project="p1")
@@ -605,13 +615,98 @@ class TrendTest(InsightsCase):
         self.add(1, None)
         self.add(2, "2026-11-03 12:00:00")
         self.ingest()
-        self.assertEqual(self.trend(), [dict(week="2026-11-02", n=1, achieved=1)])
+        self.assertEqual(self.trend(), [dict(week="2026-11-02", n=1, achieved=1, fully=1, mostly=0, partially=0, not_achieved=0)])
 
     def test_empty_for_codex_and_without_facets(self):
         self.assertEqual(self.trend(), [])
         self.add(1, "2026-11-03 12:00:00")
         self.ingest()
         self.assertEqual(self.trend(source="codex"), [])
+
+
+class MeasuredTest(InsightsCase):
+    """The stored figures the Judgments view shows beside the judgments: each listed session's cost, errors and context share,
+    and each friction family's cost and active time, summed over the sessions that reported it."""
+    PRICES = {"m-a": {"input": 1, "output": 10, "cache_read": 0.1, "cache_5m": 2, "cache_1h": 4, "context": 1000}}
+
+    def setUp(self):
+        super().setUp()
+        for sub in ("facets", "session-meta"):  # only the facets a test adds
+            shutil.rmtree(os.path.join(self.usage, sub), ignore_errors=True)
+
+    def add(self, i, friction, requests=(), errors=0, peak=None, stored=True):
+        """A facet with friction, and its stored session: requests of (minute, input tokens), failed tool calls, a peak context."""
+        sid, cur = f"0000eeee-0000-4000-8000-{i:012d}", self.con.cursor()
+        if stored:
+            self.session(sid, "p", "2026-11-03 09:00:00")
+            cur.execute("UPDATE sessions SET peak_context = ?, peak_model = 'm-a' WHERE session_id = ?", [peak, sid])
+            store.insert(cur, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
+                                           "cache_read", "cache_5m", "cache_1h"],
+                         [(f"{sid}-m{k}", sid, f"2026-11-03 09:{minute:02d}:00", "m-a", False, tokens, 0, 0, 0, 0, 0)
+                          for k, (minute, tokens) in enumerate(requests)])
+            store.insert(cur, "tool_calls", ["tool_use_id", "session_id", "tool", "start_ts", "end_ts", "is_error"],
+                         [(f"{sid}-t{k}", sid, "Bash", "2026-11-03 09:00:30", "2026-11-03 09:00:31", k < errors) for k in range(errors + 1)])
+        self.put("facets", sid + ".json", facet(sid, friction=friction))
+        return sid
+
+    def payload(self, **kw):
+        return super().payload(prices=self.PRICES, **kw)
+
+    def test_a_listed_session_carries_its_cost_errors_and_context_share(self):
+        sid = self.add(1, dict(buggy_code=1), requests=[(0, 1_000_000), (10, 2_000_000)], errors=2, peak=800)
+        self.ingest()
+        s = self.payload()["sessions"][0]
+        self.assertEqual((s["session_id"], s["cost"], s["errors"], s["context_share"]), (sid, 3.0, 2, 0.8))
+
+    def test_a_session_without_a_transcript_has_no_figures(self):
+        self.add(1, dict(buggy_code=1), stored=False)
+        self.ingest()
+        s = self.payload()["sessions"][0]
+        self.assertEqual((s["in_store"], s["cost"], s["errors"], s["context_share"]), (False, None, None, None))
+
+    def test_an_unpriced_session_has_no_cost_and_an_unknown_window_no_share(self):
+        sid = self.add(1, {}, requests=[(0, 1_000_000)], peak=800)
+        self.con.execute("UPDATE requests SET model = 'm-unknown' WHERE session_id = ?", [sid])
+        self.con.execute("UPDATE sessions SET peak_model = 'm-unknown' WHERE session_id = ?", [sid])
+        self.ingest()
+        s = self.payload()["sessions"][0]
+        self.assertEqual((s["cost"], s["errors"], s["context_share"]), (None, 0, None))
+
+    def test_figures_cover_the_whole_session_whatever_the_range(self):
+        sid = self.add(1, {}, requests=[(0, 1_000_000)])
+        store.insert(self.con.cursor(), "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
+                                                     "cache_read", "cache_5m", "cache_1h"],
+                     [(f"{sid}-old", sid, "2026-10-01 09:00:00", "m-a", False, 4_000_000, 0, 0, 0, 0, 0)])
+        self.ingest()
+        self.assertEqual(self.payload(range_days=7)["sessions"][0]["cost"], 5.0)  # the October request counts too
+
+    def test_a_friction_family_sums_the_cost_and_active_time_of_its_sessions_once_each(self):
+        self.add(1, dict(buggy_code=2, broken_build=1), requests=[(0, 1_000_000), (10, 1_000_000)])  # two labels of one family: counted once
+        self.add(2, dict(buggy_code=1), requests=[(0, 3_000_000), (5, 0)])
+        self.add(3, dict(wrong_approach=1), requests=[(0, 500_000)])
+        self.add(4, dict(wrong_approach=1), stored=False)  # no transcript: no weight
+        self.ingest()
+        fams = {f["family"]: f for f in self.payload()["friction_families"]}
+        bug = fams["buggy_code"]
+        self.assertEqual((bug["sessions"], bug["cost"], bug["active_s"]), (2, 5.0, 900))
+        self.assertEqual({m["name"]: (m["cost"], m["active_s"]) for m in bug["members"]}, dict(buggy_code=(5.0, 900), broken_build=(2.0, 600)))
+        self.assertEqual((fams["wrong_approach"]["sessions"], fams["wrong_approach"]["cost"], fams["wrong_approach"]["active_s"]), (2, 0.5, 30))  # its request, then its tool call 30 s later
+
+    def test_an_unpriced_session_adds_no_cost_to_its_friction_but_its_active_time(self):
+        sid = self.add(1, dict(buggy_code=1), requests=[(0, 1_000_000), (20, 1_000_000)])
+        self.add(2, dict(buggy_code=1), requests=[(0, 1_000_000)])
+        self.con.execute("UPDATE requests SET model = 'm-unknown' WHERE session_id = ?", [sid])
+        self.ingest()
+        bug = self.payload()["friction_families"][0]
+        # The priced session's $1, and both sessions' time: the unpriced one's 20 minutes, the other's 30 s to its tool call.
+        self.assertEqual((bug["family"], bug["sessions"], bug["cost"], bug["active_s"]), ("buggy_code", 2, 1.0, 1230))
+
+    def test_goal_families_carry_no_weight(self):
+        sid = "0000eeee-0000-4000-8000-000000000009"
+        self.session(sid, "p", "2026-11-03 09:00:00")
+        self.put("facets", sid + ".json", facet(sid, goals=dict(fix_bug=1)))
+        self.ingest()
+        self.assertEqual(self.payload()["goal_families"], [dict(family="fix_bug", n=1, sessions=1, members=[dict(name="fix_bug", n=1, sessions=1)])])
 
 
 class SessionMetaTest(InsightsCase):

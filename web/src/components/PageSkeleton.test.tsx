@@ -84,10 +84,10 @@ describe("PageSkeleton", () => {
     await waitFor(() => expect(document.getElementById("lede")!.textContent).not.toMatch(/could not be loaded/));
   });
 
-  it.each([["/cost", "pg-cost"], ["/context", "pg-context"], ["/errors", "pg-errors"], ["/limits", "pg-limits"], ["/insights", "pg-insights"], ["/live", "pg-live"]])(
+  it.each([["/cost", "pg-cost"], ["/context", "pg-context"], ["/errors", "pg-errors"], ["/limits", "pg-limits"], ["/usage?view=judgments", "pg-judgments"], ["/live", "pg-live"]])(
     "shows on %s while its first load is pending", async (path, cls) => {
       vi.stubGlobal("fetch", vi.fn(never));
-      await open(path + "?range=30", cls);
+      await open(path + (path.includes("?") ? "&" : "?") + "range=30", cls);
       expect(blocks()).toBeTruthy();
       expect(main(cls)!.getAttribute("aria-busy")).toBe("true");
     });

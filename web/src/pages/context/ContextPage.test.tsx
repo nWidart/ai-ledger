@@ -8,7 +8,7 @@ import { mockApi } from "../../components/sheets/testing";
 import { openDrawer } from "../../components/Drawer";
 import { ContextPage } from "./ContextPage";
 import { TIP_STRIP_MAX, TipStrip } from "./tips";
-import { renderApp, renderRouter } from "../../testing";
+import { renderApp, renderPage, renderRouter } from "../../testing";
 
 const fixture: ContextPayload = context;
 const serve = (d: ContextPayload) => mockApi({ "/api/context": () => d, "/api/session": () => session });
@@ -16,7 +16,7 @@ const serve = (d: ContextPayload) => mockApi({ "/api/context": () => d, "/api/se
 const show = async (d: ContextPayload = fixture, hash = "?range=0", open: string[] = []) => {
   const f = serve(d);
   history.replaceState(null, "", "/context" + hash);
-  renderApp(<ContextPage />);
+  renderPage(<ContextPage />);
   await screen.findByText((_, el) => el?.id === "lede" && !el.textContent!.startsWith("Loading"));
   act(() => open.forEach(id => openDrawer(id)));
   return f;

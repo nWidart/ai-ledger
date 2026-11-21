@@ -1,24 +1,24 @@
 import { Fragment, useEffect, useId, useState, type ReactNode } from "react";
-import { insightsUrl, viewOf, type FacetFamily, type InsightSession, type InsightsPayload, type View } from "../../api";
-import { Drawer } from "../../components/Drawer";
-import { Judged, label, outcomeLabel, outcomeTone } from "../../components/facets";
-import { Filters, viewName } from "../../components/Filters";
-import { HowMeasured } from "../../components/HowMeasured";
-import { Ledger, LedgerRow } from "../../components/Ledger";
-import { ProjectName } from "../../components/ProjectDot";
-import { jumpTo, SectionIndex } from "../../components/SectionIndex";
-import { sessionLink, sessionSheetHref, sessName, shortId } from "../../components/sheets/session";
-import { UsageSheets } from "../../components/sheets/UsageSheets";
-import { PageSkeleton } from "../../components/PageSkeleton";
-import { useLanding } from "../../components/useLanding";
-import { dayLabel, dur, num, pct, plural, when } from "../../format";
-import { setSearch, useSearchOf, useView } from "../../url";
+import { insightsUrl, viewOf, type FrictionFamily, type FrictionWeight, type InsightSession, type InsightsPayload, type View } from "../../../api";
+import { Drawer } from "../../../components/Drawer";
+import { label, outcomeLabel, outcomeTone } from "../../../components/facets";
+import { Filters, viewName } from "../../../components/Filters";
+import { HowMeasured } from "../../../components/HowMeasured";
+import { Ledger, LedgerRow } from "../../../components/Ledger";
+import { ProjectName } from "../../../components/ProjectDot";
+import { jumpTo, SectionIndex } from "../../../components/SectionIndex";
+import { sessionLink, sessionSheetHref, sessName, shortId } from "../../../components/sheets/session";
+import { PageSkeleton } from "../../../components/PageSkeleton";
+import { useLanding } from "../../../components/useLanding";
+import { dur, num, pct, plural, when } from "../../../format";
+import { setSearch, useSearchOf, useView } from "../../../url";
 import { validateSearch, type InsightsSearch } from "./search";
-import { queries } from "../../queries";
-import { useApi } from "../../useApi";
+import { queries } from "../../../queries";
+import { useApi } from "../../../useApi";
 import { armFocus, DRILL_KEYS, drillsOf, focusList, passes, pickProps, takeFocus, toggleDrill, type DrillKind } from "./drill";
-import { countOf, headline, measured } from "./insights";
-import "./insights.css";
+import { byWeight, countOf, headline, measured, stored, weightOf, WEIGHTS, weightSide, weightValue, type Weight } from "./figures";
+import { OutcomeTrend } from "./OutcomeTrend";
+import "./judgments.css";
 
 // Session-type strip colors, in the payload's fixed order; unknown types share the last.
 const TYPE_COLORS = ["var(--proj-2)", "var(--proj-4)", "var(--proj-5)", "var(--proj-1)", "var(--proj-other)"];
@@ -26,17 +26,16 @@ const TYPE_COLORS = ["var(--proj-2)", "var(--proj-4)", "var(--proj-5)", "var(--p
 /** A category name with spaces, its raw name in the title. */
 const Cat = ({ name }: { name: string }) => <span title={name}>{label(name)}</span>;
 
-/** Insights in view v and its filters with session id's sheet open over it: the href of a session card's link. */
+/** The Judgments view in view v and its filters with session id's sheet open over it: the href of a session card's link. */
 const sessionHref = (id: string, v: View, raw: InsightsSearch) =>
-  sessionSheetHref("/insights", { project: v.project, range: String(v.range), source: v.source, auto: v.automated, ...raw }, id);
+  sessionSheetHref("/usage", { project: v.project, range: String(v.range), source: v.source, auto: v.automated, view: "judgments", ...raw }, id);
 // Ledgers with free-form names (goals, friction, satisfaction) show this many rows until asked for all.
 const TOP = 12;
 // Sessions listed until asked for all.
 const SESSIONS_TOP = 25;
 
-function Coverage({ d, view, drawer }: { d: InsightsPayload; view: View; drawer: boolean }) {
+function Coverage({ d, drawer }: { d: InsightsPayload; drawer: boolean }) {
   const c = d.coverage;
-  if (view.source === "codex") return null;
   const newest = <>{c.newest_facet && <> The newest analysis was written <b className="when">{when(c.newest_facet)}</b>.</>}
     {drawer && <> Coverage <button type="button" className="linkish" onClick={() => jumpTo("d-coverage")}>by project and run</button>.</>}</>;
   return <>
@@ -44,14 +43,11 @@ function Coverage({ d, view, drawer }: { d: InsightsPayload; view: View; drawer:
       <b>{num(c.analysed)} of {plural(c.claude_sessions, "Claude Code session")}</b> in this view analysed ({pct(c.analysed / c.claude_sessions)}){c.orphans > 0 && `; ${num(c.orphans)} more ${c.orphans === 1 ? "has a facet" : "have facets"} but no transcript`}.
       Each <code>/insights</code> run in Claude Code analyses more.{newest}</p>}
     {c.not_analysed === 0 && c.analysed > 0 && <p className="cov" id="coverage">Every Claude Code session in this view with a transcript is analysed.{newest}</p>}
-    {view.source === "" && c.codex_sessions > 0 && <p className="cov">{plural(c.codex_sessions, "Codex session")} in this view {c.codex_sessions === 1 ? "is" : "are"} not
-      analysed: <code>/insights</code> covers Claude Code only.</p>}
   </>;
 }
 
-function Lede({ d, view }: { d: InsightsPayload; view: View }) {
+function Lede({ d }: { d: InsightsPayload }) {
   const c = d.coverage;
-  if (view.source === "codex") return <h1 className="lede" id="lede" tabIndex={-1}><code>/insights</code> analyses only Claude Code sessions.</h1>;
   if (!c.stored_facets) return <h1 className="lede" id="lede" tabIndex={-1}>{d.meta.sessions > 0 ? <>No <code>/insights</code> judgments found.</>
     : <>No <code>/insights</code> data found.</>}</h1>;
   if (!c.facets) return <h1 className="lede" id="lede" tabIndex={-1}>No analysed sessions in this view.</h1>;
@@ -60,15 +56,18 @@ function Lede({ d, view }: { d: InsightsPayload; view: View }) {
     goal; {h.top ? <><b><Cat name={h.top} /></b> caused the most friction.</> : <>no friction reported.</>}</h1>;
 }
 
+/** The view in words. Judgments has no source filter: every figure is of Claude Code sessions, whatever the URL's source. */
+const judgedName = (v: View) => `${viewName({ ...v, source: "" })}, Claude Code sessions`;
+
 function Sub({ d, view }: { d: InsightsPayload; view: View }) {
   const c = d.coverage;
-  if (view.source === "codex") return <p className="sub">{viewName(view)}. Codex writes no facets: {plural(c.codex_sessions, "Codex session")} in this view,
-    none analysed. Pick Claude Code or All to see the judgments.</p>;
   if (!c.stored_facets) return <p className="sub">The app reads <code>{c.dir ?? "~/.claude/usage-data"}</code>. Run <code>/insights</code> in Claude Code,
     then Refresh.{d.meta.sessions > 0 && " The session figures below are counted from transcripts."}</p>;
-  return <p className="sub">{viewName(view)}. Model-judged: a model's reading of each session, not a measurement.
-    <HowMeasured what="the judgments">The figures come from <code>/insights</code> facets, except Session figures and Coverage, which are counted. Codex sessions have no facets.
-      A session counts here by its start time; Activity counts a session with a request in the range, so the two totals can differ slightly.</HowMeasured></p>;
+  return <p className="sub">{judgedName(view)}. Model-judged: a model's reading of each session, not a measurement.
+    <HowMeasured what="the judgments">The figures come from <code>/insights</code> facets, except Session figures and Coverage, which are counted, and each
+      session's cost, peak context and tool errors, which are measured from its transcript. <code>/insights</code> judges Claude Code sessions only: Codex
+      writes no facets, so this view has no source filter. A session counts here by its start time; Overview counts a session with a request in the range,
+      so the two totals can differ slightly.</HowMeasured></p>;
 }
 
 function Vitals({ d }: { d: InsightsPayload }) {
@@ -101,46 +100,64 @@ function TopLedger<T>({ rows, empty, noun, row }: { rows: T[]; empty: string; no
 
 const FAMILY_HINT = "Similar labels are grouped into families by keyword; a family with several labels expands to them as /insights wrote them.";
 
+/** A ledger row's bar, value and side figure. */
+interface Cells { share: number; value: string; side: string }
+
 /** A row of a family ledger. With 2 or more labels it filters by the family (`family` kind) and has an expander, a separate button,
  *  that lists the labels as /insights wrote them, each filtering by its raw name (`raw` kind). A family of one label is that label's
- *  plain row, with the raw filter. */
-function FamilyRow({ f, max, raw, kind }: { f: FacetFamily; max: number; raw: InsightsSearch; kind: { raw: DrillKind; family: DrillKind } }) {
-  const [open, setOpen] = useState(false), id = useId(), share = (n: number) => max ? n / max : 0;
+ *  plain row, with the raw filter. cells: what a family or a label shows. */
+function FamilyRow<R extends { n: number; sessions: number }>({ f, cells, raw, kind }: {
+  f: R & { family: string; members: (R & { name: string })[] }; cells: (r: R) => Cells; raw: InsightsSearch; kind: { raw: DrillKind; family: DrillKind } }) {
+  const [open, setOpen] = useState(false), id = useId();
   if (f.members.length === 1) {
     const m = f.members[0]!;
-    return <LedgerRow name={label(m.name)} title={m.name} share={share(f.n)} value={num(f.n)} side={sessionsSide(f)} {...pickProps(raw, kind.raw, m.name, f.sessions)} />;
+    return <LedgerRow name={label(m.name)} title={m.name} {...cells(f)} {...pickProps(raw, kind.raw, m.name, f.sessions)} />;
   }
   return (
-    <LedgerRow name={label(f.family)} title={f.family} share={share(f.n)} value={num(f.n)} side={sessionsSide(f)} {...pickProps(raw, kind.family, f.family, f.sessions)}>
+    <LedgerRow name={label(f.family)} title={f.family} {...cells(f)} {...pickProps(raw, kind.family, f.family, f.sessions)}>
       <button type="button" className="linkish exp" aria-expanded={open} aria-controls={id} aria-label={`${f.members.length} labels in ${label(f.family)}`}
         onClick={() => setOpen(!open)}>{f.members.length} labels <span aria-hidden="true">{open ? "▴" : "▾"}</span></button>
       <ol className="ledger members" id={id} hidden={!open} aria-label={`Labels in ${label(f.family)}`}>
-        {open && f.members.map(m => <LedgerRow key={m.name} name={label(m.name)} title={m.name} share={share(m.n)} value={num(m.n)} side={sessionsSide(m)}
-          {...pickProps(raw, kind.raw, m.name, m.sessions)} />)}
+        {open && f.members.map(m => <LedgerRow key={m.name} name={label(m.name)} title={m.name} {...cells(m)} {...pickProps(raw, kind.raw, m.name, m.sessions)} />)}
       </ol>
     </LedgerRow>
   );
 }
 
-function Friction({ d }: { d: InsightsPayload }) {
-  const raw = useSearchOf(validateSearch), max = d.friction_families[0]?.n ?? 0;
+/** A row by its count: the bar against the top count, the count, and its sessions. */
+const byCount = (max: number) => (r: { n: number; sessions: number }): Cells => ({ share: max ? r.n / max : 0, value: num(r.n), side: sessionsSide(r) });
+
+/** Friction families weighed by what the sessions that reported them cost, how long they ran, or how often they were reported:
+ *  the choice orders the rows and sets each bar and value; the two other figures and the sessions stand beside it. */
+function Friction({ d, weight, onWeight }: { d: InsightsPayload; weight: Weight; onWeight: (w: Weight) => void }) {
+  const raw = useSearchOf(validateSearch), rows = byWeight(d.friction_families, weight);
+  const max = Math.max(0, ...rows.map(f => weightOf(f, weight)));
+  const cells = (r: { n: number; sessions: number } & FrictionWeight): Cells =>
+    ({ share: max ? weightOf(r, weight) / max : 0, value: weightValue(r, weight), side: weightSide(r, weight) });
   return (
-    <section className="panel sect" id="friction" aria-labelledby="frictionTitle">
-      <h2 id="frictionTitle">Friction categories</h2>
-      <p className="hint">What got in the way, by times reported.<HowMeasured what="friction">Each row has the sessions that reported it; a session can carry several. {FAMILY_HINT}</HowMeasured></p>
-      <TopLedger rows={d.friction_families} empty="No friction reported in this view." noun="friction families" row={f =>
-        <FamilyRow key={f.family} f={f} max={max} raw={raw} kind={{ raw: "fr", family: "frf" }} />} />
+    <section className="panel sect friction" id="friction" aria-labelledby="frictionTitle">
+      <div className="chart-head">
+        <div><h2 id="frictionTitle">Friction categories</h2>
+          <p className="hint">What got in the way, weighed by the sessions that reported it.<HowMeasured what="friction">Cost and active time are those of
+            the whole sessions that reported a friction, not of the friction alone, and each session counts once in a row. A session with no transcript in
+            the store adds no cost or time; one with no price adds no cost, but its active time counts. Reports are the times a friction was reported; a session can report several. {FAMILY_HINT}</HowMeasured></p></div>
+        <div className="seg" role="group" aria-label="Weigh friction by">
+          {WEIGHTS.map(w => <button key={w.k} type="button" aria-pressed={w.k === weight} onClick={() => onWeight(w.k)}>{w.label}</button>)}
+        </div>
+      </div>
+      <TopLedger rows={rows} empty="No friction reported in this view." noun="friction families" row={(f: FrictionFamily) =>
+        <FamilyRow key={f.family} f={f} cells={cells} raw={raw} kind={{ raw: "fr", family: "frf" }} />} />
     </section>
   );
 }
 
 function Goals({ d }: { d: InsightsPayload }) {
-  const raw = useSearchOf(validateSearch), max = d.goal_families[0]?.n ?? 0;
+  const raw = useSearchOf(validateSearch), cells = byCount(d.goal_families[0]?.n ?? 0);
   return (
     <Drawer id="d-goals" title="Goals">
       <p className="hint">What each session set out to do.<HowMeasured what="goals">{FAMILY_HINT}</HowMeasured></p>
       <TopLedger rows={d.goal_families} empty="No goals recorded in this view." noun="goal families" row={f =>
-        <FamilyRow key={f.family} f={f} max={max} raw={raw} kind={{ raw: "goal", family: "goalf" }} />} />
+        <FamilyRow key={f.family} f={f} cells={cells} raw={raw} kind={{ raw: "goal", family: "goalf" }} />} />
     </Drawer>
   );
 }
@@ -214,19 +231,6 @@ function HowItWorks({ d }: { d: InsightsPayload }) {
   );
 }
 
-/** The share of analysed sessions fully or mostly achieved, per week of session start. Shown from 2 weeks. */
-function Trend({ d }: { d: InsightsPayload }) {
-  if (d.trend.length < 2) return null;
-  return (
-    <section className="panel sect" id="trend" aria-labelledby="trendTitle">
-      <h2 id="trendTitle">Outcome trend</h2>
-      <p className="hint">Share of analysed sessions fully or mostly achieved, per week. Weeks are by session start, and a week with few sessions swings.</p>
-      <Ledger empty="No weeks in this view.">{d.trend.map(w => <LedgerRow key={w.week} name={`Week of ${dayLabel(w.week)}`} title={w.week}
-        share={w.n ? w.achieved / w.n : 0} value={pct(w.n ? w.achieved / w.n : 0)} side={`${num(w.achieved)} of ${num(w.n)}`} />)}</Ledger>
-    </section>
-  );
-}
-
 function Outcomes({ d }: { d: InsightsPayload }) {
   const raw = useSearchOf(validateSearch), n = d.coverage.facets;
   return (
@@ -258,7 +262,7 @@ function Feelings({ d }: { d: InsightsPayload }) {
 
 /** One session as a card: title, outcome and chips on the first line, the model's summary below, friction detail on expand. */
 function SessionCard({ s, view, raw }: { s: InsightSession; view: View; raw: InsightsSearch }) {
-  const line = s.meta ? measured(s.meta) : "";
+  const line = s.meta ? measured(s.meta) : "", figs = stored(s);
   /** A chip or badge that sets, or clears, the filter of its kind. */
   const pick = (kind: DrillKind, name: string, text: ReactNode, cls: string) =>
     <button type="button" className={cls + (raw[kind] === name ? " on" : "")} title={name} aria-pressed={raw[kind] === name} onClick={() => toggleDrill(kind, name)}>{text}</button>;
@@ -279,6 +283,9 @@ function SessionCard({ s, view, raw }: { s: InsightSession; view: View; raw: Ins
       </div>
       {s.brief_summary && <p className="sum">{s.brief_summary}</p>}
       {s.friction_detail && <details className="fd"><summary>Friction detail</summary><p>{s.friction_detail}</p></details>}
+      {/* Measured from the stored transcript, apart from the model's words: cost, peak context and failed tool calls. */}
+      {figs.length > 0 && <p className="stored" title="Measured from the stored transcript, over the whole session">{figs.map((p, i) => <Fragment key={p.text}>
+        {i > 0 && " · "}<span className={p.warn ? "warn" : undefined}>{p.text}</span></Fragment>)}</p>}
       {line && <p className="measured" title="Counted by /insights from the transcript">{line}</p>}
     </li>
   );
@@ -344,40 +351,49 @@ function Sessions({ d, view, sort, onSort }: { d: InsightsPayload; view: View; s
   );
 }
 
-/** Insights (/insights): how Claude Code's /insights judged the view's sessions (outcome, satisfaction, helpfulness,
- *  friction, goals and session types), the analysed sessions, and how much of the view is not analysed yet, by project and by run. */
-export function InsightsPage() {
+/** Activity's Judgments view (/usage?view=judgments): how Claude Code's /insights judged the view's sessions (outcome,
+ *  satisfaction, helpfulness, friction, goals and session types), the analysed sessions with what the store measured of each, and
+ *  how much of the view is not analysed yet, by project and by run. Only Claude Code sessions are judged, so the view asks for
+ *  every source and shows no source filter; Activity never shows it for a Codex-only view.
+ *  views: Activity's view switch, drawn in the header where Overview draws it. */
+export function Judgments({ views }: { views: ReactNode }) {
   const [h] = useView();
-  const want = viewOf(h);
+  // The URL's source stays for the other pages and for this view's links; the request names none.
+  const here = viewOf(h), want: View = { ...here, source: "" };
   const url = insightsUrl(want), { data: d, error, loading, retry } = useApi(queries.insights(want), { keepPrevious: true });
   const [shown, setShown] = useState(want);
-  // Held here, not in Sessions: the list unmounts for a view with no analysed session, and the choice lasts the page visit.
-  const [sort, setSort] = useState<SortId>("newest");
+  // Held here, not in Sessions or Friction: they unmount for a view with no analysed session, and the choices last the page visit.
+  const [sort, setSort] = useState<SortId>("newest"), [weight, setWeight] = useState<Weight>("cost");
   useEffect(() => { if (d && !loading && !error) setShown(want); }, [d, loading, error, url]); // want is read through url
   const { slow, grow, wrap, retryBtn } = useLanding(d, url, loading, error, ":scope > :is(.grid2, .panel, .vitals, .drawers)");
-  const howto = d && shown.source !== "codex" && d.coverage.stored_facets > 0;
-  const figures = d && shown.source !== "codex" && d.coverage.facets > 0;
+  const howto = d && d.coverage.stored_facets > 0;
+  const figures = d && d.coverage.facets > 0;
   // The first load shows the placeholder; the loading look (dimmed figures) belongs to a page that has figures.
   const first = !d && !error;
-  const counted = d && shown.source !== "codex" && d.meta.sessions > 0;
+  const counted = d && d.meta.sessions > 0;
   return (
-    <main id="content" className={"wrap pg-insights" + (slow && !first ? " loading" : "") + (grow ? " grow" : "")} ref={wrap} aria-busy={loading || undefined}>
-      {first ? <PageSkeleton title="Loading insights…" /> : <header className="top sect" id="overview">
-        <p className="kicker">Insights <Judged /></p>
-        <Filters projects={d?.projects ?? []} automated />
-      </header>}
-      {error && <div className="banner" role="alert"><b>Could not load insights for {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(shown)}.` : ""}</b>{" "}
+    <main id="content" className={"wrap pg-judgments" + (slow && !first ? " loading" : "") + (grow ? " grow" : "")} ref={wrap} aria-busy={loading || undefined}>
+      {/* Drawn through every state, as Overview draws it: a switch keeps its focus while this view's first request is pending. */}
+      {views}
+      {first ? <PageSkeleton title="Loading judgments…" /> : <>
+        <header className="top sect" id="overview">
+          <div>{d ? <Lede d={d} /> : <h1 className="lede" id="lede" tabIndex={-1}>Judgments could not be loaded.</h1>}</div>
+          {/* No source filter: it would change nothing here. */}
+          <div className="top-side"><Filters projects={d?.projects ?? []} automated source={false} /></div>
+        </header>
+      </>}
+      {error && <div className="banner" role="alert"><b>Could not load judgments for {judgedName(want)} ({error.message}).{d ? ` Still showing ${judgedName(shown)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
-      <p className="pending">{loading && d ? `Loading insights for ${viewName(want)}…` : ""}</p>
-      {!d ? (first ? null : <h1 className="lede" id="lede" tabIndex={-1}>Insights could not be loaded.</h1>) : <>
-        <Coverage d={d} view={shown} drawer={!!figures} />
-        <Lede d={d} view={shown} />
+      <p className="pending">{loading && d ? `Loading judgments for ${judgedName(want)}…` : ""}</p>
+      {d && <>
         <Sub d={d} view={shown} />
+        <Coverage d={d} drawer={!!figures} />
         {(figures || howto || counted) && <SectionIndex groups={[
-          figures ? [{ id: "overview", label: "Overview" }, { id: "outcomes", label: "Outcomes" }, { id: "friction", label: "Friction" },
+          // "Summary", not "Overview": that names Activity's other view.
+          figures ? [{ id: "overview", label: "Summary" }, { id: "outcomes", label: "Outcomes" }, { id: "friction", label: "Friction" },
             ...(d.trend.length > 1 ? [{ id: "trend", label: "Trend" }] : []),
             { id: "satisfaction", label: "Satisfaction", long: "Satisfaction and helpfulness" }, { id: "log", label: "Sessions", long: "Analysed sessions" }]
-            : [{ id: "overview", label: "Overview" }],
+            : [{ id: "overview", label: "Summary" }],
           [...(figures ? [{ id: "d-goals", label: "Goals" }, { id: "d-types", label: "Session types" }] : []),
             ...(counted ? [{ id: "d-figures", label: "Session figures" }] : []), ...(figures ? [{ id: "d-coverage", label: "Coverage" }] : []),
             ...(howto ? [{ id: "d-how", label: "How this works" }] : [])],
@@ -386,16 +402,15 @@ export function InsightsPage() {
           <Vitals d={d} />
           <div className="grid2">
             <Outcomes d={d} />
-            <Friction d={d} />
+            <Friction d={d} weight={weight} onWeight={setWeight} />
           </div>
-          <Trend d={d} />
+          {d.trend.length > 1 && <OutcomeTrend weeks={d.trend} />}
           <Feelings d={d} />
-          <Sessions d={d} view={shown} sort={sort} onSort={setSort} />
+          <Sessions d={d} view={{ ...shown, source: here.source }} sort={sort} onSort={setSort} />
           <div className="drawers"><Goals d={d} /><SessionTypes d={d} />{counted && <SessionFigures d={d} />}<CoverageDrawer d={d} />{howto && <HowItWorks d={d} />}</div>
         </>}
         {!figures && (counted || howto) && <div className="drawers">{counted && <SessionFigures d={d} />}{howto && <HowItWorks d={d} />}</div>}
       </>}
-      <UsageSheets data={undefined} />
     </main>
   );
 }

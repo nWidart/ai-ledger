@@ -20,7 +20,7 @@ from http.server import ThreadingHTTPServer
 
 import duckdb
 
-from ai_ledger import app, limits, metrics, store
+from ai_ledger import app, limits, live, metrics, store
 
 USAGE_DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "usage-data")
 
@@ -678,6 +678,55 @@ class LimitsAlertTest(unittest.TestCase):
     def test_none_before_a_cycle(self):
         self.assertIsNone(self.app.limits_alert)
         self.assertIsNone(self.app.status()["limits_alert"])
+        self.assertIsNone(self.app.status()["limits_peak"])
+
+    def test_the_fullest_window_is_kept_with_the_alert(self):
+        ws = [self.window(current=40.0), self.window(provider="claude", provider_label="Claude Code", label="5-hour", current=62.0, measured=False)]
+        with mock.patch.object(limits, "payload", return_value=dict(windows=ws)):
+            self.app.refresh_alert()
+        got = self.app.status()
+        self.assertEqual((got["limits_alert"], got["limits_peak"]),
+                         (None, dict(provider="claude", provider_label="Claude Code", label="5-hour", current=62.0, measured=False)))
+        with mock.patch.object(limits, "payload", side_effect=RuntimeError("secret text")), contextlib.redirect_stderr(io.StringIO()):
+            self.app.refresh_alert()
+        self.assertIsNone(self.app.status()["limits_peak"])  # a failure clears both
+
+    def test_the_waiting_count_is_worked_out_on_a_status_request_and_kept_for_a_while(self):
+        with mock.patch.object(live, "waiting", side_effect=[2, 5]) as waiting:
+            self.assertEqual([self.app.status()["live_waiting"] for _ in range(3)], [2, 2, 2])  # one read for any number of pages
+            self.assertEqual(waiting.call_count, 1)
+            with mock.patch.object(app, "WAITING_TTL", 0):
+                self.assertEqual(self.app.status()["live_waiting"], 5)
+
+    def test_concurrent_status_requests_work_out_the_waiting_count_once(self):
+        # The server answers each request on its own thread: five pages asking at once, with nothing kept yet, cost one read.
+        callers, gate, out = 5, threading.Barrier(5), []
+
+        def slow(_cur):
+            time.sleep(0.05)  # long enough for every caller to reach the cache while the first fills it
+            return 3
+
+        def ask():
+            gate.wait()
+            out.append(self.app.live_waiting())
+
+        with mock.patch.object(live, "waiting", side_effect=slow) as waiting:
+            threads = [threading.Thread(target=ask) for _ in range(callers)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(5)
+        self.assertEqual(waiting.call_count, 1)
+        self.assertEqual(out, [3] * callers)
+
+    def test_a_failed_waiting_count_is_none_and_names_the_type_only(self):
+        err = io.StringIO()
+        with mock.patch.object(live, "waiting", side_effect=RuntimeError("secret text")), contextlib.redirect_stderr(err):
+            self.assertIsNone(self.app.status()["live_waiting"])
+        self.assertEqual(err.getvalue(), "live waiting failed: RuntimeError\n")
+
+    def test_the_waiting_count_is_zero_on_an_empty_store(self):
+        self.assertEqual(self.app.status()["live_waiting"], 0)
 
     def test_kept_after_a_cycle(self):
         with mock.patch.object(limits, "payload", return_value=dict(windows=[self.window()])) as payload:

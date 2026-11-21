@@ -33,10 +33,10 @@ Only the shots a page shows are kept: a shot no page references is deleted, and 
 | `errors-detail` | "Where to start": error types with a ready-made fix, and the fastest rising. | Errors, First tour, Kill repeated tool failures |
 | `limits-windows` | The four open plan windows: Claude Code and Codex, weekly and 5-hour, each with its pace cone chart and its headroom, pace and top project footer. | Limits, First tour, Stop hitting plan limits |
 | `limits-history` | "Past windows": a strip of bars per limit, with its average left unused and its hits. | Limits |
-| `insights-vitals` | The outcomes-at-a-glance row. | Insights |
-| `insights-outcomes` | "Outcomes", model-judged. | Insights, First tour |
-| `insights-friction` | "Friction categories", model-judged. | Insights |
-| `insights-log` | "Analysed sessions": the log, first 1200px. | Insights |
+| `insights-vitals` | Activity's Judgments view (the name is from when it was the Insights page): the outcomes-at-a-glance row. | Judgments |
+| `insights-outcomes` | "Outcomes", model-judged. | Judgments, First tour |
+| `insights-friction` | "Friction categories", model-judged. | Judgments |
+| `insights-log` | "Analysed sessions": the log, first 1200px. | Judgments |
 | `project-layout` | The whole page in two columns, cropped to its first 1500px. | Project, First tour |
 | `project-activity` | "Activity": eight figures of the project's activity. | Project |
 | `project-cost` | "Cost": change, models, and token share beside cost share. | Project |

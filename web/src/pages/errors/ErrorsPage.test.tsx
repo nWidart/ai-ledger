@@ -17,7 +17,7 @@ import { sessionHref, typeRows } from "./model";
 import { when } from "../../format";
 import { lostPayload } from "./lostData";
 import { VIEW_KEY } from "./view";
-import { ingested, refreshed, renderApp } from "../../testing";
+import { ingested, refreshed, renderApp, renderPage } from "../../testing";
 
 // typeRows and sessionHref (one call per example render) run through their own implementation; the mock only counts the calls.
 vi.mock("./model", async orig => { const a = await orig<typeof import("./model")>(); return { ...a, typeRows: vi.fn(a.typeRows), sessionHref: vi.fn(a.sessionHref) }; });
@@ -110,7 +110,7 @@ function serve(fixes: Record<string, string> = {}, refuse: ((b: Fix) => boolean)
 
 const payloadGets = () => vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors").length;
 const page = async () => {
-  const { client } = renderApp(<ErrorsPage />);
+  const { client } = renderPage(<ErrorsPage />); // with the shell's sheet host: Errors mounts no session or tool sheet of its own
   await screen.findByRole("heading", { level: 1, name: /failed tool calls/ });
   return client;
 };

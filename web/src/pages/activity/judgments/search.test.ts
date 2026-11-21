@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatSearch, parseSearch } from "../../url";
+import { formatSearch, parseSearch } from "../../../url";
 import { validateSearch } from "./search";
 
 describe("validateSearch", () => {

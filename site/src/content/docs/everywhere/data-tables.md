@@ -12,7 +12,7 @@ A drawer is a table folded behind its title, at the foot of a page. Every drawer
 
 ## How measured
 
-A section's hint is one line. When there is more to say about how a figure is measured, a **How measured** link ends the hint, on every page that has one: Activity, Cost, Context, Errors, Limits and Insights. It is a toggletip: it shows the method on hover and on activation, and closes on Esc or a click outside it. A screen reader announces nothing on hover. Activate the link, and the method is the next thing to read after it. A method too long for the window scrolls; press Tab from the link to scroll it with the keyboard.
+A section's hint is one line. When there is more to say about how a figure is measured, a **How measured** link ends the hint, on every page that has one: Activity (both views), Cost, Context, Errors and Limits. It is a toggletip: it shows the method on hover and on activation, and closes on Esc or a click outside it. A screen reader announces nothing on hover. Activate the link, and the method is the next thing to read after it. A method too long for the window scrolls; press Tab from the link to scroll it with the keyboard.
 
 ## Show data table
 

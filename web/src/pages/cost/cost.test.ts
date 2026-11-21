@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectRow, RunRateSource, UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
-import { costDays, gaugeFigures, shares, stackHeights, tokenPairs, type Kind } from "./cost";
+import { costDays, gaugeFigures, shares, tokenPairs, type Kind } from "./cost";
 import { projectMedians } from "./insights";
 import { foldMatrix, projectMatrix, sortMatrix, type MatrixRow } from "./matrix";
 
@@ -143,25 +143,6 @@ describe("shares", () => {
 
   it("is zero for every kind on a day without tokens", () => {
     expect(shares({}, [a, b])).toEqual({ a: 0, b: 0 });
-  });
-});
-
-describe("stackHeights", () => {
-  const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
-
-  it("splits the bar in proportion when every slot is above its minimum", () => {
-    expect(stackHeights([1, 3], 100, [1, 3])).toEqual([25, 75]);
-  });
-
-  it("gives thin segments their minimum and shrinks the others, so the slots still fill the bar", () => {
-    const s = stackHeights([998, 1, 1], 200, [1, 3, 3]);
-    expect(s.slice(1)).toEqual([3, 3]);
-    expect(s[0]).toBeCloseTo(194);
-    expect(sum(s)).toBeCloseTo(200);
-  });
-
-  it("is each minimum when the bar is shorter than the minimums", () => {
-    expect(stackHeights([5, 5], 2, [1, 3])).toEqual([1, 3]);
   });
 });
 

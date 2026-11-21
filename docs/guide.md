@@ -28,7 +28,7 @@ The guide moved to the documentation site: <https://nwidart.github.io/ai-ledger/
 
 ### Insights
 
-[Insights](https://nwidart.github.io/ai-ledger/pages/insights/)
+Now Activity's Judgments view: [Judgments](https://nwidart.github.io/ai-ledger/pages/insights/)
 
 ### Live
 

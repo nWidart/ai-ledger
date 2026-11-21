@@ -32,14 +32,16 @@ const sidebar = [
   },
   {
     label: "Pages",
+    // In the app's navigation order: Now (Live, Limits), then Review. pages/insights is Activity's Judgments view: it keeps
+    // the address it had as the Insights page, so links to it still open.
     items: [
+      "pages/live",
+      "pages/limits",
       "pages/activity",
+      "pages/insights",
       "pages/cost",
       "pages/context",
       "pages/errors",
-      "pages/limits",
-      "pages/insights",
-      "pages/live",
       "pages/project",
     ],
   },

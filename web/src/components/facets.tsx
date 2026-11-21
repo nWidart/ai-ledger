@@ -1,4 +1,4 @@
-// What the Insights page and the session sheet share to show Claude Code's /insights judgments: the model-judged tag, the
+// What Activity's Judgments view, the Project page and the session sheet share to show Claude Code's /insights judgments: the model-judged tag, the
 // outcome badge's words and tone, and category names. /insights writes free-form snake_case labels; they show with spaces.
 import { Toggletip } from "./Toggletip";
 import "./facets.css";
@@ -6,6 +6,8 @@ import "./facets.css";
 const JUDGED_TITLE = "/insights asks a model to read each session's transcript and judge it: these are its opinions, not measurements";
 /** The tag every facet figure carries, so nobody reads it as measured: a toggletip button that says why. Never inside a button
  *  (a Drawer's title takes it through its `after`). */
+/** Why there are no judgments for a Codex-only view: said where Judgments cannot be opened. */
+export const NO_FACETS = "Codex writes no facets: /insights judges Claude Code sessions only.";
 export const Judged = () => <Toggletip className="judged" label="model-judged">{JUDGED_TITLE}</Toggletip>;
 
 /** A category name as shown: underscores turned into spaces. The raw name goes in the title. */

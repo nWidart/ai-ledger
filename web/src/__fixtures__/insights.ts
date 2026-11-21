@@ -242,14 +242,20 @@ export default {
     {
      "name": "buggy_code",
      "n": 3,
-     "sessions": 2
+     "sessions": 2,
+     "cost": 0,
+     "active_s": 0
     },
     {
      "name": "broken_build",
      "n": 1,
-     "sessions": 1
+     "sessions": 1,
+     "cost": 0,
+     "active_s": 0
     }
-   ]
+   ],
+   "cost": 0,
+   "active_s": 0
   },
   {
    "family": "wrong_approach",
@@ -259,16 +265,24 @@ export default {
     {
      "name": "wrong_approach",
      "n": 3,
-     "sessions": 1
+     "sessions": 1,
+     "cost": 0,
+     "active_s": 0
     }
-   ]
+   ],
+   "cost": 0,
+   "active_s": 0
   }
  ],
  "trend": [
   {
    "week": "2026-11-02",
    "n": 3,
-   "achieved": 1
+   "achieved": 1,
+   "fully": 1,
+   "mostly": 0,
+   "partially": 1,
+   "not_achieved": 0
   }
  ],
  "sessions": [
@@ -299,6 +313,9 @@ export default {
     "files_modified": 4,
     "git_pushes": 1
    },
+   "cost": null,
+   "errors": null,
+   "context_share": null,
    "title": null
   },
   {
@@ -330,6 +347,9 @@ export default {
     "files_modified": 4,
     "git_pushes": 1
    },
+   "cost": null,
+   "errors": null,
+   "context_share": null,
    "title": null
   },
   {
@@ -357,6 +377,9 @@ export default {
     "files_modified": 4,
     "git_pushes": 1
    },
+   "cost": 4.2,
+   "errors": 1,
+   "context_share": 0.62,
    "title": "Add a theme toggle"
   }
  ],

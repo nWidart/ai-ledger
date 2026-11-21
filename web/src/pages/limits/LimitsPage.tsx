@@ -4,6 +4,7 @@ import { ChartTable, DataTable } from "../../components/DataTable";
 import { Drawer } from "../../components/Drawer";
 import { Filters, RangeFilter, SOURCE_LABELS } from "../../components/Filters";
 import { HowMeasured } from "../../components/HowMeasured";
+import { subjectAttrs } from "../../components/menu/subject";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { Toggletip } from "../../components/Toggletip";
 import { useLanding } from "../../components/useLanding";
@@ -55,9 +56,10 @@ function Used({ w, now }: { w: LimitWindow; now: string }) {
   const open = (e: MouseEvent<HTMLAnchorElement>) => {
     if (!(e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) { e.preventDefault(); navigate(e.currentTarget.getAttribute("href")!); }
   };
-  const list = (title: string, rows: { key: string; r: WindowUsedRow; link?: string }[]) => rows.length > 0 && <div>
+  // A project's row is the project for the context menu, as a project row is on every page.
+  const list = (title: string, rows: { key: string; r: WindowUsedRow; link?: string; project?: string }[]) => rows.length > 0 && <div>
     <h5>{title}</h5>
-    <ul>{rows.map(({ key, r, link }) => <li key={key}>
+    <ul>{rows.map(({ key, r, link, project }) => <li key={key} {...subjectAttrs("project", project)}>
       {link ? <a href={link} onClick={open} aria-label={`${key} in Cost, ${range}`} title={`Open ${key} in Cost: ${near}`}>{key}</a> : <span>{key}</span>}
       <span className="used-share">{sharePct(r.share)}</span><span className="muted">{usd(r.cost)}</span>
       {r.points != null && <span className="muted">≈ {num(r.points, 1)} points</span>}</li>)}</ul>
@@ -66,7 +68,7 @@ function Used({ w, now }: { w: LimitWindow; now: string }) {
     <div className="lim-used">
       <h4>What used this window</h4>
       <div className="used-lists">
-        {list("Projects", u.projects.map(r => ({ key: r.project, r, link: usedHref(w, now, r.project) })))}
+        {list("Projects", u.projects.map(r => ({ key: r.project, r, link: usedHref(w, now, r.project), project: r.project })))}
         {list("Models", u.models.map(r => ({ key: r.model, r })))}
       </div>
       <p className="muted used-note">Counted local agent use only, at API list prices ({usd(u.total)} here); use elsewhere is not in it.</p>
@@ -248,8 +250,9 @@ function PastWindows({ d }: { d: LimitsPayload }) {
 function projectRows(projects: LimitsPayload["value"]["projects"]) {
   const big = projects.filter(p => p.points >= 1), small = new Map<string, typeof projects>();
   for (const p of projects) if (p.points < 1) small.set(p.provider, [...(small.get(p.provider) ?? []), p]);
-  return [...big.map(p => ({ ...p, key: `${p.provider}-${p.project}`, name: p.project })),
-    ...[...small.values()].map(ps => ({ ...ps[0]!, key: `${ps[0]!.provider}-smaller`, name: plural(ps.length, "smaller project"),
+  // subject: the project a row stands for in the context menu; the folded row is none.
+  return [...big.map(p => ({ ...p, key: `${p.provider}-${p.project}`, name: p.project, subject: p.project as string | null })),
+    ...[...small.values()].map(ps => ({ ...ps[0]!, key: `${ps[0]!.provider}-smaller`, name: plural(ps.length, "smaller project"), subject: null,
       points: ps.reduce((n, p) => n + p.points, 0), commits: ps.reduce((n, p) => n + p.commits, 0), commits_per_point: null }))];
 }
 
@@ -272,7 +275,7 @@ function Value({ d, range }: { d: LimitsPayload; range: number }) {
         <DataTable name="Commits a point, by project">
           <thead><tr><th scope="col">Project</th><th scope="col">Limit</th><th scope="col" className="num">Points</th><th scope="col" className="num">Commits</th><th scope="col" className="num">Commits a point</th></tr></thead>
           <tbody>{projectRows(v.projects).map(p =>
-            <tr key={p.key}><th scope="row">{p.name}</th><td>{windowName(p)}</td>
+            <tr key={p.key} {...subjectAttrs("project", p.subject)}><th scope="row">{p.name}</th><td>{windowName(p)}</td>
             <td className="num">{num(p.points, 1)}</td><td className="num">{num(p.commits)}</td><td className="num">{num(p.commits_per_point, 2)}</td></tr>)}</tbody>
         </DataTable>
       </div>}

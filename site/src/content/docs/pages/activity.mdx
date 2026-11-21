@@ -8,6 +8,8 @@ Activity answers one question: what did the agents get done in this view, and wh
 
 The page follows the filters at its top. Every figure below describes the selected project, time range and source.
 
+Activity has two views of the same sessions. This page describes **Overview**, the measured view. **Judgments** shows how Claude Code's `/insights` judged them; see [Judgments](/ai-ledger/pages/insights/).
+
 import ThemedImage from "../../../components/ThemedImage.astro";
 import attention from "../../../assets/shots/activity-attention.png";
 import attentionLight from "../../../assets/shots/activity-attention-light.png";
@@ -17,6 +19,14 @@ import work from "../../../assets/shots/activity-work.png";
 import workLight from "../../../assets/shots/activity-work-light.png";
 import hours from "../../../assets/shots/activity-hours.png";
 import hoursLight from "../../../assets/shots/activity-hours-light.png";
+
+## Views
+
+A switch above the heading picks the view: **Overview** or **Judgments**.
+
+- Overview is the default. Judgments is in the address as `view=judgments`, so a reload or a copied link opens the same view, and Back returns to the view before.
+- A switch keeps the project, the range, the source and Include automated. It drops the filters only the other view has: Overview's session search, near-limit filter and selected day, and the Judgments view's outcome and friction filters.
+- With **Codex** as the source, Judgments cannot be picked, and the text beside the switch says why: "Codex writes no facets: /insights judges Claude Code sessions only." A link to the Judgments view with Codex as the source opens Overview.
 
 ## Filters
 
@@ -35,7 +45,7 @@ A selected day is cleared in the same step as any change of project, range or so
 
 The page has a section index (Overview, Attention, Work, Health) and seven drawers (Sessions, Projects, Tools, MCP & hooks, Loops, Tests, Hours). A drawer is a table folded behind its title. Every drawer is closed when the page loads, and one opens at a time: opening a drawer closes the open one. Opening one from a card or chart scrolls to it.
 
-The page reads top to bottom: the heading, Needs attention, the work chart, then Work health and the drawers.
+The page reads top to bottom: the view switch, the heading, Needs attention, the work chart, then Work health and the drawers.
 
 ## Panels
 
@@ -120,7 +130,7 @@ Each drawer title carries a count. The Sessions, Project metrics and Tools table
 
 ### Sessions
 
-**Shows** every session in the view, one row each. The drawer title counts the sessions in the view. Its How measured toggletip says a session counts here when it has a request in the range, and that Insights counts sessions by their start time, so the two totals can differ slightly.
+**Shows** every session in the view, one row each. The drawer title counts the sessions in the view. Its How measured toggletip says a session counts here when it has a request in the range, and that the Judgments view counts sessions by their start time, so the two totals can differ slightly.
 
 **Columns**
 
@@ -198,7 +208,7 @@ See tools in Needs attention puts the tools failing over 10% of at least 20 call
 
 ## Sheets
 
-A sheet opens beside the page and does not change the filters. Its state is in the URL, so Back, reload and shared links agree with it.
+A sheet opens beside the page and does not change the filters. Its state is in the URL, so Back, reload and shared links agree with it. The same sheets open over every page, from a row, a link, the [command palette](/ai-ledger/everywhere/command-palette/) or a [context menu](/ai-ledger/everywhere/context-menu/); they are described here once.
 
 ### Session sheet
 
@@ -208,7 +218,7 @@ Shows the whole session, whatever the range filter says.
 - **Filter dashboard to *project*** or **Show all projects**.
 - **Source**: the first prompt as recorded. A long prompt is cut; **Show the whole prompt** loads all of it.
 - A line of figures: estimated cost (a "+" marks a subtotal when some model has no price; "Unknown" when none has), tokens, prompts and interrupted prompts, peak context with its share of the window, compactions, commits, active time. When the session records them, the line adds model time, tool time, output speed, and lines added and removed, as `+120 / −30`; a tooltip says they come from Claude Code and include subagents. See [Work health](#work-health).
-- **/insights judgment**, tagged model-judged, when the session has an `/insights` analysis: outcome, a "dissatisfied" marker when satisfaction includes it, helpfulness and session type, goal and friction categories, a brief summary and the friction detail, and **Open in Insights**, which keeps the view's filters. Only Claude Code sessions are analysed; a Codex session never shows it. See [Insights](/ai-ledger/pages/insights/).
+- **/insights judgment**, tagged model-judged, when the session has an `/insights` analysis: outcome, a "dissatisfied" marker when satisfaction includes it, helpfulness and session type, goal and friction categories, a brief summary and the friction detail, and **Open in Judgments**, which opens the Judgments view with the page's filters. Only Claude Code sessions are analysed; a Codex session never shows it. See [Judgments](/ai-ledger/pages/insights/).
 - **Timeline** of the session.
 - **Error loops** in the session, each with "Open in Errors".
 - **Commits**, **Models** (requests, tokens, estimated cost) and **Tools** (calls, failed, p50), each folded.

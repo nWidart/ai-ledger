@@ -1,10 +1,12 @@
 ---
-title: Insights
-description: How Claude Code's /insights judged your sessions.
-spec: [insights-dashboard, session-insights]
+title: Judgments
+description: Activity's Judgments view. How Claude Code's /insights judged your sessions.
+spec: [insights-dashboard, session-insights, usage-dashboard]
 ---
 
-Insights answers: **did my sessions reach their goal, what got in the way, and how much of my work has `/insights` looked at?** It shows how Claude Code's `/insights` command judged your sessions, lists the judged sessions, and says how many sessions are not judged yet.
+Judgments is the second view of [Activity](/ai-ledger/pages/activity/). It answers: **did my sessions reach their goal, what got in the way, and how much of my work has `/insights` looked at?** It shows how Claude Code's `/insights` command judged your sessions, lists the judged sessions with what the store measured of each, and says how many sessions are not judged yet.
+
+To open it, select **Judgments** in the view switch at the top of Activity, or type `>judgments` in the [command palette](/ai-ledger/everywhere/command-palette/). Its address is `/usage?view=judgments`. It was the Insights page before: an old `/insights` link opens it, with its filters and its open session kept.
 
 `/insights` is a Claude Code command. A model reads each session's transcript and writes one judgment file, a **facet**, per session. The app reads those files at every ingest and keeps a copy in the store, so the judgments stay after Claude Code overwrites or deletes the files. The app never calls a model and never runs `claude`. The directory it reads is `~/.claude/usage-data` (set with `--usage-data`; see the [CLI reference](/ai-ledger/reference/cli/)).
 
@@ -20,38 +22,39 @@ import logLight from "../../../assets/shots/insights-log-light.png";
 
 ## Filters
 
-Insights has the shared project, time range, source and Include automated sessions filters. See [Filters](/ai-ledger/everywhere/filters/).
+The view has the shared project, time range and Include automated sessions filters, in the header beside the heading. It has no source filter. See [Filters](/ai-ledger/everywhere/filters/).
 
 | Control | What it does |
 | --- | --- |
-| Project, Time range | The shared filters. A session belongs to a range by its **start time**. [Activity](/ai-ledger/pages/activity/) counts a session with a request in the range, so the two totals can differ slightly. The sub line's How measured toggletip says so. |
-| Source | Source **Codex** shows no figures: "/insights analyses only Claude Code sessions." Codex writes no facets. With source All, Codex sessions never count in a facet figure. |
+| Overview, Judgments | The view switch above the heading. A switch keeps the project, the range, the source and Include automated, and leaves the other view's own filters behind. Back returns to the view before. |
+| Project, Time range | The shared filters. A session belongs to a range by its **start time**. Activity's Overview counts a session with a request in the range, so the two totals can differ slightly. The sub line's How measured toggletip says so. |
+| Source | Not shown. `/insights` judges Claude Code sessions only, and Codex writes no facets, so every figure here is of Claude Code sessions, whatever source the address holds. With **Codex** as the source, Activity shows Overview and the Judgments button cannot be picked; the text beside it says why. |
 | Include automated sessions | With it off, the facets of automated sessions count nowhere on the page. With it on, they count in every figure except the coverage figures, which never count automated sessions unless the project filter names their project. |
 | **Refresh** | The button in the navigation bar. It runs an ingest at once: the app reads new transcript lines and new `/insights` files into the store, and the page then shows them. |
 
-Besides the shared filters, the page has drill-down filters on the session list. They are kept in the page address, so a copied link keeps them, and they survive a change of project, range, source or Include automated sessions. Setting one adds a history entry, so Back undoes it. See [Analysed sessions](#analysed-sessions) for the filters and their address keys.
+Besides the shared filters, the view has drill-down filters on the session list. They are kept in the page address, so a copied link keeps them, and they survive a change of project, range or Include automated sessions. Setting one adds a history entry, so Back undoes it. A switch to Overview drops them. See [Analysed sessions](#analysed-sessions) for the filters and their address keys.
 
 ## Section index
 
-Links to Overview, Outcomes, Friction, Trend (when the trend shows), Satisfaction and Sessions, then to the drawers Goals, Session types, Session figures, Coverage and How this works. Choosing a drawer opens it and scrolls to it. It does not show for source Codex or an empty store.
+Links to Summary, Outcomes, Friction, Trend (when the trend shows), Satisfaction and Sessions, then to the drawers Goals, Session types, Session figures, Coverage and How this works. Choosing a drawer opens it and scrolls to it. It does not show for an empty store.
 
 ## Panels
 
 In page order, when the view has analysed sessions.
 
+### Heading and sub line
+
+**Shows** the view's answer. The heading counts only the fully achieved sessions, not the mostly achieved ones. It reads "**117 of 150** analysed sessions fully achieved their goal; **tooling** caused the most friction." It names the friction family reported most often when the family holds two or more labels, else the most counted label as written, or "no friction reported". The sub line names the view, as "all projects, last 30 days, Claude Code sessions", and says the figures are model-judged: a model's reading of each session, not a measurement. Its How measured toggletip says which figures come from facets, which are counted or measured, why the view has no source filter, and gives the counting rule above.
+
 ### Coverage note
 
-**Shows** how much of the view `/insights` has analysed: "**150 of 400 Claude Code sessions** in this view analysed (38%). Each /insights run in Claude Code analyses more. The newest analysis was written Sat, Nov 7, 2:00 PM. Coverage by project and run." When analysed sessions have no transcript in the store, the first sentence adds "; N more have facets but no transcript". When none is missing, it reads "Every Claude Code session in this view with a transcript is analysed." With source All and Codex sessions in the view, a second line says they are not analysed.
+**Shows** how much of the view `/insights` has analysed: "**150 of 400 Claude Code sessions** in this view analysed (38%). Each /insights run in Claude Code analyses more. The newest analysis was written Sat, Nov 7, 2:00 PM. Coverage by project and run." When analysed sessions have no transcript in the store, the first sentence adds "; N more have facets but no transcript". When none is missing, it reads "Every Claude Code session in this view with a transcript is analysed."
 
 **Controls** The last words link to the Coverage drawer.
 
-### Heading and sub line
-
-**Shows** the view's answer. The heading counts only the fully achieved sessions, not the mostly achieved ones. It reads "**117 of 150** analysed sessions fully achieved their goal; **tooling** caused the most friction." It names the friction family with the highest count when the family holds two or more labels, else the most counted label as written, or "no friction reported". The sub line names the view and says the figures are model-judged: a model's reading of each session, not a measurement. Its How measured toggletip says which figures come from facets and gives the counting rule above.
-
 ### Outcomes at a glance
 
-<ThemedImage dark={vitals} light={vitalsLight} alt="Insights' Outcomes at a glance row: four figures from the analysed sessions." />
+<ThemedImage dark={vitals} light={vitalsLight} alt="The Judgments view's Outcomes at a glance row: four figures from the analysed sessions." />
 
 **Shows** four figures. The number of analysed sessions is in the heading, so no figure repeats it:
 
@@ -64,7 +67,7 @@ In page order, when the view has analysed sessions.
 
 ### Outcomes
 
-<ThemedImage dark={outcomes} light={outcomesLight} alt="Insights' Outcomes panel (model-judged): the share of analysed sessions in each outcome, from fully achieved to not achieved." />
+<ThemedImage dark={outcomes} light={outcomesLight} alt="The Judgments view's Outcomes panel (model-judged): the share of analysed sessions in each outcome, from fully achieved to not achieved." />
 
 **Shows** (model-judged) whether each session met its goal, as a share of the analysed sessions: Fully achieved, Mostly achieved, Partially achieved, Not achieved and Unclear.
 
@@ -74,19 +77,34 @@ In page order, when the view has analysed sessions.
 
 ### Friction categories
 
-<ThemedImage dark={friction} light={frictionLight} alt="Insights' Friction categories panel (model-judged): what got in the way, by times reported." />
+<ThemedImage dark={friction} light={frictionLight} alt="The Friction categories panel (model-judged): what got in the way, by times reported." />
 
-**Shows** (model-judged) what got in the way, by times reported, with the sessions that reported it ("14", "9 sessions"). A session can carry several labels. Similar labels are grouped into **families** by keyword (the How measured toggletip says so), in a fixed order where the first matching rule wins; a label no rule matches is a family of its own.
+**Shows** (model-judged) what got in the way, weighed by the sessions that reported it. A session can carry several labels. Similar labels are grouped into **families** by keyword (the How measured toggletip says so), in a fixed order where the first matching rule wins; a label no rule matches is a family of its own.
 
-**Figures** A family of two or more labels shows an expander, "N labels", that lists the labels as `/insights` wrote them. A family's count is the sum of its labels' counts, and its sessions are the distinct sessions that carry any of them. Names read with spaces, not underscores. The list shows the first 12 rows and "Show all N friction families". With none, it reads "No friction reported in this view."
+**Figures** Each row shows three figures of the sessions that reported it, and how many they are: their estimated **cost**, their **active time**, and the **reports** (the times the friction was reported). The weight you pick orders the rows, sets the bar and is the row's main figure; the other two and the sessions follow it, as in "$42", "1.5h · 2 reports · 1 session". The cost and the active time are those of the whole sessions, not of the friction alone. Each session counts once in a row, over its whole length, whatever the range. A session with no transcript in the store adds no cost or time. A session with no price adds no cost, but its active time counts.
 
-**Controls** Selecting a family row filters the session list by the family (`frf`); selecting a label row, or a family of one label, filters by that label (`fr`). The chip names the filter: "Friction: buggy code" for a label, "Friction family: buggy code" for a family. Selecting the same row again, or the chip, clears it.
+A family of two or more labels shows an expander, "N labels", that lists the labels as `/insights` wrote them, weighed the same way. A family's reports are the sum of its labels' reports, and its sessions are the distinct sessions that carry any of them. Names read with spaces, not underscores. The list shows the first 12 rows and "Show all N friction families". With none, it reads "No friction reported in this view."
+
+**Controls**
+
+| Control | What it does |
+| --- | --- |
+| Cost, Active time, Reports | Picks the weight. **Cost** is the default. The choice lasts for the page visit and is not in the address. |
+
+Selecting a family row filters the session list by the family (`frf`); selecting a label row, or a family of one label, filters by that label (`fr`). The chip names the filter: "Friction: buggy code" for a label, "Friction family: buggy code" for a family. Selecting the same row again, or the chip, clears it.
 
 ### Outcome trend
 
-**Shows** (model-judged) for each week of session start, the share of analysed sessions fully or mostly achieved, as "Week of Nov 3", the share, and "4 of 5".
+**Shows** (model-judged) one bar per week of session start. Every bar is as tall as the plot: it is 100% of that week's analysed sessions, split by outcome. From the bottom: fully achieved, mostly achieved, partially achieved, not achieved, then no clear outcome. A key names the parts.
 
-**Figures** Weeks with no session are left out, and at most the newest 26 weeks show. The panel shows only when the analysed sessions span two or more weeks. A week with few sessions swings.
+**Figures** The figure over a bar is the week's analysed sessions. Read it with the bar: a week of 4 sessions is as tall as a week of 40. A week with fewer than 5 sessions is drawn at half width, and the key then shows "Under 5 sessions". Every outcome with a session shows, however thin: 1 session in 150 still draws a line. On a narrow chart the figures show over every few bars; the data table has each week's. Weeks start on Monday. Weeks with no session are left out, and at most the newest 26 weeks show. The panel shows only when the analysed sessions span two or more weeks.
+
+**Controls**
+
+| Control | What it does |
+| --- | --- |
+| Hover, or Left and Right on the focused chart | Reads one week: its analysed sessions, and each outcome's count and share, as "7 fully achieved (58%)". Home and End read the first and last week. Esc closes the readout. A key with Alt, Ctrl, Cmd or Shift is left to the browser. |
+| **Show data table** | Lists every week with its sessions and each outcome's count and share. |
 
 ### Satisfaction and helpfulness
 
@@ -97,11 +115,16 @@ In page order, when the view has analysed sessions.
 
 ### Analysed sessions
 
-<ThemedImage dark={log} light={logLight} alt="Insights' Analysed sessions log (model-judged): session cards with their outcome, session type and friction labels, under the sort and outcome controls." />
+<ThemedImage dark={log} light={logLight} alt="The Judgments view's Analysed sessions log (model-judged): session cards with their outcome, session type and friction labels, under the sort and outcome controls." />
 
 **Shows** (model-judged) the view's analysed sessions as cards. A line above the cards says how many it lists, in what order, and that the summary and friction detail are the model's words.
 
-**Figures** Each card shows: the session title (a link that opens the session's sheet over the page; a session with no transcript in the store shows "no transcript" and no link), the outcome badge, **dissatisfied** when the user pushed back, the goal chips and friction chips, the start time and the project, then the model's brief summary. A closed **Friction detail** control holds the model's friction text. A last line counted from the transcript reads "+120 −30 lines · 4 files · 35m · 1 push", leaving out any part that is missing or 0.
+**Figures** Each card shows: the session title (a link that opens the session's sheet over the page; a session with no transcript in the store shows "no transcript" and no link), the outcome badge, **dissatisfied** when the user pushed back, the goal chips and friction chips, the start time and the project, then the model's brief summary. A closed **Friction detail** control holds the model's friction text.
+
+Two quiet lines follow. Both are measured, not judged:
+
+- What the store measured of the session, over its whole length: "$4.20 · peak context 62% · 1 tool error". The cost is the estimate at API list prices, the peak context is a share of the model's window, and a tool error is a failed tool call. A peak at 80% or more and a failed call are marked. A figure the store does not know (no price, no known window) is left out, and a session with no transcript in the store has no such line.
+- What `/insights` counted from the transcript: "+120 −30 lines · 4 files · 35m · 1 push", leaving out any part that is missing or 0.
 
 The list shows the first 25 sessions and "Show all N sessions". The payload holds the newest 200 analysed sessions of the view; when it is cut and a filter is active, the line says the filter covers only those 200, so a ledger count can exceed the sessions listed.
 
@@ -145,7 +168,7 @@ Closed on every page load. One opens at a time: opening a drawer closes the open
 
 **Shows** what `/insights` counted from each transcript, for sessions with a session-meta row, which can be more than were judged.
 
-**Figures** Lines added, Lines removed, Files modified, Git pushes, Median session duration and Median response time (the median of the session medians), then **Languages** with the summed count and the sessions that named each. Shows in a view with no analysed session. Not shown for source Codex.
+**Figures** Lines added, Lines removed, Files modified, Git pushes, Median session duration and Median response time (the median of the session medians), then **Languages** with the summed count and the sessions that named each. Shows in a view with no analysed session.
 
 ### Coverage
 
@@ -158,15 +181,15 @@ Closed on every page load. One opens at a time: opening a drawer closes the open
 
 ### How this works
 
-**Shows** what `/insights` is, the directory the app reads, when the last run wrote, how many sessions the last runs wrote ("The last 3 runs each wrote between 40 and 80 sessions (median 60)", or "The one run so far wrote 12 sessions"), and "For more coverage, run /insights again in Claude Code, then Refresh." Shows whenever the store has facets and the source is not Codex.
+**Shows** what `/insights` is, the directory the app reads, when the last run wrote, how many sessions the last runs wrote ("The last 3 runs each wrote between 40 and 80 sessions (median 60)", or "The one run so far wrote 12 sessions"), and "For more coverage, run /insights again in Claude Code, then Refresh." Shows whenever the store has facets.
 
 ## Sheets
 
-A session card's title opens that session's sheet over Insights. The filters stay as they are, and Close or Back returns to the list. The URL names the session (`session=…`), and middle-click opens it in a new tab. The sheet is the one on [Activity](/ai-ledger/pages/activity/#session-sheet). Its **/insights judgment** section (model-judged) repeats the outcome, the dissatisfied mark, the helpfulness and session type ratings, the goal and friction chips, the summary and the friction text, with an **Open in Insights** link. Project rows in Coverage by project work with the [context menu](/ai-ledger/everywhere/context-menu/).
+A session card's title opens that session's sheet over the view. The filters stay as they are, and Close or Back returns to the list. The URL names the session (`session=…`), and middle-click opens it in a new tab. The sheet is the one on [Activity](/ai-ledger/pages/activity/#session-sheet). Its **/insights judgment** section (model-judged) repeats the outcome, the dissatisfied mark, the helpfulness and session type ratings, the goal and friction chips, the summary and the friction text, with an **Open in Judgments** link. Project rows in Coverage by project work with the [context menu](/ai-ledger/everywhere/context-menu/).
 
 ## Model-judged and measured
 
-The page header carries the **model-judged** tag once, beside the page name; the panels and drawers do not repeat it. The tag says the figures are a model's opinion of a transcript, not a measurement. The sections marked (model-judged) on this page come from facets. Figures counted from transcripts (Session figures, Coverage, the measured line on a session card) are measured, and the sub line's How measured toggletip names them.
+The view carries the **model-judged** tag once, beside the view switch; the panels and drawers do not repeat it. The tag says the figures are a model's opinion of a transcript, not a measurement. The sections marked (model-judged) on this page come from facets. Session figures, Coverage and the two quiet lines on a session card are measured or counted, and the sub line's How measured toggletip names them. The cost and active time beside a friction are measured too, for the sessions a model said had that friction.
 
 ## Page states
 
@@ -177,7 +200,7 @@ The text at the top changes with what the store holds.
 | No facet in the store | "No /insights data found." with the directory it reads and "Run /insights in Claude Code, then Refresh." |
 | No facet, but session figures exist | "No /insights judgments found." The session figures are counted from transcripts. |
 | Facets in the store, none in this view | "No analysed sessions in this view." |
-| Source Codex | "/insights analyses only Claude Code sessions." No figures. |
+| Source Codex | Activity shows Overview. The Judgments button cannot be picked, and the text beside it says "Codex writes no facets: /insights judges Claude Code sessions only." |
 | Facets in the view | The panels above. |
 
 ## What each figure means
@@ -199,4 +222,4 @@ See the [Metric glossary](/ai-ledger/reference/glossary/) for every figure in th
 ## Playbooks that start here
 
 - [Get sessions to finish](/ai-ledger/improve/finish-sessions/): raise the share of sessions that reach their goal, from the outcomes and friction.
-- [Weekly 15-minute review](/ai-ledger/improve/weekly-review/): where Insights sits in a routine across the pages.
+- [Weekly 15-minute review](/ai-ledger/improve/weekly-review/): where the Judgments view sits in a routine across the pages.

@@ -1,5 +1,5 @@
 // Text for the Limits page: names, captions and pace, from the /api/limits payload.
-import type { LimitHistoryRow, LimitPoint, LimitWindow, LimitsAlert, LimitsPayload } from "../../api";
+import type { LimitHistoryRow, LimitPoint, LimitWindow, LimitsAlert, LimitsPayload, LimitsPeak } from "../../api";
 import { num, plural, usd } from "../../format";
 import { formatSearch, RANGES, sourceOf, type Range } from "../../url";
 
@@ -7,7 +7,12 @@ import { formatSearch, RANGES, sourceOf, type Range } from "../../url";
 export const whenDay = (ts: string | null | undefined): string =>
   ts ? new Date(ts).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "–";
 
-/** The nav's Limits alert as one sentence, which is the tab's accessible name after "Limits: " and the dot's hover text: "Claude Code
+/** The nav's Limits pill in words, for the tab's accessible name and its hover text: "Highest open window: Codex weekly at 72%",
+ *  or "at an estimated 72%" when the percent is not a reading. */
+export const peakText = (p: Pick<LimitsPeak, "provider_label" | "label" | "current" | "measured">): string =>
+  `Highest open window: ${windowName(p)} at ${p.measured ? "" : "an estimated "}${num(p.current)}%`;
+
+/** The nav's Limits alert as one sentence, which is the tab's accessible name after "Limits alert: " and the pill's hover text: "Claude Code
  *  weekly is at its limit until Sat, Nov 7, 2:00 PM", "… is forecast to run out …" or "… is at 92%", and " (and 2 more)" when other
  *  windows are in alert too. A figure that is an estimate, not a reading, says so ("is estimated to be at its limit", "is at an
  *  estimated 92%"); a forecast is one already. */

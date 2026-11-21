@@ -296,6 +296,10 @@ export interface SessionFigures {
 /** Similar goal or friction labels grouped by keyword: n sums the members' counts, sessions counts the distinct sessions with any
  *  member. Members most counted first. A label no rule matches is a family of its own. */
 export interface FacetFamily { family: string; n: number; sessions: number; members: FacetTally[] }
+/** What the sessions that reported a friction label or family weigh: their cost in dollars and their active time in seconds,
+ *  each session once and whole, whatever the view's range. A session with no transcript in the store, or no price, adds nothing. */
+export interface FrictionWeight { cost: number; active_s: number }
+export interface FrictionFamily extends FacetFamily, FrictionWeight { members: (FacetTally & FrictionWeight)[] }
 export interface InsightSession {
   session_id: string; project: string; start: Ts | null; outcome: string | null; helpfulness: string | null; session_type: string | null;
   brief_summary: string | null; friction_detail: string | null;
@@ -307,7 +311,12 @@ export interface InsightSession {
   in_store: boolean;
   /** Counted by /insights; null when the session has no session-meta row. */
   meta: SessionFigures | null;
+  /** Measured from the stored transcript over the whole session, as the Sessions table measures them: its cost (null when no
+   *  request is priced), its failed tool calls, and its peak context as a share of the model's window (null without a known
+   *  window). All null when the session has no transcript in the store. */
+  cost: number | null; errors: number | null; context_share: number | null;
 }
+export interface TrendWeek { week: string; n: number; achieved: number; fully: number; mostly: number; partially: number; not_achieved: number }
 export interface InsightsPayload {
   coverage: {
     /** Claude Code sessions in the view, those with a facet and those without; Codex sessions are never analysed. */
@@ -333,11 +342,12 @@ export interface InsightsPayload {
   outcomes: FacetCount[]; helpfulness: FacetCount[]; session_types: FacetCount[];
   /** Summed counts and the sessions that reported each, most first. */
   satisfaction: FacetTally[]; friction: FacetTally[]; goals: FacetTally[];
-  /** friction and goals grouped into families, most counted first. */
-  friction_families: FacetFamily[]; goal_families: FacetFamily[];
+  /** friction and goals grouped into families, most counted first. A friction family and its labels carry their weight. */
+  friction_families: FrictionFamily[]; goal_families: FacetFamily[];
   /** Per week of session start (the Monday, YYYY-MM-DD), oldest first, at most 26 weeks with a session: the view's analysed
-   *  sessions and those fully or mostly achieved. */
-  trend: { week: string; n: number; achieved: number }[];
+   *  sessions (n), those fully or mostly achieved, and those of each outcome. n less the four outcomes is the sessions with no
+   *  clear outcome, or with one /insights added later. */
+  trend: TrendWeek[];
   /** Newest first, at most 200; truncated when there were more. */
   sessions: InsightSession[]; truncated: boolean;
   /** The view's session figures, counted by /insights from each transcript (not model-judged), for Claude Code sessions with a
@@ -427,6 +437,8 @@ export interface LimitsAlert {
   /** Whether the window's percent is a reading (false: an estimate, or a reading too old to measure now). */
   measured: boolean; count: number;
 }
+/** The fullest open window (limits.peak_of). measured: as LimitsAlert's. */
+export interface LimitsPeak { provider: string; provider_label: string; label: string; current: number; measured: boolean }
 export interface Status {
   ingesting: boolean; last_ingest: string | null; last_stats: IngestStats | null; error: string | null;
   /** The last ingest that stored new lines or usage data; null until one does. */
@@ -437,6 +449,12 @@ export interface Status {
   /** The Limits tab's alert, worked out once per ingest cycle; null when no window is in alert or before the first cycle ends.
    *  Absent from an older app. */
   limits_alert?: LimitsAlert | null;
+  /** The fullest open window, for the Limits tab's pill, worked out with the alert; null when no open window has a percent.
+   *  Absent from an older app. */
+  limits_peak?: LimitsPeak | null;
+  /** How many active sessions wait on the user (a likely approval wait, or your turn), over every project and source,
+   *  automated sessions left out: the Live tab's badge. null when the count failed; absent from an older app. */
+  live_waiting?: number | null;
   /** Plan-limit pollers by provider; never the credential. */
   limits?: Record<string, { last_ok: string | null; last_attempt: string | null; failures: number; error: string | null; stale: boolean }>;
   /** The user automated projects file and why it was ignored, for the toggle's hint and the app's warning. Absent from an older app. */

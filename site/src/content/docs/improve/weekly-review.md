@@ -19,7 +19,7 @@ Skip the week when Activity's heading reads "No agent activity in the last 7 day
 
 ## Diagnose
 
-Make one pass over seven pages. At each stop, read the figures named, compare them with the "off" column, and write down what is off. Fix nothing yet.
+Make one pass over seven stops: the six pages in the navigation, and Activity's Judgments view. At each stop, read the figures named, compare them with the "off" column, and write down what is off. Fix nothing yet.
 
 Start on Activity. Set the range to **7d**, the project to **All projects**, the source to **All**, and leave **Include automated sessions** off. The navigation carries these filters to each page you open next. To open the review in one step, bookmark this address:
 
@@ -34,7 +34,7 @@ http://127.0.0.1:8765/usage?range=7
 | [3. Context](#3-context-2-minutes) | 2 | **Tips** | [Keep context lean](/ai-ledger/improve/lean-context/), [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 | [4. Errors](#4-errors-3-minutes) | 3 | **Change**, **Where to start** | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
 | [5. Limits](#5-limits-2-minutes) | 2 | The heading, the card headers, **Past windows** | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
-| [6. Insights](#6-insights-2-minutes) | 2 | **Outcomes at a glance**, **Friction categories** | [Get sessions to finish](/ai-ledger/improve/finish-sessions/) |
+| [6. Judgments](#6-judgments-2-minutes) | 2 | **Outcomes at a glance**, **Friction categories** | [Get sessions to finish](/ai-ledger/improve/finish-sessions/) |
 | [7. Live](#7-live-1-minute) | 1 | The rail's **approval?** and **your turn** groups | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
 
 ### 1. Activity (3 minutes)
@@ -102,21 +102,21 @@ Then read two more lines:
 - A suggestion such as "Send work to Codex: about 70% of its weekly limit would go unused" (an example) names the provider with the most headroom. To act on it, open [Compare Claude Code and Codex](/ai-ledger/improve/compare-sources/).
 - **Past windows** gives, under each limit's name, the average share still unused when its windows reset ("avg 60% unused"). Rule of thumb: when a weekly limit reads 50% unused or more in every review of a month, your plan is larger than your use. Open [Spend less for the same output](/ai-ledger/improve/spend-less/) for the plan fit.
 
-### 6. Insights (2 minutes)
+### 6. Judgments (2 minutes)
 
-Set the range to **30d** for this stop. Insights counts a session by its start time, and **Outcome trend** needs sessions from two or more weeks.
+Select the **Activity** tab, then **Judgments** in the view switch above the heading. Set the range to **30d** for this stop. The view counts a session by its start time, and **Outcome trend** needs sessions from two or more weeks.
 
 First read the coverage note at the top, such as "150 of 400 Claude Code sessions in this view analysed (38%)" (an example). The figures cover only the analysed sessions. If the last week is not analysed, run the `/insights` command in Claude Code, then select **Refresh** in the app's navigation bar, and read the stop again.
 
 Every figure here is **model-judged**: a model's reading of the transcript, not a measurement. The app sets no threshold on this page, so these are rules of thumb. The stop is off when:
 
 - **Not achieved** or **Dissatisfied**, in **Outcomes at a glance**, is higher than in your last note.
-- The newest week in **Outcome trend** has a lower share than the week before. A week with few sessions swings: read the "4 of 5" count beside the share.
-- One family leads **Friction categories** two reviews in a row.
+- The newest week's bar in **Outcome trend** has a smaller fully and mostly achieved part than the week before. A week with few sessions swings: read the figure over the bar, the week's sessions. A half-width bar has fewer than 5.
+- One family leads **Friction categories** two reviews in a row. Read it by **Cost** to see which friction the costliest sessions had, and by **Reports** to see which comes most often.
 
 For any of these, open [Get sessions to finish](/ai-ledger/improve/finish-sessions/).
 
-Insights shows no figures for Codex sessions. Set the range back to **7d** when you leave.
+The view shows Claude Code sessions only, and with Codex as the source Activity does not offer it. Set the range back to **7d** when you leave.
 
 ### 7. Live (1 minute)
 
@@ -152,7 +152,7 @@ Not every page shows last week's figure next to this week's, so keep your own. P
 - Context: tips showing: _
 - Errors: error rate: _% · change: _ · open fixes: _ · fix verdicts: _
 - Limits: heading: _ · chips at limit or runs out: _
-- Insights (30d): analysed: _ of _ · not achieved: _ · dissatisfied: _ · top friction: _
+- Judgments (30d): analysed: _ of _ · not achieved: _ · dissatisfied: _ · top friction: _
 - Live: waiting for you: _
 - Stops that are off: _
 - Playbook picked: _
@@ -180,7 +180,7 @@ If the figures did not move after 28 days, you picked a new playbook each week w
 ## Related
 
 - [15-minute first tour](/ai-ledger/start/first-tour/): read each page once before you make the review a routine.
-- [Activity](/ai-ledger/pages/activity/), [Cost](/ai-ledger/pages/cost/), [Context](/ai-ledger/pages/context/), [Errors](/ai-ledger/pages/errors/), [Limits](/ai-ledger/pages/limits/), [Insights](/ai-ledger/pages/insights/) and [Live](/ai-ledger/pages/live/): what each stop shows.
+- [Activity](/ai-ledger/pages/activity/), [Cost](/ai-ledger/pages/cost/), [Context](/ai-ledger/pages/context/), [Errors](/ai-ledger/pages/errors/), [Limits](/ai-ledger/pages/limits/), [Judgments](/ai-ledger/pages/insights/) and [Live](/ai-ledger/pages/live/): what each stop shows.
 - [Filters](/ai-ledger/everywhere/filters/): how the range, project and source carry from page to page.
 - [Command palette](/ai-ledger/everywhere/command-palette/): `#7d` and `#30d` switch the range from the keyboard.
 - [Metric glossary](/ai-ledger/reference/glossary/): every figure named here, and the playbook that acts on it.

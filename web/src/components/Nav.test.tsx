@@ -3,7 +3,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { hasHue, setOrder } from "../colors";
-import type { LimitsAlert } from "../api";
+import type { LimitsAlert, LimitsPeak } from "../api";
 import { alertText, whenDay } from "../pages/limits/limits";
 import { Nav } from "./Nav";
 import { queries } from "../queries";
@@ -16,7 +16,6 @@ import sessions from "../__fixtures__/sessions";
 import session from "../__fixtures__/session";
 import limits from "../__fixtures__/limits";
 import context from "../__fixtures__/context";
-import insights from "../__fixtures__/insights";
 import live from "../__fixtures__/live";
 import liveSession from "../__fixtures__/live-session";
 
@@ -74,18 +73,34 @@ describe("Nav", () => {
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/limits?range=30&source=codex")).toBe(true));
   });
 
-  it("opens Insights with the project, range and source from Cost", async () => {
-    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/insights") ? insights : usage)));
-    history.replaceState(null, "", "/cost?project=foo&range=30&source=codex");
-    renderRouter();
-    await screen.findByRole("link", { name: "Cost" });
-    // Within the nav: Cost's data now arrives with its page, which has a link to Insights of its own.
-    await userEvent.click(within(screen.getByRole("navigation", { name: "Dashboards" })).getByRole("link", { name: "Insights" }));
-    expect(location.pathname).toBe("/insights");
-    expect(location.search).toBe("?project=foo&range=30&source=codex");
-    expect(document.title).toBe("Insights · AI Ledger");
-    // The page's chunk loads on first show, so its fetch follows the click a tick later.
-    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/insights?project=foo&range=30&source=codex")).toBe(true));
+  it("lists the tabs in two named groups, Now then Review, with no Insights tab and the filters on every link", () => {
+    vi.stubGlobal("fetch", vi.fn(() => json(status)));
+    history.replaceState(null, "", "/errors?project=foo&range=14&source=claude&auto=1&cat=x");
+    renderApp(<Nav />);
+    const tabs = document.querySelector<HTMLElement>("nav.appnav .appnav-tabs")!;
+    const groups = within(tabs).getAllByRole("group");
+    expect(groups.map(g => g.getAttribute("aria-label"))).toEqual(["Now", "Review"]);
+    expect(groups.map(g => within(g).getAllByRole("link").map(a => a.textContent))).toEqual([["Live", "Limits"], ["Activity", "Cost", "Context", "Errors"]]);
+    // Each group shows its name; the same word names the group to assistive technology, so the visible one is hidden from it.
+    for (const g of groups) {
+      const shown = g.querySelector<HTMLElement>(".appnav-glabel")!;
+      expect(shown.textContent).toBe(g.getAttribute("aria-label"));
+      expect(shown.getAttribute("aria-hidden")).toBe("true");
+      expect(g.firstElementChild).toBe(shown);
+    }
+    expect(within(tabs).queryByRole("link", { name: "Insights" })).toBeNull();
+    expect(within(tabs).getAllByRole("link").map(a => a.getAttribute("href"))).toEqual(["/live", "/limits", "/usage", "/cost", "/context", "/errors"]
+      .map(p => p + "?project=foo&range=14&source=claude&auto=1"));
+    expect(within(tabs).getAllByRole("link").filter(a => a.hasAttribute("aria-current")).map(a => a.textContent)).toEqual(["Errors"]);
+  });
+
+  it("gives every tab the same active style: Errors has no tint of its own", () => {
+    const css = readFileSync("src/components/Nav.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, ""); // vitest runs from web/
+    const current = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, sel]) => sel!.includes("[aria-current=page]"));
+    expect(current.map(([, sel]) => sel!.trim())).toEqual([":is(.appnav, .appnav-chooser-pop) a[aria-current=page]"]);
+    expect(current[0]![2]).toMatch(/background:\s*var\(--accent-soft\)/);
+    expect(css).not.toMatch(/\/errors/);
+    expect(css).not.toMatch(/appnav-(badge|dot)\b/); // the alert dot is gone: the pill replaces it
   });
 
   it("opens Context from Cost with the project and range kept, after Cost in the nav", async () => {
@@ -437,42 +452,167 @@ describe("Nav", () => {
     expect(ingestText()).toMatch(/^Last ingest/);
   });
 
-  describe("Limits badge", () => {
-    const alert = (over: Partial<LimitsAlert>): LimitsAlert => ({ kind: "at_limit", provider: "codex", provider_label: "Codex", label: "weekly", current: 100,
-      at: "2026-11-14T12:00:00.000Z", resets_at: "2026-11-14T12:00:00.000Z", measured: true, count: 1, ...over });
-    const badge = () => document.querySelector<HTMLElement>(".appnav-badge");
-    const tab = (name: string | RegExp) => screen.getByRole("link", { name });
+  // The Live tab's badge: the sessions waiting on the user, from the status. None at 0.
+  describe("Live badge", () => {
+    const badge = () => document.querySelector<HTMLElement>(".appnav-tabs .appnav-count");
+    const live = () => within(document.querySelector<HTMLElement>(".appnav-tabs")!).getByRole("link", { name: /^Live/ });
 
-    it.each([
-      ["at_limit", { kind: "at_limit" }, "critical", `Codex weekly is at its limit until ${whenDay("2026-11-14T12:00:00.000Z")}`],
-      ["runs_out", { kind: "runs_out", current: 60, at: "2026-11-13T08:00:00.000Z" }, "critical", `Codex weekly is forecast to run out ${whenDay("2026-11-13T08:00:00.000Z")}`],
-      ["high", { kind: "high", current: 92 }, "warning", "Codex weekly is at 92%"],
-    ] as const)("marks the Limits tab for %s: a dot in the right tone, the sentence in its name and title", async (_kind, over, tone, sentence) => {
-      vi.stubGlobal("fetch", vi.fn(() => json({ ...status, limits_alert: alert(over) })));
-      history.replaceState(null, "", "/usage");
+    it("counts the sessions waiting on the user, with the count in words in the tab's name", async () => {
+      vi.stubGlobal("fetch", vi.fn(() => json({ ...status, live_waiting: 2 })));
+      history.replaceState(null, "", "/cost");
       renderApp(<Nav />);
-      const link = await screen.findByRole("link", { name: `Limits alert: ${sentence}` });
-      expect(sentence).toBe(alertText(alert(over)));
-      // Exposed once: the sentence is in the link's name (a hidden span after the label), the link has no title to read again as a
-      // description, and a plain span around the visible label and the dot carries the hover text, so it covers the whole tab.
+      const link = await screen.findByRole("link", { name: "Live 2 sessions waiting for you" });
+      expect(link).toBe(live());
+      expect(badge()!.textContent).toBe("2");
+      expect(badge()!.getAttribute("aria-hidden")).toBe("true"); // the number alone says nothing: the words are its text alternative
+      expect(link.querySelector(".sr")!.textContent).toBe("2 sessions waiting for you");
+      // The hover text is on a plain span around the label and the badge, not on the link: the words are exposed once.
       expect(link.hasAttribute("title")).toBe(false);
       expect(link.hasAttribute("aria-label")).toBe(false);
-      expect(link.textContent).toBe(`Limits alert: ${sentence}`); // one space, a text node of the link before the hidden span
+      const wrap = link.querySelector<HTMLElement>("span[title]")!;
+      expect(wrap.getAttribute("title")).toBe("2 sessions waiting for you: for an approval, or for your next prompt");
+      expect(wrap.textContent).toBe("Live2");
+      expect(wrap.contains(badge())).toBe(true);
+      expect(link.textContent).toBe("Live2 2 sessions waiting for you");
+    });
+
+    it("says one session in the singular, and caps the badge at 9+ while the name keeps the count", async () => {
+      const f = vi.fn(() => json({ ...status, live_waiting: 1 }));
+      vi.stubGlobal("fetch", f);
+      const { client } = renderApp(<Nav />);
+      await screen.findByRole("link", { name: "Live 1 session waiting for you" });
+      expect(badge()!.textContent).toBe("1");
+      f.mockImplementation(() => json({ ...status, live_waiting: 12 }));
+      await poll(client);
+      expect(screen.getByRole("link", { name: "Live 12 sessions waiting for you" })).toBeTruthy();
+      expect(badge()!.textContent).toBe("9+");
+    });
+
+    it("shows none at 0, for a count that failed, and for an older app that sends none", async () => {
+      const f = vi.fn(() => json({ ...status, live_waiting: 3 }));
+      vi.stubGlobal("fetch", f);
+      const { client } = renderApp(<Nav />);
+      await screen.findByRole("link", { name: "Live 3 sessions waiting for you" });
+      for (const body of [{ ...status, live_waiting: 0 }, { ...status, live_waiting: null }, status]) {
+        f.mockImplementation(() => json({ ...status, live_waiting: 3 }));
+        await poll(client);
+        expect(badge()).not.toBeNull();
+        f.mockImplementation(() => json(body));
+        await poll(client);
+        expect(badge()).toBeNull();
+        expect(live().textContent).toBe("Live");
+        expect(live().querySelector("[title]")).toBeNull();
+      }
+    });
+
+    it("keeps the badge when the app does not answer, and shows on Live itself", async () => {
+      const f = vi.fn((url: string) => json(url.startsWith("/api/status") ? { ...status, live_waiting: 2 } : { now: "2026-11-10T10:00:00.000Z", sessions: [], newest: null, automated_file: { path: "", error: null, projects: [] } }));
+      vi.stubGlobal("fetch", f);
+      history.replaceState(null, "", "/live");
+      const { client } = renderRouter();
+      const link = await screen.findByRole("link", { name: "Live 2 sessions waiting for you" });
+      expect(link.getAttribute("aria-current")).toBe("page");
+      f.mockImplementation(() => Promise.reject(new Error("down")));
+      await poll(client);
+      expect(badge()!.textContent).toBe("2");
+    });
+  });
+
+  // The Limits tab's pill: the fullest open window's percent, toned by the alert. It replaces the alert dot.
+  describe("Limits pill", () => {
+    const alert = (over: Partial<LimitsAlert>): LimitsAlert => ({ kind: "at_limit", provider: "codex", provider_label: "Codex", label: "weekly", current: 100,
+      at: "2026-11-14T12:00:00.000Z", resets_at: "2026-11-14T12:00:00.000Z", measured: true, count: 1, ...over });
+    const peak = (over: Partial<LimitsPeak> = {}): LimitsPeak => ({ provider: "codex", provider_label: "Codex", label: "weekly", current: 42, measured: true, ...over });
+    const badge = () => document.querySelector<HTMLElement>(".appnav-tabs .appnav-pill");
+    const tab = (name: string | RegExp) => screen.getByRole("link", { name });
+
+    it("shows the fullest open window's percent with no alert: quiet, and said in the tab's name", async () => {
+      vi.stubGlobal("fetch", vi.fn(() => json({ ...status, limits_alert: null, limits_peak: peak() })));
+      history.replaceState(null, "", "/usage");
+      renderApp(<Nav />);
+      const link = await screen.findByRole("link", { name: "Limits Highest open window: Codex weekly at 42%" });
+      expect(badge()!.textContent).toBe("42%");
+      expect(badge()!.hasAttribute("data-tone")).toBe(false); // neither near nor at a limit
+      expect(badge()!.getAttribute("aria-hidden")).toBe("true");
+      expect(link.querySelector(".sr")!.textContent).toBe("Highest open window: Codex weekly at 42%");
+      expect(link.hasAttribute("title")).toBe(false);
+      const wrap = link.querySelector<HTMLElement>("span[title]")!;
+      expect(wrap.getAttribute("title")).toBe("Highest open window: Codex weekly at 42%");
+      expect(wrap.textContent).toBe("Limits42%");
+      // The chooser's button carries it in alert only; until then it keeps the pill's room, empty and hidden.
+      const slot = document.querySelector<HTMLElement>(".appnav-chooser .appnav-pill")!;
+      expect([slot.hasAttribute("data-slot"), slot.hasAttribute("data-tone"), slot.textContent]).toEqual([true, false, ""]);
+    });
+
+    it("marks a percent that is not a reading, on the pill and in its words", async () => {
+      vi.stubGlobal("fetch", vi.fn(() => json({ ...status, limits_peak: peak({ current: 67.4, measured: false }) })));
+      renderApp(<Nav />);
+      await screen.findByRole("link", { name: "Limits Highest open window: Codex weekly at an estimated 67%" });
+      expect(badge()!.textContent).toBe("≈67%");
+    });
+
+    it("shows no pill without an open window's percent, or from an older app", async () => {
+      const f = vi.fn(() => json({ ...status, limits_peak: peak() }));
+      vi.stubGlobal("fetch", f);
+      const { client } = renderApp(<Nav />);
+      await screen.findByRole("link", { name: /^Limits Highest open window/ });
+      for (const body of [{ ...status, limits_peak: null }, status]) {
+        f.mockImplementation(() => json(body));
+        await poll(client);
+        expect(badge()).toBeNull();
+        expect(tab("Limits").textContent).toBe("Limits");
+      }
+    });
+
+    it("keeps the fullest window's percent on the pill when the alert is for another window, and says both", async () => {
+      const a = alert({ kind: "runs_out", label: "5-hour", current: 40, at: "2026-11-13T08:00:00.000Z" });
+      vi.stubGlobal("fetch", vi.fn(() => json({ ...status, limits_alert: a, limits_peak: peak({ current: 70 }) })));
+      renderApp(<Nav />);
+      const sentence = `Codex 5-hour is forecast to run out ${whenDay("2026-11-13T08:00:00.000Z")}`;
+      const link = await screen.findByRole("link", { name: `Limits alert: ${sentence}. Highest open window: Codex weekly at 70%` });
+      expect([badge()!.textContent, badge()!.dataset.tone]).toEqual(["70%", "critical"]);
+      expect(link.querySelector("span[title]")!.getAttribute("title")).toBe(sentence);
+    });
+
+    it.each([
+      ["at_limit", { kind: "at_limit" }, "critical", `Codex weekly is at its limit until ${whenDay("2026-11-14T12:00:00.000Z")}`, "100%", ""],
+      ["runs_out", { kind: "runs_out", current: 60, at: "2026-11-13T08:00:00.000Z" }, "critical", `Codex weekly is forecast to run out ${whenDay("2026-11-13T08:00:00.000Z")}`, "60%",
+        ". Highest open window: Codex weekly at 60%"], // a forecast's sentence states no percent: the pill's follows it
+      ["high", { kind: "high", current: 92 }, "warning", "Codex weekly is at 92%", "92%", ""],
+    ] as const)("marks the Limits tab for %s: the pill in the right tone, the sentence in its name and title", async (_kind, over, tone, sentence, pill, more) => {
+      vi.stubGlobal("fetch", vi.fn(() => json({ ...status, limits_alert: alert(over), limits_peak: peak({ current: alert(over).current! }) })));
+      history.replaceState(null, "", "/usage");
+      renderApp(<Nav />);
+      const link = await screen.findByRole("link", { name: `Limits alert: ${sentence}${more}` });
+      expect(sentence).toBe(alertText(alert(over)));
+      // Exposed once: the sentence is in the link's name (a hidden span after the label), the link has no title to read again as a
+      // description, and a plain span around the visible label and the pill carries the hover text, so it covers the whole tab.
+      expect(link.hasAttribute("title")).toBe(false);
+      expect(link.hasAttribute("aria-label")).toBe(false);
+      expect(link.textContent).toBe(`Limits${pill} alert: ${sentence}${more}`); // one space, a text node of the link before the hidden span
       expect(link.textContent!.split(sentence).length - 1).toBe(1);
       const wrap = link.querySelector<HTMLElement>("span[title]")!;
       expect(wrap.getAttribute("title")).toBe(sentence);
       expect(link.querySelectorAll("[title]").length).toBe(1);
-      expect(wrap.textContent).toBe("Limits");
+      expect(wrap.textContent).toBe(`Limits${pill}`);
       expect(wrap.contains(badge())).toBe(true);
       expect(badge()?.hasAttribute("title")).toBe(false);
       expect(wrap.querySelector(".sr")).toBeNull();
-      expect(link.querySelector(".sr")?.textContent).toBe(`alert: ${sentence}`);
+      expect(link.querySelector(".sr")?.textContent).toBe(`alert: ${sentence}${more}`);
       expect(badge()?.dataset.tone).toBe(tone);
       expect(link.contains(badge())).toBe(true);
-      expect(badge()?.textContent).toBe(""); // a dot, not a number
+      expect(badge()?.textContent).toBe(pill); // a percent, not a dot
       expect(badge()?.getAttribute("aria-hidden")).toBe("true");
-      expect(document.querySelectorAll(".appnav-badge").length).toBe(1);
+      expect(document.querySelectorAll(".appnav-tabs .appnav-pill").length).toBe(1);
+      expect(document.querySelector(".appnav-badge, .appnav-dot")).toBeNull();
       expect(tab("Activity").textContent).toBe("Activity");
+    });
+
+    it("shows an alert's own percent when the app sends no fullest window", async () => {
+      vi.stubGlobal("fetch", vi.fn(() => json({ ...status, limits_alert: alert({ kind: "high", current: 92 }) })));
+      renderApp(<Nav />);
+      await screen.findByRole("link", { name: "Limits alert: Codex weekly is at 92%" });
+      expect([badge()!.textContent, badge()!.dataset.tone]).toEqual(["92%", "warning"]);
     });
 
     it("marks an estimate in the name and the hover text", async () => {
@@ -586,8 +726,9 @@ describe("Nav", () => {
         expect(region().textContent).toBe(was);
         expect(seen.concat(mo.takeRecords())).toEqual([]);
         mo.disconnect();
-        // the link's name still follows the newest sentence
-        expect(screen.getByRole("link", { name: /^Limits alert: .*\(and 1 more\)$/ })).toBeTruthy();
+        // the link's name still follows the newest sentence, and the pill the newest percent
+        expect(screen.getByRole("link", { name: /^Limits alert: .*\(and 1 more\)\. Highest open window: Codex weekly at 71%$/ })).toBeTruthy();
+        expect(badge()!.textContent).toBe("71%");
       });
 
       it("says it again when the kind, the window or the measured flag changes", async () => {
@@ -614,7 +755,7 @@ describe("Nav", () => {
         expect(region().textContent).toBe("");
       });
 
-      it("leaves the link's name, the dot and the hover text as they were", async () => {
+      it("leaves the link's name, the pill and the hover text as they were", async () => {
         const a = alert({ kind: "high", current: 92 });
         await setup(a);
         const link = await screen.findByRole("link", { name: "Limits alert: Codex weekly is at 92%" });
@@ -837,7 +978,7 @@ describe("Nav", () => {
     const alert: LimitsAlert = { kind: "at_limit", provider: "codex", provider_label: "Codex", label: "weekly", current: 100,
       at: "2026-11-14T12:00:00.000Z", resets_at: "2026-11-14T12:00:00.000Z", measured: true, count: 1 };
 
-    it("is a collapsed button named for the current page, whose list holds the seven page links with the filters, the current one marked", async () => {
+    it("is a collapsed button named for the current page, whose list holds the six page links in the tabs' two groups, with the filters, the current one marked", async () => {
       vi.stubGlobal("fetch", vi.fn(() => json(status)));
       history.replaceState(null, "", "/errors?project=foo&range=14");
       renderApp(<Nav />);
@@ -850,8 +991,12 @@ describe("Nav", () => {
       await open();
       expect(btn.getAttribute("aria-expanded")).toBe("true");
       const links = within(list()!).getAllByRole("link");
-      expect(links.map(a => a.textContent)).toEqual(["Activity", "Cost", "Context", "Errors", "Limits", "Insights", "Live"]);
+      expect(links.map(a => a.textContent)).toEqual(["Live", "Limits", "Activity", "Cost", "Context", "Errors"]);
       expect(links.every(a => a.parentElement!.tagName === "LI" && a.parentElement!.parentElement!.tagName === "UL")).toBe(true);
+      const groups = within(list()!).getAllByRole("group");
+      expect(groups.map(g => [g.getAttribute("aria-label"), g.querySelector(".appnav-glabel")!.textContent, within(g).getAllByRole("link").length]))
+        .toEqual([["Now", "Now", 2], ["Review", "Review", 4]]);
+      expect(groups.every(g => g.querySelector(".appnav-glabel")!.getAttribute("aria-hidden") === "true")).toBe(true);
       expect(list()!.querySelector("[role=menu], [role=menuitem]")).toBeNull(); // links, not a menu
       expect(item("Errors").getAttribute("aria-current")).toBe("page");
       expect(links.filter(a => a.hasAttribute("aria-current")).length).toBe(1);
@@ -942,25 +1087,50 @@ describe("Nav", () => {
       expect(within(list()!).getAllByRole("link").filter(a => a.hasAttribute("aria-current"))).toEqual([]);
     });
 
-    it("carries the dot and says Limits alert while an alert is present; the Limits link is named for the alert", async () => {
-      const f = vi.fn(() => json({ ...status, limits_alert: alert }));
+    it("carries the pill and says Limits alert with its percent while an alert is present; the Limits link is named for the alert", async () => {
+      const f = vi.fn(() => json({ ...status, limits_alert: alert, limits_peak: { ...alert } }));
       vi.stubGlobal("fetch", f);
       history.replaceState(null, "", "/errors");
       const { client } = renderApp(<Nav />);
-      const btn = await screen.findByRole("button", { name: "Errors, Limits alert" });
+      // The name says what the pill shows.
+      const btn = await screen.findByRole("button", { name: "Errors, Limits alert, highest open window at 100%" });
       expect(btn).toBe(chooser());
-      expect(btn.textContent).toBe("Errors"); // the name holds the visible label
-      const dot = btn.querySelector<HTMLElement>(".appnav-dot")!;
-      expect([dot.dataset.tone, dot.getAttribute("aria-hidden"), dot.textContent]).toEqual(["critical", "true", ""]);
+      expect(btn.textContent).toBe("Errors100%"); // the name holds the visible label
+      const pill = btn.querySelector<HTMLElement>(".appnav-pill")!;
+      expect([pill.dataset.tone, pill.getAttribute("aria-hidden"), pill.textContent]).toEqual(["critical", "true", "100%"]);
       await open();
       const link = item(/^Limits alert: /);
-      expect(link.textContent).toBe(`Limits alert: ${alertText(alert)}`);
-      expect(link.querySelector<HTMLElement>(".appnav-badge")!.dataset.tone).toBe("critical");
+      expect(link.textContent).toBe(`Limits100% alert: ${alertText(alert)}`);
+      expect(link.querySelector<HTMLElement>(".appnav-pill")!.dataset.tone).toBe("critical");
       await userEvent.keyboard("{Escape}");
-      f.mockImplementation(() => json({ ...status, limits_alert: null }));
+      // With no alert the fullest window's percent stays on the Limits link, and leaves the button.
+      f.mockImplementation(() => json({ ...status, limits_alert: null, limits_peak: { ...alert, current: 30 } }));
       await poll(client);
       expect(screen.getByRole("button", { name: "Errors" })).toBe(btn);
-      expect(btn.querySelector(".appnav-dot")).toBeNull();
+      expect(btn.querySelector(".appnav-pill")!.hasAttribute("data-slot")).toBe(true); // its room kept, so the button keeps its width
+      expect(btn.textContent).toBe("Errors");
+      await open();
+      expect(item(/^Limits/).textContent).toBe("Limits30% Highest open window: Codex weekly at 30%");
+    });
+
+    it("carries the count of waiting sessions on the button and on the Live link, and says it in both names", async () => {
+      const f = vi.fn(() => json({ ...status, live_waiting: 2, limits_alert: alert }));
+      vi.stubGlobal("fetch", f);
+      history.replaceState(null, "", "/cost");
+      const { client } = renderApp(<Nav />);
+      const btn = await screen.findByRole("button", { name: "Cost, Limits alert, highest open window at 100%, 2 sessions waiting for you" });
+      const count = btn.querySelector<HTMLElement>(".appnav-count")!;
+      expect([count.textContent, count.getAttribute("aria-hidden")]).toEqual(["2", "true"]);
+      await open();
+      expect(item(/^Live/).textContent).toBe("Live2 2 sessions waiting for you");
+      await userEvent.keyboard("{Escape}");
+      f.mockImplementation(() => json({ ...status, live_waiting: 1 }));
+      await poll(client);
+      expect(screen.getByRole("button", { name: "Cost, 1 session waiting for you" })).toBe(btn);
+      f.mockImplementation(() => json(status));
+      await poll(client);
+      expect(screen.getByRole("button", { name: "Cost" })).toBe(btn);
+      expect(btn.querySelector(".appnav-count")).toBeNull();
     });
   });
 

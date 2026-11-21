@@ -89,15 +89,23 @@ No. The store keeps every line it has read, and never deletes or alters one beca
 
 ### Which agents does it read?
 
-Claude Code (`~/.claude/projects`) and Codex (`~/.codex`). Both map onto the same pages. Insights covers Claude Code sessions only, because it shows Claude Code's `/insights`.
+Claude Code (`~/.claude/projects`) and Codex (`~/.codex`). Both map onto the same pages. Activity's Judgments view covers Claude Code sessions only, because it shows Claude Code's `/insights`.
 
 ### Where are the store and the configuration files?
 
 In the [data folder](/ai-ledger/reference/storage/).
 
-### What does the dot on the Limits tab mean?
+### What does the percent on the Limits tab mean?
 
-A plan-limit window is at its limit, forecast to run out, or at 90% or more. Hover the tab to read the sentence. A screen reader reads it as part of the tab's name, "Limits alert: *sentence*".
+It is how full your fullest open plan-limit window is. It turns amber or red, with a ring, when a window is at its limit, forecast to run out, or at 90% or more. Hover the tab to read the sentence. A screen reader reads it as part of the tab's name, "Limits alert: *sentence*". See [Navigation pill](/ai-ledger/pages/limits/#navigation-pill).
+
+### What does the number on the Live tab mean?
+
+It counts the sessions that wait for you: those likely waiting for an approval and those in your turn. See [Live](/ai-ledger/pages/live/).
+
+### Where did the Insights page go?
+
+It is the **Judgments** view of Activity: select the Activity tab, then Judgments above the heading. An old `/insights` link still opens it. See [Judgments](/ai-ledger/pages/insights/).
 
 ### How do I update?
 

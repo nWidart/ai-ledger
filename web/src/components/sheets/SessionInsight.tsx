@@ -1,9 +1,9 @@
 import type { SessionInsight as Insight, View } from "../../api";
 import { Judged, label, outcomeLabel, outcomeTone } from "../facets";
-import { appLink, insightsHref } from "./session";
+import { appLink, judgmentsHref } from "./session";
 
 /** A session's /insights judgment beside its measured figures: the model's outcome, ratings, categories and words, tagged
- *  model-judged, with a link to the Insights page in the view. */
+ *  model-judged, with a link to Activity's Judgments view in the view. */
 export function SessionInsight({ i, view }: { i: Insight; view: View }) {
   const rating = (name: string, v: string | null) => v && <span>{name} <b title={v}>{label(v)}</b></span>;
   return <>
@@ -19,7 +19,7 @@ export function SessionInsight({ i, view }: { i: Insight; view: View }) {
         {i.friction.map(f => <span key={f} className="chip warn" title={f}>{label(f)}</span>)}</div>}
       {i.brief_summary && <p>{i.brief_summary}</p>}
       {i.friction_detail && <p><b>Friction:</b> {i.friction_detail}</p>}
-      <a href={insightsHref(view)} onClick={appLink}>Open in Insights</a>
+      <a href={judgmentsHref(view)} onClick={appLink}>Open in Judgments</a>
     </div>
   </>;
 }

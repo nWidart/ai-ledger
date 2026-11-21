@@ -7,33 +7,53 @@
 .appnav-brand svg { display: block; width: 1.25rem; height: 1.25rem; }
 .appnav-word { font-size: .90625rem; font-weight: 500; letter-spacing: -.02em; color: var(--text-secondary); white-space: nowrap; }
 .appnav-word b { font-weight: 600; color: var(--text-primary); }
-.appnav-tabs { display: inline-flex; gap: 2px; padding-left: 10px; border-left: 1px solid var(--border); }
+/* The tabs in their two groups, Now and Review: a rule before each group, its name in small capitals, then its tabs. */
+.appnav-tabs { display: inline-flex; align-items: center; gap: 10px; }
+.appnav-group { display: inline-flex; align-items: center; gap: 2px; padding-left: 10px; border-left: 1px solid var(--border); }
+/* --text-muted on --surface-1: 5.70 (light) and 6.32 (dark). */
+.appnav-glabel { font-size: .6875rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); white-space: nowrap; }
+.appnav-group .appnav-glabel { margin-right: 4px; }
 /* The tabs and the page chooser's links: the same links, drawn as tabs in the bar and as rows in the chooser's list. */
 .appnav a, .appnav-chooser-pop a { color: var(--text-secondary); text-decoration: none; border-radius: 8px; font-weight: 500; white-space: nowrap; }
 .appnav a { padding: 5px 10px; }
 .appnav a:hover, .appnav-chooser-pop a:hover { background: var(--surface-2); color: var(--text-primary); }
-/* The current page's link takes that page's tint: clay for Activity and Cost, coral red for Errors. */
+/* The current page's link: one tint for every page. */
 :is(.appnav, .appnav-chooser-pop) a[aria-current=page] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
-:is(.appnav, .appnav-chooser-pop) a[href^="/errors"][aria-current=page] { background: var(--critical-soft); color: var(--critical-text); }
-/* The alert dot on the Limits tab, and on the page chooser's button, sits in the corner, out of the flow: it never moves a tab or
-   resizes the button. The ring is the bar's color, so the dot reads on any tint. Against --surface-1 the dot clears 3:1 in both
-   themes: critical 4.68 (light) and 5.39 (dark), warning-text 5.77 and 8.69. (--warning itself is 2.99 in light, so the dot does not use it.) */
-.appnav a:has(.appnav-badge) { position: relative; }
-.appnav-badge, .appnav-dot { position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--surface-1); }
-:is(.appnav-badge, .appnav-dot)[data-tone=critical] { background: var(--critical); }
-:is(.appnav-badge, .appnav-dot)[data-tone=warning] { background: var(--warning-text); }
+/* The Limits tab's pill: the fullest open window's percent, in the flow after the label. Its width is fixed, wide enough for
+   "≈100%" in IBM Plex Sans (3.31em) and in the system fallback (3.66em), so a changed figure moves nothing. Quiet by default; in
+   alert it takes the warning or the critical tint, with a ring, so color is not the only signal. Every fill is opaque: the tint
+   is laid over --surface-1, so the current tab's tint or a hover never shows through. Text on its fill: --text-secondary on
+   --surface-2 6.90 (light) and 8.68 (dark); --warning-text 5.12 and 6.61, --critical-text 5.56 and 5.43. */
+.appnav-pill { display: inline-block; box-sizing: border-box; width: 4.7em; margin-left: 6px; padding: 0 5px; border-radius: 999px; vertical-align: 1px;
+  font-size: .6875rem; font-weight: 600; line-height: 1.5; text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums;
+  background: var(--surface-2); color: var(--text-secondary); }
+.appnav-pill[data-tone=warning] { background: linear-gradient(var(--warning-soft), var(--warning-soft)) var(--surface-1); color: var(--warning-text);
+  box-shadow: inset 0 0 0 1px var(--warning-text); }
+.appnav-pill[data-tone=critical] { background: linear-gradient(var(--critical-soft), var(--critical-soft)) var(--surface-1); color: var(--critical-text);
+  box-shadow: inset 0 0 0 1px var(--critical-text); }
+/* The page chooser keeps the pill's room with no alert, so the button does not grow when one starts. */
+.appnav-pill[data-slot] { visibility: hidden; }
+/* The Live tab's badge, and the page chooser's: the sessions waiting on the user, in the corner, out of the flow, so it never
+   moves a tab or resizes the button when it comes and goes. The ring is the bar's color, so it reads over the next tab.
+   --on-accent on --accent: 5.10 (light) and 6.78 (dark). */
+.appnav a:has(.appnav-count) { position: relative; }
+.appnav-count { position: absolute; top: -4px; right: -5px; box-sizing: border-box; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
+  background: var(--accent); color: var(--on-accent); font-size: .625rem; font-weight: 700; line-height: 16px; text-align: center;
+  font-variant-numeric: tabular-nums; box-shadow: 0 0 0 1.5px var(--surface-1); pointer-events: none; }
 /* The page chooser: hidden until the narrow step below puts it in the tabs' place. Its label is the page's, as on the tab. */
 .appnav .appnav-chooser { display: none; position: relative; align-items: center; gap: 6px; padding: 4px 9px 4px 10px; font-size: inherit; font-weight: 600;
   color: var(--text-primary); }
 .appnav-chooser .appnav-caret { opacity: .7; }
 .appnav-chooser[aria-expanded=true] .appnav-caret { transform: rotate(180deg); }
-/* The list: over the page, below the bar; the dot follows the Limits label in a row. */
+/* The list: over the page, below the bar, in the tabs' two groups; the badge and the pill follow their label in a row. */
 .appnav-chooser-pos { z-index: 40; }
 .appnav-chooser-pop { box-sizing: border-box; min-width: max(var(--anchor-width), 11rem); max-height: var(--available-height); overflow-y: auto; padding: 4px;
   background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-pop); }
 .appnav-chooser-pop ul { list-style: none; margin: 0; padding: 0; }
 .appnav-chooser-pop a { display: block; padding: 8px 12px; border-radius: 6px; }
-.appnav-chooser-pop .appnav-badge { position: relative; top: -1px; right: auto; display: inline-block; margin-left: 6px; vertical-align: middle; }
+.appnav-chooser-pop .appnav-glabel { padding: 6px 12px 2px; }
+.appnav-chooser-pop [role=group] + [role=group] { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border); }
+.appnav-chooser-pop .appnav-count { position: static; display: inline-block; margin-left: 6px; vertical-align: 1px; box-shadow: none; }
 .appnav-palette { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); }
 .appnav-in > .appnav-palette { flex: 0 1 auto; min-width: 0; }
 /* The project filter in the button: its dot and name. When the button goes to its icon only the name goes; the dot stays beside the icon. */
@@ -89,17 +109,22 @@
 .appnav-fresh-dl .appnav-fresh-err { color: var(--critical-text); overflow-wrap: anywhere; }
 .appnav-fresh-note { margin: 0 0 6px; color: var(--text-primary); font-weight: 500; }
 .appnav-fresh-foot { margin: 6px 0 0; padding-top: 6px; border-top: 1px solid var(--border); color: var(--text-muted); }
-/* High contrast: the theme's border colors are dropped, so the group and its line take the system text color; the flash keeps a frame. */
+/* High contrast: the theme's border colors are dropped, so the group and its line take the system text color; the flash, the
+   pill and the badge keep a frame (their tints and rings are dropped). A pill in alert is drawn in the system's reverse colors,
+   so it still differs from a quiet one. */
 @media (forced-colors: active) {
   .appnav-fresh { border-color: CanvasText; }
   .appnav-fresh .appnav-state { border-left-color: CanvasText; }
-  .appnav-flash { border: 1px solid CanvasText; }
+  .appnav-flash, .appnav-pill, .appnav-count { border: 1px solid CanvasText; }
+  .appnav-pill[data-tone] { forced-color-adjust: none; background: CanvasText; color: Canvas; box-shadow: none; }
+  .appnav-count { line-height: 14px; }
 }
 /* The steps, widest first, each taking room away so the bar stays one row: the wordmark goes; the palette button keeps its icon
-   (and the project's dot); the tabs tighten; then the page chooser takes the tabs' place. Each width is what the wider step needs,
-   measured with a long project name and the widest freshness state ("Stale" with its time; the flash floats and takes no room),
-   plus 16px to spare and 17px for a desktop scrollbar. They are in em, the browser's text size, so a larger text size steps down
-   sooner, as a narrower window does. */
+   (and the project's dot); the groups' names go (the rule between the groups stays, and so do their names for assistive
+   technology); the tabs tighten; then the page chooser takes the tabs' place. Each width is what the wider step needs, measured
+   with a long project name, the widest freshness state ("Stale" with its time; the flash floats and takes no room), the Limits
+   pill at "≈100%" and the Live badge, plus 16px to spare and 17px for a desktop scrollbar. They are in em, the browser's text
+   size, so a larger text size steps down sooner, as a narrower window does. */
 @media (max-width: 64em) {
   .appnav-word { display: none; }
   .appnav-brand { margin-right: 4px; }
@@ -107,12 +132,15 @@
 @media (max-width: 59.5em) {
   .appnav-palette .lbl, .appnav-scope b, .appnav-palette kbd { display: none; }
 }
-@media (max-width: 50.5em) {
+@media (max-width: 56.5em) {
+  .appnav-group .appnav-glabel { display: none; }
+}
+@media (max-width: 51em) {
   .appnav a { padding: 5px 7px; }
 }
 /* Phones: the page chooser and one row of 36px targets. The freshness control keeps both halves: the time goes, the
    toggletip button keeps its caret and shows the same details; Failed, Offline, Stale and Retry stay in words. */
-@media (max-width: 47.5em) {
+@media (max-width: 48.5em) {
   .appnav-tabs { display: none; }
   .appnav .appnav-chooser { display: inline-flex; }
   .appnav-in { padding: 6px 12px; gap: 4px; }
@@ -122,8 +150,13 @@
   .appnav-fresh:not([data-kind=failed], [data-kind=offline], [data-kind=stale]) .appnav-time, .appnav-at { display: none; }
   #navRefresh:has(.lbl), .appnav-fresh:is([data-kind=failed], [data-kind=offline], [data-kind=stale]) .appnav-state { padding: 0 8px; }
 }
-/* The narrowest phones: the logo goes and the targets tighten. */
-@media (max-width: 22.5em) {
+/* The narrowest phones: the logo and the chooser's caret go, and the targets and the bar's padding tighten. With the chooser's
+   pill (a limits alert) and "Stale", the row above needs 384px, and this one 315px. */
+@media (max-width: 24em) {
   .appnav-brand { display: none; }
+  .appnav-in { padding: 6px 8px; gap: 3px; }
   .appnav .appnav-palette, #navRefresh, .appnav-fresh .appnav-state, #navTheme { min-width: 32px; }
+  .appnav .appnav-chooser { padding: 4px 8px; }
+  .appnav-chooser .appnav-caret { display: none; }
+  .appnav-chooser .appnav-pill { margin-left: 4px; }
 }

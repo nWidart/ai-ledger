@@ -2,7 +2,7 @@
 
 **See what Claude Code and Codex did, what it cost, and where they got stuck.**
 
-AI Ledger reads your Claude Code and Codex transcripts and turns them into seven local dashboards. Your agents delete old transcripts; AI Ledger keeps every line.
+AI Ledger reads your Claude Code and Codex transcripts and turns them into six local dashboards. Your agents delete old transcripts; AI Ledger keeps every line.
 
 [Documentation](https://nwidart.github.io/ai-ledger/)
 
@@ -20,20 +20,23 @@ Needs [uv](https://docs.astral.sh/uv/). Runs on macOS and Linux. Your data stays
 
 | Page | Shows |
 | --- | --- |
-| **Activity** | What got done per day or week, by project, and what needs your attention. It also shows the output speed per model second and how long a median session waits on the model and tools. |
+| **Live** | Every active session as it runs, sorted by who needs you first. Its tab counts the sessions that wait for you. |
+| **Limits** | Each plan limit window with its forecast cone and the safe pace to its reset, what used it, and how past windows ended. Its tab shows how full the fullest window is. |
+| **Activity** | What got done per day or week, by project, and what needs your attention. It also shows the output speed per model second and how long a median session waits on the model and tools. Its **Judgments** view shows how Claude Code's `/insights` judged your sessions: the outcome mix per week, what each judged session cost, and which friction the costliest sessions had. |
 | **Cost** | Estimated spend at API list prices per day, and the month's pace against your plan. One table shows each project's trend, spend, change, cost per commit and cache hit. The tokens chart can show each day's share by token kind, and the Tokens and cache drawer sets each kind's share of tokens beside its share of cost. |
 | **Context** | How full the context window gets, how fast it grows, what fills it, and what the prompt cache wastes. |
 | **Errors** | Failed tool calls by type, the time they cost, a fix to paste into `CLAUDE.md` or `AGENTS.md`, and whether each fix worked. |
-| **Limits** | Each plan limit window with its forecast cone and the safe pace to its reset, what used it, and how past windows ended. |
-| **Insights** | How Claude Code's `/insights` judged your sessions. |
-| **Live** | Every active session as it runs, sorted by who needs you first. |
 | **Project** | One project across all of the above in two columns, each block loading on its own, opened from the "Project page" link beside the project filter, its sheet, or its name in the command palette. |
 
 Each page leads with its answer and its main chart. Full tables wait in drawers at the foot of the page, closed on every load, one open at a time; method notes wait behind a **How measured** link.
 
-Press **Cmd+K** to jump anywhere, for example `>errors #myproject #7d`. Right-click a project, session, tool or error type for its actions, such as copying a session's resume command. Every page works by keyboard and screen reader. Charts open a data table or read point by point with the arrow keys. The navigation stays on one row at every width, and next to Refresh it shows when the data was last ingested.
+Press **Cmd+K** to jump anywhere, for example `>errors #myproject #7d`. Right-click a project, session, tool or error type for its actions, such as copying a session's resume command. Every page works by keyboard and screen reader. Charts open a data table or read point by point with the arrow keys.
 
-A session link on any page opens the session's sheet over that page, so the page keeps its state and Back closes the sheet. **Open session** in Cmd+K and in the right-click menu does the same on every page that shows sessions; on Live the stream keeps following its session. A session's sheet shows its model time, tool time, output speed and lines added and removed. These come from the `cost-state` line Claude Code writes when a session ends (from about late October 2026), so Codex and older Claude Code sessions show none.
+The navigation has two groups: **Now** (Live, Limits) and **Review** (Activity, Cost, Context, Errors). The Live tab shows a badge with the sessions waiting for an approval or for your next prompt. The Limits tab shows the percent of your fullest open limit window, in amber or red when a window is nearly full, at its limit or forecast to run out. The bar stays on one row at every width, and next to Refresh it shows when the data was last ingested.
+
+Each page shows only the filters that change it. Activity's Judgments view has no source filter, because `/insights` judges Claude Code sessions only; with Codex as the source, Activity shows Overview and says why Judgments is not available. An old `/insights` link opens the Judgments view with its filters.
+
+A session link on any page opens the session's sheet over that page, so the page keeps its state and Back closes the sheet. **Open session** in Cmd+K and in the right-click menu does the same on every page, Limits included; on Live the stream keeps following its session. A session's sheet shows its model time, tool time, output speed and lines added and removed. These come from the `cost-state` line Claude Code writes when a session ends (from about late October 2026), so Codex and older Claude Code sessions show none.
 
 The [documentation site](https://nwidart.github.io/ai-ledger/) describes each page in detail.
 
@@ -41,7 +44,7 @@ The [documentation site](https://nwidart.github.io/ai-ledger/) describes each pa
 <tr><td><picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/activity-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/activity.gif" alt="Activity"></picture></td><td><picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/cost-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/cost.gif" alt="Cost"></picture></td></tr>
 <tr><td><picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/context-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/context.gif" alt="Context"></picture></td><td><picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/project-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/project.gif" alt="Project"></picture></td></tr>
 <tr><td><picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/errors-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/errors.gif" alt="Errors"></picture></td><td><picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/limits-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/limits.gif" alt="Limits"></picture></td></tr>
-<tr><td><picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/insights-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/insights.gif" alt="Insights"></picture></td><td><picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/live-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/live.gif" alt="Live"></picture></td></tr>
+<tr><td><picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/insights-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/insights.gif" alt="Activity's Judgments view"></picture></td><td><picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/live-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/live.gif" alt="Live"></picture></td></tr>
 </table>
 
 ## Install

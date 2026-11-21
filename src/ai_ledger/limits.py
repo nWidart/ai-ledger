@@ -750,6 +750,16 @@ def alert_of(windows):
                 at=at, resets_at=w["resets_at"], measured=w["measured"], count=count)
 
 
+def peak_of(windows):
+    """The fullest open window, for the nav's Limits pill: its provider, label, percent and whether the percent is a reading,
+    from the open windows' rows of a finished payload. None when no open window has a percent."""
+    known = [w for w in windows if w["current"] is not None]
+    if not known:
+        return None
+    w = max(known, key=lambda w: w["current"])
+    return dict(provider=w["provider"], provider_label=w["provider_label"], label=w["label"], current=w["current"], measured=w["measured"])
+
+
 def suggestion_of(windows):
     """The provider with the most room left at reset at the current pace. A provider with any window at its limit, or
     forecast to reach 100% before it resets, is never suggested; its room is that of its fullest window. None unless two

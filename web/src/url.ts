@@ -35,9 +35,10 @@ export type RootSearch = {
 export type SearchPatch = { [k: string]: string | number | boolean | null | undefined };
 
 // Back retraces changes to these; other keys replace unless the caller asks to push.
-const PUSH_KEYS = ["project", "range", "source", "auto", "inspect", "tool", "mcp", "skill", "session", "sheet", "ex", "cat"];
-// Written in this order (as the pages wrote them), with any other keys between gran and inspect.
-const HEAD = ["project", "range", "source", "auto", "sub", "noise", "gran"], TAIL = ["inspect", "tool", "mcp", "skill", "session", "sheet", "ex", "cat"];
+const PUSH_KEYS = ["project", "range", "source", "auto", "view", "inspect", "tool", "mcp", "skill", "session", "sheet", "ex", "cat"];
+// Written in this order (as the pages wrote them), with any other keys between view and inspect. view is Activity's view
+// (Overview or Judgments): it leads the keys of the view it picks.
+const HEAD = ["project", "range", "source", "auto", "sub", "noise", "gran", "view"], TAIL = ["inspect", "tool", "mcp", "skill", "session", "sheet", "ex", "cat"];
 /** The key of the session sheet on a page: session, except on Live, where session names the session the stream follows. */
 export const sheetKey = (path: string): "session" | "sheet" => (path === "/live" ? "sheet" : "session");
 // The keys that open a sheet on a page.

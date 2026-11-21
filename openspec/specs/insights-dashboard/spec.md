@@ -1,7 +1,7 @@
 # insights-dashboard Specification
 
 ## Purpose
-The Insights page: shows, per project and time range, how Claude Code's `/insights` judged the analysed sessions (outcome, satisfaction, helpfulness, friction, goals and session types), lists those sessions, and says how much of the view is not analysed yet.
+Activity's Judgments view (`/usage?view=judgments`, once the Insights page): shows, per project and time range, how Claude Code's `/insights` judged the analysed sessions (outcome, satisfaction, helpfulness, friction, goals and session types), lists those sessions, and says how much of the view is not analysed yet.
 
 ## Requirements
 

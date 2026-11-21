@@ -1332,6 +1332,18 @@ class AlertTest(unittest.TestCase):
         ws = [self.win(provider="claude", hits="2026-11-13T09:00:00"), self.win(provider="codex", hits="2026-11-13T01:00:00")]
         self.assertEqual((limits.binding_of(ws)["provider"], limits.alert_of(ws)["provider"]), ("codex", "codex"))
 
+    def test_peak_is_the_fullest_open_window(self):
+        ws = [self.win(current=41.5), self.win(provider="codex", label="5-hour", current=72.0, measured=False), self.win(label="x", current=None)]
+        self.assertEqual(limits.peak_of(ws), dict(provider="codex", provider_label="Codex", label="5-hour", current=72.0, measured=False))
+
+    def test_peak_is_none_without_a_percent(self):
+        self.assertIsNone(limits.peak_of([]))
+        self.assertIsNone(limits.peak_of([self.win(current=None)]))
+
+    def test_peak_can_differ_from_the_alert_window(self):  # the soonest to run out is not the fullest
+        ws = [self.win(label="5-hour", current=40.0, hits="2026-11-13T08:00:00"), self.win(provider="codex", current=70.0)]
+        self.assertEqual((limits.alert_of(ws)["label"], limits.peak_of(ws)["label"], limits.peak_of(ws)["current"]), ("5-hour", "weekly", 70.0))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -387,6 +387,22 @@ def sessions(cur, project="", source="", automated=False, now=None, prices=None,
     return dict(now=iso(now), sessions=out, newest=None if out else newest_session(cur, where, params))
 
 
+WAITING = ("wait", "you")  # the states that wait on the user: a likely approval wait, and your turn
+
+
+def waiting(cur, now=None):
+    """How many active sessions wait on the user (a state in WAITING), over every project and source, automated sessions
+    left out: the nav's Live badge. The states are those sessions() gives the same sessions at the same time."""
+    now = now or now_utc()
+    where, params = metrics.scope("", False, "")
+    since = (now - ACTIVE).astimezone(timezone.utc).replace(tzinfo=None)
+    info = cur.execute(f"SELECT s.session_id, s.source, s.last_ts FROM sessions s WHERE s.last_ts >= ? AND {where}", [since] + params).fetchall()
+    sids = [r[0] for r in info]
+    lines, ended, copied = recent(cur, sids), closed(cur, sids), forked(cur, sids)
+    return sum(state(assemble(lines.get(sid, []), copied)[0], now, source, aware(last), sid in ended)["kind"] in WAITING
+               for sid, source, last in info)
+
+
 def title_of(found, sid):
     """The title and title_from fields of session sid, from titles.titles."""
     title, origin = found.get(sid, (None, None))

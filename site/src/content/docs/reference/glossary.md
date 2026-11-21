@@ -18,7 +18,7 @@ Four words mark where a figure comes from:
 
 | Term | Definition |
 | --- | --- |
-| Session | One Claude Code or Codex conversation, with its subagents. A session is in a view when it has a request in the range; Insights counts it by its start time instead. |
+| Session | One Claude Code or Codex conversation, with its subagents. A session is in a view when it has a request in the range; Activity's Judgments view counts it by its start time instead. |
 | Source | The agent that wrote the session: Claude Code or Codex. |
 | Project | The repository or folder a session ran in. |
 | Automated session | A session of a known automated project, a session with no user prompt, or a session in a temporary folder with at most one prompt. Left out unless **Include automated** is on; Errors has no such control and always counts them. See [Filters](/ai-ledger/everywhere/filters/#include-automated). |
@@ -189,9 +189,9 @@ See [Limits](/ai-ledger/pages/limits/). Open windows cover the whole account and
 | $ a point, Tokens a point | The estimated cost of one point of a limit, and the tokens of each model that one point buys. | **What a point buys** drawer | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 | Commits a point | A project's commits per point of a limit. | **What a point buys** drawer | [Retro on one project](/ai-ledger/improve/project-retro/) |
 
-## Insights
+## Judgments
 
-See [Insights](/ai-ledger/pages/insights/). The figures are model-judged unless the table says "measured". They cover Claude Code sessions only.
+See [Judgments](/ai-ledger/pages/insights/), Activity's second view. The figures are model-judged unless the table says "measured". They cover Claude Code sessions only.
 
 | Figure | Meaning | Where | Playbook |
 | --- | --- | --- | --- |
@@ -201,7 +201,9 @@ See [Insights](/ai-ledger/pages/insights/). The figures are model-judged unless 
 | Partially, Not achieved | Sessions that met some of the goal, and sessions whose goal was abandoned or failed. | **Outcomes at a glance** | [Get sessions to finish](/ai-ledger/improve/finish-sessions/) |
 | Dissatisfied | Sessions where the model saw you push back. | **Outcomes at a glance** | [Get sessions to finish](/ai-ledger/improve/finish-sessions/) |
 | Friction | A label for what got in the way, counted by times reported and by sessions. Similar labels form a family. | **Friction categories** | [Get sessions to finish](/ai-ledger/improve/finish-sessions/) |
-| Outcome trend | Per week of session start, the share of analysed sessions fully or mostly achieved. | **Outcome trend** | [Get sessions to finish](/ai-ledger/improve/finish-sessions/) |
+| Friction cost, active time (measured) | The estimated cost and the active time of the whole sessions that reported a friction, each session once. Not the cost of the friction alone. | **Friction categories** | [Get sessions to finish](/ai-ledger/improve/finish-sessions/) |
+| Outcome trend | Per week of session start, the share of the week's analysed sessions in each outcome, with the week's sessions over its bar. | **Outcome trend** | [Get sessions to finish](/ai-ledger/improve/finish-sessions/) |
+| Cost, peak context, tool errors (measured) | A session's estimated cost, its peak context as a share of the model's window, and its failed tool calls, over the whole session. | Session cards | [Get sessions to finish](/ai-ledger/improve/finish-sessions/) |
 | Satisfaction signals, helpfulness | The satisfaction signals the model saw, and its rating of Claude's help from essential to unhelpful. | **Satisfaction and helpfulness** | [Get sessions to finish](/ai-ledger/improve/finish-sessions/) |
 | Goal, session type | What a session set out to do, and the model's label for its shape, such as single task. | **Goals**, **Session types** drawers | – |
 | Session figures (measured) | Lines added and removed, files modified, git pushes, median session duration and response time, and languages, as `/insights` counted them. | **Session figures** drawer | – |

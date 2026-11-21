@@ -4,7 +4,7 @@ import { askedFor } from "./refresh";
 import { motion } from "./chart";
 
 /**
- * How Activity, Cost, Insights and Limits take in a new payload. The loading look belongs to a request that takes a while (the
+ * How Activity (both views), Cost and Limits take in a new payload. The loading look belongs to a request that takes a while (the
  * old numbers stay on screen meanwhile); a failure puts focus on Retry. When data lands for a new view (url), after Refresh
  * or after a failure, bars grow in, the sections matching fade crossfade from the old view, and after a failure focus lands
  * on the new answer (#lede). New data for the same view that an ingest brought in the background swaps in quietly.

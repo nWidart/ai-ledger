@@ -1,4 +1,4 @@
-"""Local app: owns the transcript store, keeps it current, serves the Activity, Cost, Context, Errors, Limits, Insights and Live pages.
+"""Local app: owns the transcript store, keeps it current, serves the Live, Limits, Activity, Cost, Context and Errors pages.
 
 Usage:
   ai-ledger            serve on http://127.0.0.1:8765 and open it in the browser (ingests at start and every 60 seconds, every
@@ -29,7 +29,9 @@ INTERVAL = 60
 LIVE_INTERVAL = 1  # transcript ingest while a Live page is connected; usage data and limits stay on INTERVAL
 KEEPALIVE = 15  # seconds between SSE comments, so a closed Live page is noticed
 WEB = os.path.join(store.HERE, "web")  # the frontend build (npm run build in web/); not in git, CI builds it and the package ships it
-PAGES = ("/usage", "/cost", "/context", "/errors", "/limits", "/insights", "/live", "/project")  # one app; it picks the page from the path
+# One app; it picks the page from the path. /insights is no page any more: the app redirects it to Activity's Judgments view.
+PAGES = ("/usage", "/cost", "/context", "/errors", "/limits", "/insights", "/live", "/project")
+WAITING_TTL = 15  # seconds the nav's waiting count is kept: every open page polls /api/status
 ASSET_TYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml",
                ".png": "image/png", ".woff2": "font/woff2", ".json": "application/json; charset=utf-8"}
 MAX_BODY = 4096  # a POST body is one small JSON object
@@ -134,8 +136,14 @@ class App:
         self.stopping = threading.Event()
         # last_change: the time of the last ingest that stored anything, so pages refetch only when data changed.
         self.state = dict(ingesting=False, last_ingest=None, last_change=None, last_stats=None, error=None)
-        # The nav's Limits badge: limits.alert_of over the open windows, worked out after each full cycle (see refresh_alert).
+        # The nav's Limits pill: limits.alert_of and limits.peak_of over the open windows, worked out after each full cycle
+        # (see refresh_alert).
         self.limits_alert = None
+        self.limits_peak = None
+        # The nav's Live badge: (the count, when it was worked out), see live_waiting. Its lock lets one request thread fill it
+        # while the others wait for that count.
+        self.waiting = (None, None)
+        self.waiting_lock = threading.Lock()
         # Live pages: how many are connected, and the sessions each ingest changed, numbered so each page sends a
         # notice for every change since its last one.
         self.watchers = 0
@@ -175,17 +183,42 @@ class App:
                     self.state["last_change"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     def refresh_alert(self):
-        """Work out the nav's limits alert, as the Limits page's payload gives it with no filters. Run once per full cycle,
-        not per /api/status request: the payload scans the whole request history and every open page polls status. A read, as
-        the routes do it: no store lock. It runs in the loop thread, so it delays the next fast pass of a Live page by the
-        payload's duration (about 0.14 s on a store of 90,000 requests, once per INTERVAL); if a store ever makes it slow, the
-        remedy is a thread of its own. Never raises: whatever the payload does, the alert is None and ingest goes on."""
+        """Work out the nav's limits alert and its fullest open window, as the Limits page's payload gives them with no
+        filters. Run once per full cycle, not per /api/status request: the payload scans the whole request history and every
+        open page polls status. A read, as the routes do it: no store lock. It runs in the loop thread, so it delays the next
+        fast pass of a Live page by the payload's duration (about 0.14 s on a store of 90,000 requests, once per INTERVAL); if
+        a store ever makes it slow, the remedy is a thread of its own. Never raises: whatever the payload does, both are None
+        and ingest goes on."""
         try:
             payload = limits.payload(self.con.cursor(), polls={p.name: dict(p.state) for p in self.pollers})
-            self.limits_alert = limits.alert_of(payload["windows"])
+            self.limits_alert, self.limits_peak = limits.alert_of(payload["windows"]), limits.peak_of(payload["windows"])
         except Exception as e:  # the type only: the message could carry stored text
-            self.limits_alert = None
+            self.limits_alert = self.limits_peak = None
             print(f"limits alert failed: {type(e).__name__}", file=sys.stderr, flush=True)
+
+    def live_waiting(self):
+        """How many active sessions wait on the user (live.waiting), for the nav's Live badge. A session's state depends on
+        the time, so it is worked out when /api/status asks, and kept for WAITING_TTL seconds: any number of open pages cost
+        one read per WAITING_TTL, however many ask at once: the server answers each request on its own thread, so the fill is
+        under a lock, and a thread that waited for it takes the count the first one stored. Never raises: a failure gives None,
+        which the nav shows as no badge."""
+        def fresh(at):
+            return at is not None and time.monotonic() - at < WAITING_TTL
+
+        n, at = self.waiting
+        if fresh(at):
+            return n
+        with self.waiting_lock:
+            n, at = self.waiting
+            if fresh(at):
+                return n
+            try:
+                n = live.waiting(self.con.cursor())
+            except Exception as e:  # the type only: the message could carry stored text
+                n = None
+                print(f"live waiting failed: {type(e).__name__}", file=sys.stderr, flush=True)
+            self.waiting = (n, time.monotonic())
+            return n
 
     def loop(self):
         """Ingest everything and poll limits every INTERVAL, then refresh the limits alert; in between, ingest transcripts
@@ -259,7 +292,8 @@ class App:
         cur = self.con.cursor()
         counts = {t: cur.execute(f"SELECT count(*) FROM {t}").fetchone()[0] for t in ("raw_lines", "files", "sessions", "requests", "tool_calls")}
         return dict(self.state, counts=counts, interval=INTERVAL, limits={p.name: dict(p.state) for p in self.pollers},
-                    limits_alert=self.limits_alert, project_order=metrics.project_order(cur), automated_file=metrics.automated_file())
+                    limits_alert=self.limits_alert, limits_peak=self.limits_peak, live_waiting=self.live_waiting(),
+                    project_order=metrics.project_order(cur), automated_file=metrics.automated_file())
 
 
 def asset(path):

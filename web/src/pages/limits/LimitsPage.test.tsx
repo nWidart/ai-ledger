@@ -5,14 +5,17 @@ import type { LimitHistoryRow, LimitWindow, LimitWindowCurve, LimitsPayload } fr
 import limits from "../../__fixtures__/limits";
 import windowCurve from "../../__fixtures__/limit-window";
 import palette from "../../__fixtures__/palette";
+import session from "../../__fixtures__/session";
+import tool from "../../__fixtures__/tool";
 import { openDrawer } from "../../components/Drawer";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
+import { openSessionSheet } from "../../components/sheets/session";
 import { mockApi } from "../../components/sheets/testing";
 import { usd } from "../../format";
 import { barName, caption, capText, historyStrips, pace, paceRates, recentText, shareText, span, stripSummary, surfacesText, usedHint, whenDay, windowName } from "./limits";
 import { LimitsPage } from "./LimitsPage";
-import { ingested, renderApp } from "../../testing";
+import { ingested, renderApp, renderPage, renderRouter } from "../../testing";
 
 const fixture = limits as LimitsPayload;
 const claude = fixture.windows[0]!, fable = fixture.windows[1]!, codex = fixture.windows[2]!;
@@ -393,16 +396,73 @@ describe("LimitsPage", () => {
     expect(document.activeElement).toBe(await lede());
   });
 
-  it("sends >bash from Limits to Activity, which hosts the inspector", async () => {
-    mockApi({ "/api/limits": () => fixture, "/api/palette": () => palette });
+  it("opens >bash over Limits: the app's shell hosts the inspector on every page", async () => {
+    mockApi({ "/api/limits": () => fixture, "/api/palette": () => palette, "/api/tool": () => tool });
     history.replaceState(null, "", "/limits");
-    renderApp(<><LimitsPage /><Palette /></>);
-    await lede();
+    renderPage(<><LimitsPage /><Palette /></>);
+    const heading = await lede();
     act(() => openPalette());
     await userEvent.type(screen.getByRole("combobox", { name: "Filters, pages, inspectors and commands" }), ">bash");
-    expect(document.getElementById(screen.getByRole("combobox", { name: "Filters, pages, inspectors and commands" }).getAttribute("aria-describedby")!)!.textContent).toBe("Enter: open Bash inspector on Activity · 30d");
+    expect(document.getElementById(screen.getByRole("combobox", { name: "Filters, pages, inspectors and commands" }).getAttribute("aria-describedby")!)!.textContent).toBe("Enter: open Bash inspector · 30d");
     await userEvent.keyboard("{Enter}");
-    expect(location.pathname + location.search).toBe("/usage?tool=Bash");
+    expect(location.pathname + location.search).toBe("/limits?tool=Bash");
+    expect(await within(document.querySelector<HTMLElement>("dialog.sheet")!).findByText("Recent calls")).toBeTruthy();
+    expect(heading.isConnected).toBe(true); // Limits stays under the sheet
+  });
+
+  // A project row is the project for the context menu here as on every page; the folded "smaller projects" row is none.
+  it.each([
+    ["What used this window", () => within(details(windowName(claude)).getByRole("heading", { name: "What used this window" }).closest<HTMLElement>(".lim-used")!)
+      .getByRole("link", { name: /^foo in Cost/ })],
+    ["Commits a point, by project", () => within(screen.getByRole("table", { name: "Commits a point, by project" })).getAllByRole("rowheader", { name: "foo" })[0]!],
+  ])("opens a project's menu from %s, and its sheet over Limits", async (_where, target) => {
+    mockApi({ "/api/limits": () => fixture });
+    history.replaceState(null, "", "/limits?range=30");
+    openDrawers();
+    renderRouter();
+    const heading = await lede();
+    fireEvent.contextMenu(target(), { clientX: 20, clientY: 30 });
+    await userEvent.click(within(screen.getByRole("menu", { name: "foo actions" })).getByRole("menuitem", { name: "Open project sheet" }));
+    expect(location.pathname + location.search).toBe("/limits?range=30&inspect=foo");
+    expect(heading.isConnected).toBe(true);
+  });
+
+  it("marks no project on the folded smaller-projects row", async () => {
+    show(fixture);
+    await lede();
+    const rows = within(screen.getByRole("table", { name: "Commits a point, by project" })).getAllByRole("row").slice(1);
+    for (const r of rows) {
+      const name = r.querySelector("th")!.textContent!;
+      expect(r.getAttribute("data-subject")).toBe(/smaller project/.test(name) ? null : `project:${name}`);
+    }
+  });
+
+  it("opens a session sheet in place: the URL names it, Limits stays under it, and Close returns to Limits", async () => {
+    const f = mockApi({ "/api/limits": () => fixture, "/api/session": () => session });
+    history.replaceState(null, "", "/limits?range=30&source=codex");
+    renderRouter();
+    const heading = await lede();
+    const limitsGets = () => f.mock.calls.filter(c => String(c[0]).startsWith("/api/limits")).length, before = limitsGets();
+    act(() => openSessionSheet("s1"));
+    expect(location.pathname + location.search).toBe("/limits?range=30&source=codex&session=s1");
+    const dlg = document.querySelector<HTMLDialogElement>("dialog.sheet")!;
+    expect(await within(dlg).findByText("Timeline")).toBeTruthy();
+    expect(within(dlg).getByRole("heading", { level: 2 }).textContent).toMatch(/^Session/);
+    expect(heading.isConnected).toBe(true);
+    expect(screen.getByRole("link", { name: /^Limits/ }).getAttribute("aria-current")).toBe("page");
+    expect(limitsGets()).toBe(before); // the sheet key is no part of the Limits request
+    await userEvent.click(within(dlg).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(location.pathname + location.search).toBe("/limits?range=30&source=codex"));
+    expect(dlg.open).toBe(false);
+  });
+
+  it("opens a session sheet from a link to Limits with the session in it", async () => {
+    mockApi({ "/api/limits": () => fixture, "/api/session": () => session });
+    history.replaceState(null, "", "/limits?session=s1");
+    renderRouter();
+    await lede();
+    expect(await within(document.querySelector<HTMLElement>("dialog.sheet")!).findByText("Timeline")).toBeTruthy();
+    expect(location.pathname).toBe("/limits");
   });
 });
 

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, u
 import { setOrder } from "../../colors";
 import { agentName, Filters } from "../../components/Filters";
 import { showModalUnder } from "../../components/Sheet";
-import { UsageSheets } from "../../components/sheets/UsageSheets";
 import type { SortBy } from "../../components/Sort";
 import { num as fmt } from "../../format";
 import { onNavigate, setSearch, useSearchOf, validateRoot } from "../../url";
@@ -264,7 +263,6 @@ export function ErrorsPage() {
           {toSheet && <><section className="panel detail" id="detail"><Detail /></section>{detailLive}</>}
         </dialog>
       </RowContext.Provider></Ctx.Provider>}
-      <UsageSheets data={undefined} automated />
     </main>
   );
 }

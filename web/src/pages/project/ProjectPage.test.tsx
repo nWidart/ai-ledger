@@ -11,10 +11,11 @@ import live from "../../__fixtures__/live";
 import session from "../../__fixtures__/session";
 import usage from "../../__fixtures__/usage";
 import usageAll from "../../__fixtures__/usage-all";
+import { NO_FACETS } from "../../components/facets";
 import { ProjectSheet } from "../../components/sheets/ProjectSheet";
 import { mockApi } from "../../components/sheets/testing";
 import { big, num, usd } from "../../format";
-import { refreshed, renderApp } from "../../testing";
+import { refreshed, renderApp, renderPage } from "../../testing";
 import { ProjectPage } from "./ProjectPage";
 
 /** The fixture with the fields the grid reads (until the fixtures are regenerated): the peak's share of the window, null for none. */
@@ -36,7 +37,7 @@ const serve = (over: Payloads = {}) => {
 const open = (over: Payloads = {}, search = "?project=foo&range=30") => {
   const f = serve(over);
   history.replaceState(null, "", "/project" + search);
-  return { f, ...renderApp(<ProjectPage />) };
+  return { f, ...renderPage(<ProjectPage />) };
 };
 const loaded = () => screen.findByRole("heading", { level: 1, name: "foo" });
 const block = (name: RegExp | string) => screen.getByRole("region", { name });
@@ -63,9 +64,19 @@ describe("ProjectPage", () => {
     expect(link("Activity")).toBe("/usage?project=foo&range=7&source=claude&auto=1");
     expect(link("Cost")).toBe("/cost?project=foo&range=7&source=claude&auto=1");
     expect(link("Context")).toBe("/context?project=foo&range=7&source=claude&auto=1");
-    expect(link("Session judgments")).toBe("/insights?project=foo&range=7&source=claude&auto=1");
+    expect(link("Session judgments")).toBe("/usage?project=foo&range=7&source=claude&auto=1&view=judgments"); // Activity's Judgments view
+    expect(within(block("Session judgments")).getByRole("link", { name: "Open in Judgments" })).toBeTruthy();
     expect(link("Plan limits")).toBe("/limits?project=foo&range=7&source=claude&auto=1");
     expect(link("Errors")).toBe("/errors?project=foo&range=7&source=claude");
+  });
+
+  it("offers no Judgments link with the source on Codex alone, and says why in its place, as Activity's switch does", async () => {
+    open({}, "?project=foo&range=7&source=codex");
+    await loaded();
+    const judged = within(block("Session judgments"));
+    expect(judged.queryByRole("link", { name: /^Open in/ })).toBeNull();
+    expect(judged.getByText(NO_FACETS)).toBeTruthy();
+    expect(within(block("Activity")).getByRole("link", { name: /^Open in/ }).getAttribute("href")).toBe("/usage?project=foo&range=7&source=codex");
   });
 
   describe("layout", () => {

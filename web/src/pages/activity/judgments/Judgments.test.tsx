@@ -1,30 +1,40 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { InsightsPayload } from "../../api";
-import insights from "../../__fixtures__/insights";
-import empty from "../../__fixtures__/insights-empty";
-import session from "../../__fixtures__/session";
-import sessions from "../../__fixtures__/sessions";
-import usage from "../../__fixtures__/usage";
-import { openDrawer } from "../../components/Drawer";
-import { mockApi } from "../../components/sheets/testing";
-import { when } from "../../format";
-import { InsightsPage } from "./InsightsPage";
-import { renderApp, renderRouter } from "../../testing";
+import type { InsightsPayload } from "../../../api";
+import insights from "../../../__fixtures__/insights";
+import empty from "../../../__fixtures__/insights-empty";
+import session from "../../../__fixtures__/session";
+import sessions from "../../../__fixtures__/sessions";
+import usage from "../../../__fixtures__/usage";
+import { openDrawer } from "../../../components/Drawer";
+import { mockApi } from "../../../components/sheets/testing";
+import { when } from "../../../format";
+import { ActivityPage } from "../ActivityPage";
+import { NO_FACETS } from "../../../components/facets";
+import { ViewSwitch } from "../ViewSwitch";
+import { Judgments } from "./Judgments";
+import { FEW_SESSIONS, stored, trendCounts, trendText, weightSide, weightValue, byWeight } from "./figures";
+import { renderPage, renderRouter } from "../../../testing";
+import { setSearch } from "../../../url";
 
 const fixture = insights as InsightsPayload, none = empty as InsightsPayload;
 /** A closed drawer renders no body, and a page opens one drawer at a time: once the page is up, lede() opens these in turn, so
  *  each has rendered its body (kept, hidden, once closed) and the last stays open. A test reads a drawer by role after open(). */
 const DRAWERS = ["d-goals", "d-types", "d-figures", "d-coverage", "d-how"];
 let toOpen: string[] = [];
+/** The view with Activity's view switch over it, beside the shell's sheet host, at Activity's path. Its own keys need no view
+ *  key here: Activity reads that one to pick the view (see "Activity's view switch" below), and the view's links write it. */
 const show = (d: InsightsPayload, hash = "?range=0", open = DRAWERS) => {
   toOpen = open;
   const f = mockApi({ "/api/insights": () => d });
-  history.replaceState(null, "", "/insights" + hash);
-  renderApp(<InsightsPage />);
+  history.replaceState(null, "", "/usage" + hash);
+  renderPage(<Judgments views={<ViewSwitch view="judgments" codex={false} />} />);
   return f;
 };
+/** A friction family as the payload sends it: its labels, and the weight of the sessions that reported it. */
+const fam = (family: string, n: number, sessions: number, cost = 0, active_s = 0, members?: InsightsPayload["friction_families"][number]["members"]) =>
+  ({ family, n, sessions, cost, active_s, members: members ?? [{ name: family, n, sessions, cost, active_s }] });
 const open = (id: string) => act(() => openDrawer(id));
 const lede = async () => {
   const el = await screen.findByText((_, el) => el?.id === "lede" && !el.textContent!.startsWith("Loading"));
@@ -38,21 +48,23 @@ const section = (name: RegExp) => screen.getByRole("region", { name });
 const drawer = (id: string) => { open(id); return document.getElementById(id)!; };
 const isOpen = (id: string) => document.getElementById(id)!.hasAttribute("data-open");
 
-describe("InsightsPage", () => {
+describe("Judgments view", () => {
   it("leads with the analysed counts, the unanalysed count and the newest facet", async () => {
     const f = show(fixture);
     expect((await lede()).textContent).toBe("1 of 3 analysed sessions fully achieved their goal; buggy code caused the most friction.");
     expect(f.mock.calls[0]![0]).toBe("/api/insights?range=0");
     const sub = screen.getByText(/Model-judged: a model's reading/);
-    expect(sub.textContent).toContain("Model-judged: a model's reading of each session, not a measurement.");
+    expect(sub.textContent).toMatch(/^all projects, all time, Claude Code sessions\. Model-judged: a model's reading of each session, not a measurement\./);
     await userEvent.click(within(sub).getByRole("button", { name: "How measured: the judgments" }));
     const how = within(sub).getByRole("tooltip").textContent!;
-    expect(how).toContain("The figures come from /insights facets, except Session figures and Coverage, which are counted. Codex sessions have no facets.");
-    expect(how).toContain("A session counts here by its start time; Activity counts a session with a request in the range, so the two totals can differ slightly.");
+    expect(how).toContain("The figures come from /insights facets, except Session figures and Coverage, which are counted, and each session's cost, peak context and tool errors, which are measured from its transcript.");
+    expect(how).toContain("/insights judges Claude Code sessions only: Codex writes no facets, so this view has no source filter.");
+    expect(how).toContain("A session counts here by its start time; Overview counts a session with a request in the range, so the two totals can differ slightly.");
     const cov = document.getElementById("coverage")!;
     expect(cov.getAttribute("role")).toBe("status");
     expect(cov.textContent).toBe(`1 of 3 Claude Code sessions in this view analysed (33%); 2 more have facets but no transcript. Each /insights run in Claude Code analyses more. The newest analysis was written ${when(fixture.coverage.newest_facet)}. Coverage by project and run.`);
-    expect(screen.getByText(/Codex session in this view is not/).textContent).toBe("1 Codex session in this view is not analysed: /insights covers Claude Code only.");
+    // No line disclaims Codex sessions: the view offers no Codex to pick.
+    expect(document.querySelector("main")!.textContent).not.toMatch(/Codex session/);
     const vitals = screen.getByRole("region", { name: "Outcomes at a glance" });
     expect(within(vitals).queryByText("Sessions analysed")).toBeNull(); // the lede states it
     expect(within(vitals).getByText("Fully or mostly achieved").parentElement!.textContent).toBe("1 33%Fully or mostly achieved0 mostly; 1 with no clear outcome"); // abandoned: not a tile of its own
@@ -90,21 +102,32 @@ describe("InsightsPage", () => {
     expect(screen.queryByRole("region", { name: /Outcomes/ })).toBeNull();
   });
 
-  it("says /insights covers only Claude Code with source Codex, and shows no figures", async () => {
-    const codex: InsightsPayload = { ...none, coverage: { ...fixture.coverage, claude_sessions: 0, analysed: 0, not_analysed: 0, facets: 0, orphans: 0 } };
-    const f = show(codex, "?range=0&source=codex");
-    expect((await lede()).textContent).toBe("/insights analyses only Claude Code sessions.");
-    expect(f.mock.calls[0]![0]).toBe("/api/insights?range=0&source=codex");
-    expect(screen.getByText(/Codex writes no facets/).textContent).toContain("1 Codex session in this view, none analysed");
-    for (const name of [/Outcomes/, /Friction/, /Analysed sessions/]) expect(screen.queryByRole("region", { name })).toBeNull();
-    expect(document.getElementById("coverage")).toBeNull();
+  it("shows only the filters that change it: project, range and the automated toggle, in the header beside the heading, and no source", async () => {
+    const f = show(fixture, "?project=demo-app&range=7&source=claude&auto=1");
+    await lede();
+    // The URL's source stays for the other pages; the request names none, since only Claude Code sessions are judged.
+    expect(f.mock.calls[0]![0]).toBe("/api/insights?project=demo-app&range=7&automated=1");
+    const filters = screen.getByRole("group", { name: "Filters" });
+    expect(within(filters).getByRole("combobox", { name: "Project" })).toBeTruthy();
+    expect(within(filters).getByRole("group", { name: "Time range" })).toBeTruthy();
+    expect(within(filters).getByRole("checkbox", { name: "Include automated sessions" })).toBeTruthy();
+    expect(screen.queryByRole("group", { name: "Source" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Codex" })).toBeNull();
+    // Placed as on Overview: the heading, then the filters, in one header.
+    const header = document.querySelector("header.top")!;
+    expect(header.querySelector(":scope > div > #lede")).toBeTruthy();
+    expect(header.querySelector(":scope > .top-side > .filters")).toBe(filters);
+    await userEvent.click(within(filters).getByRole("button", { name: "30d" }));
+    expect(location.search).toBe("?project=demo-app&range=30&source=claude&auto=1"); // the hidden filter's value is kept
+    // The view in words names no source of the URL's: it is always Claude Code sessions.
+    await waitFor(() => expect(screen.getByText(/Model-judged/).textContent).toMatch(/^demo-app, last 30 days, Claude Code sessions\./));
   });
 
-  it("tags the page header as model-judged once, beside the page name, and no section heading", async () => {
+  it("tags the view as model-judged once, beside the view switch, and no section heading", async () => {
     show(fixture);
     await lede();
     // The tag sits outside the h1: the lede is a live region, and the tag's toggletip would read into it.
-    expect(within(document.querySelector<HTMLElement>("header.top .kicker")!).getByText("model-judged")).toBeTruthy();
+    expect(within(document.querySelector<HTMLElement>("main > .views")!).getByText("model-judged")).toBeTruthy();
     expect(screen.getByRole("heading", { level: 1 }).id).toBe("lede");
     expect(screen.getAllByText("model-judged")).toHaveLength(1);
     const headings = screen.getAllByRole("heading", { level: 2 });
@@ -118,8 +141,9 @@ describe("InsightsPage", () => {
     await lede();
     const rows = within(section(/^Outcomes$/)).getAllByRole("listitem").map(li => li.textContent);
     expect(rows).toEqual(["Fully achieved33%1", "Mostly achieved0%0", "Partially achieved33%1", "Not achieved0%0", "Unclear0%0", "abandoned33%1"]);
+    // Friction is weighed by cost first; the fixture's two friction sessions have no transcript, so they weigh nothing.
     const fr = within(section(/^Friction/)).getAllByRole("listitem");
-    expect(fr.map(li => li.textContent)).toEqual(["buggy code42 sessions2 labels ▾", "wrong approach31 session"]);
+    expect(fr.map(li => li.textContent)).toEqual(["buggy code$00s · 4 reports · 2 sessions2 labels ▾", "wrong approach$00s · 3 reports · 1 session"]);
     expect(within(fr[0]!).getByTitle("buggy_code")).toBeTruthy();
     const feel = within(section(/Satisfaction/)).getAllByRole("listitem").map(li => li.textContent);
     expect(feel.slice(0, 4)).toEqual(["likely satisfied21 session", "dissatisfied11 session", "satisfied11 session", "unclear11 session"]);
@@ -130,7 +154,7 @@ describe("InsightsPage", () => {
   it("orders the page: vitals, outcomes and friction, satisfaction, sessions, then Goals, Session types, Session figures and Coverage as closed drawers", async () => {
     show(fixture, "?range=0", []);
     await lede();
-    const wrap = document.querySelector(".pg-insights")!, at = (sel: string) => [...wrap.querySelectorAll("*")].indexOf(wrap.querySelector(sel)!);
+    const wrap = document.querySelector(".pg-judgments")!, at = (sel: string) => [...wrap.querySelectorAll("*")].indexOf(wrap.querySelector(sel)!);
     const order = [".secidx", ".vitals", "#outcomes", "#friction", "#satisfaction", "#log", "#d-goals", "#d-types", "#d-figures", "#d-coverage", "#d-how"].map(at);
     expect(order.every(i => i >= 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
@@ -147,7 +171,8 @@ describe("InsightsPage", () => {
     show(fixture, "?range=0", []);
     await lede();
     const nav = screen.getByRole("navigation", { name: "Page sections" });
-    expect(within(nav).getAllByRole("link").map(a => a.textContent)).toEqual(["Overview", "Outcomes", "Friction", "Satisfaction", "Sessions", "Goals", "Session types", "Session figures", "Coverage", "How this works"]);
+    // "Summary", not "Overview": that is the name of Activity's other view.
+    expect(within(nav).getAllByRole("link").map(a => a.textContent)).toEqual(["Summary", "Outcomes", "Friction", "Satisfaction", "Sessions", "Goals", "Session types", "Session figures", "Coverage", "How this works"]);
     await userEvent.click(within(nav).getByRole("link", { name: "Session types" }));
     expect(isOpen("d-types")).toBe(true);
     expect(isOpen("d-goals")).toBe(false);
@@ -178,7 +203,7 @@ describe("InsightsPage", () => {
     show({ ...none, coverage: { ...fixture.coverage, facets: 0, analysed: 0, not_analysed: 0 } }, "?project=nope");
     await lede();
     expect(drawer("d-how")).toBeTruthy();
-    expect(within(screen.getByRole("navigation", { name: "Page sections" })).getAllByRole("link").map(a => a.textContent)).toEqual(["Overview", "How this works"]);
+    expect(within(screen.getByRole("navigation", { name: "Page sections" })).getAllByRole("link").map(a => a.textContent)).toEqual(["Summary", "How this works"]);
   });
 
   it("hides How this works for Codex and without stored facets", async () => {
@@ -187,16 +212,154 @@ describe("InsightsPage", () => {
     expect(document.getElementById("d-how")).toBeNull();
   });
 
-  it("shows the outcome trend under outcomes and friction with two weeks, and not with one", async () => {
-    const trend = [{ week: "2026-10-26", n: 5, achieved: 4 }, { week: "2026-11-02", n: 2, achieved: 1 }];
-    show({ ...fixture, trend });
-    await lede();
-    const panel = section(/^Outcome trend$/);
-    expect(within(panel).getAllByRole("listitem").map(li => li.textContent)).toEqual(["Week of Oct 2680%4 of 5", "Week of Nov 250%1 of 2"]);
-    expect(within(panel).getByText(/Weeks are by session start, and a week with few sessions swings/)).toBeTruthy();
-    expect(panel.previousElementSibling).toBe(document.querySelector(".grid2"));
-    const nav = screen.getByRole("navigation", { name: "Page sections" });
-    expect(within(nav).getAllByRole("link").map(a => a.textContent)).toContain("Trend");
+  // The outcome trend: one bar per week, each filling the plot (100%) and stacked by outcome, with the week's sessions over it.
+  describe("outcome trend", () => {
+    const week = (day: string, fully: number, mostly: number, partially: number, not_achieved: number, other = 0) =>
+      ({ week: day, n: fully + mostly + partially + not_achieved + other, achieved: fully + mostly, fully, mostly, partially, not_achieved });
+    // 12 sessions, then 3 (few), then 8 with one of no clear outcome.
+    const trend = [week("2026-10-19", 7, 2, 2, 1), week("2026-10-26", 1, 0, 1, 1), week("2026-11-02", 4, 2, 1, 0, 1)];
+    const panel = () => section(/^Outcome trend$/);
+    const chart = () => within(panel()).getByRole("group", { name: /^Outcome mix per week/ });
+    const readout = () => panel().querySelector<HTMLElement>(".sr[aria-live]")!.textContent;
+    const tip = () => within(panel()).getByRole("tooltip", { hidden: true });
+    const up = async () => { show({ ...fixture, trend }); await lede(); };
+
+    it("sits under outcomes and friction with two weeks or more, in the index, and is left out with one", async () => {
+      await up();
+      expect(panel().previousElementSibling).toBe(document.querySelector(".grid2"));
+      expect(within(screen.getByRole("navigation", { name: "Page sections" })).getAllByRole("link").map(a => a.textContent)).toContain("Trend");
+      expect(panel().querySelector("ol.ledger")).toBeNull(); // bars, no more ledger rows
+    });
+
+    it("draws each week as one full-height bar stacked by outcome, best first, with its sessions over it", async () => {
+      await up();
+      const bars = [...chart().querySelectorAll<SVGGElement>("svg g.bar-seg")];
+      expect(bars.length).toBe(3);
+      // The parts of a bar add up to the whole plot (less the 2px gaps between them), whatever the week's sessions.
+      const plot = +chart().querySelector<SVGRectElement>("svg rect.hit")!.getAttribute("height")!;
+      const heights = bars.map(b => [...b.querySelectorAll("rect")].map(r => +r.getAttribute("height")!));
+      expect(heights.map(h => h.length)).toEqual([4, 3, 4]); // a part with no session is not drawn
+      heights.forEach(h => expect(h.reduce((a, b) => a + b, 0) + 2 * (h.length - 1)).toBeCloseTo(plot, 5));
+      expect(heights[0]![0]! / plot).toBeCloseTo(7 / 12, 2); // fully achieved, at the bottom
+      // The sample size: the count over each bar, since every bar is as tall as the next.
+      expect(bars.map(b => b.querySelector("text")!.textContent)).toEqual(["12", "3", "8"]);
+      // The parts keep one order and one color each, named in the key.
+      expect([...panel().querySelectorAll(".legend .key")].map(k => k.textContent)).toEqual(
+        ["Fully achieved", "Mostly achieved", "Partially achieved", "Not achieved", "No clear outcome", `Under ${FEW_SESSIONS} sessions`]);
+      expect(bars[0]!.querySelector("rect")!.getAttribute("fill")).toBe("var(--good)");
+    });
+
+    it("marks a week with few sessions: a half-width bar in full color, a key for it, and the words in its reading", async () => {
+      await up();
+      const bars = [...chart().querySelectorAll<SVGGElement>("svg g.bar-seg")];
+      expect(bars.map(b => b.classList.contains("few"))).toEqual([false, true, false]);
+      const width = (b: SVGGElement) => +b.querySelector("rect")!.getAttribute("width")!;
+      expect(width(bars[1]!)).toBeCloseTo(width(bars[0]!) / 2, 5);
+      // Not faded: a faint part would drop below 3:1 against the surface and its neighbours.
+      expect(bars[1]!.querySelectorAll("rect[opacity], rect[style]").length).toBe(0);
+      expect(FEW_SESSIONS).toBe(5);
+      expect(trendText(trend[1]!)).toBe("3 analysed sessions: 1 fully achieved (33%), 1 partially achieved (33%), 1 not achieved (33%); few sessions: one session moves this bar a lot");
+      cleanup();
+      show({ ...fixture, trend: [trend[0]!, trend[2]!] }); // no week with few sessions: no key for it
+      await lede();
+      expect([...panel().querySelectorAll(".legend .key")].map(k => k.textContent)).not.toContain(`Under ${FEW_SESSIONS} sessions`);
+    });
+
+    it("reads each week with the arrow keys: the week, its sessions and each outcome's count and share, in a tooltip and aloud", async () => {
+      await up();
+      expect(chart().getAttribute("aria-label")).toBe(
+        "Outcome mix per week of session start, 3 weeks: 70% of 23 analysed sessions fully or mostly achieved. Use the left and right arrow keys to read each week.");
+      expect(chart().getAttribute("tabindex")).toBe("0");
+      expect(chart().querySelector("svg")!.getAttribute("aria-hidden")).toBe("true"); // the group's name, the reading and the table stand for it
+      expect(readout()).toBe("");
+      act(() => chart().focus());
+      fireEvent.keyDown(chart(), { key: "ArrowRight" });
+      expect(readout()).toBe(`Week of ${new Date("2026-10-19T00:00:00Z").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}: `
+        + "12 analysed sessions: 7 fully achieved (58%), 2 mostly achieved (17%), 2 partially achieved (17%), 1 not achieved (8%)");
+      expect(tip().style.display).toBe("block");
+      expect([...tip().querySelectorAll(".row")].map(r => r.textContent)).toEqual(
+        ["Fully achieved7 · 58%", "Mostly achieved2 · 17%", "Partially achieved2 · 17%", "Not achieved1 · 8%", "Analysed sessions12"]);
+      fireEvent.keyDown(chart(), { key: "End" });
+      expect(readout()).toMatch(/: 8 analysed sessions: 4 fully achieved \(50%\), 2 mostly achieved \(25%\), 1 partially achieved \(13%\), 1 no clear outcome \(13%\)$/);
+      fireEvent.keyDown(chart(), { key: "ArrowLeft" });
+      expect(readout()).toMatch(/: 3 analysed sessions: .*; few sessions: one session moves this bar a lot$/);
+      expect(tip().textContent).toContain("few sessions: one session moves this bar a lot");
+      fireEvent.keyDown(chart(), { key: "Home" });
+      expect(readout()).toMatch(/: 12 analysed sessions/);
+      fireEvent.keyDown(chart(), { key: "Escape" }); // Escape dismisses the tooltip
+      expect(readout()).toBe("");
+      expect(tip().style.display).toBe("none");
+      fireEvent.keyDown(chart(), { key: "ArrowLeft" }); // the first Left reads the last week
+      expect(readout()).toMatch(/: 8 analysed sessions/);
+      act(() => chart().blur());
+      expect(readout()).toBe("");
+    });
+
+    it("offers the chart as a table: each week's sessions, and each outcome's count and share", async () => {
+      await up();
+      expect(within(panel()).queryByRole("table")).toBeNull(); // closed on load
+      const toggle = within(panel()).getByRole("button", { name: "Show data table" });
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      await userEvent.click(toggle);
+      const table = within(panel()).getByRole("table", { name: "Analysed sessions by outcome per week" });
+      expect(within(table).getAllByRole("columnheader").map(h => h.textContent)).toEqual(
+        ["Week", "Sessions", "Fully achieved", "Mostly achieved", "Partially achieved", "Not achieved", "No clear outcome"]);
+      const rows = within(table).getAllByRole("row").slice(1).map(r => [...r.children].map(c => c.textContent));
+      expect(rows.map(r => r.slice(1))).toEqual([
+        ["12", "7 · 58%", "2 · 17%", "2 · 17%", "1 · 8%", "0 · 0%"],
+        ["3 (few)", "1 · 33%", "0 · 0%", "1 · 33%", "1 · 33%", "0 · 0%"],
+        ["8", "4 · 50%", "2 · 25%", "1 · 13%", "0 · 0%", "1 · 13%"],
+      ]);
+      expect(rows.every(r => r[0]!.startsWith("Week of "))).toBe(true);
+      expect(within(table).getAllByRole("rowheader").length).toBe(3);
+      // The table's counts are the payload's: every row adds up to its sessions.
+      expect(trend.map(w => trendCounts(w).reduce((a, b) => a + b, 0))).toEqual(trend.map(w => w.n));
+      await userEvent.click(within(panel()).getByRole("button", { name: "Hide data table" }));
+      expect(within(panel()).queryByRole("table")).toBeNull();
+    });
+
+    it("says what the bars show in one line, and how to read them behind How measured", async () => {
+      await up();
+      expect(within(panel()).getByText(/as shares of that week/).textContent).toContain("The figure over a bar is its sessions.");
+      await userEvent.click(within(panel()).getByRole("button", { name: "How measured: the outcome trend" }));
+      const how = within(panel()).getAllByRole("tooltip").find(t => t.textContent!.includes("Weeks are by session start"))!.textContent!;
+      expect(how).toContain("Every bar is 100% of its week");
+      expect(how).toContain("A week with fewer than 5 sessions is drawn at half width.");
+    });
+
+    it("keeps a part of 1 in 150 visible: at least 1px painted, with the 2px gap below it", async () => {
+      show({ ...fixture, trend: [week("2026-10-19", 149, 0, 0, 1), trend[2]!] });
+      await lede();
+      const plot = +chart().querySelector<SVGRectElement>("svg rect.hit")!.getAttribute("height")!;
+      const h = [...chart().querySelectorAll<SVGGElement>("svg g.bar-seg")[0]!.querySelectorAll("rect")].map(r => +r.getAttribute("height")!);
+      expect(h.length).toBe(2);
+      expect(h[1]!).toBeGreaterThanOrEqual(1);
+      expect(h[0]! + h[1]! + 2).toBeCloseTo(plot, 5); // the slots still fill the bar
+    });
+
+    it("leaves Alt, Ctrl, Meta and Shift keys to the browser", async () => {
+      await up();
+      act(() => chart().focus());
+      for (const init of [{ key: "ArrowLeft", altKey: true }, { key: "Home", ctrlKey: true }, { key: "End", metaKey: true }, { key: "ArrowRight", shiftKey: true }]) {
+        const ev = new KeyboardEvent("keydown", { ...init, bubbles: true, cancelable: true });
+        act(() => { chart().dispatchEvent(ev); });
+        expect(ev.defaultPrevented).toBe(false);
+        expect(readout()).toBe("");
+      }
+    });
+
+    it("thins the sample counts on a phone with 26 weeks, so no two overlap", async () => {
+      // A 320px phone: the panel's plot box is about 254px wide.
+      vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(254);
+      const weeks = Array.from({ length: 26 }, (_, i) => week(new Date(Date.UTC(2026, 4, 4 + 7 * i)).toISOString().slice(0, 10), 10 + i, 2, 1, 1));
+      show({ ...fixture, trend: weeks });
+      await lede();
+      const counts = [...chart().querySelectorAll<SVGTextElement>("svg g.bar-seg > text")].filter(t => /^\d+$/.test(t.textContent!) && +t.getAttribute("y")! < 20);
+      expect(counts.length).toBeGreaterThan(1);
+      expect(counts.length).toBeLessThan(26);
+      const xs = counts.map(t => +t.getAttribute("x")!), wide = (2 * 6.6 + 4); // two digits at 11px, with room around them
+      xs.slice(1).forEach((x, k) => expect(x - xs[k]!).toBeGreaterThanOrEqual(wide));
+    });
   });
 
   it("leaves the trend out with one week", async () => {
@@ -299,7 +462,7 @@ describe("InsightsPage", () => {
     expect(top.textContent).toContain(when(fixture.sessions[2]!.start));
     expect(top.contains(last!.querySelector(".sum"))).toBe(false);
     expect(within(last!).getByText("#0000aaaa")).toBeTruthy();
-    expect(link.getAttribute("href")).toBe("/insights?range=0&session=0000aaaa-0000-4000-8000-000000000001");
+    expect(link.getAttribute("href")).toBe("/usage?range=0&view=judgments&session=0000aaaa-0000-4000-8000-000000000001");
     // Friction detail: an expander, closed, only on a card that has detail.
     const fd = mid!.querySelector("details")!;
     expect(fd.open).toBe(false);
@@ -309,8 +472,46 @@ describe("InsightsPage", () => {
     expect(fd.open).toBe(true);
     expect(last!.querySelector("details")).toBeNull();
     await userEvent.click(link);
-    expect(location.pathname).toBe("/insights");
+    expect(location.pathname).toBe("/usage");
     expect(location.search).toBe("?range=0&session=0000aaaa-0000-4000-8000-000000000001");
+  });
+
+  describe("stored figures on a session card", () => {
+    const lines = () => cards().map(c => c.querySelector(".stored")?.textContent ?? null);
+
+    it("shows a stored session's cost, peak context share and tool errors on one line, and none for a session with no transcript", async () => {
+      show(fixture);
+      await lede();
+      // The fixture's one stored session: $4.20, a peak at 62% of the window, one failed tool call.
+      expect(fixture.sessions.map(s => [s.in_store, s.cost, s.context_share, s.errors])).toEqual([[false, null, null, null], [false, null, null, null], [true, 4.2, 0.62, 1]]);
+      expect(lines()).toEqual([null, null, "$4.20 · peak context 62% · 1 tool error"]);
+      const line = cards()[2]!.querySelector<HTMLElement>(".stored")!;
+      expect(line.title).toBe("Measured from the stored transcript, over the whole session");
+      // Measured, so apart from the model's words: after the summary, before what /insights counted.
+      expect(cards()[2]!.querySelector(".sum")!.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(line.compareDocumentPosition(cards()[2]!.querySelector(".measured")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(within(line).queryByText("model-judged")).toBeNull();
+    });
+
+    it("marks a peak near the limit and a failed call, and says no errors in words", async () => {
+      const s = fixture.sessions[2]!;
+      show({ ...fixture, sessions: [{ ...s, session_id: s.session_id.replace(/1$/, "7"), cost: 31.4, context_share: 0.93, errors: 0 }, s] });
+      await lede();
+      expect(lines()).toEqual(["$31 · peak context 93% · 0 tool errors", "$4.20 · peak context 62% · 1 tool error"]);
+      const warn = (i: number) => [...cards()[i]!.querySelectorAll(".stored .warn")].map(e => e.textContent);
+      expect(warn(0)).toEqual(["peak context 93%"]); // 80% of the window or more: near the limit, as on Overview
+      expect(warn(1)).toEqual(["1 tool error"]);
+    });
+
+    it("leaves out a figure the store does not know: no price, no known window", async () => {
+      const s = fixture.sessions[2]!;
+      show({ ...fixture, sessions: [{ ...s, cost: null, context_share: null, errors: 3 }] });
+      await lede();
+      expect(lines()).toEqual(["3 tool errors"]);
+      expect(stored({ cost: null, context_share: null, errors: null })).toEqual([]);
+      expect(stored({ cost: 0.5, context_share: 0.8, errors: 0 })).toEqual([
+        { text: "$0.50", warn: false }, { text: "peak context 80%", warn: true }, { text: "0 tool errors", warn: false }]);
+    });
   });
 
   it("narrows to friction and keeps that in the URL", async () => {
@@ -334,7 +535,7 @@ describe("InsightsPage", () => {
     expect(cards().length).toBe(2);
     await userEvent.click(within(log).getByLabelText("Only sessions with friction"));
     expect(within(log).getByRole("link", { name: "Add a theme toggle" }).getAttribute("href"))
-      .toBe("/insights?project=demo-app&range=7&source=claude&auto=1&session=0000aaaa-0000-4000-8000-000000000001");
+      .toBe("/usage?project=demo-app&range=7&source=claude&auto=1&view=judgments&session=0000aaaa-0000-4000-8000-000000000001");
   });
 
   it("shows the first 25 sessions of the chosen order until asked for all, and names the collapse by position, not age", async () => {
@@ -627,12 +828,14 @@ describe("InsightsPage", () => {
 
     it("keeps the sort for the page visit when the list unmounts and comes back", async () => {
       show(fixture);
+      // A project with no analysed session has no list.
+      mockApi({ "/api/insights": q => (q.get("project") === "docs-site" ? { ...none, coverage: { ...fixture.coverage, facets: 0, analysed: 0 } } : fixture) });
       await lede();
       await pick("Sort", "oldest");
       expect(order()[0]).toBe("Synthetic: added a theme toggle to a demo app.");
-      await userEvent.click(screen.getByRole("button", { name: "Codex" }));
+      act(() => setSearch({ project: "docs-site" }));
       await vi.waitFor(() => expect(screen.queryByRole("region", { name: /Analysed sessions/ })).toBeNull());
-      await userEvent.click(screen.getByRole("button", { name: "Claude Code" }));
+      act(() => setSearch({ project: null }));
       await vi.waitFor(() => expect(screen.queryByRole("region", { name: /Analysed sessions/ })).toBeTruthy());
       expect((within(logOf()).getByLabelText("Sort") as HTMLSelectElement).value).toBe("oldest");
       expect(order()[0]).toBe("Synthetic: added a theme toggle to a demo app.");
@@ -700,17 +903,11 @@ describe("InsightsPage", () => {
       expect(within(screen.getByRole("navigation", { name: "Page sections" })).queryByRole("link", { name: "Session figures" })).toBeNull();
     });
 
-    it("is not shown for Codex, whatever the payload holds", async () => {
-      show({ ...none, meta: fixture.meta, coverage: { ...fixture.coverage, claude_sessions: 0, analysed: 0, not_analysed: 0, facets: 0, orphans: 0 } }, "?range=0&source=codex");
-      await lede();
-      expect(document.getElementById("d-figures")).toBeNull();
-    });
-
     it("stays in a view with no analysed session, with its place in the index", async () => {
       show({ ...none, meta: fixture.meta, coverage: { ...fixture.coverage, facets: 0, analysed: 0, not_analysed: 3 } }, "?project=nope", []);
       await lede();
       expect(isOpen("d-figures")).toBe(false);
-      expect(within(screen.getByRole("navigation", { name: "Page sections" })).getAllByRole("link").map(a => a.textContent)).toEqual(["Overview", "Session figures", "How this works"]);
+      expect(within(screen.getByRole("navigation", { name: "Page sections" })).getAllByRole("link").map(a => a.textContent)).toEqual(["Summary", "Session figures", "How this works"]);
     });
   });
 
@@ -769,15 +966,96 @@ describe("InsightsPage", () => {
       await lede();
       expect(within(goals()).getAllByRole("listitem").map(li => li.textContent)).toEqual([
         "fix bug21 session", "implement feature21 session2 labels ▾", "explore idea11 session", "write tests11 session"]); // a family of one label shows the label as written
-      expect(within(fr()).getAllByRole("listitem").map(li => li.textContent)).toEqual(["buggy code42 sessions2 labels ▾", "wrong approach31 session"]);
+      await userEvent.click(within(fr()).getByRole("button", { name: "Reports" })); // by times reported, as the goals are
+      expect(within(fr()).getAllByRole("listitem").map(li => li.textContent)).toEqual(["buggy code4$0 · 0s · 2 sessions2 labels ▾", "wrong approach3$0 · 0s · 1 session"]);
       for (const [sec, what] of [[goals(), "goals"], [fr(), "friction"]] as const) {
         await userEvent.click(within(sec).getByRole("button", { name: `How measured: ${what}` }));
         expect(within(sec).getByRole("tooltip").textContent).toMatch(/grouped into families by keyword.*as \/insights wrote them/);
       }
     });
 
+    // Friction is weighed by the sessions that reported it: what they cost, how long they ran, or how often it was reported.
+    describe("friction weights", () => {
+      // tooling: reported most, by cheap sessions. wrong_approach: reported least, by the costliest. buggy_code: the longest.
+      const friction_families = [
+        fam("tooling", 9, 4, 6.5, 3600, [{ name: "flaky_ci", n: 6, sessions: 3, cost: 5, active_s: 2700 }, { name: "environment", n: 3, sessions: 2, cost: 2.25, active_s: 1500 }]),
+        fam("buggy_code", 5, 3, 18, 14400), fam("wrong_approach", 2, 1, 42, 5400), fam("mood", 1, 1, 0, 0),
+      ];
+      const weighed = { ...fixture, friction_families };
+      const rows = () => [...fr().querySelectorAll<HTMLElement>(":scope > ol.ledger > li")];
+      const names = () => rows().map(li => li.querySelector(".n")!.textContent);
+      const bars = () => rows().map(li => parseFloat(li.querySelector<HTMLElement>(".bar span")!.style.width));
+      const by = (name: string) => within(fr()).getByRole("button", { name });
+
+      it("weighs by cost first: the costliest sessions' friction on top, with the active time, the reports and the sessions beside the cost", async () => {
+        show(weighed);
+        await lede();
+        const group = within(fr()).getByRole("group", { name: "Weigh friction by" });
+        expect(within(group).getAllByRole("button").map(b => [b.textContent, b.getAttribute("aria-pressed")])).toEqual([["Cost", "true"], ["Active time", "false"], ["Reports", "false"]]);
+        expect(names()).toEqual(["wrong approach", "buggy code", "tooling", "mood"]);
+        expect(rows().map(li => [li.querySelector(".v")!.textContent, li.querySelector(".s")!.textContent])).toEqual([
+          ["$42", "1.5h · 2 reports · 1 session"], ["$18", "4h · 5 reports · 3 sessions"], ["$6.50", "1h · 9 reports · 4 sessions"], ["$0", "0s · 1 report · 1 session"]]);
+        expect(bars()).toEqual([100, expect.closeTo(100 * 18 / 42, 3), expect.closeTo(100 * 6.5 / 42, 3), 0]); // each against the heaviest
+      });
+
+      it("weighs by active time or by reports on request, and reorders, re-scales and re-labels the rows", async () => {
+        show(weighed);
+        await lede();
+        await userEvent.click(by("Active time"));
+        expect(by("Active time").getAttribute("aria-pressed")).toBe("true");
+        expect(names()).toEqual(["buggy code", "wrong approach", "tooling", "mood"]);
+        expect(rows().map(li => [li.querySelector(".v")!.textContent, li.querySelector(".s")!.textContent])[0]).toEqual(["4h", "$18 · 5 reports · 3 sessions"]);
+        expect(bars()[1]).toBeCloseTo(100 * 5400 / 14400, 3);
+        await userEvent.click(by("Reports"));
+        expect(names()).toEqual(["tooling", "buggy code", "wrong approach", "mood"]); // the payload's order: most reported first
+        expect(rows().map(li => [li.querySelector(".v")!.textContent, li.querySelector(".s")!.textContent])[0]).toEqual(["9", "$6.50 · 1h · 4 sessions"]);
+        expect(location.search).toBe("?range=0"); // a way to read the ledger, not a filter
+      });
+
+      it("weighs a family's labels the same way when it expands", async () => {
+        show(weighed);
+        await lede();
+        await userEvent.click(within(fr()).getByRole("button", { name: "2 labels in tooling" }));
+        const members = within(fr()).getByRole("list", { name: "Labels in tooling" });
+        expect(within(members).getAllByRole("listitem").map(li => li.textContent)).toEqual(["flaky ci$5.0045m · 6 reports · 3 sessions", "environment$2.2525m · 3 reports · 2 sessions"]);
+        // A session with both labels counts once in the family: the family weighs less than its labels added up.
+        expect(friction_families[0]!.cost).toBeLessThan(5 + 2.25);
+      });
+
+      it("keeps a row a filter of the list whatever it is weighed by", async () => {
+        show(weighed);
+        await lede();
+        await userEvent.click(by("Active time"));
+        await userEvent.click(rowBtn(fr(), /^buggy code/));
+        expect(hashOf()).toBe("?range=0&fr=buggy_code");
+        expect(rowBtn(fr(), /^buggy code/).getAttribute("aria-pressed")).toBe("true");
+      });
+
+      it("says what the weights are, and what they are not, behind How measured", async () => {
+        show(weighed);
+        await lede();
+        expect(within(fr()).getByText(/What got in the way/).textContent).toContain("What got in the way, weighed by the sessions that reported it.");
+        await userEvent.click(within(fr()).getByRole("button", { name: "How measured: friction" }));
+        const how = within(fr()).getByRole("tooltip").textContent!;
+        expect(how).toContain("Cost and active time are those of the whole sessions that reported a friction, not of the friction alone, and each session counts once in a row.");
+        expect(how).toContain("A session with no transcript in the store adds no cost or time; one with no price adds no cost, but its active time counts.");
+      });
+
+      it("orders and words the weights", () => {
+        expect(byWeight(friction_families, "cost").map(f => f.family)).toEqual(["wrong_approach", "buggy_code", "tooling", "mood"]);
+        expect(byWeight(friction_families, "time").map(f => f.family)).toEqual(["buggy_code", "wrong_approach", "tooling", "mood"]);
+        expect(byWeight(friction_families, "reports")).toEqual(friction_families);
+        // A tie keeps the payload's order, most reported first.
+        expect(byWeight([fam("a", 3, 1), fam("b", 2, 1)], "cost").map(f => f.family)).toEqual(["a", "b"]);
+        const f = friction_families[1]!;
+        expect([weightValue(f, "cost"), weightSide(f, "cost")]).toEqual(["$18", "4h · 5 reports · 3 sessions"]);
+        expect([weightValue(f, "time"), weightSide(f, "time")]).toEqual(["4h", "$18 · 5 reports · 3 sessions"]);
+        expect([weightValue(f, "reports"), weightSide(f, "reports")]).toEqual(["5", "$18 · 4h · 3 sessions"]);
+      });
+    });
+
     it("counts the 12-row cap in families", async () => {
-      const friction_families = Array.from({ length: 13 }, (_, i) => ({ family: `f${i}`, n: 13 - i, sessions: 1, members: [{ name: `f${i}`, n: 13 - i, sessions: 1 }] }));
+      const friction_families = Array.from({ length: 13 }, (_, i) => fam(`f${i}`, 13 - i, 1));
       show({ ...fixture, friction_families });
       await lede();
       expect(within(fr()).getAllByRole("listitem").length).toBe(12);
@@ -796,7 +1074,7 @@ describe("InsightsPage", () => {
       await userEvent.click(exp);
       expect(exp.getAttribute("aria-expanded")).toBe("true");
       const members = within(row).getByRole("list", { name: "Labels in buggy code" });
-      expect(within(members).getAllByRole("listitem").map(li => li.textContent)).toEqual(["buggy code32 sessions", "broken build11 session"]);
+      expect(within(members).getAllByRole("listitem").map(li => li.textContent)).toEqual(["buggy code$00s · 3 reports · 2 sessions", "broken build$00s · 1 report · 1 session"]);
       expect(within(members).getByTitle("broken_build")).toBeTruthy();
       expect(hashOf()).toBe("?range=0"); // expanding filters nothing
       await userEvent.click(exp);
@@ -903,52 +1181,210 @@ describe("InsightsPage", () => {
     });
 
     it("names the top friction label as written in the lede when its family has one label", async () => {
-      const one = [{ family: "environment", n: 5, sessions: 2, members: [{ name: "environment", n: 5, sessions: 2 }] }];
+      const one = [fam("environment", 5, 2)];
       show({ ...fixture, friction: [{ name: "environment", n: 5, sessions: 2 }], friction_families: one });
       expect((await lede()).textContent).toContain("environment caused the most friction.");
     });
 
     it("names a family the labels of which are not named like it in the lede", async () => {
-      const several = [{ family: "tooling", n: 6, sessions: 3, members: [{ name: "environment", n: 4, sessions: 2 }, { name: "flaky_ci", n: 2, sessions: 1 }] }];
+      const several = [fam("tooling", 6, 3, 0, 0, [{ name: "environment", n: 4, sessions: 2, cost: 0, active_s: 0 }, { name: "flaky_ci", n: 2, sessions: 1, cost: 0, active_s: 0 }])];
       show({ ...fixture, friction: [{ name: "environment", n: 4, sessions: 2 }, { name: "flaky_ci", n: 2, sessions: 1 }], friction_families: several });
       expect((await lede()).textContent).toContain("tooling caused the most friction.");
     });
   });
 
-  it("opens the session sheet over Insights from a session link, and Back closes it with the page as it was", async () => {
-    mockApi({ "/api/insights": () => fixture, "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/session": () => session,
+  // In the app: the shell hosts the sheet, the Judgments view stays under it.
+  const inApp = (url: string) => {
+    const f = mockApi({ "/api/insights": () => fixture, "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/session": () => session,
       "/api/status": () => ({ ingesting: false, last_ingest: null, last_change: null, last_stats: null, error: null, counts: {}, interval: 60, project_order: [] }) });
-    history.replaceState(null, "", "/insights?range=0");
+    history.replaceState(null, "", url);
     renderRouter();
+    return f;
+  };
+  const SID = "0000aaaa-0000-4000-8000-000000000001";
+
+  it("opens the session sheet over the Judgments view from a session link, and Back closes it with the view as it was", async () => {
+    inApp("/usage?range=0&view=judgments&outcome=fully_achieved");
     const link = await screen.findByRole("link", { name: "Add a theme toggle" });
-    expect(link.getAttribute("href")).toBe("/insights?range=0&session=0000aaaa-0000-4000-8000-000000000001"); // a new tab opens the same
+    expect(link.getAttribute("href")).toBe(`/usage?range=0&view=judgments&outcome=fully_achieved&session=${SID}`); // a new tab opens the same
     const page = document.querySelector("main")!;
+    expect(page.className).toContain("pg-judgments");
     await userEvent.click(link);
-    expect(location.pathname + location.search).toBe("/insights?range=0&session=0000aaaa-0000-4000-8000-000000000001");
-    expect(document.title).toBe("Insights · AI Ledger");
+    expect(location.pathname + location.search).toBe(`/usage?range=0&view=judgments&outcome=fully_achieved&session=${SID}`);
+    expect(document.title).toBe("Activity · AI Ledger");
     const dlg = await waitFor(() => { const d = document.querySelector<HTMLDialogElement>("dialog[open]"); expect(d).toBeTruthy(); return d!; });
     expect(await within(dlg).findByText("Timeline")).toBeTruthy();
-    expect(document.querySelector("main")).toBe(page); // the page stays mounted under the sheet
+    expect(page.contains(dlg)).toBe(false); // the shell's sheet, not the view's
+    expect(document.querySelector("main")).toBe(page); // the view stays mounted under the sheet, with its filter
+    expect(screen.getByRole("button", { name: "Judgments" }).getAttribute("aria-pressed")).toBe("true");
     await userEvent.click(within(dlg).getByRole("button", { name: "Close" }));
-    await waitFor(() => expect(location.search).toBe("?range=0"));
+    await waitFor(() => expect(location.search).toBe("?range=0&view=judgments&outcome=fully_achieved"));
     expect(document.querySelector("main")).toBe(page);
     await waitFor(() => expect(document.activeElement).toBe(link)); // focus returns to the link
   });
 
-  it("opens the session sheet over Insights from a session link's context menu, and returns focus to the link", async () => {
-    mockApi({ "/api/insights": () => fixture, "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/session": () => session,
-      "/api/status": () => ({ ingesting: false, last_ingest: null, last_change: null, last_stats: null, error: null, counts: {}, interval: 60, project_order: [] }) });
-    history.replaceState(null, "", "/insights?range=0");
-    renderRouter();
+  it("opens the session sheet from a link to the Judgments view with the session in it, as the old /insights link did", async () => {
+    inApp(`/insights?range=0&session=${SID}`);
+    await waitFor(() => expect(location.pathname + location.search).toBe(`/usage?range=0&view=judgments&session=${SID}`));
+    const dlg = await waitFor(() => { const d = document.querySelector<HTMLDialogElement>("dialog[open]"); expect(d).toBeTruthy(); return d!; });
+    expect(await within(dlg).findByText("Timeline")).toBeTruthy();
+    expect(document.querySelector("main")!.className).toContain("pg-judgments");
+  });
+
+  it("opens the session sheet over the Judgments view from a session link's context menu, and returns focus to the link", async () => {
+    inApp("/usage?range=0&view=judgments");
     const link = await screen.findByRole("link", { name: "Add a theme toggle" });
     const page = document.querySelector("main")!;
     fireEvent.contextMenu(link, { clientX: 20, clientY: 30 });
     await userEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Open session" }));
-    await waitFor(() => expect(location.pathname + location.search).toBe("/insights?range=0&session=0000aaaa-0000-4000-8000-000000000001"));
+    await waitFor(() => expect(location.pathname + location.search).toBe(`/usage?range=0&view=judgments&session=${SID}`));
     const dlg = await waitFor(() => { const d = document.querySelector<HTMLDialogElement>("dialog[open]"); expect(d).toBeTruthy(); return d!; });
-    expect(document.querySelector("main")).toBe(page); // over Insights, not Activity
+    expect(document.querySelector("main")).toBe(page); // over the Judgments view, not Overview
     await userEvent.click(within(dlg).getByRole("button", { name: "Close" }));
-    await waitFor(() => expect(location.search).toBe("?range=0"));
+    await waitFor(() => expect(location.search).toBe("?range=0&view=judgments"));
     await waitFor(() => expect(document.activeElement).toBe(link));
+  });
+});
+
+// Activity holds two views of the same sessions. The switch over the heading picks one, and the URL keeps it.
+describe("Activity's view switch", () => {
+  const serve = () => mockApi({ "/api/usage": () => usage, "/api/insights": () => fixture, "/api/sessions": () => sessions, "/api/session": () => session });
+  const calls = (f: ReturnType<typeof serve>, path: string) => f.mock.calls.map(c => String(c[0])).filter(u => u.startsWith(path));
+  const open = (search: string) => { const f = serve(); history.replaceState(null, "", "/usage" + search); renderPage(<ActivityPage />); return f; };
+  const sw = () => within(screen.getByRole("group", { name: "Activity view" }));
+  const btn = (name: string) => sw().getByRole("button", { name });
+  const pressed = () => sw().getAllByRole("button").map(b => [b.textContent, b.getAttribute("aria-pressed")]);
+  const overview = () => screen.findByRole("heading", { level: 1, name: /commit/ });
+  const judgments = () => screen.findByRole("heading", { level: 1, name: /analysed sessions/ });
+  const main = () => document.querySelector("main")!.className;
+
+  it("shows Overview by default, with both views offered over the heading", async () => {
+    const f = open("?range=30");
+    await overview();
+    expect(pressed()).toEqual([["Overview", "true"], ["Judgments", "false"]]);
+    expect(main()).toContain("pg-activity");
+    expect(calls(f, "/api/insights")).toEqual([]);
+    expect(document.querySelector("main > .views")!.nextElementSibling).toBe(document.querySelector("header.top"));
+    expect(screen.queryByText("model-judged")).toBeNull(); // Overview is measured
+    expect(btn("Judgments").hasAttribute("aria-disabled")).toBe(false);
+  });
+
+  it("opens the view the URL names, with its own request and not Overview's", async () => {
+    const f = open("?project=foo&range=7&view=judgments");
+    await judgments();
+    expect(pressed()).toEqual([["Overview", "false"], ["Judgments", "true"]]);
+    expect(main()).toContain("pg-judgments");
+    expect(calls(f, "/api/insights")).toEqual(["/api/insights?project=foo&range=7"]);
+    expect(calls(f, "/api/usage")).toEqual([]);
+    expect(within(document.querySelector<HTMLElement>("main > .views")!).getByText("model-judged")).toBeTruthy();
+  });
+
+  it("switches to Judgments as one history entry: the view in the URL, Overview's own keys dropped, focus kept on the switch", async () => {
+    const f = open("?project=foo&range=30&q=fix&near=1");
+    await overview();
+    const before = history.length;
+    await userEvent.click(btn("Judgments"));
+    expect(location.search).toBe("?project=foo&range=30&view=judgments");
+    expect(history.length).toBe(before + 1);
+    await judgments();
+    expect(pressed()).toEqual([["Overview", "false"], ["Judgments", "true"]]);
+    // The switch was drawn again with the view: the pressed button takes the focus the clicked one had.
+    await waitFor(() => expect(document.activeElement).toBe(btn("Judgments")));
+    expect(calls(f, "/api/insights")).toEqual(["/api/insights?project=foo&range=30"]);
+    expect(screen.queryByRole("group", { name: "Source" })).toBeNull();
+  });
+
+  it("switches back to Overview, leaving the judgment filters behind and keeping the shared ones", async () => {
+    open("?project=foo&range=7&source=claude&auto=1&view=judgments&outcome=not_achieved&friction=1&frf=buggy_code");
+    await judgments();
+    await userEvent.click(btn("Overview"));
+    expect(location.search).toBe("?project=foo&range=7&source=claude&auto=1");
+    await overview();
+    expect(main()).toContain("pg-activity");
+    await waitFor(() => expect(document.activeElement).toBe(btn("Overview")));
+    expect(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Claude Code" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  // The view picked first loads with a placeholder; the switch stays drawn over it, with the focus on it and the tab order intact.
+  it.each([
+    ["Judgments", "?range=30", "/api/insights", /Loading judgments/],
+    ["Overview", "?range=30&view=judgments", "/api/usage", /Loading activity/],
+  ])("keeps the focus on the switch while %s's first request is pending, keyboard and all", async (to, search, path, title) => {
+    let resolve!: (v: unknown) => void;
+    const gate = new Promise(r => { resolve = r; });
+    // The first view's request answers at once; only the one the switch starts is held.
+    open(search);
+    await (to === "Judgments" ? overview : judgments)();
+    mockApi({ "/api/usage": () => usage, "/api/insights": () => fixture, "/api/sessions": () => sessions, "/api/session": () => session, [path]: () => gate });
+    act(() => btn(to).focus());
+    await userEvent.keyboard("{Enter}");
+    expect(screen.getByRole("heading", { level: 1, name: title })).toBeTruthy(); // still pending: the placeholder shows
+    expect(document.activeElement).toBe(btn(to));
+    const other = to === "Judgments" ? "Overview" : "Judgments";
+    await userEvent.tab({ shift: to === "Judgments" });
+    expect(document.activeElement).toBe(btn(other));
+    await userEvent.tab({ shift: to !== "Judgments" });
+    expect(document.activeElement).toBe(btn(to));
+    await act(async () => { resolve(path === "/api/usage" ? usage : fixture); await gate; });
+    await (to === "Judgments" ? judgments : overview)();
+    expect(document.activeElement).toBe(btn(to));
+  });
+
+  it("does nothing when the view shown is picked again", async () => {
+    open("?range=30");
+    await overview();
+    const before = history.length;
+    await userEvent.click(btn("Overview"));
+    expect([location.search, history.length]).toEqual(["?range=30", before]);
+  });
+
+  describe("with the source filter on Codex alone", () => {
+    it("does not offer Judgments: it says why beside the switch, stays focusable, and does nothing", async () => {
+      const f = open("?range=30&source=codex");
+      await overview();
+      const j = btn("Judgments");
+      expect(j.getAttribute("aria-disabled")).toBe("true");
+      expect(j.hasAttribute("disabled")).toBe(false); // focusable, so its reason can be reached from the keyboard
+      const why = document.getElementById(j.getAttribute("aria-describedby")!)!;
+      expect(why.textContent).toBe(NO_FACETS);
+      expect(NO_FACETS).toBe("Codex writes no facets: /insights judges Claude Code sessions only.");
+      expect(why.closest(".views")).toBeTruthy(); // shown, not a hover text
+      expect(j.hasAttribute("title")).toBe(false);
+      const before = history.length;
+      await userEvent.click(j);
+      act(() => j.focus());
+      await userEvent.keyboard("{Enter}");
+      await userEvent.keyboard(" ");
+      expect([location.search, history.length]).toEqual(["?range=30&source=codex", before]);
+      expect(main()).toContain("pg-activity");
+      expect(calls(f, "/api/insights")).toEqual([]);
+      expect(document.activeElement).toBe(j);
+    });
+
+    it("offers Judgments again once the source is All or Claude Code, with no reason left", async () => {
+      open("?range=30&source=codex");
+      await overview();
+      await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "All" }));
+      expect(btn("Judgments").hasAttribute("aria-disabled")).toBe(false);
+      expect(btn("Judgments").hasAttribute("aria-describedby")).toBe(false);
+      expect(screen.queryByText(NO_FACETS)).toBeNull();
+      await userEvent.click(btn("Judgments"));
+      expect(location.search).toBe("?range=30&view=judgments");
+    });
+
+    it("opens Overview for a link to the judgments, never a dead-end page: the URL drops the view with no new entry", async () => {
+      const f = serve();
+      history.replaceState(null, "", "/usage?range=30&source=codex&view=judgments&outcome=not_achieved");
+      const before = history.length;
+      renderPage(<ActivityPage />);
+      await overview();
+      await waitFor(() => expect(location.search).toBe("?range=30&source=codex"));
+      expect(history.length).toBe(before);
+      expect(main()).toContain("pg-activity");
+      expect(pressed()).toEqual([["Overview", "true"], ["Judgments", "false"]]);
+      expect(btn("Judgments").getAttribute("aria-disabled")).toBe("true");
+      expect(calls(f, "/api/insights")).toEqual([]);
+      expect(document.querySelector("main")!.textContent).not.toMatch(/analyses only Claude Code|could not be loaded/);
+    });
   });
 });

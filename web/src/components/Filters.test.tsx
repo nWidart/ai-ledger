@@ -81,6 +81,38 @@ describe("Filters", () => {
     expect(screen.queryByRole("checkbox")).toBeNull();
   });
 
+  // A page shows a filter only when it changes what the page shows. The filters that show keep one order: project, range,
+  // source, then the automated toggle.
+  describe("per page", () => {
+    const shown = () => [
+      screen.queryByRole("combobox", { name: "Project" }) && "project", screen.queryByRole("group", { name: "Time range" }) && "range",
+      screen.queryByRole("group", { name: "Source" }) && "source", screen.queryByRole("checkbox", { name: "Include automated sessions" }) && "automated",
+    ].filter(Boolean);
+    const order = () => [...document.querySelectorAll(".filters > *")].map(e => (e.id === "fRange" ? "range" : e.id === "fSource" ? "source"
+      : e.classList.contains("filters-project") ? "project" : e.classList.contains("chk") ? "automated" : "")).filter(Boolean);
+
+    it.each([
+      ["Activity's Overview, Cost, Context and the Project page", "/usage", <Filters key="a" projects={["foo"]} automated />, ["project", "range", "source", "automated"]],
+      ["Activity's Judgments view, which judges Claude Code sessions only", "/usage?view=judgments", <Filters key="b" projects={["foo"]} automated source={false} />, ["project", "range", "automated"]],
+      ["Errors, which is never filtered by automated sessions", "/errors", <Filters key="c" projects={["foo"]} />, ["project", "range", "source"]],
+      ["Limits, which is per account and ranges one section", "/limits", <Filters key="d" projects={[]} project={false} range={false} />, ["source"]],
+      ["Live, which has no range", "/live", <Filters key="e" projects={["foo"]} automated range={false} />, ["project", "source", "automated"]],
+    ])("shows the filters of %s, in the shared order", (_page, url, ui, filters) => {
+      history.replaceState(null, "", url);
+      renderApp(ui);
+      expect(shown()).toEqual(filters);
+      expect(order()).toEqual(filters);
+    });
+
+    it("keeps a hidden filter's value in the URL for the other pages, and never writes it", async () => {
+      history.replaceState(null, "", "/usage?range=30&source=claude&view=judgments");
+      renderApp(<Filters projects={["foo"]} automated source={false} />);
+      expect(screen.queryByRole("button", { name: "Codex" })).toBeNull();
+      await userEvent.click(screen.getByRole("button", { name: "7d" }));
+      expect(location.search).toBe("?range=7&source=claude&view=judgments");
+    });
+  });
+
   it("shows a label in the field and in the list", async () => {
     history.replaceState(null, "", "/errors?project=foo");
     renderApp(<Filters projects={[{ value: "foo", label: "foo — 3 errors (all time)" }]} />);
@@ -174,7 +206,7 @@ describe("Filters project link and clear button", () => {
     await screen.findByRole("heading", { level: 1, name: "foo" });
     expect(link()).toBeNull();
     const tabs = within(screen.getByRole("navigation", { name: "Dashboards" }));
-    for (const name of ["Activity", "Cost", "Context", "Errors", "Limits", "Insights", "Live"]) expect(tabs.getByRole("link", { name }).getAttribute("aria-current")).toBeNull();
+    for (const name of ["Live", "Limits", "Activity", "Cost", "Context", "Errors"]) expect(tabs.getByRole("link", { name }).getAttribute("aria-current")).toBeNull();
     expect(clear()).toBeTruthy();
   });
 });

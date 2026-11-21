@@ -6,10 +6,9 @@ import { createRootRouteWithContext, createRoute, createRouter, redirect, type P
 import { App, ROUTES, type PagePath } from "./App";
 import { motion } from "./components/chart";
 import { PageSkeleton } from "./components/PageSkeleton";
-import { validateSearch as activitySearch } from "./pages/activity/search";
+import { validateRoute as activitySearch } from "./pages/activity/search";
 import { validateSearch as contextSearch } from "./pages/context/search";
 import { validateSearch as errorsSearch } from "./pages/errors/search";
-import { validateSearch as insightsSearch } from "./pages/insights/search";
 import { validateSearch as liveSearch } from "./pages/live/search";
 import { viewOf, type View } from "./api";
 import { queries } from "./queries";
@@ -28,6 +27,13 @@ const fromOldHash = ({ location }: { location: ParsedLocation }) => {
 const toActivity = ({ location }: { location: ParsedLocation }) => {
   throw redirect({ to: "/usage", search: location.search, replace: true } as never);
 };
+// /insights was a page until it became Activity's Judgments view: a bookmark, a copied link or a link in the earlier hash form
+// opens that view with every key kept (the filters, the drill-down filters and an open session sheet), and a section anchor
+// (#d-goals) kept too: a hash with "=" has become the query string at the root before this runs. It replaces the entry, so
+// Back does not return to the old address. Never remove it.
+const toJudgments = ({ location }: { location: ParsedLocation }) => {
+  throw redirect({ to: "/usage", search: { ...location.search, view: "judgments" }, hash: location.hash, replace: true } as never);
+};
 // The Project page needs a project: without one (a link, or the project cleared on the page) Activity opens in its place, with
 // the rest of the view kept. Not tied to o.loaders: it is routing, not data.
 const needProject = ({ location }: { location: ParsedLocation }) => { if (!parseView(location.search).project) toActivity({ location }); };
@@ -45,6 +51,15 @@ const viewLoader = <K extends QueryKey>(query: (v: View) => FetchQueryOptions<an
   loaderDeps: ({ search }: { search: Record<string, unknown> }) => { const d = viewDeps(search); return limits ? { ...d, auto: false, project: "" } : d; },
   loader: ({ context, deps }: { context: RouterContext; deps: ReturnType<typeof viewDeps> }) => { void context.queryClient.prefetchQuery(query(viewOf(deps))); },
 });
+// Activity starts the query of the view it shows: Judgments' (view=judgments, never for Codex alone, and with no source: only
+// Claude Code sessions are judged), else Overview's. The view is a dep, so a switch of view starts the other one.
+const activityLoader = {
+  loaderDeps: ({ search }: { search: Record<string, unknown> }) => { const d = viewDeps(search); return { ...d, judgments: search.view === "judgments" && d.source !== "codex" }; },
+  loader: ({ context, deps }: { context: RouterContext; deps: ReturnType<typeof viewDeps> & { judgments: boolean } }) => {
+    if (deps.judgments) void context.queryClient.prefetchQuery(queries.insights({ ...viewOf(deps), source: "" }));
+    else void context.queryClient.prefetchQuery(queries.usage(viewOf(deps)));
+  },
+};
 // Errors has one key for every filter.
 const errorsLoader = { loader: ({ context }: { context: RouterContext }) => { void context.queryClient.prefetchQuery(queries.errors); } };
 
@@ -58,13 +73,14 @@ export function makeRouter(o: { queryClient: QueryClient; history?: RouterHistor
   const page = <const P extends PagePath, S = {}>(path: P, validateSearch?: (raw: Record<string, unknown>) => S, load?: object, beforeLoad?: (o: { location: ParsedLocation }) => void) =>
     createRoute({ getParentRoute: () => root, path, component: ROUTES[path].Page, validateSearch, ...(beforeLoad ? { beforeLoad } : {}), ...(o.loaders === false ? {} : load) });
   // Live has no loader: pointing at its tab loads its code only; its data is a stream the page opens when it is shown.
+  // /insights is no page: it redirects to Activity's Judgments view.
   const routeTree = root.addChildren([
-    page("/usage", activitySearch, viewLoader(v => queries.usage(v))), page("/cost", undefined, viewLoader(v => queries.usage(v))),
+    page("/usage", activitySearch, activityLoader), page("/cost", undefined, viewLoader(v => queries.usage(v))),
     page("/context", contextSearch, viewLoader(queries.context)), page("/errors", errorsSearch, errorsLoader),
-    page("/limits", undefined, viewLoader(queries.limits, true)), page("/insights", insightsSearch, viewLoader(queries.insights)),
-    page("/live", liveSearch),
+    page("/limits", undefined, viewLoader(queries.limits, true)), page("/live", liveSearch),
     // The usage payload is the one above the fold; the other blocks start when the page mounts.
     page("/project", undefined, viewLoader(v => queries.usage(v)), needProject),
+    createRoute({ getParentRoute: () => root, path: "/insights", beforeLoad: toJudgments }),
     createRoute({ getParentRoute: () => root, path: "/", beforeLoad: toActivity }),
     createRoute({ getParentRoute: () => root, path: "$", beforeLoad: toActivity }),
   ]);

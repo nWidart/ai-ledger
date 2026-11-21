@@ -85,7 +85,7 @@ export function SessionsDrawer({ view, count, filter, onFilter, sort, onSort, se
           <button type="button" aria-label="Show sessions on every day" title="Every day" onClick={() => { onFilter({ ...filter, day: "" }); search.current?.focus(); }}>✕</button></span>}
       </div>
       <div className="hint"><span aria-live="polite">{hint}</span>
-        <HowMeasured what="the session count">A session counts here when it has a request in the range; Insights counts sessions by their start time, so the two totals can differ slightly.</HowMeasured></div>
+        <HowMeasured what="the session count">A session counts here when it has a request in the range; the Judgments view counts sessions by their start time, so the two totals can differ slightly.</HowMeasured></div>
       <DataTable name="Sessions" region="scroll tall">
         <thead><tr>{HEAD.map(([label, k, cls, title, whole]) => {
           const t = whole && filter.day ? WHOLE : title;

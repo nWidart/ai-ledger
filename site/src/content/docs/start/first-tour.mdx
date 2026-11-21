@@ -23,7 +23,7 @@ In this tour we open each page of AI Ledger once, with our own data, and read th
 
 Before we start, AI Ledger must be running and its first ingest done: the navigation bar shows the time of the last ingest, not **Ingesting…**. If it is not running, follow [Install and first run](/ai-ledger/start/install/) first.
 
-Every page we visit is a tab in the navigation bar at the top, except the last one. The filters beside each page's heading start on the last 30 days, all projects and both agents; we leave them so.
+Every stop is a tab in the navigation bar at the top, except two: Judgments is a view of Activity, and the last stop has no tab. The tabs are in two groups, **Now** (Live, Limits) and **Review** (Activity, Cost, Context, Errors). The filters beside each page's heading start on the last 30 days, all projects and both agents; we leave them so.
 
 ## Activity: what got done
 
@@ -75,15 +75,15 @@ If the heading says "No plan limits seen yet.", AI Ledger has no limit data yet.
 
 More: [Limits](/ai-ledger/pages/limits/), and [Context windows and plan limit windows](/ai-ledger/concepts/windows/).
 
-## Insights: how /insights judged the sessions
+## Judgments: how /insights judged the sessions
 
-Select the **Insights** tab. This page shows what Claude Code's `/insights` command wrote about our sessions: outcomes, friction and goals.
+Select the **Activity** tab, then **Judgments** in the view switch above the heading. This view shows what Claude Code's `/insights` command wrote about our sessions: outcomes, friction and goals.
 
-If we have never run `/insights`, the page says "No /insights data found." and tells us to run `/insights` in Claude Code, then Refresh. We can leave that for later.
+If we have never run `/insights`, the view says "No /insights data found." and tells us to run `/insights` in Claude Code, then Refresh. We can leave that for later.
 
-<ThemedImage dark={outcomes} light={outcomesLight} alt="The Outcomes panel on Insights, with demo data: the share of analysed sessions in each outcome." />
+<ThemedImage dark={outcomes} light={outcomesLight} alt="The Outcomes panel of Activity's Judgments view, with demo data: the share of analysed sessions in each outcome." />
 
-More: [Insights](/ai-ledger/pages/insights/).
+More: [Judgments](/ai-ledger/pages/insights/).
 
 ## Live: what runs now
 

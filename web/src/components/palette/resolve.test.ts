@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseSearch } from "../../url";
 import { prefill, resolve } from "./resolve";
-import type { Chip } from "./suggest";
+import { JUDGMENTS_PAGE, type Chip } from "./suggest";
 
 const at = (href: string) => { const [path, search = ""] = href.split("?"); return { path: path!, search: parseSearch(search) }; };
 const c = {
@@ -9,6 +9,9 @@ const c = {
   cost: { kind: "page", value: "/cost", label: "Cost" },
   context: { kind: "page", value: "/context", label: "Context" },
   project: { kind: "page", value: "/project", label: "Project" },
+  limits: { kind: "page", value: "/limits", label: "Limits" },
+  activity: { kind: "page", value: "/usage", label: "Activity" },
+  judgments: { kind: "page", value: JUDGMENTS_PAGE, label: "Judgments" },
   my: { kind: "project", value: "myproject", label: "myproject" },
   alpha: { kind: "project", value: "alpha", label: "alpha" },
   beta: { kind: "project", value: "beta", label: "beta" },
@@ -89,9 +92,11 @@ describe("resolve", () => {
   it("#myproject #codex #7d >cost", () => {
     expect(commit("/usage?range=30", c.my, c.codex, c.d7, c.cost).href).toBe("/cost?project=myproject&range=7&source=codex");
   });
-  it("opens a sheet over Insights and Live, on Live under sheet with the followed session kept", () => {
+  it("opens a sheet over the Judgments view and Live, on Live under sheet with the followed session kept", () => {
     const s1: Chip = { kind: "session", value: "abc", label: "#abc" };
-    expect(commit("/insights?range=7", s1).href).toBe("/insights?range=7&session=abc");
+    const judged = commit("/usage?range=7&view=judgments&outcome=not_achieved", s1);
+    expect(judged.href).toBe("/usage?range=7&view=judgments&outcome=not_achieved&session=abc");
+    expect(judged.footer).toBe("Enter: open session #abc · 7d");
     const live = commit("/live?session=s1", s1);
     expect(live.href).toBe("/live?session=s1&sheet=abc");
     expect(live.footer).toBe("Enter: open session #abc · 30d");
@@ -135,11 +140,39 @@ describe("resolve", () => {
     expect(r.status[0]).toEqual({ state: "dropped" });
     expect(r.footer).toBe("Enter: open Cost · 30d · Command timed out not applied on Cost");
   });
-  it(">bash stays on Errors and goes from Limits to Activity", () => {
+  it(">bash stays on Errors, and on Limits: every page hosts the sheets", () => {
     expect(commit("/errors?range=30&cat=x", c.bash).href).toBe("/errors?range=30&tool=Bash&cat=x");
     const r = commit("/limits?range=7", c.bash);
-    expect(r.href).toBe("/usage?range=7&tool=Bash");
-    expect(r.footer).toBe("Enter: open Bash inspector on Activity · 7d");
+    expect(r.href).toBe("/limits?range=7&tool=Bash");
+    expect(r.footer).toBe("Enter: open Bash inspector · 7d");
+    const s = commit("/limits?range=7&source=codex", { kind: "session", value: "abc", label: "#abc" });
+    expect(s.href).toBe("/limits?range=7&source=codex&session=abc");
+    expect(s.status.every(x => x.state === "applied")).toBe(true);
+    expect(commit("/usage", c.limits, c.bash).href).toBe("/limits?tool=Bash"); // a page chip for Limits drops no sheet
+  });
+  it(">judgments opens Activity's Judgments view with the filters, and leaves Overview's own keys behind", () => {
+    const r = commit("/usage?project=myproject&range=7&q=fix&day=2026-10-20", c.judgments);
+    expect(r.href).toBe("/usage?project=myproject&range=7&view=judgments");
+    expect(r.path).toBe("/usage");
+    expect(r.footer).toBe("Enter: open Judgments · myproject · 7d");
+    expect(commit("/cost?range=14&source=claude", c.judgments).href).toBe("/usage?range=14&source=claude&view=judgments");
+  });
+  it(">activity from the Judgments view opens Overview, and leaves the judgment filters behind", () => {
+    const r = commit("/usage?range=7&view=judgments&outcome=not_achieved&frf=tooling", c.activity);
+    expect(r.href).toBe("/usage?range=7");
+    expect(r.footer).toBe("Enter: open Activity · 7d");
+  });
+  it("stays on the Judgments view for a filter or a sheet, keeping its own keys", () => {
+    const here = "/usage?range=30&view=judgments&outcome=not_achieved";
+    expect(commit(here, c.my).href).toBe("/usage?project=myproject&range=30&view=judgments&outcome=not_achieved");
+    expect(commit(here, c.my).footer).toBe("Enter: update Judgments · myproject · 30d");
+    expect(commit(here, c.judgments).changed).toBe(false);
+    expect(commit(here, c.bash).href).toBe("/usage?range=30&view=judgments&outcome=not_achieved&tool=Bash");
+  });
+  it("says Overview opens when >judgments is asked of Codex alone", () => {
+    const r = commit("/usage?range=30", c.codex, c.judgments);
+    expect(r.href).toBe("/usage?range=30&source=codex&view=judgments");
+    expect(r.footer).toBe("Enter: open Judgments · Codex · 30d · Codex has no judgments: Overview opens");
   });
   it("clears session and inspect on a project change, and keeps tool", () => {
     expect(commit("/usage?range=30&inspect=foo&tool=Bash&session=s1", c.my).href).toBe("/usage?project=myproject&range=30&tool=Bash");

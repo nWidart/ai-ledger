@@ -3,7 +3,6 @@ import { viewOf, type LiveListSession, type LiveState } from "../../api";
 import { Filters, SOURCE_LABELS } from "../../components/Filters";
 import { ProjectName } from "../../components/ProjectDot";
 import { sessionLink, sessionSheetHref } from "../../components/sheets/session";
-import { UsageSheets } from "../../components/sheets/UsageSheets";
 import { plural, usd, when } from "../../format";
 import { useSearchOf, useView } from "../../url";
 import { PageSkeleton } from "../../components/PageSkeleton";
@@ -130,7 +129,6 @@ export function LivePage() {
         {shown && <AgentPanel s={shown} st={stateNow(shown.state, now)} now={now} failedOnly={filters.errors}
           setFailedOnly={errors => setFilters({ ...filters, errors })} />}
       </div>}
-      <UsageSheets data={undefined} />
     </main>
   );
 }

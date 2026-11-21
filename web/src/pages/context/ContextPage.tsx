@@ -5,7 +5,6 @@ import { agentName, Filters, viewName } from "../../components/Filters";
 import { HowMeasured } from "../../components/HowMeasured";
 import { ProjectDot } from "../../components/ProjectDot";
 import { jumpTo } from "../../components/SectionIndex";
-import { UsageSheets } from "../../components/sheets/UsageSheets";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
 import { num, plural } from "../../format";
@@ -107,7 +106,6 @@ export function ContextPage() {
           {tab === "cache" && <><CostSection d={d} /><div className="drawers"><BreaksDrawer cost={d.cost} /></div></>}
         </Tabs>
       </>}
-      <UsageSheets data={undefined} />
     </main>
   );
 }
