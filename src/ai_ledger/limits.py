@@ -561,16 +561,19 @@ def series(w, usage, cal, end):
 
 def earlier_windows(ws, usage, cal, horizon):
     """Estimated windows before a limit's first snapshot, stepped back by its window length to horizon: the history of
-    a limit from before the app saw it (Claude Code before polling started). Windows with no counted usage are left out."""
+    a limit from before the app saw it (Claude Code before polling started). Windows with no counted usage are left out, and
+    so are those over the span of a measured window: the first window listed need not be the earliest (one poll can list a
+    later reset first), and an estimate there would repeat a window the snapshots already give."""
     first = ws[0]
     if not first.minutes or cal is None or not fixed(first.provider, first.minutes):
         return []
     out, end = [], first.start
     source = PROVIDERS[first.provider].source if first.provider in PROVIDERS else first.provider
+    measured = [(m.start, m.closed_at or m.resets_at) for m in ws]
     while end > horizon:
         w = Window(first.key, first.minutes, end, estimated=True)
         cost = usage.cost(source, w.scope, w.start, end)
-        if cost > 0:
+        if cost > 0 and not any(a < end and w.start < b for a, b in measured):
             w.closed_at, w.final = end, min(100.0, cost / cal["per_pct"])
             if w.final >= 100:  # when the estimate first reached the cap, to the step
                 t, step = w.start, step_of(w)
@@ -930,17 +933,22 @@ def closed_series(w, usage, cal):
     return out
 
 
-def window_curve(cur, provider, limit_id, scope, start, now=None, prices=None):
+def window_curve(cur, provider, limit_id, scope, start, resets_at="", now=None, prices=None):
     """One closed window's curve, for the page to draw when a bar of its history is picked: {window, series, events} with
     the window as history_row gives it, its series from its start to its close (no forecast), and the plan changes of its
     provider inside it. The window is the limit's one nearest to start (an ISO time), when it is closed and its start is within
-    SAME_RESET of start; None when it is not, and so always for the open window. A measured window's curve is flat at its final
-    percent after its last reading (closed_series). Raises ValueError for an unknown provider or a start that is no time."""
+    SAME_RESET of start; None when it is not, and so always for the open window. resets_at (an ISO time, optional) narrows
+    the search to the windows that reset within SAME_RESET of it: two windows of unknown length that one poll reported start
+    together and differ only by their reset. A measured window's curve is flat at its final percent after its last reading
+    (closed_series). Raises ValueError for an unknown provider, or a start or resets_at that is no time."""
     if provider not in PROVIDERS:
         raise ValueError(f"unknown provider: {provider}")
     at = utc_naive(start)
     if at is None:
         raise ValueError("start must be an ISO time")
+    reset = utc_naive(resets_at) if resets_at else None
+    if resets_at and reset is None:
+        raise ValueError("resets_at must be an ISO time")
     now = now or datetime.now(timezone.utc).replace(tzinfo=None)
     snaps = cur.execute(f"SELECT {', '.join(store.SNAPSHOT_COLS)} FROM limit_snapshots WHERE provider = ?", [provider]).fetchall()
     ws = group_windows([s for s in snaps if s[1] == limit_id and s[2] == scope]).get((provider, limit_id, scope))
@@ -948,6 +956,9 @@ def window_curve(cur, provider, limit_id, scope, start, now=None, prices=None):
         return None
     usage = load_usage(cur, metrics.load_prices() if prices is None else prices)
     cal, past = limit_windows(ws, usage, now)
+    past = [w for w in past if reset is None or abs(w.resets_at - reset) <= SAME_RESET]
+    if not past:
+        return None
     w = min(past, key=lambda w: abs(w.start - at))  # the nearest of all, so an open window's start is never taken for a closed one's
     if not w.closed_at or abs(w.start - at) > SAME_RESET:
         return None

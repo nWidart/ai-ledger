@@ -646,7 +646,7 @@ describe("past windows strips", () => {
   const early = curve.window; // the Codex weekly window a plan change ended early
   const row = (h: LimitHistoryRow) => screen.getByRole("button", { name: barName(h) });
   const hist = () => within(document.getElementById("history")!);
-  const showCurve = (d: LimitsPayload = fixture, answer: () => unknown = () => curve, open = true) => {
+  const showCurve = (d: LimitsPayload = fixture, answer: (q: URLSearchParams) => unknown = () => curve, open = true) => {
     toOpen = open;
     const f = mockApi({ "/api/limits": () => d, "/api/limits/window": answer });
     history.replaceState(null, "", "/limits?range=30");
@@ -720,6 +720,30 @@ describe("past windows strips", () => {
       expect(marks()).toEqual([["", null], ["sel", "true"]]);
       expect(error).not.toHaveBeenCalled();
     } finally { error.mockRestore(); }
+  });
+
+  it("asks for, and draws, each of two windows that share a start by its own reset", async () => {
+    const two = [{ ...early, window_minutes: null }, twin({ ...early, window_minutes: null })];
+    const own = (h: LimitHistoryRow, mid: number): LimitWindowCurve => ({ window: h, events: [], series: [
+      { t: h.start, pct: 0, measured: true }, { t: new Date(Date.parse(h.start) + 3_600_000).toISOString(), pct: mid, measured: true },
+      { t: h.closed_at, pct: h.final, measured: false }] });
+    const curves = new Map([[two[0]!.resets_at, own(two[0]!, 13)], [two[1]!.resets_at, own(two[1]!, 37)]]);
+    const f = showCurve({ ...fixture, history: two }, p => curves.get(p.get("resets_at") ?? "")); // no reset, or another: not found
+    await lede();
+    const bars = within(hist().getByRole("group", { name: /past windows/ })).getAllByRole("button");
+    const used = async () => {
+      const panel = hist().getByRole("region", { name: WINDOW });
+      await within(panel).findByRole("img", { name: /used when it ended/ });
+      await userEvent.click(within(panel).getByRole("button", { name: "Show data table" }));
+      return within(within(panel).getByRole("table", { name: /chart data$/ })).getAllByRole("row").slice(1).map(r => r.children[1]!.textContent);
+    };
+    for (const [i, mid] of [[0, "13% · measured"], [1, "37% · measured"]] as const) {
+      await userEvent.click(bars[i]!);
+      const url = new URL(vi.mocked(f).mock.calls.at(-1)![0] as string, "http://localhost");
+      expect([url.searchParams.get("start"), url.searchParams.get("resets_at")]).toEqual([two[i]!.start, two[i]!.resets_at]);
+      expect(await used()).toContain(mid);
+      await userEvent.click(bars[i]!); // close it again
+    }
   });
 
   it("heads each closed window's row with the window's name", async () => {
@@ -808,7 +832,7 @@ describe("past windows strips", () => {
     expect(hist().queryByRole("region", { name: /Codex weekly/ })).toBeNull();
     await userEvent.click(row(early));
     expect(row(early).getAttribute("aria-pressed")).toBe("true");
-    expect(vi.mocked(f).mock.calls.at(-1)![0]).toBe(`/api/limits/window?provider=codex&limit_id=codex_10080&start=${encodeURIComponent(early.start)}`);
+    expect(vi.mocked(f).mock.calls.at(-1)![0]).toBe(`/api/limits/window?provider=codex&limit_id=codex_10080&start=${encodeURIComponent(early.start)}&resets_at=${encodeURIComponent(early.resets_at)}`);
     const panel = hist().getByRole("region", { name: /Codex weekly/ });
     expect(within(panel).getByText("Loading the curve…")).toBeTruthy();
     expect(within(panel).getByText(/22%/)).toBeTruthy();

@@ -610,8 +610,9 @@ export const promptUrl = (session: string) => `/api/prompt?${qs({ session })}`;
 export const toolUrl = (kind: ToolKind, name: string, v: View) => `/api/tool?${qs({ kind, name, ...viewQs(v) })}`;
 export const paletteUrl = (v: View) => `/api/palette?${qs(viewQs(v))}`;
 export const limitsUrl = (v: View) => `/api/limits?${qs({ project: v.project, range: v.range, source: v.source })}`;
-export const limitWindowUrl = (h: Pick<LimitHistoryRow, "provider" | "limit_id" | "scope" | "start">) =>
-  `/api/limits/window?${qs({ provider: h.provider, limit_id: h.limit_id, scope: h.scope, start: h.start })}`;
+/** One closed window's curve. Its start and reset name it: two windows that one poll reported can share a start. */
+export const limitWindowUrl = (h: Pick<LimitHistoryRow, "provider" | "limit_id" | "scope" | "start" | "resets_at">) =>
+  `/api/limits/window?${qs({ provider: h.provider, limit_id: h.limit_id, scope: h.scope, start: h.start, resets_at: h.resets_at })}`;
 export const contextUrl = (v: View) => `/api/context?${qs(viewQs(v))}`;
 export const insightsUrl = (v: View) => `/api/insights?${qs(viewQs(v))}`;
 export const liveUrl = (v: View, text = false) => {
