@@ -66,9 +66,18 @@ export async function run(pages) {
       BASE,
       /** The server's JSON answer for a path. */
       json: async path => (await fetch(`${BASE}${path}`)).json(),
+      /** Answers a routed request with the server's JSON changed by f. A request the server drops (a connection reset, on a
+       *  loaded machine) fails in the page, where the check of what the pages reported names it, instead of ending the run. */
+      async answer(route, f) {
+        let res;
+        try { res = await route.fetch(); } catch { await route.abort("connectionreset").catch(() => {}); return; }
+        await route.fulfill({ response: res, json: f(await res.json()) }).catch(() => {});
+      },
       /** A page on path with the chart under root drawn (ready(page) resolves once it is), logging what the page reports
-       *  under name. page.requests lists the /api/ requests it makes; page.done() records its reports and closes it. */
-      async open({ path, root, ready }, name, options = {}, init = null) {
+       *  under name. page.requests lists the /api/ requests it makes; page.done() records its reports and closes it.
+       *  setup, when given, runs in the page before its scripts, before init; with answer, the chart's payload (the request
+       *  data matches) is answer(payload). */
+      async open({ path, root, ready, setup = null, data = null, answer = null }, name, options = {}, init = null) {
         const ctx = await b.newContext({ viewport: { width: W, height: H }, locale: LOCALE, colorScheme: "light", reducedMotion: "reduce", ...options });
         const page = await ctx.newPage();
         page.errors = [];
@@ -77,8 +86,12 @@ export async function run(pages) {
         page.on("pageerror", e => page.errors.push(`page error: ${e.message}`));
         page.on("request", r => { if (new URL(r.url()).pathname.startsWith("/api/")) page.requests.push(r.url()); });
         await page.addInitScript(readers, root);
+        if (setup) await page.addInitScript(setup);
         if (init) await page.addInitScript(init);
+        if (answer) await page.route(data, route => h.answer(route, answer));
         page.done = async () => {
+          // A refetch may still be on its way through a route: let it go, or its failed fetch ends the run.
+          await page.unrouteAll({ behavior: "ignoreErrors" });
           for (const v of await page.evaluate(() => window.__csp)) reported.push(`${name}: CSP ${v}`);
           for (const e of page.errors) reported.push(`${name}: ${e}`);
           await ctx.close();

@@ -20,16 +20,23 @@
 //       and keep the points shown, "Show all" and the focus on it, with nothing said; after the root font size doubles
 //       with the chart mounted, the next such redraw draws the labels at twice their size;
 //     - with motion on, a zoom out draws the points that come back at full height;
+//     - newer figures keep the point read with the keys, and say nothing; Escape with the focus on another control closes
+//       a tooltip the pointer opened; with motion on the bars grow on the first drawing and on no later one; under
+//       reduced motion they never grow;
 //     - the pages log no CSP violation, no console error and no page error.
-//   chartfit/<page>.mjs    a page's descriptor, the order of its checks and its own checks: cost (Cost's daily chart)
+//   chartfit/<page>.mjs    a page's descriptor, the order of its checks and its own checks: cost (Cost's daily chart),
+//                          activity (Activity's work chart, its two tracks, selection, zoom and weeks), judgments (the
+//                          Judgments view's outcome trend)
 // It runs locally, not in CI. It needs the build and the pinned Playwright:
 //   uv sync;  cd web && npm ci && npm run build;  cd tools/demo && npm ci
-//   node chartfit.mjs [cost]   the pages named, every page when none is; SHOTS=<dir> also saves screenshots of the charts
+//   node chartfit.mjs [cost] [activity] [judgments]   the pages named, every page when none is; SHOTS=<dir> also saves screenshots of the charts
 //                              there; CHROMIUM=<path> uses that Chromium
 import { run } from "./chartfit/harness.mjs";
+import { activity } from "./chartfit/activity.mjs";
 import { cost } from "./chartfit/cost.mjs";
+import { judgments } from "./chartfit/judgments.mjs";
 
-const PAGES = { cost };
+const PAGES = { cost, activity, judgments };
 const named = process.argv.slice(2);
 const unknown = named.filter(n => !(n in PAGES));
 if (unknown.length) {

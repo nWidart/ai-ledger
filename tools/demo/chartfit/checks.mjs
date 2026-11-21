@@ -9,6 +9,14 @@
 //   data     the request of the chart's payload, a RegExp
 //   newer    newer(payload, more): the payload with figures more higher, the same view
 //   kept     [name, selector] pairs of what a zoom leaves alone, beside the URL and the requests
+// and, when the page needs them:
+//   setup    a function run in every page before its scripts, such as one that picks a measure in localStorage
+//   answer   answer(payload): the chart's payload as every page of the descriptor gets it, for a case the store lacks
+//   zoom     false for a chart with no zoom slider: the colors block then checks no slider handles
+//   activates false for a chart that takes no activation: the pointer is then never a hand over it
+//   said     said(key): the point as the zoom sentence names it, label(key) by default; the sentence may name "the weeks of"
+//   tell     the index of the legend key whose color differs between light and dark, 0 by default
+// A chart below the first screen is scrolled into view once drawn, so the pointer can reach it.
 // The page module calls the blocks in its order, with its own checks between them.
 import { H, W, line, sleep, until } from "./harness.mjs";
 
@@ -20,12 +28,19 @@ export function chart(h, d) {
   /** Where the chart draws point i when it shows points from..to: the middle of its band. */
   const centre = (g, i, from = 0, to = N - 1) => g.l + (i - from + .5) * (g.r - g.l) / (to - from + 1);
   /** The points shown, from the live region's zoom sentence ("Showing Oct 11 to Oct 20, 10 of 30 days."). */
-  const zoomed = new RegExp(`^Showing (.+?) to (.+?), \\d+ of \\d+ ${many}\\.$`);
+  const zoomed = new RegExp(`^Showing (?:the ${many} of )?(.+?) to (.+?), \\d+ of \\d+ ${many}\\.$`);
+  const said = d.said ?? (k => label(k));
   const shownBy = text => {
     const m = zoomed.exec(text);
-    return m ? { from: P.findIndex(k => label(k) === m[1]), to: P.findIndex(k => label(k) === m[2]) } : null;
+    return m ? { from: P.findIndex(k => said(k) === m[1]), to: P.findIndex(k => said(k) === m[2]) } : null;
   };
-  const open = (name, options, init) => h.open({ path: d.path, root: d.root, ready: page => page.waitForFunction(n => window.chartfit.points().length === n, N) }, name, options, init);
+  /** A page of the chart, drawn: on another path, with another answer to its payload, or drawing another count of points. */
+  const openOn = ({ path = d.path, answer = d.answer, points = N } = {}, name, options, init) => h.open({ path, root: d.root, setup: d.setup, data: d.data, answer,
+    ready: async page => {
+      await page.waitForFunction(n => window.chartfit.points().length === n, points);
+      await page.locator(d.root).scrollIntoViewIfNeeded();
+    } }, name, options, init);
+  const open = (name, options, init) => openOn({}, name, options, init);
   const shot = (page, what) => h.shot(page, d.root, `${d.name}-chart-${what}`);
   const drawn = page => ev(page, () => window.chartfit.points().length);
   const away = page => page.mouse.move(2, H - 2);
@@ -53,6 +68,33 @@ export function chart(h, d) {
     return { keys, ok: keys.length > 0 && keys.every(k => fills.has(k.color) && k.color === window.chartfit.probe(k.css)), fills: [...fills] };
   });
   const keyLine = k => k.keys.map(x => `${x.name} ${x.css} rgb(${x.color})`).join(", ");
+  /** Answers the chart's payload with figures more() higher once more() is not 0, and the status with a new change then, so
+   *  a window focus (a visibilitychange) makes the page fetch its payload again, as a background ingest does. */
+  const newerOn = async (page, more) => {
+    await page.route(d.data, route => h.answer(route, json => {
+      const base = d.answer ? d.answer(json) : json;
+      return more() ? d.newer(base, more()) : base;
+    }));
+    await page.route(/\/api\/status/, route => h.answer(route, s => (more() ? { ...s, last_change: `chartfit ${more()}` } : s)));
+  };
+  /** Bars that grow during act() and the second after it: the most bar segments drawn growing in any frame. */
+  const growth = async (page, act) => {
+    await ev(page, () => {
+      window.__grew = 0;
+      window.__watching = true;
+      const tick = () => { window.__grew = Math.max(window.__grew, window.chartfit.growing()); if (window.__watching) requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
+    });
+    await act();
+    await sleep(1000);
+    return ev(page, () => { window.__watching = false; return window.__grew; });
+  };
+  /** Counts, from the page's first frame, the most bar segments drawn growing in any frame, as window.__grew. */
+  const watchGrowth = () => {
+    window.__grew = 0;
+    const tick = () => { if (window.chartfit) window.__grew = Math.max(window.__grew, window.chartfit.growing()); requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  };
   const theme = async (page, want) => {
     for (let i = 0; i < 3 && (await page.locator("#navTheme").getAttribute("aria-label")) !== `Theme: ${want}`; i++) await page.locator("#navTheme").click();
   };
@@ -67,7 +109,7 @@ export function chart(h, d) {
   };
 
   return {
-    N, I, P, named, centre, shownBy, open, shot, ev, drawn, away, box, showAll, state, read,
+    N, I, P, named, centre, shownBy, open, openOn, shot, ev, drawn, away, box, showAll, state, read, onPoint, drawnKeys, keyLine, newerOn,
 
     /** Colors: light, the toggle's dark, then System with the OS scheme flipped; the slider's handles in light and dark. */
     async colors() {
@@ -76,15 +118,17 @@ export function chart(h, d) {
       await theme(page, "light");
       const light = await until(() => drawnKeys(page), k => k.ok);
       line("light: each legend key's color is drawn", light.ok, keyLine(light));
-      await handleLine(page, "light");
+      if (d.zoom !== false) await handleLine(page, "light");
       await shot(page, "light");
-      // The first key's color tells the schemes apart: every --proj-N token differs between them.
-      const like = want => k => k.ok && k.keys[0].color === want.keys[0].color;
+      // The first key's color tells the schemes apart: every --proj-N token differs between them. A chart whose first key's
+      // token is the same in both (the trend's --good) names the key that tells them apart, d.tell.
+      const T = d.tell ?? 0;
+      const like = want => k => k.ok && k.keys[T].color === want.keys[T].color;
       await theme(page, "dark");
-      const dark = await until(() => drawnKeys(page), k => k.ok && k.keys[0].color !== light.keys[0].color);
+      const dark = await until(() => drawnKeys(page), k => k.ok && k.keys[T].color !== light.keys[T].color);
       const dataTheme = await ev(page, () => document.documentElement.dataset.theme);
-      line(`dark (data-theme="${dataTheme}"): each legend key's color is drawn, and differs from light`, dataTheme === "dark" && dark.ok && dark.keys[0].color !== light.keys[0].color, keyLine(dark));
-      await handleLine(page, "dark");
+      line(`dark (data-theme="${dataTheme}"): each legend key's color is drawn, and differs from light`, dataTheme === "dark" && dark.ok && dark.keys[T].color !== light.keys[T].color, keyLine(dark));
+      if (d.zoom !== false) await handleLine(page, "dark");
       await shot(page, "dark");
       await theme(page, "system");
       const sysLight = await until(() => drawnKeys(page), like(light));
@@ -171,7 +215,8 @@ export function chart(h, d) {
       await page.mouse.move((axisText.l + axisText.r) / 2, (axisText.t + axisText.b) / 2);
       await sleep(100);
       const notHand = await ev(page, ([x, y]) => getComputedStyle(document.elementFromPoint(x, y)).cursor, [(axisText.l + axisText.r) / 2, (axisText.t + axisText.b) / 2]);
-      line(`the pointer is a hand over a ${one}, not over a ${one} label`, hand === "pointer" && notHand !== "pointer", `over ${one} ${I + 1}: ${hand}; over "${axisText.text}": ${notHand}`);
+      if (d.activates === false) line(`the pointer is never a hand: a ${one} takes no activation`, hand !== "pointer" && notHand !== "pointer", `over ${one} ${I + 1}: ${hand}; over "${axisText.text}": ${notHand}`);
+      else line(`the pointer is a hand over a ${one}, not over a ${one} label`, hand === "pointer" && notHand !== "pointer", `over ${one} ${I + 1}: ${hand}; over "${axisText.text}": ${notHand}`);
       await page.mouse.move(centre(g, N - 1), (g.t + g.b) / 2);
       const last = await until(() => state(page), s => named(s.readout) === N - 1);
       line(`pointer over the last ${one}: the tooltip flips to the band's left, inside the window`, beside(last, centre(g, N - 1)) && last.tip.r < centre(g, N - 1) && last.tip.l >= 0 && last.tip.r <= W,
@@ -276,14 +321,7 @@ export function chart(h, d) {
     async refresh() {
       const page = await open("refresh");
       let more = 0;
-      await page.route(d.data, async route => {
-        const res = await route.fetch(), json = await res.json();
-        await route.fulfill({ response: res, json: more ? d.newer(json, more) : json });
-      });
-      await page.route(/\/api\/status/, async route => {
-        const res = await route.fetch(), s = await res.json();
-        await route.fulfill({ response: res, json: more ? { ...s, last_change: `chartfit ${more}` } : s });
-      });
+      await newerOn(page, () => more);
       const name = await box(page).getAttribute("aria-label");
       const bars = () => ev(page, () => JSON.stringify(window.chartfit.bars().map(r => [Math.round(r.l), Math.round(r.t), Math.round(r.h)])));
       await box(page).focus();
@@ -338,5 +376,78 @@ export function chart(h, d) {
         `${zoomed} ${many} zoomed, ${back} back; ${atOnce === settled ? "no bar grew" : "bars grew again"}`);
       await page.done();
     },
+
+    /** Newer figures for the same view keep the point read with the keys: its band, tooltip and readout stay on it, and the
+     *  live region says nothing, since its figures did not change. newer() must leave point I as it is. */
+    async refreshRead() {
+      const page = await open("refresh while reading");
+      let more = 0;
+      await newerOn(page, () => more);
+      const bars = () => ev(page, () => JSON.stringify(window.chartfit.bars().map(r => [Math.round(r.l), Math.round(r.t), Math.round(r.h)])));
+      await read(page);
+      await until(() => state(page), s => onPoint(s, I, centre(s.grid, I)).ok);
+      const before = await bars();
+      await ev(page, () => window.chartfit.listen());
+      more = 1000;
+      await ev(page, () => window.dispatchEvent(new Event("visibilitychange")));
+      const after = await until(bars, s => s !== before);
+      await sleep(400);
+      const s = await state(page), at = onPoint(s, I, centre(s.grid, I)), heard = await ev(page, () => window.__said);
+      line(`newer figures keep the ${one} read with the keys, and say nothing`, after !== before && at.ok && !heard.length,
+        `${after !== before ? "redrawn" : "NOT REDRAWN"}; ${at.at}; said ${JSON.stringify(heard)}`);
+      await page.done();
+    },
+
+    /** Escape closes a tooltip the pointer opened while the focus is on another control, and leaves the focus there. */
+    async escapeElsewhere(page) {
+      await ev(page, () => document.activeElement?.blur());
+      await away(page);
+      await page.locator("#navTheme").focus();
+      await page.locator(d.root).scrollIntoViewIfNeeded(); // the focus scrolled the page to the control
+      const g = await ev(page, () => window.chartfit.grid());
+      await page.mouse.move(centre(g, I), (g.t + g.b) / 2);
+      const open = await until(() => state(page), s => s.tip);
+      await page.keyboard.press("Escape");
+      const closed = await until(() => state(page), s => !s.tip && !s.band);
+      const focus = await ev(page, () => document.activeElement?.id ?? "");
+      line("Escape with the focus on another control closes a tooltip the pointer opened, and leaves the focus there", !!open.tip && !closed.tip && !closed.band && focus === "navTheme",
+        `${open.tip ? "opened" : "never opened"}; after Escape ${closed.tip ? "tooltip open" : "no tooltip"}, ${closed.band ? "band drawn" : "no band"}; focus on "#${focus}"`);
+      await away(page);
+    },
+
+    /** With motion on, the bars grow on the first drawing and on no later one: each act(page, refresh) of acts, [what, act]
+     *  pairs, must grow no bar. refresh() brings newer figures, as the refresh block does, and resolves once they are drawn. */
+    async motionOnce(acts) {
+      const page = await open("motion once", { reducedMotion: "no-preference" }, watchGrowth);
+      await sleep(1500);
+      const first = await ev(page, () => window.__grew);
+      line(`with motion on, the bars grow on the first drawing`, first > 0, `${first} segments grew`);
+      let more = 0;
+      await newerOn(page, () => more);
+      const bars = () => ev(page, () => JSON.stringify(window.chartfit.bars().map(r => [Math.round(r.l), Math.round(r.t), Math.round(r.h)])));
+      const refresh = async () => {
+        const before = await bars();
+        more += 1000;
+        await ev(page, () => window.dispatchEvent(new Event("visibilitychange")));
+        await until(bars, s => s !== before);
+      };
+      for (const [what, act] of acts) {
+        const grew = await growth(page, () => act(page, refresh));
+        line(`with motion on, ${what} grows no bar again`, grew === 0, `${grew} segments grew`);
+      }
+      await page.done();
+    },
+
+    /** Under reduced motion no bar grows, from the first frame on. */
+    async reducedMotion() {
+      const page = await open("reduced motion", {}, watchGrowth);
+      await sleep(1000);
+      const grew = await ev(page, () => window.__grew);
+      line("with reduced motion, no bar grows on the first drawing", grew === 0, `${grew} segments grew`);
+      await page.done();
+    },
+
+    /** The theme toggle on a light, dark or system value. */
+    theme,
   };
 }
