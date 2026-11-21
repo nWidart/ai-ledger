@@ -171,6 +171,8 @@ describe("live.ts", () => {
     expect(stateNow({ ...st, long: true }, after(600))).toMatchObject({ kind: "tool", inferred: false });
     expect(stateNow({ ...st, tool: "WebFetch" }, after(600)).kind).toBe("tool");
     expect([likelyWaiting("exec", false, 31_000), likelyWaiting("exec", true, 31_000), likelyWaiting("exec", false, null)]).toEqual([true, false, false]);
+    // Grok's shell tool, as live.py reads it
+    expect(stateNow({ ...st, tool: "run_terminal_command" }, after(45))).toMatchObject({ kind: "wait", tool: "run_terminal_command", inferred: true });
   });
 
   it("words an ended session apart from your turn and idle", () => {

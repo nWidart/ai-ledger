@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { SessionDetail, ToolPayload } from "../../api";
 import session from "../../__fixtures__/session";
+import sessionGrok from "../../__fixtures__/session-grok";
 import tool from "../../__fixtures__/tool";
 import toolMcp from "../../__fixtures__/tool-mcp";
 import toolSkill from "../../__fixtures__/tool-skill";
@@ -208,15 +209,18 @@ describe("SessionSheet", () => {
     expect(sheet().getAllByText(/From Claude Code's own record of the session, subagent work included/).length).toBeGreaterThan(0);
   });
 
-  it("shows a dash for the tool time and lines a session's runs do not state", async () => {
-    const info = { ...session.info, runs: { ...session.info.runs!, tool_ms: null, lines_added: null, lines_removed: null } };
-    mockApi({ "/api/session": () => ({ ...session, info }) });
-    at("?session=s1");
+  it("shows a Grok session's model time and output speed, leaves out the tool time and lines it does not state, and says where they come from", async () => {
+    mockApi({ "/api/session": () => sessionGrok });
+    at("?session=g1");
     renderApp(<UsageSheets />);
-    await sheet().findByText("$16");
-    expect(sheet().getByText("model time").textContent).toMatch(/^2\.8h model time/);
-    expect(sheet().getByText("tool time").textContent).toBe("– tool time");
-    expect(sheet().getByText("lines").textContent).toBe("– lines");
+    await sheet().findByText("model time");
+    expect(sheet().getByText("model time").textContent).toMatch(/^1m model time/);
+    expect(sheet().getByText("output tok/s").textContent).toBe("100 output tok/s");
+    for (const l of ["tool time", "lines"]) expect(sheet().queryByText(l)).toBeNull();
+    await userEvent.click(sheet().getByRole("button", { name: "About model and tool time" }));
+    expect(sheet().getAllByText(/From the API time Grok reports for each turn, subagent work included\. Grok reports no tool time or lines changed/).length).toBeGreaterThan(0);
+    expect(sheet().queryByText(/Claude Code's own record/)).toBeNull();
+    expect(sheet().queryByText(/insights/)).toBeNull(); // no judgment block
   });
 
   it("shows none of them for a session that records no model time", async () => {

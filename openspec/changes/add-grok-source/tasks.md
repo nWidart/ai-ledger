@@ -29,7 +29,7 @@ Each task names the model that does it: Sonnet for mechanical edits, Opus for st
 - [x] 4.1 (Sonnet) Add `grok` to `metrics.SOURCES`. Move every Python test that uses `grok` as the unknown source to `gemini` (`test_metrics`, `test_live`, `test_context`, `test_insights`, `test_limits`, `test_app`). Verify that `source=grok` is accepted and `source=gemini` gets a 400.
 - [x] 4.2 (Opus) `context.py`: no `expired` cause for a Grok break; `per_agent` and the advice texts for views with Grok sessions; the large-results advice for `run_terminal_command`; the stated window. Verify the context-dashboard delta scenarios in `test_context`.
 - [x] 4.3 (Opus) `insights.py` and `limits.py`: no judgments for a source other than Claude Code; Limits for `source=grok` sends no window and says why. Verify the insights-dashboard and limits-dashboard delta scenarios.
-- [ ] 4.4 (Opus) Add a Grok session to the `test_metrics` fixture store and to the stores `tests/test_web_fixtures.py` builds, then regenerate `web/src/__fixtures__/`. Verify that `tests/test_web_fixtures.py` passes and a second run leaves the fixtures unchanged.
+- [x] 4.4 (Opus) Add a Grok session to the `test_metrics` fixture store and to the stores `tests/test_web_fixtures.py` builds, then regenerate `web/src/__fixtures__/`. Verify that `tests/test_web_fixtures.py` passes and a second run leaves the fixtures unchanged.
 
 ## 5. Live (after 3)
 
@@ -38,10 +38,10 @@ Each task names the model that does it: Sonnet for mechanical edits, Opus for st
 
 ## 6. Web (after 4.4)
 
-- [ ] 6.1 (Sonnet) Add `grok` to `Source` (`api.ts`), `SOURCES` (`url.ts`), `SOURCE_LABELS` (`Filters.tsx`), `SOURCE_COLORS` (`cost/cost.ts`), the inline scope type in `project/blocks.tsx`, and the palette's `#grok` term. Move the web tests that use `grok` as the unknown source to `gemini` (`url.test.ts`, `Filters.test.tsx`, `errors/model.test.ts`). Verify with `url.test.ts` and `Filters.test.tsx` that picking Grok writes `source=grok`.
-- [ ] 6.2 (Opus) Replace every `=== "codex"` that means "not Claude Code" with a test for Claude Code, and name the picked agent in the text: `router.tsx`, `ScopeBar.tsx`, `ActivityPage.tsx`, `ViewSwitch.tsx`, `sheets/session.ts`, `palette/resolve.ts`, `ProjectPage.tsx`, `project/blocks.tsx`, `facets.tsx`. Leave `codexOnly` (no model time) as it is. Verify with the page tests: a Grok view offers no Judgments and says "Grok writes no facets"; a Codex view behaves as before.
-- [ ] 6.3 (Sonnet) `menu/resume.ts`: `grok --resume <id>` for a Grok session. Verify with `resume.test.ts`.
-- [ ] 6.4 (Opus) Check the pages against the regenerated fixtures: the session sheet with NULL tool time and lines, the Limits text for Grok, the Cost Agent stack with three series, Live's thinking text. Fix `tokenPairs` in `cost/cost.ts`: it divides each kind.s cost by a total that now includes reported costs, so the kind shares fall short of 100% with Grok in view. Run `npm run check` in `web/`, then verify that `tests/test_web_build.py` passes.
+- [x] 6.1 (Sonnet) Add `grok` to `Source` (`api.ts`), `SOURCES` (`url.ts`), `SOURCE_LABELS` (`Filters.tsx`), `SOURCE_COLORS` (`cost/cost.ts`), the inline scope type in `project/blocks.tsx`, and the palette's `#grok` term. Move the web tests that use `grok` as the unknown source to `gemini` (`url.test.ts`, `Filters.test.tsx`, `errors/model.test.ts`). Verify with `url.test.ts` and `Filters.test.tsx` that picking Grok writes `source=grok`.
+- [x] 6.2 (Opus) Replace every `=== "codex"` that means "not Claude Code" with a test for Claude Code, and name the picked agent in the text: `router.tsx`, `ScopeBar.tsx`, `ActivityPage.tsx`, `ViewSwitch.tsx`, `sheets/session.ts`, `palette/resolve.ts`, `ProjectPage.tsx`, `project/blocks.tsx`, `facets.tsx`. Leave `codexOnly` (no model time) as it is. Verify with the page tests: a Grok view offers no Judgments and says "Grok writes no facets"; a Codex view behaves as before.
+- [x] 6.3 (Sonnet) `menu/resume.ts`: `grok --resume <id>` for a Grok session. Verify with `resume.test.ts`.
+- [x] 6.4 (Opus) Check the pages against the regenerated fixtures: the session sheet with NULL tool time and lines, the Limits text for Grok, the Cost Agent stack with three series, Live's thinking text. Fix `tokenPairs` in `cost/cost.ts`: it divides each kind.s cost by a total that now includes reported costs, so the kind shares fall short of 100% with Grok in view. Run `npm run check` in `web/`, then verify that `tests/test_web_build.py` passes.
 
 ## 7. Docs (after 4; parallel with 6)
 
