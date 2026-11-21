@@ -5,29 +5,35 @@ import starlightLinksValidator from "starlight-links-validator";
 import starlightLlmsTxt from "starlight-llms-txt";
 
 const description =
-  "AI Ledger reads your Claude Code and Codex transcripts into a local DuckDB store and serves them as dashboards: " +
+  "AI Ledger reads your Claude Code, Codex and Grok transcripts into a local DuckDB store and serves them as dashboards: " +
   "what your coding agents did, what it cost, how full their context got, where they failed, how much of your plan " +
   "limits they used, and which sessions need you now. Everything runs on your machine.";
 
 // Written out item by item (design D7): a new file never joins the sidebar by accident.
-/** @type {Array<{ label: string, slug: string } | { label: string, items: string[] }>} */
+/** @typedef {{ label: string, items: Array<string | Group> }} Group */
+/** @type {Array<{ label: string, slug: string } | Group>} */
 const sidebar = [
   { label: "Home", slug: "index" },
   { label: "Get started", items: ["start/install", "start/first-tour", "start/upgrade"] },
   {
     label: "Improve your workflow",
+    // The playbooks in three groups; their slugs are the addresses the app and older links use.
     items: [
-      "improve/weekly-review",
-      "improve/spend-less",
-      "improve/plan-limits",
-      "improve/lean-context",
-      "improve/tool-failures",
-      "improve/babysit-less",
-      "improve/finish-sessions",
-      "improve/project-retro",
-      "improve/compare-sources",
-      "improve/automated-sessions",
-      "improve/share-screen",
+      { label: "Routines", items: ["improve/weekly-review", "improve/project-retro"] },
+      {
+        label: "Efficiency & limits",
+        items: ["improve/spend-less", "improve/plan-limits", "improve/lean-context", "improve/compare-sources"],
+      },
+      {
+        label: "Reliability & workflow",
+        items: [
+          "improve/tool-failures",
+          "improve/babysit-less",
+          "improve/finish-sessions",
+          "improve/automated-sessions",
+          "improve/share-screen",
+        ],
+      },
     ],
   },
   {
@@ -50,6 +56,7 @@ const sidebar = [
     items: [
       "everywhere/command-palette",
       "everywhere/context-menu",
+      "everywhere/sheets",
       "everywhere/filters",
       "everywhere/keyboard-screen-reader",
       "everywhere/data-tables",
@@ -57,7 +64,13 @@ const sidebar = [
   },
   {
     label: "Concepts",
-    items: ["concepts/how-it-works", "concepts/cost-estimates", "concepts/windows", "concepts/privacy-security"],
+    items: [
+      "concepts/how-it-works",
+      "concepts/supported-agents",
+      "concepts/cost-estimates",
+      "concepts/windows",
+      "concepts/privacy-security",
+    ],
   },
   {
     label: "Reference",
@@ -73,9 +86,11 @@ const sidebar = [
 ];
 
 // llms-full.txt follows the sidebar order, so the playbooks come before the reference (design D5).
-const sidebarOrder = sidebar.flatMap((entry) => ("items" in entry ? entry.items : [entry.slug]));
-// llms.txt links one file per sidebar group, so an agent can fetch only the section it needs.
-const sidebarGroups = sidebar.flatMap((entry) => ("items" in entry ? [{ label: entry.label, paths: entry.items }] : []));
+/** A group's slugs, its nested groups' included, in sidebar order. @param {Group} group @returns {string[]} */
+const slugs = (group) => group.items.flatMap((item) => (typeof item === "string" ? [item] : slugs(item)));
+const sidebarOrder = sidebar.flatMap((entry) => ("items" in entry ? slugs(entry) : [entry.slug]));
+// llms.txt links one file per top-level sidebar group, so an agent can fetch only the section it needs.
+const sidebarGroups = sidebar.flatMap((entry) => ("items" in entry ? [{ label: entry.label, paths: slugs(entry) }] : []));
 
 export default defineConfig({
   site: "https://nwidart.github.io",

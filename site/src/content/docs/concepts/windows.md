@@ -32,7 +32,7 @@ The pages do not all resolve the window the same way. Context and Live use the w
 | --- | --- |
 | [Context](/ai-ledger/pages/context/) | Starting context per project, growth per turn, turns and minutes to the first compaction, and peak fill by window size. |
 | [Activity](/ai-ledger/pages/activity/) | Sessions that reached 80% or more of their window, in **Needs attention**. |
-| [Live](/ai-ledger/pages/live/) | The selected session's fill in **Context window**, with a mark at each compaction. |
+| [Live](/ai-ledger/pages/live/) | The selected session's context meter in the status strip, with a mark at each compaction. |
 | [Project](/ai-ledger/pages/project/) | A typical session's window as a grid, in the style of Claude Code's `/context`. |
 
 ## The plan limit window
@@ -58,8 +58,8 @@ From your activity by hour of day, AI Ledger also forecasts each open window: wh
 | Page | What it shows |
 | --- | --- |
 | [Limits](/ai-ledger/pages/limits/) | Every open window with its forecast, what used it by project and model, and past windows. |
-| The **Limits** tab | A dot, on every page, when a window is at its limit, forecast to run out, or at 90% or more. |
-| [Live](/ai-ledger/pages/live/) | **Plan limits** for the selected session's agent. |
+| The **Limits** tab | A percent pill, on every page: the percent of the fullest open window, turning amber or red with a ring when a window is at its limit, forecast to run out, or at 90% or more. |
+| [Live](/ai-ledger/pages/live/) | Each open plan limit of the selected session's agent in the status strip, with its reset time behind a toggletip. |
 | [Project](/ai-ledger/pages/project/) | The project's share of the plan limits. |
 
 ## How the two meet

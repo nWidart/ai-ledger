@@ -44,7 +44,7 @@ The store holds full transcript content, **including any secrets** that appeared
 | Claude Code `/insights` usage data (read) | `~/.claude/usage-data` |
 | Codex sessions (read) | `~/.codex` |
 | Grok sessions (read) | `~/.grok/sessions` |
-| Theme and sheet width | Your browser's local storage, per browser |
+| Theme, sheet width and chart and list preferences (Activity's metric, Cost's measure, stacking, scale and hidden token kinds, Errors' view and list mode) | Your browser's local storage, per browser |
 
 The app never writes to the transcript roots.
 

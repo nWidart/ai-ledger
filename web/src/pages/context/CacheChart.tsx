@@ -1,7 +1,8 @@
-import { useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { CacheBucket, ContextPayload } from "../../api";
 import { dayAxis, scaleMargins, stackHeights, textScale, tipAt, useWidth } from "../../components/chart";
-import { ChartTable, DataTable } from "../../components/DataTable";
+import { ChartTable } from "../../components/DataTable";
+import { Table, type Column } from "../../components/table/Table";
 import { dayLabel, dayRange, niceStep, num, pct, plural } from "../../format";
 import { BREAK_CAUSES, causesText, short } from "./context";
 import { modified } from "../../components/keys";
@@ -49,6 +50,16 @@ export function cacheSlots(series: Series): Slot[] {
 const CAUSE_NAME = Object.fromEntries(BREAK_CAUSES.map(([k, n]) => [k, n])) as Record<string, string>;
 const causeLabel = (k: string) => { const n = CAUSE_NAME[k]!; return n[0]!.toUpperCase() + n.slice(1); };
 
+/** The chart's data table: one row per bucket. */
+const tableColumns = (weekly: boolean): Column<CacheBucket>[] => [
+  { id: "day", header: weekly ? "Week of" : "Day", cell: r => dayLabel(r.day, true) },
+  { id: "input", header: "Uncached input", align: "num", cell: r => short(r.input) },
+  { id: "cache_write", header: "Cache write", align: "num", cell: r => short(r.cache_write) },
+  { id: "cache_read", header: "Cache read", align: "num", cell: r => short(r.cache_read) },
+  { id: "ratio", header: "Cache-hit ratio", align: "num", cell: r => pct(hitRatio(r)) },
+  ...BREAK_CAUSES.map(([k]): Column<CacheBucket> => ({ id: k, header: causeLabel(k), align: "num", cell: r => num(r[k]) })),
+];
+
 /** Rects stacked up from y0, bottom first, scaled by per: a nonzero part is at least MIN_H tall, and each after the first sits SEP above the last.
  *  The parts share the stack's own height (stackHeights): a thin part takes its minimum from its neighbours, so a full stack stays in its track. */
 export function stack(parts: [string, number][], y0: number, per: number): { key: string; y: number; h: number }[] {
@@ -74,6 +85,7 @@ export function CacheChart({ series }: { series: Series }) {
     tip.current.style.left = p.left + "px"; tip.current.style.top = p.top + "px";
   }, [at]);
   const slots = cacheSlots(series), weekly = series.bucket === "week", rows = series.rows;
+  const columns = useMemo(() => tableColumns(weekly), [weekly]);
   if (!rows.length) return <p className="empty">No request in this view.</p>;
 
   const n = slots.length, unit = weekly ? "week" : "day";
@@ -194,12 +206,7 @@ export function CacheChart({ series }: { series: Series }) {
       <div className="caption muted small">A break's cause is inferred from the gap and the model of the previous request, not reported by the provider.
         {reads ? "" : " Cache reads are left out of the bars until you turn them on."}{weekly ? " Each bar is a week, labelled by its first day." : ""}</div>
       <div className="readout" aria-live="polite">{cur?.row ? read(cur) : ""}</div>
-      <ChartTable><DataTable name="Cache use by bucket" region="scroll tall">
-        <thead><tr><th scope="col">{weekly ? "Week of" : "Day"}</th><th scope="col" className="num">Uncached input</th><th scope="col" className="num">Cache write</th>
-          <th scope="col" className="num">Cache read</th><th scope="col" className="num">Cache-hit ratio</th>{BREAK_CAUSES.map(([k]) => <th key={k} scope="col" className="num">{causeLabel(k)}</th>)}</tr></thead>
-        <tbody>{hit.map(r => <tr key={r.day}><th scope="row">{dayLabel(r.day, true)}</th><td className="num">{short(r.input)}</td><td className="num">{short(r.cache_write)}</td>
-          <td className="num">{short(r.cache_read)}</td><td className="num">{pct(hitRatio(r))}</td>{BREAK_CAUSES.map(([k]) => <td key={k} className="num">{num(r[k])}</td>)}</tr>)}</tbody>
-      </DataTable></ChartTable>
+      <ChartTable><Table name="Cache use by bucket" region="scroll tall" rows={hit} columns={columns} rowId={r => r.day} /></ChartTable>
     </div>
   );
 }

@@ -12,7 +12,7 @@ Fewer sessions stop to wait for you, and you interrupt or reject fewer prompts, 
 This playbook applies when one of these holds:
 
 - [Live](/ai-ledger/pages/live/): a session sits under **approval?** and you did not know. The app puts a session there when a shell call has had no result for more than 30 seconds.
-- Live: the rail's footer reads "N waiting for you" most times you look, or the tab title carries a count, as in `(2) Live · AI Ledger`. The count adds the sessions under **approval?** and **your turn**.
+- Live: the rail's footer reads "N waiting for you" most times you look, or the **Live** tab in the navigation carries a count badge on any page you are on. On Live itself the browser tab title carries the count too, as in `(2) Live · AI Ledger`. The count adds the sessions under **approval?** and **your turn**.
 - [Activity](/ai-ledger/pages/activity/), the line under the heading: **prompts interrupted** reads "up from". The app marks it when the share goes up against the previous period of equal length.
 - Rule of thumb: **Prompts interrupted** is above 5% at **30d**.
 - Rule of thumb: on [Errors](/ai-ledger/pages/errors/), the type **User rejected the action** or **Permission / safety check denied** is among the five types with the most errors.
@@ -75,6 +75,8 @@ sandbox_mode = "workspace-write"
 
 With these, Codex runs commands that stay inside the workspace without asking, and asks for the rest.
 
+For Grok, this playbook gives no settings file: set its approvals in the Grok CLI itself. The app reads Grok sessions the same way (its shell tool `run_terminal_command` reads **approval?** after 30 seconds with no result), so Diagnose and Verify hold as they are. See [Supported agents](/ai-ledger/concepts/supported-agents/).
+
 ### Tell the agent to finish without checking in
 
 Paste this into the project's `CLAUDE.md`, or `AGENTS.md` for Codex:
@@ -115,8 +117,9 @@ When the plan is wrong, correct the plan, not the code.
 
 These are habits. Each has a trigger.
 
-- Keep Live open in a pinned tab while sessions run. When its tab title shows a count, such as `(2) Live · AI Ledger`, switch to it and answer the session under **approval?** first: it holds a running call.
-- When you start a long task, give it a single prompt with all of the task, and work on something else until the tab title shows a count.
+- Keep AI Ledger open in a browser tab while sessions run. When the **Live** tab in the navigation shows a count badge (on any page), or Live's browser tab title shows one, such as `(2) Live · AI Ledger`, switch to Live and answer the session under **approval?** first: it holds a running call.
+- When you supervise several sessions at once, open Live's Wall and select up to two tiles to pin their streams beside the tiles. A third pin unpins the oldest. Read each pinned stream's status strip for its state.
+- When you start a long task, give it a single prompt with all of the task, and work on something else until the badge shows a count.
 
 ## Verify
 
@@ -137,7 +140,7 @@ After 7 days of work, read:
 If a figure did not move:
 
 - A change to `CLAUDE.md`, `AGENTS.md` or the settings applies to new sessions only. Start a new session.
-- If commands still move under **approval?**, select the session and compare the call in **Doing now** with your rule. A rule that names a command must match the command as the agent writes it.
+- If commands still move under **approval?**, select the session and compare the call in the status strip and the last tool row of the stream with your rule. A rule that names a command must match the command as the agent writes it.
 - If **Prompts interrupted** stays high with few rejections, read the session sheets of step 5 again: when the session also has error loops, the agent is stuck, not wrong. Open [Kill repeated tool failures](/ai-ledger/improve/tool-failures/).
 
 ## Related
@@ -146,6 +149,7 @@ If a figure did not move:
 - [Activity](/ai-ledger/pages/activity/): the prompts interrupted line and **Needs attention**.
 - [Errors](/ai-ledger/pages/errors/#type-detail): the type detail, **By message** and **Mark fix applied**.
 - [Metric glossary](/ai-ledger/reference/glossary/#live): the definition of each state and figure.
+- [Supported agents](/ai-ledger/concepts/supported-agents/): each agent's shell tool for **approval?**.
 - [Kill repeated tool failures](/ai-ledger/improve/tool-failures/): when the agent is stuck, not waiting.
 - [Get sessions to finish](/ai-ledger/improve/finish-sessions/): when sessions end without reaching their goal.
 - [Weekly 15-minute review](/ai-ledger/improve/weekly-review/): where this check sits in a routine.

@@ -1,7 +1,8 @@
 // Window pressure: per window size, one stacked bar of how many sessions peaked in each band of it; a segment lists its sessions.
 import { useState } from "react";
 import type { ContextPayload, SessionPoint } from "../../api";
-import { ChartTable, DataTable } from "../../components/DataTable";
+import { ChartTable } from "../../components/DataTable";
+import { Table, type Column } from "../../components/table/Table";
 import { SOURCE_LABELS } from "../../components/Filters";
 import { subjectAttrs } from "../../components/menu/subject";
 import { openSessionSheet, sessName } from "../../components/sheets/session";
@@ -18,6 +19,13 @@ const LIST_MAX = 20;
 const COUNT_AT = .07, LABEL_AT = .2;
 const TONE = [
   "color-mix(in srgb, var(--text-muted) 45%, var(--track))", "color-mix(in srgb, var(--text-muted) 80%, var(--track))", "var(--text-muted)", "var(--warning)", "var(--critical)",
+];
+
+const total = (f: Fill[number]) => f.sessions || f.bins.reduce((a, b) => a + b, 0);
+// The chart's data table: one row per window, one column per band.
+const COLUMNS: Column<Fill[number]>[] = [
+  { id: "window", header: "Window", cell: f => windowLabel(f.window) },
+  ...FILL_LABELS.map((l, i): Column<Fill[number]> => ({ id: `band${i}`, header: l, align: "num", cell: f => <>{num(f.bins[i]!)} ({pct(f.bins[i]! / (total(f) || 1))})</> })),
 ];
 
 /** The band (0-4) of a peak share. */
@@ -38,7 +46,6 @@ export function fillOf(points: SessionPoint[]): Fill {
 export function PressureBars({ fill, points }: { fill: Fill; points: SessionPoint[] }) {
   const [sel, setSel] = useState<{ window: number; band: number } | null>(null);
   if (!fill.length) return null;
-  const total = (f: Fill[number]) => f.sessions || f.bins.reduce((a, b) => a + b, 0);
   return (
     <div className="pressure">
       <ul className="pkey" aria-hidden="true">{FILL_LABELS.map((l, i) => <li key={l}><i style={{ background: TONE[i] }} />{l}</li>)}</ul>
@@ -74,13 +81,7 @@ export function PressureBars({ fill, points }: { fill: Fill; points: SessionPoin
           </div>}
         </div>;
       })}
-      <ChartTable>
-        <DataTable name="Sessions by peak share of the window" region="scroll">
-          <thead><tr><th scope="col">Window</th>{FILL_LABELS.map(l => <th key={l} scope="col" className="num">{l}</th>)}</tr></thead>
-          <tbody>{fill.map(f => <tr key={f.window}><th scope="row">{windowLabel(f.window)}</th>
-            {f.bins.map((n, i) => <td key={i} className="num">{num(n)} ({pct(n / (total(f) || 1))})</td>)}</tr>)}</tbody>
-        </DataTable>
-      </ChartTable>
+      <ChartTable><Table name="Sessions by peak share of the window" region="scroll" rows={fill} columns={COLUMNS} rowId={f => String(f.window)} /></ChartTable>
     </div>
   );
 }

@@ -1,8 +1,9 @@
-import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { ContextPayload, GrowthPoint } from "../../api";
 import { useColors } from "../../colors";
 import { scaleMargins, textScale, useWidth } from "../../components/chart";
-import { ChartTable, DataTable } from "../../components/DataTable";
+import { ChartTable } from "../../components/DataTable";
+import { Table, type Column } from "../../components/table/Table";
 import { niceStep, num, pct, plural } from "../../format";
 import { NEAR_LIMIT, share as shareText, short } from "./context";
 import { modified } from "../../components/keys";
@@ -14,6 +15,20 @@ const H0 = 260, M0 = { t: 12, r: 14, b: 30, l: 52 }; // at the default text size
 const STRIP = { gap: 6, bar: 22, text: 18 };
 type Mode = "tokens" | "share";
 const key = (p: { project: string | null }) => p.project ?? "";
+
+type Drawn = { project: string | null; c: GrowthPoint[] };
+/** The chart's data table: the view's median and band at each turn, then one column per drawn project (its median, and with one isolated its band). */
+const tableColumns = (shown: Drawn[], only: Drawn | null, fmt: (v: number) => string): Column<GrowthPoint>[] => [
+  { id: "turn", header: "Turn", cellProps: () => ({ className: "num" }), cell: p => num(p.turn) },
+  { id: "median", header: "Median", align: "num", cell: p => fmt(p.median) },
+  { id: "p25", header: "25th percentile", align: "num", cell: p => fmt(p.p25) },
+  { id: "p75", header: "75th percentile", align: "num", cell: p => fmt(p.p75) },
+  { id: "sessions", header: "Sessions", align: "num", cell: p => num(p.sessions) },
+  ...shown.map((q): Column<GrowthPoint> => ({ id: `project:${key(q)}`, header: q.project ?? "(no project)", align: "num", cell: p => {
+    const c = q.c.find(r => r.turn === p.turn);
+    return c ? fmt(c.median) + (only ? ` (${fmt(c.p25)} to ${fmt(c.p75)})` : "") : "–";
+  } })),
+];
 
 /** What a curve reads at a turn, in words: "Turn 12: median 45k tokens (25th to 75th percentile 30k to 60k), 9 sessions". */
 export const readTurn = (p: GrowthPoint) =>
@@ -31,14 +46,15 @@ export function GrowthChart({ curve, projects, share }: { curve: GrowthPoint[]; 
   const color = useColors(), box = useRef<HTMLDivElement>(null), W = useWidth(box);
   const [at, setAt] = useState<number | null>(null); // an index into the curve in view
   const [mode, setMode] = useState<Mode>("tokens"), [sel, setSel] = useState<string | null>(null);
+  const canShare = !!share?.length, m: Mode = mode === "share" && canShare ? "share" : "tokens", isShare = m === "share", fmt = isShare ? shareText : short;
+  const drawn = useMemo(() => projects.map(p => ({ project: p.project, sessions: p.sessions, c: isShare ? p.share_curve : p.curve })).filter(p => p.c.length), [projects, isShare]);
+  const only = sel == null ? null : drawn.find(p => key(p) === sel) ?? null;
+  const shown = useMemo(() => only ? [only] : drawn, [only, drawn]);
+  const columns = useMemo(() => tableColumns(shown, only, fmt), [shown, only, fmt]);
   if (!curve.length) return null;
   // Labels and the room around them follow the browser's text size; the plot keeps its height.
   const ts = textScale(), M = scaleMargins(M0, ts), H = H0 + (M.t + M.b) - (M0.t + M0.b);
-  const canShare = !!share?.length, m: Mode = mode === "share" && canShare ? "share" : "tokens", isShare = m === "share";
-  const cv = isShare ? share! : curve, fmt = isShare ? shareText : short;
-  const drawn = projects.map(p => ({ project: p.project, sessions: p.sessions, c: isShare ? p.share_curve : p.curve })).filter(p => p.c.length);
-  const only = sel == null ? null : drawn.find(p => key(p) === sel) ?? null;
-  const shown = only ? [only] : drawn;
+  const cv = isShare ? share! : curve;
   const pick = (next: Mode) => {
     setMode(next); setAt(null);
     if (sel != null && !projects.some(p => key(p) === sel && (next === "share" ? p.share_curve : p.curve).length)) setSel(null);
@@ -128,12 +144,7 @@ export function GrowthChart({ curve, projects, share }: { curve: GrowthPoint[]; 
         : "Turn in the session (a main-thread request that carries the context) · tokens the model read at that turn"}</div>
       <div className="readout" aria-live="polite">{readout ?? ""}</div>
       {/* The chart's text alternative: the view's median and band at each turn, and each drawn project's median. */}
-      <ChartTable><DataTable name={isShare ? "Median share of the window at each turn" : "Median context at each turn"} region="scroll tall">
-        <thead><tr><th scope="col">Turn</th><th scope="col" className="num">Median</th><th scope="col" className="num">25th percentile</th><th scope="col" className="num">75th percentile</th>
-          <th scope="col" className="num">Sessions</th>{shown.map(p => <th key={key(p)} scope="col" className="num">{p.project ?? "(no project)"}</th>)}</tr></thead>
-        <tbody>{cv.map(p => <tr key={p.turn}><th scope="row" className="num">{num(p.turn)}</th><td className="num">{fmt(p.median)}</td><td className="num">{fmt(p.p25)}</td><td className="num">{fmt(p.p75)}</td>
-          <td className="num">{num(p.sessions)}</td>{shown.map(q => { const c = q.c.find(r => r.turn === p.turn); return <td key={key(q)} className="num">{c ? fmt(c.median) + (only ? ` (${fmt(c.p25)} to ${fmt(c.p75)})` : "") : "–"}</td>; })}</tr>)}</tbody>
-      </DataTable></ChartTable>
+      <ChartTable><Table name={isShare ? "Median share of the window at each turn" : "Median context at each turn"} region="scroll tall" rows={cv} columns={columns} rowId={p => String(p.turn)} /></ChartTable>
     </div>
   );
 }

@@ -27,8 +27,12 @@ Under some charts, a **Show data table** button opens the chart's figures as a t
 | Context | Cache chart | One row per bucket: the cache use the chart draws. |
 | Context | Session map | One row per session on the map. |
 | Context | Window pressure bars | The figures the bars draw. |
+| Activity (Judgments) | Outcome trend | One row per week: sessions and each outcome's count and share. |
+| Cost | Tokens and cache (and the Cost block of the Project page) | Each billed token kind's full token count, share of tokens, estimated cost and share of cost, with thinking and both cache-write lifetimes. |
+| Errors | Rate chart (Errors by type) | One row per day or week: tool calls, failed calls, rate, and failed calls by type. |
+| Limits | Open window chart (inside Details), past window curve, and Past windows | Open window and curve: times and percent used, plus the safe pace after now. Past windows: every closed window in the range. |
 
-No other chart has this button, the Errors chart and the Limits chart included. Read their points with the arrow keys (see [Keyboard and screen reader](/ai-ledger/everywhere/keyboard-screen-reader/)); Errors lists the same figures by type in its type table.
+Live's 10-minute pulse has no data table. Read it with the arrow keys, one minute at a time (see [Keyboard and screen reader](/ai-ledger/everywhere/keyboard-screen-reader/)).
 
 ## Sorting
 

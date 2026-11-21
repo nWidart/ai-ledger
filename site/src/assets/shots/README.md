@@ -6,11 +6,11 @@ Every row is two files: `<name>.png` (dark) and `<name>-light.png` (light). Pass
 
 Only the shots a page shows are kept: a shot no page references is deleted, and its entry leaves the recorder's list (`SHOT_PAGES` in `tools/demo/record.mjs`) in the same change. To show another panel, add it to that list, record it, and add its row here.
 
-`tour-overview` has no page of its own: it is the reduced-motion still of the home page's `tour` GIF, the first screen of Activity (1280×800): `ThemedImage gif="tour" dark={tourStill} light={tourStillLight}`.
+`tour-overview` has no page of its own: it is the poster and reduced-motion still of the home page's `tour` video, the first screen of Activity (1280×800): `ThemedImage video="tour" dark={tourStill} light={tourStillLight}`.
 
 | Name | What it shows | Page |
 | --- | --- | --- |
-| `tour-overview` | The first screen of Activity: header, filters, what needs attention, the work chart, the vitals row and the workbench tabs. Still for the `tour` GIF. | Home (tour GIF) |
+| `tour-overview` | The first screen of Activity: header, filters, what needs attention, the work chart, the vitals row and the workbench tabs. Poster and reduced-motion still for the `tour` video. | Home (tour video) |
 | `activity-attention` | "Needs attention": the short list of things to look at (error loops, sessions near the window, failing tools, failed tests). | Activity, First tour |
 | `activity-vitals` | The work-health row of tiles. | Activity |
 | `activity-work` | "Work per day": commits per day by project, with errors per 100 calls on a track under the bars. | Activity |
@@ -20,11 +20,12 @@ Only the shots a page shows are kept: a shot no page references is deleted, and 
 | `cost-highlights` | "What stands out": the insight cards. | Cost |
 | `cost-models` | "Models and effort": spend by model and effort level. | Cost, Spend less |
 | `cost-tokens` | "Tokens and cache" drawer, open: each kind's share of tokens beside its share of cost. | Cost |
-| `context-tips` | "Tips": the cards that say what to change. | Context, First tour |
+| `context-tips` | "Tips": the strip of short items that say what to change. | Context, First tour |
 | `context-starting` | "Starting context": what a session begins with, per project. | Context, Keep context lean |
 | `context-growth` | "Growth": context size as a session goes on. | Context |
 | `context-pressure` | "Window pressure": how close sessions get to the window. | Context |
-| `context-fills` | "What fills context": by tool, MCP server and skill. | Context |
+| `context-grids` | "Window of a typical session": small window grids for the busiest projects. | Context |
+| `context-fills` | "What fills context": by tool and by MCP server. | Context |
 | `context-cost` | "Cost": what context costs. | Context |
 | `errors-summary` | The summary figures at the top. | Errors |
 | `errors-chart` | "Errors by type": failed tool calls over time. | Errors |

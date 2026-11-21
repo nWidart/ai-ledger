@@ -26,7 +26,7 @@ Project answers one question: how is this project doing, without visiting every 
 
 <ThemedImage dark={layout} light={layoutLight} alt="The Project page for atlas-api in two columns: Activity, Cost and Context on the left, Errors, Plan limits and Sessions on the right." />
 
-On a wide screen (wider than 60em) the blocks sit in two columns: Activity, Cost and Context on the left; Errors, Plan limits, Sessions and Session judgments on the right. On a narrow screen they stack in one column in the same order, left column first. The page adds depth to the [project sheet](/ai-ledger/pages/cost/) rather than repeating it: the sheet keeps the eight quick figures, and the page shows other figures and charts.
+On a wide screen (wider than 60em) the blocks sit in two columns: Activity, Cost and Context on the left; Errors, Plan limits, Sessions and Session judgments on the right. On a narrow screen they stack in one column in the same order, left column first. The page adds depth to the [project sheet](/ai-ledger/everywhere/sheets/#project-sheet) rather than repeating it: the sheet keeps the eight quick figures, and the page shows other figures and charts.
 
 Terms such as automated session, calibrated window, points and counted use are in the [Metric glossary](/ai-ledger/reference/glossary/).
 
@@ -84,29 +84,6 @@ A figure the store cannot give reads `n/a`.
 
 **Controls** The heading link **Open in Cost** opens Cost for the project.
 
-### Sessions
-
-<ThemedImage dark={sessions} light={sessionsLight} alt="The Project page's Sessions block: the project's most expensive sessions." />
-
-**Shows** the project's eight most expensive sessions in the view, in a table named "Most expensive sessions": session (title and start), Branch, Active (active time, pauses over 20 minutes left out), and Est. cost.
-
-**Controls** The heading link **Open in Activity** opens Activity for the project. Selecting a row opens its session sheet over the page, and the URL names the session.
-
-### Errors
-
-<ThemedImage dark={errors} light={errorsLight} alt="The Project page's Errors block for atlas-api." />
-
-**Shows** figures that each equal what [Errors](/ai-ledger/pages/errors/) shows by default for the project, range and source. The block counts automated sessions too, as Errors does; when the **Include automated sessions** filter is off it says so: "Errors counts automated sessions too, whatever the filter says." With that filter off, this block's error rate can therefore differ from the project sheet's errors per 100 calls, which follow the filter.
-
-**Figures**
-
-- **failed tool calls**, and the **error rate** with its call count.
-- **Top error types**: the five most frequent types, in a table of Type, Errors, Rate and Change against the previous period ("Change vs previous N days"). A change that needs explaining is a toggletip: select it to read what it compares, as in Errors' type table.
-
-With no failed call, the block says "No errors in this view." and lists no type.
-
-**Controls** The heading link **Open in Errors** opens Errors for the project. A type links to Errors on that type, filtered to the project, range and source.
-
 ### Context
 
 <ThemedImage dark={context} light={contextLight} alt="The Project page's Context block: the starting-context grid and its legend." />
@@ -142,13 +119,20 @@ The legend beside the grid has a heading, "Typical session · 200k window" (the 
 - The heading link **Open in Context** opens Context for the project.
 - **Measure now.** The control shows for a project with Claude Code sessions in the view, or with a snapshot already. It runs `claude -p "/context"` in the folder of the project's latest Claude Code session, with the project's most used model, then ingests the result and shows the new snapshot. It calls no model and costs nothing, but it starts the project's MCP servers and hooks as a new session would; the block says so. The button reads "Measuring…" while it runs, and only one run goes at a time. The app chooses the folder and the model from the store. When Claude Code is not found, the run fails or times out, or no folder of the project exists, the block says "Could not measure" with the reason and keeps its figures.
 
-### Session judgments
+### Errors
 
-<ThemedImage dark={insights} light={insightsLight} alt="The Project page's Session judgments block: how many of the project's sessions /insights analysed." />
+<ThemedImage dark={errors} light={errorsLight} alt="The Project page's Errors block for atlas-api." />
 
-**Shows** how many of the project's Claude Code sessions `/insights` analysed, out of how many ("N of M Claude Code sessions analysed"), marked as a model's judgment as on Activity's [Judgments view](/ai-ledger/pages/insights/). Then **Outcomes** of the analysed sessions, as share and count, and **Top friction**, the three most reported friction families with their session counts. With no analysed session the block says "No session is analysed by `/insights` in this view." and shows no outcome.
+**Shows** figures that each equal what [Errors](/ai-ledger/pages/errors/) shows by default for the project, range and source. The block counts automated sessions too, as Errors does; when the **Include automated sessions** filter is off it says so: "Errors counts automated sessions too, whatever the filter says." With that filter off, this block's error rate can therefore differ from the project sheet's errors per 100 calls, which follow the filter.
 
-**Controls** The heading link **Open in Judgments** opens Activity's Judgments view for the project. With **Codex** or **Grok** as the source there is no such view, and the link's place says why, naming the agent: "Grok writes no facets: /insights judges Claude Code sessions only."
+**Figures**
+
+- **failed tool calls**, and the **error rate** with its call count.
+- **Top error types**: the five most frequent types, in a table of Type, Errors, Rate and Change against the previous period ("Change vs previous N days"). A change that needs explaining is a toggletip: select it to read what it compares, as in Errors' type table.
+
+With no failed call, the block says "No errors in this view." and lists no type.
+
+**Controls** The heading link **Open in Errors** opens Errors for the project. A type links to Errors on that type, filtered to the project, range and source.
 
 ### Plan limits
 
@@ -165,17 +149,34 @@ See [Windows](/ai-ledger/concepts/windows/) for how limit windows work.
 
 **Controls** The heading link **Open in Limits** opens Limits for the project.
 
+### Sessions
+
+<ThemedImage dark={sessions} light={sessionsLight} alt="The Project page's Sessions block: the project's most expensive sessions." />
+
+**Shows** the project's eight most expensive sessions in the view, in a table named "Most expensive sessions": session (title and start), Branch, Active (active time, pauses over 20 minutes left out), and Est. cost.
+
+**Controls** The heading link **Open in Activity** opens Activity for the project. Selecting a row opens its session sheet over the page, and the URL names the session.
+
+### Session judgments
+
+<ThemedImage dark={insights} light={insightsLight} alt="The Project page's Session judgments block: how many of the project's sessions /insights analysed." />
+
+**Shows** how many of the project's Claude Code sessions `/insights` analysed, out of how many ("N of M Claude Code sessions analysed"), marked as a model's judgment as on Activity's [Judgments view](/ai-ledger/pages/insights/). Then **Outcomes** of the analysed sessions, as share and count, and **Top friction**, the three most reported friction families with their session counts. With no analysed session the block says "No session is analysed by `/insights` in this view." and shows no outcome.
+
+**Controls** The heading link **Open in Judgments** opens Activity's Judgments view for the project. With **Codex** or **Grok** as the source there is no such view, and the link's place says why, naming the agent: "Grok writes no facets: /insights judges Claude Code sessions only."
+
 ## Sheets
 
-The Project page shows the session sheet and the tool, MCP server and skill sheets, as every page does. Their state is kept in the URL, as on Activity: reloading `/project?project=foo&session=abc` shows the Project page of `foo` with that session's sheet open.
+The Project page shows the session sheet and the tool, MCP server and skill sheets, as every page does; see [Sheets](/ai-ledger/everywhere/sheets/). Their state is kept in the URL, as on Activity: reloading `/project?project=foo&session=abc` shows the Project page of `foo` with that session's sheet open.
 
 ## Open the page
 
-The Project page has no tab. Open it in one of three ways:
+The Project page has no tab. Open it in one of four ways:
 
 - Select **Brief →** at the end of the scope bar, once a project filter is set. The link reads "Brief, \<project> project page" for a screen reader.
 - Choose **Open project page** in the project sheet. The sheet closes and the page opens with the same range, source and automated filters.
-- With a project set, choose the **Project** row in the [command palette](/ai-ledger/everywhere/command-palette/) (`>project`).
+- Choose **Open project page** in the [context menu](/ai-ledger/everywhere/context-menu/) of a project or a session.
+- Use the [command palette](/ai-ledger/everywhere/command-palette/): `>project` with a project set, or `><project>` with a project's name to open its page directly.
 
 Without a project the page has nothing to show. Opening `/project` with no project, or clearing the project on the page, opens Activity with the range, source and automated filters kept.
 

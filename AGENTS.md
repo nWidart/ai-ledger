@@ -1,6 +1,6 @@
 # AI Ledger
 
-Local DuckDB store of Claude Code and Codex transcripts, served as dashboards (Live, Limits, Activity with its Judgments view, Cost, Context, Errors). See `README.md` for goals and setup, and `openspec/specs/` for page behavior. `tools/demo/` records the README GIFs from a synthetic store.
+Local DuckDB store of Claude Code, Codex and Grok CLI transcripts, served as dashboards (Live, Limits, Activity with its Judgments view, Cost, Context, Errors). See `README.md` for goals and setup, and `openspec/specs/` for page behavior. `tools/demo/` records the README GIFs from a synthetic store.
 
 ## Identity
 
@@ -42,7 +42,7 @@ Your goal is to complete the entire specification with maximum quality while min
 - The store holds full transcript content, including secrets. Never commit, print or paste it.
 - `src/ai_ledger/web/` is the Vite build. Git ignores it; CI builds it for the tests and the package. In a fresh clone or worktree, run `cd web && npm ci && npm run build` before `uv run ai-ledger` or the Python tests. Without it, pages answer 503.
 - After a payload change, regenerate the page-test fixtures in `web/src/__fixtures__/`: `uv run python -m unittest tests.test_web_fixtures`.
-- Both sources (Claude Code, Codex) map onto the same derived tables. A parser change in `store.py` or `codex.py` must keep that shape.
+- All three sources (Claude Code, Codex, Grok) map onto the same derived tables. A parser change in `store.py`, `codex.py` or `grok.py` must keep that shape.
 - Plan features as OpenSpec changes in `openspec/changes/`; current specs live in `openspec/specs/`.
 - Give each OpenSpec change its own git worktree, on its own branch from `main`. Propose, apply and archive the change in that worktree, never in the main checkout or another change's branch. After archiving, remove the worktree.
 - Update `README.md` when user-visible behavior changes.

@@ -11,18 +11,20 @@ No plan limit window reaches 100% before its reset, so the agent never stops you
 
 This playbook applies when one of these holds. The first three are the app's own alerts.
 
-- The **Limits** tab carries a dot. The app shows it when an open window is at its limit, is forecast to run out before its reset, or is at 90% or more.
+- The **Limits** tab's percent pill is amber or red, with a ring. The app shows it so when an open window is at its limit, is forecast to run out before its reset, or is at 90% or more; otherwise the pill is a quiet percent.
 - [Limits](/ai-ledger/pages/limits/), the heading, names a window "is at its limit" or "runs out …", and a card's header reads **at its limit** or **runs out**.
 - Limits, a window card: its cone is amber, its footer's **Pace** shows in the critical tone (faster than the safe pace), or its **Details** read "If the last 24 hours continue: reaches 100% at …" in the warning tone.
 - Rule of thumb: Limits, **Past windows** at **30d**, shows red bars (**hit its limit**) in two windows or more of the same limit.
 
 The plan limit window is the 5-hour or weekly allowance of your plan, not the model's context window; see [Windows](/ai-ledger/concepts/windows/).
 
+Grok has a Limits card on macOS and Linux when the Grok CLI is signed in with grok.com; with an API key or no grok.com login, Limits shows no Grok card. See [Supported agents](/ai-ledger/concepts/supported-agents/).
+
 The opposite sign, a weekly limit that reads avg 50% unused or more in **Past windows**, means the plan is larger than your use: open [Spend less for the same output](/ai-ledger/improve/spend-less/#fit-the-plan-to-your-use).
 
 ### On Linux
 
-On Linux, the app cannot read Claude Code's limits: the poll needs the macOS Keychain. The data line for Claude Code shows the **polling failing** chip, and Limits has no Claude Code window. This is expected. This playbook then works for the Codex windows only, which the app reads from Codex's transcripts. For Claude Code, read the limits in Claude Code itself, with `/usage`, and apply [Act](#act) all the same. See [Limits](/ai-ledger/pages/limits/#where-the-data-comes-from).
+On Linux, the app cannot read Claude Code's limits: the poll needs the macOS Keychain. The data line for Claude Code shows the **polling failing** chip, and Limits has no Claude Code window. This is expected. This playbook then works for Codex (read from transcripts) and Grok (polled with the grok.com login, which needs no Keychain). For Claude Code, read the limits in Claude Code itself, with `/usage`, and apply [Act](#act) all the same. See [Limits](/ai-ledger/pages/limits/#where-the-data-comes-from).
 
 ## Diagnose
 
@@ -54,7 +56,7 @@ import windowsLight from "../../../assets/shots/limits-windows-light.png";
 
 The footer's **Pace** gives the safe pace, the rate that would use the window all: "9.1%/d safe" (an example). That rate is your daily budget until the reset. On the chart it is the thin, long-dashed straight line from now to 100% at the reset.
 
-- Habit: when a plan limit, in a session's status strip on [Live](/ai-ledger/pages/live/), takes the warning color and reads "near" (above 80%, earlier than the dot on the **Limits** tab at 90%), finish the current step and stop heavy work, such as large refactors or wide searches, until the reset. Hover the limit for its reset time, or read it on the **Limits** tab.
+- Habit: when a plan limit, in a session's status strip on [Live](/ai-ledger/pages/live/), takes the warning color and reads "near" (above 80%, earlier than the **Limits** tab's pill, which turns amber at 90%), finish the current step and stop heavy work, such as large refactors or wide searches, until the reset. Select or hover the **?** toggletip beside the limit for its reset time, or read it on the **Limits** tab.
 - Habit: each morning, read the window card's **Pace**. When it shows in the critical tone (the verdict in **Details** reads **ahead of pace**), start that day's heavy work with the other provider (see [Send work to the provider with headroom](#send-work-to-the-provider-with-headroom)), or with a cheaper model.
 
 ### Cut the cost of the project that leads
@@ -78,7 +80,7 @@ To keep such sessions apart in the other pages, follow [Separate automated sessi
 
 When the heading shows a suggestion, such as "Send work to Codex: about 70% of its weekly limit would go unused" (an example), the other provider has room at the current pace.
 
-Habit: when a window card reads **ahead of pace**, start the next new task in the agent that the suggestion names. Keep a short `AGENTS.md` next to your `CLAUDE.md` so that Codex reads the same project rules; [Compare Claude Code and Codex](/ai-ledger/improve/compare-sources/) shows how to compare the two on your work.
+Habit: when a window card reads **ahead of pace**, start the next new task in the agent that the suggestion names. Keep a short `AGENTS.md` next to your `CLAUDE.md` so that Codex reads the same project rules; [Compare Claude Code, Codex and Grok](/ai-ledger/improve/compare-sources/) shows how to compare the agents on your work.
 
 If the surfaces line shows that chats use most of the week, the same budget covers them: count them in the daily budget of [Pace your work to the reset](#pace-your-work-to-the-reset).
 
@@ -96,7 +98,7 @@ Then wait: 14 days for a weekly limit, two full weeks of windows; for a 5-hour l
 | --- | --- | --- |
 | Red bars (**hit its limit**) | Limits, **Past windows**, at **30d** | No red bar after the day you acted. The strip lists the windows oldest left, so the before and the after sit side by side. |
 | **At 100% for** | Limits, **Past windows**, the table | Empty, or shorter, for the windows after the day you acted. |
-| The dot | The **Limits** tab | No dot, or a warning dot only (90% or more) late in a window. |
+| The percent pill | The **Limits** tab | A quiet percent, or an amber pill only (90% or more) late in a window. |
 | **avg N% unused** | Limits, **Past windows**, at **30d** | Rule of thumb: above 0%, but under 50%. 0% means every window ran out; 50% or more means the plan is larger than your use. |
 
 If a figure did not move:
@@ -108,9 +110,10 @@ If a figure did not move:
 ## Related
 
 - [Limits](/ai-ledger/pages/limits/): every panel, line and drawer used here.
-- [Live](/ai-ledger/pages/live/): the **Plan limits** meter of a running session.
+- [Live](/ai-ledger/pages/live/): the plan limits in a running session's status strip.
+- [Supported agents](/ai-ledger/concepts/supported-agents/): which agents report plan limits.
 - [Context windows and plan limit windows](/ai-ledger/concepts/windows/): what a plan limit window is and how the app reads it.
 - [Metric glossary](/ai-ledger/reference/glossary/#limits): the definition of each figure.
 - [Spend less for the same output](/ai-ledger/improve/spend-less/): a cheaper model mix, and the plan fit when it is too large.
-- [Compare Claude Code and Codex](/ai-ledger/improve/compare-sources/): send work to the provider with headroom.
+- [Compare Claude Code, Codex and Grok](/ai-ledger/improve/compare-sources/): send work to the provider with headroom.
 - [Weekly 15-minute review](/ai-ledger/improve/weekly-review/): where Limits sits in a routine.

@@ -23,7 +23,7 @@ Failed test runs ("N failed test runs of M.") also start here: their type is **T
 
 ## Diagnose
 
-Find out which of five causes you have. Errors counts automated sessions too; it has no **Include automated** control.
+Find out which of five causes you have. Errors counts automated sessions too; it has no **Include automated sessions** control.
 
 1. Open Errors with the range at **30d**. Turn on **Hide noise and muted**, in the type table's toolbar: harness errors, user rejections and muted types leave the view.
 2. In **Where to start**, select the first type under **Open fixes**: it lost the most time in retry loops. If **Open fixes** reads "Nothing open with a known fix.", sort the **Error types** table by **Time lost** and open the top row.
@@ -55,7 +55,9 @@ Where to paste a rule:
 | In one project (**By project**) | `CLAUDE.md` at the project's root | `AGENTS.md` at the project's root |
 | In most projects | `~/.claude/CLAUDE.md` | `~/.codex/AGENTS.md` |
 
-**By agent** says which agent fails. If both do, paste into both files. A rule about your own machine, such as your shell or your aliases, goes in the file in your home directory, even for one project: the project's file is often in git, and its rules reach everyone who uses the repository.
+For Grok, paste the rule into the instruction file your Grok CLI reads; to keep one file for every agent, see [Give every agent the same instructions](/ai-ledger/improve/compare-sources/#give-every-agent-the-same-instructions). Several ready-made lines name Claude Code tools or options, such as `Read`, `Grep` or `run_in_background`: paste those into `CLAUDE.md` only, and leave them out of the files other agents read. See [Supported agents](/ai-ledger/concepts/supported-agents/).
+
+**By agent** says which agent fails. If more than one does, paste into each agent's file. A rule about your own machine, such as your shell or your aliases, goes in the file in your home directory, even for one project: the project's file is often in git, and its rules reach everyone who uses the repository.
 
 ### Paste the ready-made fix
 

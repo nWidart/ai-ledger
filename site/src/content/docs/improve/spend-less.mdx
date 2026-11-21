@@ -32,7 +32,7 @@ Find out which of five causes you have. Keep the filters of the signs: **30d**, 
 
 1. On Cost, select the action of the card that is marked: **Compare projects** or **Show that day's sessions**. If one project leads, pick it in the project picker for the next steps.
 2. Read **Models and effort**. Note the top row and its share, such as `fable-5-2 · high` at 70% (an example). Note every row that ends in `· fast`: those are fast-mode requests.
-3. Open the drawer **Tokens and cache**. Write down **Cache hit**, **Subagent cost**, **Per prompt** and **Per commit**. You need them in Verify.
+3. Open the drawer **Tokens and cache**. Write down **Cache hit**, **Subagent cost**, **Per prompt** and **Per commit**. You need them in Verify. Below them, the two-sided chart puts each token kind's **Share of tokens** beside its **Share of estimated cost**; the sentence above it names the kind whose two shares are furthest apart. Grok's reported cost has no split by kind, so it is left out of the cost side, and a line says how much of the view's cost that is. To see when a kind's share moved, set the chart at the top of Cost to **Tokens** and **Scale** to **Share**: a day where output or cache writes take a larger part of the bar is a day to read in **Most expensive sessions**.
 4. Open [Context](/ai-ledger/pages/context/) with the same filters. If the tip **The prompt cache breaks within sessions** shows, read its evidence line **Breaks by cause**: model switches, expired or other. If the tip **Requests are priced on the long-prompt tier** shows, read **Long-prompt thresholds**: the prompt size above which each model charges more.
 5. Back on Cost, open the drawer **Most expensive sessions**. Look for sessions with a long **Active** time, many **Prompts** and few **Commits**.
 6. For the plan gauge, open [Limits](/ai-ledger/pages/limits/) with the range at **90d** and read the **avg N% unused** summary in **Past windows** for each weekly limit.
@@ -87,6 +87,8 @@ model_reasoning_effort = "medium"
 ```
 
 When a task needs the larger model, switch for that session only, at its start.
+
+For Grok, the cost on every page is the one Grok reported, not an estimate at list prices, so the packaged price table does not decide it, and Grok has no part in the plan gauge. Pick the cheaper Grok model in the Grok CLI, then read the change on Cost with the source set to **Grok**. See [Supported agents](/ai-ledger/concepts/supported-agents/).
 
 ### Use fast mode only when you wait
 
