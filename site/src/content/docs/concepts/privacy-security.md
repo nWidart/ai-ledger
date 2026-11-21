@@ -35,6 +35,10 @@ The app sends nothing, and Limits shows no Grok card, when there is no grok.com 
 
 The page loads its font, IBM Plex Sans, from Google Fonts. Your browser fetches it from `fonts.googleapis.com` and `fonts.gstatic.com` as for any web page. The request carries no transcript data, and the app tells the browser to send no referrer.
 
+### Metrics, when something scrapes them
+
+`GET /metrics` serves the store's figures in the Prometheus text format to whatever asks for it: project, model, tool, error-category and workload names, counts, tokens, cost and the app's version. Nothing leaves the machine unless you point a Prometheus at it, or publish it with a proxy. No label or sample holds a session id, a prompt, a command, a tool input, an error message or a path. See [Prometheus metrics and Grafana dashboard](/ai-ledger/reference/metrics/).
+
 ### Nothing else
 
 The app has no account, no analytics and no update check.
@@ -50,6 +54,7 @@ The app's server listens only on `127.0.0.1`, the address your machine uses to t
 It also checks who is asking:
 
 - **The address.** The server answers only requests addressed to `127.0.0.1` and its port. A request for `localhost` is redirected to `127.0.0.1`. Any other name gets `403 forbidden host`. This stops a web site that points its own domain name at your machine from reading the pages.
+- **The exception for `/metrics`.** With `--metrics-host`, `GET /metrics` also accepts the `Host` a proxy such as `tailscale serve` passes on. Pages, `/api` and every other method keep the check above. This is safe because the check exists to stop DNS rebinding, where a page on an attacker's domain points that domain at your machine and sends it as `Host`. An attacker cannot point your tailnet name at your machine, and a browser page cannot choose its `Host`. The app still listens on `127.0.0.1` only; the proxy is the only thing that makes `/metrics` reachable from the tailnet. Without the option, no other host is accepted. The option takes a host name, not a header such as `X-Forwarded-Host`, which any local client can send.
 - **The site.** A request to the app's API, and every request that changes something, is refused with `403 forbidden cross-site request` when another site sent it from your browser. A page you visit elsewhere cannot read your figures, start an ingest or mark an error type. The browser's `Sec-Fetch-Site` header, or else its `Origin` header, says who sent a request.
 - **The page.** Every response tells the browser not to show the app inside another site's frame. The page may run scripts only from the app itself, and may load nothing from another origin except the Google Fonts files.
 

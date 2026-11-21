@@ -39,6 +39,7 @@ A first ingest reads every transcript and takes about 5 minutes for a month of h
 | `--grok <path>` | `~/.grok` | The Grok home. The app reads `sessions/*/*/updates.jsonl` under it. | `serve`, `ingest` |
 | `--usage-data <path>` | `~/.claude/usage-data` | The directory of Claude Code's `/insights` usage data. | `serve`, `ingest` |
 | `--db <file>` | The store in the [data folder](/ai-ledger/reference/storage/) | The database file. The configuration files are read from its folder. | all |
+| `--metrics-host <host[:port]>` | none | Also lets `GET /metrics` accept this `Host` header, as a proxy such as `tailscale serve` sends it. Repeatable; matched without case. Every other route keeps the strict host check. See [Prometheus metrics](/ai-ledger/reference/metrics/#a-second-machine). | `serve` |
 | `--version` | | Prints `ai-ledger <version>` and exits without opening the store. It works while the app runs. | |
 | `-h`, `--help` | | Prints the usage and exits. | |
 
@@ -51,7 +52,8 @@ A transcript root that does not exist, such as a missing Codex or Grok home, is 
 - The app prints `serving http://127.0.0.1:<port>/ (ingest every 60s)`.
 - The app opens the browser unless `--no-open` is given, standard output is not a terminal, or it runs on Linux with neither `DISPLAY` nor `WAYLAND_DISPLAY` set. It prints the URL in every case.
 - A second instance on another store and port runs beside the first: `ai-ledger --db <copy> --port 8766`.
-- A request with a `Host` of `localhost:<port>` is redirected to `127.0.0.1:<port>`. A request with any other host gets 403.
+- A request with a `Host` of `localhost:<port>` is redirected to `127.0.0.1:<port>`. A request with any other host gets 403, except `GET /metrics` with a host that `--metrics-host` names.
+- `GET /metrics` serves the figures in the Prometheus text format. See [Prometheus metrics](/ai-ledger/reference/metrics/).
 
 ## Exit status
 

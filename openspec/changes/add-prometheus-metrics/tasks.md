@@ -14,6 +14,6 @@
 
 ## 3. Docs
 
-- [ ] 3.1 README: a "Prometheus and Grafana" section: the scrape config for one and for two machines (`tailscale serve` and `--metrics-host`), the workloads file, the metric list, the first-scrape step, what leaves the store.
-- [ ] 3.2 Docs site: a page on the metrics, the workloads file and the dashboard, written with the `doc-coauthoring` skill.
-- [ ] 3.3 `CHANGELOG.md` `[Unreleased]`: the endpoint, `--metrics-host`, the workloads file and the dashboard.
+- [x] 3.1 README: a "Prometheus and Grafana" section: the scrape config for one and for two machines (`tailscale serve` and `--metrics-host`), the workloads file, the metric list, the first-scrape step, what leaves the store.
+- [x] 3.2 Docs site: a page on the metrics, the workloads file and the dashboard, written with the `doc-coauthoring` skill.
+- [x] 3.3 `CHANGELOG.md` `[Unreleased]`: the endpoint, `--metrics-host`, the workloads file and the dashboard.
