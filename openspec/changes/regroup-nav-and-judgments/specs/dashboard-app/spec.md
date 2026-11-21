@@ -121,7 +121,7 @@ Each page SHALL show a shared filter only when the filter changes what the page 
 - **THEN** it shows the project and source filters and the automated toggle, and no range
 
 ### Requirement: Redirect the old Insights address
-`/insights` SHALL open Activity's Judgments view. The app SHALL replace the address with `/usage`, add `view=judgments` and keep every other key: the filters, the judgment filters and an open sheet. It SHALL add no history entry. A link in the earlier hash form SHALL open the same way.
+`/insights` SHALL open Activity's Judgments view. The app SHALL replace the address with `/usage`, add `view=judgments` and keep every other key (the filters, the judgment filters and an open sheet) and a section anchor. It SHALL add no history entry. A link in the earlier hash form SHALL open the same way. For `source=codex`, the rule that opens Overview for the judgments of Codex overrides keeping every key.
 
 #### Scenario: A bookmark with filters
 - **WHEN** the user opens `/insights?project=foo&range=7&source=claude&auto=1`
@@ -130,6 +130,14 @@ Each page SHALL show a shared filter only when the filter changes what the page 
 #### Scenario: A link with judgment filters and a sheet
 - **WHEN** the user opens `/insights?range=7&outcome=not_achieved&session=abc`
 - **THEN** the address becomes `/usage?range=7&view=judgments&outcome=not_achieved&session=abc`, the list is narrowed, and the session sheet is open
+
+#### Scenario: A section anchor
+- **WHEN** the user opens `/insights?range=0#d-goals`
+- **THEN** the address becomes `/usage?range=0&view=judgments#d-goals`
+
+#### Scenario: A Codex-only link
+- **WHEN** the user opens `/insights?range=7&source=codex&outcome=not_achieved`
+- **THEN** the address becomes `/usage?range=7&source=codex` and Overview shows, with no judgment filter kept
 
 #### Scenario: Back
 - **WHEN** the user follows an old `/insights` link from another site and presses Back

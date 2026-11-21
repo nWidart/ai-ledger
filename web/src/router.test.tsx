@@ -106,6 +106,7 @@ describe("router", () => {
       ["/insights?range=7&outcome=not_achieved&friction=1&frf=tooling", "/usage?range=7&view=judgments&outcome=not_achieved&friction=1&frf=tooling"],
       ["/insights?project=foo&session=abc", "/usage?project=foo&view=judgments&session=abc"],
       ["/insights#project=foo&range=30", "/usage?project=foo&range=30&view=judgments"], // the earlier hash form, too
+      ["/insights?range=0#d-goals", "/usage?range=0&view=judgments#d-goals"], // a section anchor, kept
     ];
     it.each(cases)("opens %s as the Judgments view, with every key kept and no new entry", async (old, now) => {
       const { length } = open(old);

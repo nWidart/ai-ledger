@@ -1,12 +1,10 @@
 import { useId, useLayoutEffect } from "react";
-import { Judged } from "../../components/facets";
+import { Judged, NO_FACETS } from "../../components/facets";
 import { setSearch } from "../../url";
 import { NO_JUDGMENTS_KEYS, NO_OVERVIEW_KEYS } from "./search";
 
 export type ActivityView = "overview" | "judgments";
 const VIEWS: { k: ActivityView; label: string }[] = [{ k: "overview", label: "Overview" }, { k: "judgments", label: "Judgments" }];
-/** Why Judgments cannot be picked for a Codex-only view. */
-export const NO_FACETS = "Codex writes no facets: /insights judges Claude Code sessions only.";
 
 // A switch replaces the page's content, this control included: the click arms it, and the new control takes the focus back in
 // the commit that draws it, before the browser paints or handles another key. Each view draws the switch in every state, its

@@ -11,6 +11,7 @@ import live from "../../__fixtures__/live";
 import session from "../../__fixtures__/session";
 import usage from "../../__fixtures__/usage";
 import usageAll from "../../__fixtures__/usage-all";
+import { NO_FACETS } from "../../components/facets";
 import { ProjectSheet } from "../../components/sheets/ProjectSheet";
 import { mockApi } from "../../components/sheets/testing";
 import { big, num, usd } from "../../format";
@@ -67,6 +68,15 @@ describe("ProjectPage", () => {
     expect(within(block("Session judgments")).getByRole("link", { name: "Open in Judgments" })).toBeTruthy();
     expect(link("Plan limits")).toBe("/limits?project=foo&range=7&source=claude&auto=1");
     expect(link("Errors")).toBe("/errors?project=foo&range=7&source=claude");
+  });
+
+  it("offers no Judgments link with the source on Codex alone, and says why in its place, as Activity's switch does", async () => {
+    open({}, "?project=foo&range=7&source=codex");
+    await loaded();
+    const judged = within(block("Session judgments"));
+    expect(judged.queryByRole("link", { name: /^Open in/ })).toBeNull();
+    expect(judged.getByText(NO_FACETS)).toBeTruthy();
+    expect(within(block("Activity")).getByRole("link", { name: /^Open in/ }).getAttribute("href")).toBe("/usage?project=foo&range=7&source=codex");
   });
 
   describe("layout", () => {

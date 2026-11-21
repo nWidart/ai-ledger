@@ -28,10 +28,11 @@ const toActivity = ({ location }: { location: ParsedLocation }) => {
   throw redirect({ to: "/usage", search: location.search, replace: true } as never);
 };
 // /insights was a page until it became Activity's Judgments view: a bookmark, a copied link or a link in the earlier hash form
-// opens that view with every key kept (the filters, the drill-down filters and an open session sheet). It replaces the entry,
-// so Back does not return to the old address. Never remove it.
+// opens that view with every key kept (the filters, the drill-down filters and an open session sheet), and a section anchor
+// (#d-goals) kept too: a hash with "=" has become the query string at the root before this runs. It replaces the entry, so
+// Back does not return to the old address. Never remove it.
 const toJudgments = ({ location }: { location: ParsedLocation }) => {
-  throw redirect({ to: "/usage", search: { ...location.search, view: "judgments" }, replace: true } as never);
+  throw redirect({ to: "/usage", search: { ...location.search, view: "judgments" }, hash: location.hash, replace: true } as never);
 };
 // The Project page needs a project: without one (a link, or the project cleared on the page) Activity opens in its place, with
 // the rest of the view kept. Not tied to o.loaders: it is routing, not data.

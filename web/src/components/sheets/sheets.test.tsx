@@ -144,6 +144,17 @@ describe("SessionSheet", () => {
     expect(block.getByRole("link", { name: "Open in Judgments" }).getAttribute("href")).toBe("/usage?project=foo&range=30&source=claude&auto=1&view=judgments");
   });
 
+  it("links a judged session opened over a Codex-only view to the Judgments view with no source, which shows it", async () => {
+    const insight = { outcome: "fully_achieved", helpfulness: null, session_type: null, brief_summary: null, friction_detail: null,
+      goals: [], friction: [], satisfaction: [] };
+    mockApi({ "/api/session": () => ({ ...session, insight }) });
+    at("?project=foo&range=30&source=codex&session=s1");
+    renderApp(<UsageSheets />);
+    const link = await sheet().findByRole("link", { name: "Open in Judgments" });
+    // Activity opens Overview for the judgments of Codex alone; the session is a Claude Code one, judged in the view of every source.
+    expect(link.getAttribute("href")).toBe("/usage?project=foo&range=30&view=judgments");
+  });
+
   it("shows no judgment block for a session without a facet", async () => {
     mockApi({ "/api/session": () => session });
     at("?range=30&session=s1");

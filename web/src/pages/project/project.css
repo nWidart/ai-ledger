@@ -25,6 +25,7 @@
 .pg-project h3 { font-size: .8125rem; font-weight: 600; margin: 18px 0 2px; color: var(--text-secondary); }
 .pg-project .blk-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; margin-bottom: 4px; }
 .pg-project .blk-open { font-size: .8125rem; color: var(--link); }
+.pg-project .blk-off { font-size: .8125rem; color: var(--text-secondary); }
 .pg-project .blk-lede { margin: 6px 0 0; color: var(--text-secondary); }
 .pg-project .blk-lede b { color: var(--text-primary); font-weight: 600; }
 .pg-project .empty { padding: 12px 0; color: var(--text-muted); }

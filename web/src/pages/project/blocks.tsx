@@ -6,7 +6,7 @@ import { motion } from "../../components/chart";
 import { askedFor } from "../../components/refresh";
 import type { ContextPayload, ErrorsPayload, InsightsPayload, LimitsPayload, LivePayload, Totals, UsagePayload } from "../../api";
 import { DataTable } from "../../components/DataTable";
-import { Judged, label as facetLabel, outcomeLabel } from "../../components/facets";
+import { Judged, label as facetLabel, NO_FACETS, outcomeLabel } from "../../components/facets";
 import { Ledger, LedgerRow } from "../../components/Ledger";
 import { ChangeDetail, Facts, ModelLedger, TopSessions } from "../../components/sheets/ProjectSheet";
 import { appLink, errorsHref, judgmentsHref, openSessionSheet } from "../../components/sheets/session";
@@ -69,8 +69,9 @@ function useLand(data: unknown, view: string, error: Error | undefined) {
  *  and, when the block already has figures (a refresh failed), keeps them. The block is aria-busy while its request, or another it
  *  reads a line from (also), is under way; one of them taking a while dims its figures, and no other block's. The loading line is
  *  plain text, not a live region: aria-busy says it. href names the view, so the block lands anew when it changes. */
-function Block<T>({ id, title, page, href, state, also = [], children }: { id: string; title: string; page: string; href: string; state: ApiState<T>;
-  also?: readonly ApiState<unknown>[]; children: (d: T) => ReactNode }) {
+function Block<T>({ id, title, page, href, off, state, also = [], children }: { id: string; title: string; page: string; href: string; state: ApiState<T>;
+  /** Why the page cannot show this view: said in the link's place. */
+  off?: string; also?: readonly ApiState<unknown>[]; children: (d: T) => ReactNode }) {
   const { data, error, retry } = state;
   const loading = state.loading || also.some(s => s.loading), slow = useSlow(loading);
   const ref = useLand(data, href, error);
@@ -78,7 +79,7 @@ function Block<T>({ id, title, page, href, state, also = [], children }: { id: s
     <section ref={ref} className={"panel sect" + (slow && data ? " loading" : "")} id={id} aria-labelledby={id + "Title"} aria-busy={loading || undefined}>
       <header className="blk-head">
         <h2 id={id + "Title"}>{title}</h2>
-        <a className="blk-open" href={href} onClick={appLink}>Open in {page}</a>
+        {off ? <span className="blk-off">{off}</span> : <a className="blk-open" href={href} onClick={appLink}>Open in {page}</a>}
       </header>
       {error && <div className="empty" role="alert">Could not load {title.toLowerCase()} ({error.message}). <button type="button" className="linkish" onClick={retry}>Retry</button></div>}
       {data ? children(data) : !error && <p className="empty">Loading…</p>}
@@ -200,11 +201,12 @@ export function ContextBlock({ context, usage, scope }: { context: ApiState<Cont
 }
 
 /** How many sessions /insights analysed, their outcomes and the top friction; a model's judgment, so tagged as on Activity's
- *  Judgments view, which it opens. */
+ *  Judgments view, which it opens. With the source on Codex alone there is no such view, as Activity's switch says: the block
+ *  says why in the link's place. */
 export function InsightsBlock({ insights, scope }: { insights: ApiState<InsightsPayload>; scope: Scope }) {
   const href = judgmentsHref({ project: scope.project, range: scope.range, source: scope.source, automated: scope.auto });
   return (
-    <Block id="insights" title="Session judgments" page="Judgments" href={href} state={insights}>
+    <Block id="insights" title="Session judgments" page="Judgments" href={href} off={scope.source === "codex" ? NO_FACETS : undefined} state={insights}>
       {d => {
         const c = d.coverage, n = c.facets, top = d.friction_families.slice(0, FRICTION_TOP), max = top[0]?.n ?? 0;
         if (!c.analysed) return <p className="empty">No session is analysed by <code>/insights</code> in this view.</p>;

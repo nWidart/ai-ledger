@@ -70,11 +70,15 @@ A session with no `/insights` facet SHALL show no judgment block and no link to 
 - **THEN** the sheet shows no `/insights` block
 
 ### Requirement: Link a session's judgment to the Judgments view
-The judgment block SHALL link to Activity's Judgments view, keeping the view's project, range, source and automated filters.
+The judgment block SHALL link to Activity's Judgments view, keeping the view's project, range, source and automated filters. A source of Codex alone SHALL be dropped from the link: the session is a Claude Code one, and Activity opens Overview for the judgments of Codex.
 
 #### Scenario: Open in Insights
 - **WHEN** the user views project `foo` for the last 30 days and selects the link, now "Open in Judgments", in a judged session's sheet
 - **THEN** Activity's Judgments view opens on project `foo` for the last 30 days, at `/usage?project=foo&range=30&view=judgments`
+
+#### Scenario: Over a Codex-only view
+- **WHEN** the source filter is Codex alone and the user opens a judged Claude Code session's sheet on `foo` over 30 days
+- **THEN** its link opens `/usage?project=foo&range=30&view=judgments`, the Judgments view, where the session is listed
 
 ### Requirement: Order the Activity page
 Activity SHALL show its view switch first. Its Overview SHALL then show, in this order: the lede with the filters beside it, the attention summary, the work chart, the vitals, then the drawers.

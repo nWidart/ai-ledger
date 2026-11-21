@@ -55,9 +55,10 @@ export function errorsHref(project: string | null | undefined, range?: number | 
 /** The Project page for a project, in a range, source and automated toggle. No sheet key goes with it. */
 export const projectHref = (project: string, range: number, source: Source | "", automated: boolean) =>
   "/project" + formatSearch({ project, range: String(range), source, auto: automated ? "1" : "" });
-/** Activity's Judgments view in view v's project, range, source and automated toggle. */
+/** Activity's Judgments view in view v's project, range, source and automated toggle. A Codex source is dropped: Codex sessions
+ *  have no judgments, and Activity opens Overview for a link to the judgments of Codex alone. */
 export const judgmentsHref = (v: View) =>
-  "/usage" + formatSearch({ project: v.project, range: String(v.range), source: v.source, auto: v.automated ? "1" : "", view: "judgments" });
+  "/usage" + formatSearch({ project: v.project, range: String(v.range), source: v.source === "codex" ? "" : v.source, auto: v.automated ? "1" : "", view: "judgments" });
 /** Follows an in-app link without a reload; modified clicks open as the browser does. */
 export function appLink(e: MouseEvent<HTMLAnchorElement>) {
   if (!plain(e)) return;
