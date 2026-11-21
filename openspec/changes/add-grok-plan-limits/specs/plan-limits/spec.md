@@ -23,3 +23,11 @@ The app SHALL read the access token of the Grok CLI's grok.com login from the Gr
 #### Scenario: No Grok login
 - **WHEN** the machine has no Grok auth file, or the Grok CLI is set to use an API key or another account or endpoint
 - **THEN** the app sends no Grok request, records nothing, and shows no Grok window, freshness flag or error
+
+#### Scenario: Signed out after polling
+- **WHEN** Grok polls were recorded and the user then signs out of the Grok CLI
+- **THEN** Limits shows no open Grok window and no Grok freshness line, and Grok's past windows stay in the history
+
+#### Scenario: Redirected request
+- **WHEN** the billing endpoint answers with a redirect
+- **THEN** the request that follows the redirect carries no token

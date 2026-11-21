@@ -26,17 +26,23 @@ As T3 Code does, the app treats the account as unknown, and polls nothing, when:
 ## Snapshot
 
 One snapshot per poll:
-- provider `grok`, limit id the period type without its `USAGE_PERIOD_TYPE_` prefix, lowercased (`weekly`, `monthly`; `credits` when the type is missing); scope `""`. The limit id is also the label (`Provider.named`), so a monthly window is "monthly" every month, not "744-hour";
-- minutes: the period's end minus its start, in whole minutes, when both read; else 10080 for `WEEKLY`; else none;
+- provider `grok`, limit id the period type without its `USAGE_PERIOD_TYPE_` prefix, lowercased (`weekly`, `monthly`; `credits` when the type is missing); scope `""`;
+- minutes: 10080 for `WEEKLY`, else none. A monthly period runs 28 to 31 days, so repeating one observed length would put the next reset, and estimated earlier windows, on wrong dates. With no length, the app neither steps a reset on nor back, and the label is the limit id ("monthly");
 - reset: the period's end; percent: `creditUsagePercent`; plan: none (the response names no plan); reached when the percent is 100 or more.
 
 A response without a percent that reads (0 to 100, not a bool) or without an end that reads has no limit, so the poll fails with the existing "no recognizable limit" message. `productUsage` is not read.
 
-A monthly period's length varies by month; its windows are still told apart by their resets.
-
 ## Provider
 
-`PROVIDERS["grok"] = Provider("grok", "Grok", grok_poll, POLL_SECONDS, fixed=lambda minutes: True)`. The Grok period runs on the billing schedule.
+`PROVIDERS["grok"] = Provider("grok", "Grok", grok_poll, POLL_SECONDS, fixed=lambda minutes: True, one_limit=True)`. The Grok period runs on the billing schedule. Each poll reports the one current period (`one_limit`), so only the limit of the newest poll has an open window: a period whose type changed is not shown twice. Older limits keep their history.
+
+## Signed out, expired, redirected
+
+- A poll that finds no account resets the poller's state to `absent`. Limits then shows no open Grok window and no Grok freshness line, and keeps Grok's history. The next poll that sends a request clears it.
+- An expired token flags "token expired" and marks the Grok figures estimated, not measured.
+- Any change in a poller's state, not only a new reading, tells open pages to refetch.
+- The bearer token is an unredirected header, for Grok and Claude alike: a redirect never carries it.
+- Config files are parsed as TOML (`tomllib`) and their top-level keys checked, so quoted or escaped keys count. A config that does not parse counts as another account.
 
 ## Payload
 

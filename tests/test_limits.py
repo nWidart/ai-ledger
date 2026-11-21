@@ -356,11 +356,11 @@ class GrokParseTest(unittest.TestCase):
 
     def test_the_period_type_is_the_limit(self):
         monthly = grok_body(type="USAGE_PERIOD_TYPE_MONTHLY", start="2026-12-01T00:00:00Z", end="2027-01-01T00:00:00Z")
-        self.assertEqual(self.rows(monthly), [("grok", "monthly", "", 44640, "2027-01-01T00:00:00", 10.0, None, False)])
-        # Its name, not "744-hour": a monthly period's length varies by month.
-        self.assertEqual(limits.label("grok", "monthly", "", 44640), "monthly")
+        # No length: a monthly period runs 28 to 31 days, so its resets are neither stepped on nor back, and its name is its type.
+        self.assertEqual(self.rows(monthly), [("grok", "monthly", "", None, "2027-01-01T00:00:00", 10.0, None, False)])
+        self.assertEqual(limits.label("grok", "monthly", "", None), "monthly")
         daily = grok_body(type="USAGE_PERIOD_TYPE_DAILY", start="2026-11-26T00:00:00Z", end="2026-11-27T00:00:00Z")
-        self.assertEqual(self.rows(daily)[0][1:4], ("daily", "", 1440))
+        self.assertEqual(self.rows(daily)[0][1:4], ("daily", "", None))
 
     def test_the_length_without_a_start(self):
         self.assertEqual(self.rows(grok_body(start=None))[0][1:4], ("weekly", "", 10080))  # a week, for a weekly period
@@ -449,6 +449,14 @@ class GrokCredentialTest(unittest.TestCase):
             self.assertIsNone(self.read(), text)
         self.write("config.toml", "theme = 'dark'\nauth_mode_hint = 1\n# auth = 'x'\n[ui]\nendpoints_shown = true\n")
         self.assertEqual(self.read(), (GROK_TOKEN, None))
+        self.write("config.toml", '["\\u0061uth"]\nkind = \'x\'\n')  # TOML decodes the escape to auth
+        self.assertIsNone(self.read())
+        self.write("config.toml", "[auth\n")  # a config the app cannot read may name any account
+        self.assertIsNone(self.read())
+        self.write("config.toml", "theme = 'dark'\n")
+        self.write("requirements.toml", "[endpoints]\n")
+        self.assertIsNone(self.read())
+        os.remove(os.path.join(self.home, "requirements.toml"))
         self.write("managed_config.toml", "[auth]\n", folder=self.system)
         self.assertIsNone(self.read())
 
@@ -473,6 +481,7 @@ class GrokCredentialTest(unittest.TestCase):
         req = urlopen.call_args[0][0]
         self.assertEqual((req.full_url, req.get_method()), (limits.GROK_BILLING_URL, "GET"))
         self.assertEqual(req.get_header("Authorization"), f"Bearer {GROK_TOKEN}")
+        self.assertNotIn("Authorization", req.headers)  # unredirected: a redirect never carries the token
         self.assertEqual(urlopen.call_args[1], dict(timeout=10))
         self.assertEqual((plan, body), (None, grok_body()))
 
@@ -508,19 +517,20 @@ class GrokPollerTest(StoreCase):
             self.poller.run(self.con, self.lock)
         return urlopen
 
-    def test_no_login_leaves_the_poller_untouched(self):
-        before = dict(self.poller.state)
+    def test_no_login_marks_the_poller_absent(self):
         urlopen = self.run_poll(cred=None, response=grok_body())
         urlopen.assert_not_called()
-        self.assertEqual(self.poller.state, before)
+        self.assertEqual(self.poller.state, limits.Poller.blank(absent=True))
         self.assertEqual(self.poller.next_at, self.now + limits.POLL_SECONDS)  # tried again at the next interval
         self.assertEqual(self.q("SELECT count(*) FROM limit_polls"), [(0,)])
-        # Nor does a login that went away touch what an earlier poll left.
-        self.run_poll(response=grok_body())
-        before = dict(self.poller.state)
-        self.now += limits.POLL_SECONDS
+        # A login that went away after failures starts over as absent; signing in again clears it.
+        self.run_poll(error=limits.PollFailed("billing endpoint answered HTTP 401"))
+        self.now += limits.MAX_BACKOFF
         self.run_poll(cred=None)
-        self.assertEqual(self.poller.state, before)
+        self.assertEqual(self.poller.state, limits.Poller.blank(absent=True))
+        self.now += limits.POLL_SECONDS
+        self.run_poll(response=grok_body())
+        self.assertEqual((self.poller.state["absent"], self.poller.state["last_ok"]), (False, limits.iso_utc(self.now)))
 
     def test_success_stores_the_poll_and_its_snapshot(self):
         self.run_poll(response=grok_body())
@@ -988,6 +998,27 @@ class PayloadTest(AnalysisCase):
         grok = self.payload(self.NOW, source="grok", polls=dict(grok=failed))["freshness"]
         self.assertEqual([(f["provider"], f["flags"], f["error"]) for f in grok],
                          [("grok", ["polling failing", "no snapshots"], "billing endpoint answered HTTP 401")])
+
+    def test_a_signed_out_grok_keeps_its_history_only(self):
+        self.snap("grok", "weekly", self.NOW - timedelta(days=8), 40, resets=self.NOW - timedelta(days=2), plan=None)
+        self.snap("grok", "weekly", self.NOW - timedelta(minutes=2), 10, resets=self.NOW + timedelta(days=5), plan=None)
+        out = self.payload(self.NOW, source="grok", polls=dict(grok=limits.Poller.blank(absent=True)))
+        self.assertEqual((out["windows"], out["freshness"]), ([], []))
+        self.assertEqual([h["final"] for h in out["history"]], [40])
+
+    def test_only_the_newest_grok_poll_has_an_open_window(self):
+        # A period whose type changed (weekly to monthly) is one current allowance, not two.
+        self.snap("grok", "weekly", self.NOW - timedelta(hours=2), 30, resets=self.NOW + timedelta(days=5), plan=None)
+        self.snap("grok", "monthly", self.NOW - timedelta(minutes=2), 5, resets=self.NOW + timedelta(days=20), plan=None, minutes=None)
+        out = self.payload(self.NOW, source="grok")
+        self.assertEqual([(w["label"], w["current"]) for w in out["windows"]], [("monthly", 5.0)])
+
+    def test_an_expired_grok_token_is_not_measured(self):
+        self.snap("grok", "weekly", self.NOW - timedelta(minutes=2), 10, resets=self.NOW + timedelta(days=5), plan=None)
+        stale = dict(limits.Poller.blank(), last_ok="2026-11-06T11:58:00+00:00", stale=True, error="Grok token expired")
+        out = self.payload(self.NOW, source="grok", polls=dict(grok=stale))
+        self.assertEqual([w["measured"] for w in out["windows"]], [False])
+        self.assertEqual([(f["flags"], f["measured"]) for f in out["freshness"]], [(["token expired"], False)])
 
     def test_freshness_flags_failing_polls(self):
         out = self.payload(self.NOW + timedelta(minutes=30), polls=dict(claude=dict(failures=3, last_ok="2026-11-06T12:00:00+00:00",

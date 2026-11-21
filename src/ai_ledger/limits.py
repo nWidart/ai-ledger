@@ -7,9 +7,9 @@ in limit_polls, the raw layer; rederive_polls turns them into snapshots again on
 """
 import json
 import os
-import re
 import subprocess
 import time
+import tomllib
 import urllib.error
 import urllib.request
 from bisect import bisect_left, bisect_right
@@ -35,7 +35,7 @@ class Provider(NamedTuple):
     interval: int | None = None  # seconds between polls
     qualifier: Callable = lambda limit_id: None  # limit_id -> extra words for its label, when the window alone is ambiguous
     fixed: Callable = lambda minutes: False  # whether a window this long resets on a schedule, not on the first use after a reset
-    named: bool = False  # whether the limit id names the window ("monthly"), whose length varies
+    one_limit: bool = False  # whether each poll reports the provider's one current limit, so only the newest poll's is open
 
 
 def claude_poll():
@@ -50,16 +50,14 @@ def grok_poll():
 PROVIDERS = {
     "claude": Provider("claude", "Claude Code", claude_poll, POLL_SECONDS, fixed=lambda minutes: (minutes or 0) >= 1440),
     "codex": Provider("codex", "Codex", qualifier=lambda lid: None if lid.startswith("codex_") else lid.rsplit("_", 1)[0]),
-    "grok": Provider("grok", "Grok", grok_poll, POLL_SECONDS, fixed=lambda minutes: True, named=True),
+    "grok": Provider("grok", "Grok", grok_poll, POLL_SECONDS, fixed=lambda minutes: True, one_limit=True),
 }
 
 
 def label(provider, limit_id, scope, minutes):
     """A limit's name on the page: its window ("weekly"), its scope ("weekly · Fable"), and the provider's qualifier.
-    A limit the app has no window length for keeps the provider's own kind name, as does every limit of a provider whose
-    limit ids name their windows (Grok's "monthly" runs 28 to 31 days: one name, not "744-hour")."""
-    named = provider in PROVIDERS and PROVIDERS[provider].named
-    name = None if named else WINDOW_NAMES.get(minutes) or (f"{minutes // 60}-hour" if minutes and minutes % 60 == 0 else None)
+    A limit the app has no window length for keeps the provider's own kind name."""
+    name = WINDOW_NAMES.get(minutes) or (f"{minutes // 60}-hour" if minutes and minutes % 60 == 0 else None)
     name = name or limit_id.replace("_", " ")
     q = PROVIDERS[provider].qualifier(limit_id) if provider in PROVIDERS else None
     return " · ".join(x for x in (q, name, scope) if x)
@@ -119,8 +117,9 @@ def get_json(req, what):
 
 def fetch_claude(cred):
     token, plan = cred
-    req = urllib.request.Request(USAGE_URL, headers={"Authorization": f"Bearer {token}", "anthropic-beta": "oauth-2025-04-20",
-                                                     "Content-Type": "application/json", "User-Agent": "ai-ledger"})
+    req = urllib.request.Request(USAGE_URL, headers={"anthropic-beta": "oauth-2025-04-20", "Content-Type": "application/json",
+                                                     "User-Agent": "ai-ledger"})
+    req.add_unredirected_header("Authorization", f"Bearer {token}")  # a redirect never carries the token
     return plan, get_json(req, "usage endpoint")
 
 
@@ -176,7 +175,7 @@ GROK_CONFIGS = ("config.toml", "managed_config.toml", "requirements.toml")
 GROK_OVERRIDES = ("GROK_AUTH_PROVIDER_COMMAND", "GROK_LOCAL_AUTH", "GROK_CLI_CHAT_PROXY_BASE_URL", "GROK_MODELS_BASE_URL",
                   "GROK_CONFIG", "GROK_CONFIG_PATH")
 GROK_OVERRIDE_PREFIXES = ("GROK_OIDC_", "GROK_OAUTH2_")
-GROK_CONFIG_KEYS = re.compile(r"""^\s*(?:\[\[?\s*)?["']?(?:auth|grok_com_config|endpoints)["']?\s*[.\]=]""", re.M)
+GROK_CONFIG_KEYS = ("auth", "grok_com_config", "endpoints")  # top-level config keys that pick another account or endpoint
 WEEKLY_PERIOD = "WEEKLY"
 
 
@@ -189,11 +188,13 @@ def grok_overridden(env, home):
     for folder in (home, GROK_SYSTEM_DIR):
         for name in GROK_CONFIGS:
             try:
-                with open(os.path.join(folder, name), encoding="utf-8") as fh:
-                    text = fh.read()
-            except (OSError, UnicodeDecodeError):
+                with open(os.path.join(folder, name), "rb") as fh:
+                    config = tomllib.load(fh)
+            except FileNotFoundError:
                 continue
-            if GROK_CONFIG_KEYS.search(text):
+            except (OSError, tomllib.TOMLDecodeError):  # a config the app cannot read may name any account
+                return True
+            if any(k in config for k in GROK_CONFIG_KEYS):
                 return True
     return False
 
@@ -237,13 +238,15 @@ def read_grok_credential(env=os.environ):
 
 def fetch_grok(cred):
     token, plan = cred
-    req = urllib.request.Request(GROK_BILLING_URL, headers={"Authorization": f"Bearer {token}", "User-Agent": "ai-ledger"})
+    req = urllib.request.Request(GROK_BILLING_URL, headers={"User-Agent": "ai-ledger"})
+    req.add_unredirected_header("Authorization", f"Bearer {token}")  # a redirect never carries the token
     return plan, get_json(req, "billing endpoint")
 
 
 def grok_rows(poll, observed_at):
     """The one limit_snapshots row of a stored Grok poll ({plan, response}), or none: the credits used in the current
-    billing period. The limit is the period type ("weekly"); its length is the period's, else a week for a weekly one.
+    billing period. The limit is the period type ("weekly"). Only a weekly period has a length: a monthly one runs 28 to
+    31 days, so the app neither steps its resets on nor back, and its label is its type.
     The endpoint is undocumented: a response without a percent or an end that reads has no limit."""
     body = poll.get("response")
     config = body.get("config") if isinstance(body, dict) else None
@@ -251,13 +254,12 @@ def grok_rows(poll, observed_at):
         return []
     period = config.get("currentPeriod")
     period = period if isinstance(period, dict) else {}
-    pct, end, start = percent_of(config.get("creditUsagePercent")), parse_iso(period.get("end")), parse_iso(period.get("start"))
+    pct, end = percent_of(config.get("creditUsagePercent")), parse_iso(period.get("end"))
     if pct is None or end is None or utc_naive(period.get("end")) is None:  # an end past the year range is none
         return []
     kind = period.get("type")
     kind = kind.strip().upper().removeprefix("USAGE_PERIOD_TYPE_") if isinstance(kind, str) and kind.strip() else "CREDITS"
-    minutes = round((end - start).total_seconds() / 60) if start and end > start else None
-    minutes = minutes or (10080 if kind == WEEKLY_PERIOD else None)
+    minutes = 10080 if kind == WEEKLY_PERIOD else None
     return [store.snapshot("grok", kind.lower(), "", minutes, end, observed_at, pct, poll.get("plan"), pct >= 100)]
 
 
@@ -345,20 +347,26 @@ class Poller:
     def __init__(self, name, provider, clock=time.time):
         self.name, self.provider, self.clock = name, provider, clock
         self.next_at = 0.0
-        self.state = dict(last_ok=None, last_attempt=None, failures=0, error=None, stale=False)
+        self.state = self.blank()
+
+    @staticmethod
+    def blank(absent=False):
+        return dict(last_ok=None, last_attempt=None, failures=0, error=None, stale=False, absent=absent)
 
     def due(self):
         return self.clock() >= self.next_at
 
     def run(self, con, lock):
-        """One poll. A poll that returns None had nothing to poll (no account, so no request went out): the state stays
-        as it was, so a provider the machine has no account for never shows, and the next try is an interval away."""
+        """One poll. A poll that returns None had nothing to poll (no account, so no request went out): the state starts
+        over as absent, so Limits shows no open window or freshness for the provider (signed out, or never signed in),
+        and the next try is an interval away."""
         now = self.clock()
-        attempt = dict(last_attempt=iso_utc(now))
+        attempt = dict(last_attempt=iso_utc(now), absent=False)
         wait = self.provider.interval
         try:
             got = self.provider.poll()
             if got is None:
+                self.state = self.blank(absent=True)
                 return
             self.state.update(attempt)
             plan, body = got
@@ -968,6 +976,13 @@ def payload(cur, range_days=0, source="", project="", now=None, today=None, pric
         if s[7]:
             latest_plan[s[0]] = s[7]
     extras = {n: newest_extras(cur, n) for n in names}
+    # No open window for a provider whose last poll found no account (signed out), nor, for a provider whose poll reports
+    # its one current limit, for a limit that its newest poll no longer reports (a weekly period turned monthly).
+    gone = {n for n in names if (polls or {}).get(n, {}).get("absent")}
+    newest = {}
+    for s in snaps:
+        if PROVIDERS[s[0]].one_limit and s[5] >= newest.get(s[0], (s[5],))[0]:
+            newest[s[0]] = (s[5], (s[0], s[1], s[2]))
     windows, history, cals, spans, closed = [], [], {}, {}, []
     for key, ws in group_windows(snaps).items():
         cal, past = limit_windows(ws, usage, now, start)
@@ -978,7 +993,8 @@ def payload(cur, range_days=0, source="", project="", now=None, today=None, pric
                 # A model-scoped window with nothing used, not even counted use of its model, says nothing of capacity.
                 if not (w.scope and not w.final and not usage.cost(source_of(w.provider), w.scope, w.start, w.closed_at)):
                     closed.append(history[-1])
-        w = open_window(ws, now, latest_plan.get(key[0]))
+        retired = key[0] in gone or (key[0] in newest and newest[key[0]][1] != key)
+        w = None if retired else open_window(ws, now, latest_plan.get(key[0]))
         if w:
             share, surfaces = poll_extras(w, extras.get(key[0]))
             windows.append(dict(window_row(w, now, usage, cal, profile),
@@ -1061,14 +1077,15 @@ def value(cur, usage, cals, spans, latest_plan, start, now, project, prices):
 
 
 def freshness(names, snaps, windows, polls, now):
-    """Per provider, how current its readings are. A polled provider with no snapshot whose poller has nothing to say (it
-    never sent a request, as for an account the machine does not have) is left out: there is nothing to show for it."""
+    """Per provider, how current its readings are. A polled provider is left out when its last poll found no account, or
+    when it has no snapshot and its poller has nothing to say yet: there is nothing to show for it."""
     out = []
     for n in names:
         p = PROVIDERS[n]
         last = max((s[5] for s in snaps if s[0] == n), default=None)
         st = polls.get(n)
-        if p.poll and last is None and not any((st or {}).get(k) for k in ("last_attempt", "last_ok", "failures", "error", "stale")):
+        if p.poll and ((st or {}).get("absent") or last is None and not any(
+                (st or {}).get(k) for k in ("last_attempt", "last_ok", "failures", "error", "stale"))):
             continue
         flags = []
         if st and st.get("failures"):
@@ -1081,7 +1098,7 @@ def freshness(names, snaps, windows, polls, now):
             flags.append("no snapshots")
         mine = [w for w in windows if w["provider"] == n]
         # An old poll is no measure of now; nor is an old reading, since use outside this machine never shows in it.
-        if "polling failing" in flags or "old" in flags or (not p.interval and last and now - last > READING_AGE):
+        if "polling failing" in flags or "old" in flags or "token expired" in flags or (not p.interval and last and now - last > READING_AGE):
             for w in mine:
                 w["measured"] = False
         out.append(dict(provider=n, provider_label=p.label, last_snapshot=metrics.iso(last), measured=bool(mine) and all(w["measured"] for w in mine),
