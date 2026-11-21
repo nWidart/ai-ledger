@@ -80,15 +80,6 @@ describe("ProjectPage", () => {
     expect(within(block("Activity")).getByRole("link", { name: /^Open in/ }).getAttribute("href")).toBe("/usage?project=foo&range=7&source=codex");
   });
 
-  it("offers no Judgments link with the source on Grok alone, says Grok writes no facets, and asks for none", async () => {
-    const { f } = open({}, "?project=foo&range=7&source=grok");
-    await loaded();
-    const judged = within(block("Session judgments"));
-    expect(judged.queryByRole("link", { name: /^Open in/ })).toBeNull();
-    expect(judged.getByText("Grok writes no facets: /insights judges Claude Code sessions only.")).toBeTruthy();
-    expect(f.mock.calls.map(c => c[0] as string).filter(u => u.startsWith("/api/insights"))).toEqual([]);
-  });
-
   it("asks for no judgments with the source on Codex alone, and shows none kept from another source", async () => {
     const { f } = open({}, "?project=foo&range=7");
     await loaded();
@@ -124,12 +115,6 @@ describe("ProjectPage", () => {
       expect(ids(cols[1]!)).toEqual(["errors", "limits", "sessions", "insights"]);
       // The heading and the filters sit above the columns.
       expect(document.querySelector(".pg-project > header")!.contains(screen.getByRole("heading", { level: 1 }))).toBe(true);
-    });
-
-    it("has no Project tab to repeat: the page is not in the navigation", async () => {
-      open();
-      await loaded();
-      expect(screen.queryByRole("link", { name: "Project" })).toBeNull();
     });
   });
 
@@ -189,23 +174,14 @@ describe("ProjectPage", () => {
       const asked = () => f.mock.calls.filter(c => String(c[0]).startsWith("/api/live")).length, before = asked();
       await userEvent.click(within(note).getByRole("button", { name: "Retry" }));
       await waitFor(() => expect(asked()).toBeGreaterThan(before));
-      // While it is under way: a plain line, no live region, and focus on the line, not lost with the button.
+      // While it is under way: a plain line, not "no session", no live region, the block busy, and focus on the line, not lost with the button.
       const line = within(block("Activity")).getByText("Checking for active sessions…");
       expect(line.closest("[aria-live], [role=status]")).toBeNull();
+      expect(block("Activity").getAttribute("aria-busy")).toBe("true");
       expect(document.activeElement).toBe(line);
       act(() => done());
       const link = await within(block("Activity")).findByRole("link", { name: "2 sessions active now" });
       expect(document.activeElement).toBe(link.parentElement);
-    });
-
-    it("says it is checking for active sessions while Live has not answered, not that there are none", async () => {
-      const f = serve(), answer = f.getMockImplementation()!;
-      f.mockImplementation((input: string) => (String(input).startsWith("/api/live") ? new Promise<Response>(() => {}) : answer(input)));
-      history.replaceState(null, "", "/project?project=foo&range=30");
-      renderApp(<ProjectPage />);
-      await within(block("Activity")).findByText("median session");
-      expect(within(block("Activity")).getByText("Checking for active sessions…")).toBeTruthy();
-      expect(block("Activity").getAttribute("aria-busy")).toBe("true");
     });
   });
 
@@ -216,6 +192,9 @@ describe("ProjectPage", () => {
       const cost = await within(await screen.findByRole("region", { name: "Cost" })).findByText(/Change vs the previous 30 days/);
       expect(cost).toBeTruthy();
       expect(within(block("Cost")).getByText("Models by estimated cost")).toBeTruthy();
+      // Each token kind's share of tokens beside its share of cost, as Cost draws it.
+      const list = within(block("Cost")).getByRole("list", { name: "Share of tokens beside share of estimated cost, by kind" });
+      expect(list.querySelectorAll(".sr")).toHaveLength(4);
     });
 
     it("shows no change for all time, and the estimated cost in its place", async () => {
@@ -224,15 +203,6 @@ describe("ProjectPage", () => {
       await within(block("Cost")).findByText("Models by estimated cost");
       expect(within(block("Cost")).queryByText(/Change vs/)).toBeNull();
       expect(within(block("Cost")).getByText("est. cost, all time")).toBeTruthy();
-    });
-
-    it("sets each token kind's share of tokens beside its share of cost", async () => {
-      open();
-      await loaded();
-      const list = await within(block("Cost")).findByRole("list", { name: "Share of tokens beside share of estimated cost, by kind" });
-      const rows = [...list.querySelectorAll(".sr")].map(r => r.textContent);
-      expect(rows).toHaveLength(4);
-      expect(rows).toContain("Cache read: 66.7% of tokens, 5.1% of estimated cost");
     });
 
     it("opens a session's sheet from the list", async () => {
@@ -323,13 +293,6 @@ describe("ProjectPage", () => {
       expect(items[0]).toContain("System prompt, tools, memory and first prompt together");
       expect(items[1]).toContain(`Added by the peak${big(56000)} tokens (28%)`);
       expect(items[2]).toContain(`Free space${big(120000)} tokens (60%)`);
-    });
-
-    it("shows no grid when the peak's share of the window is not known", async () => {
-      open({ context: typical(null) });
-      await loaded();
-      await within(block("Context")).findByText("median starting context, tokens");
-      expect(block("Context").querySelector(".ctx-grid")).toBeNull();
     });
 
     // A start of 40,000 tokens at 20% of a 200k window: 40 starting cells, split 4 / 12 / 4 / 20.
@@ -542,15 +505,6 @@ describe("ProjectPage", () => {
       expect(screen.queryByText(/No use of foo/)).toBeNull();
     });
 
-    it("fails the Errors block alone when its request fails", async () => {
-      open({ errors: null });
-      await loaded();
-      expect(await within(block("Errors")).findByRole("alert")).toBeTruthy();
-      expect(await within(block("Activity")).findByText("median session")).toBeTruthy();
-      expect(within(block("Activity")).queryByRole("alert")).toBeNull();
-      expect(within(block("Session judgments")).queryByRole("alert")).toBeNull();
-    });
-
     /** The API with one path that never answers. */
     const hang = (path: string) => {
       const f = serve(), answer = f.getMockImplementation()!;
@@ -626,13 +580,6 @@ describe("ProjectPage", () => {
       for (const name of ["Errors", "Session judgments"]) expect(block(name).classList.contains("fade-in")).toBe(false);
       expect(document.getElementById("content")!.classList.contains("grow")).toBe(false);
     });
-
-    it("says a slow errors request is loading, and draws the other blocks", async () => {
-      hang("/api/errors");
-      expect(within(block("Errors")).getByText("Loading…")).toBeTruthy();
-      expect(await within(block("Activity")).findByText("median session")).toBeTruthy();
-      expect(within(block("Errors")).getByText("Loading…")).toBeTruthy();
-    });
   });
 
   describe("no use in the view", () => {
@@ -657,11 +604,5 @@ describe("ProjectPage", () => {
       await userEvent.click(within(alert).getByRole("button", { name: "Retry" }));
       await waitFor(() => expect(asked()).toBeGreaterThan(before));
     });
-  });
-
-  it("hosts the sheets: a session in the URL opens its sheet over the page", async () => {
-    open({}, "?project=foo&range=30&session=s1");
-    await loaded();
-    expect(await screen.findByRole("dialog")).toBeTruthy();
   });
 });

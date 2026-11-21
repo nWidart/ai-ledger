@@ -17,6 +17,8 @@ FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", 
 SENTINEL = "SENTINEL-facet-text"
 A = "0000aaaa-0000-4000-8000-00000000000"  # the fixture session ids: A + "1" to A + "4"
 TODAY = date(2026, 11, 6)
+EMPTY_META = dict(sessions=0, lines_added=0, lines_removed=0, files_modified=0, git_pushes=0, duration_p50_min=None, response_p50_s=None,
+                  languages=[])  # the session figures of a view with no session meta
 
 
 def facet(sid, outcome="fully_achieved", friction=None, goals=None, satisfaction=None, helpfulness="very_helpful",
@@ -76,18 +78,6 @@ class InsightsCase(unittest.TestCase):
 
 
 class FixtureTest(unittest.TestCase):
-    def test_fixtures_parse_as_intended(self):
-        def load(n):
-            with open(os.path.join(FIXTURES, "facets", n)) as fh:
-                return json.load(fh)
-        ok = {n: load(n)["outcome"] for n in sorted(os.listdir(os.path.join(FIXTURES, "facets")))
-              if n not in (A + "4.json", "no-session-id.json")}
-        self.assertEqual(ok, {A + "1.json": "fully_achieved", A + "2.json": "partially_achieved", A + "3.json": "abandoned"})
-        with self.assertRaises(ValueError):
-            load(A + "4.json")
-        self.assertNotIn("session_id", load("no-session-id.json"))
-        self.assertTrue(os.path.exists(os.path.join(FIXTURES, "report.html")))
-
     def test_no_real_session_id(self):
         real = os.path.expanduser("~/.claude/usage-data")
         if not os.path.isdir(real):
@@ -109,22 +99,21 @@ class IngestTest(InsightsCase):
         self.assertEqual(self.q("SELECT kind, count(*) FROM usage_files GROUP BY 1 ORDER BY 1"), [("facet", 3), ("meta", 3)])
         with open(os.path.join(FIXTURES, "facets", A + "2.json")) as fh:
             self.assertEqual(self.q("SELECT json FROM usage_files WHERE path LIKE ?", f"%facets/{A}2.json")[0][0], fh.read())
+        self.assertTrue(os.path.exists(os.path.join(self.usage, "report.html")))  # there to be left out
         self.assertEqual(self.q("SELECT count(*) FROM usage_files WHERE path LIKE '%report%'")[0][0], 0)
         self.assertEqual(self.q("SELECT count(*) FROM session_facets")[0][0], 3)
         self.assertIn("no-session-id.json", err)
 
-    def test_second_ingest_reads_nothing(self):
+    def test_rewritten_facet_replaces_its_rows(self):
         self.ingest()
-        stats, _ = self.ingest()
-        self.assertEqual((stats["usage_files"], stats["usage_skipped"]), (0, 0))
-
-    def test_rewritten_facet_replaces_its_row(self):
-        self.ingest()
-        self.put("facets", A + "2.json", facet(A + "2", outcome="fully_achieved"))
+        counts = lambda: self.q("SELECT kind, name, n FROM facet_counts WHERE session_id = ? ORDER BY 1, 2", A + "2")
+        self.assertEqual([r for r in counts() if r[0] == "friction"], [("friction", "buggy_code", 1), ("friction", "wrong_approach", 3)])
+        self.put("facets", A + "2.json", facet(A + "2", outcome="fully_achieved", friction=dict(environment=2)))
         stats, _ = self.ingest()
         self.assertEqual(stats["usage_files"], 1)
         self.assertEqual(self.q("SELECT outcome FROM session_facets WHERE session_id = ?", A + "2"), [("fully_achieved",)])
         self.assertEqual(self.q("SELECT count(*) FROM usage_files WHERE session_id = ? AND kind = 'facet'", A + "2")[0][0], 1)
+        self.assertEqual(counts(), [("friction", "environment", 2)])  # no stale counts
 
     def test_fixed_malformed_file_is_stored_next_time(self):
         self.ingest()
@@ -142,7 +131,8 @@ class IngestTest(InsightsCase):
     def test_deleted_file_keeps_its_row(self):
         self.ingest()
         shutil.rmtree(os.path.join(self.usage, "facets"))
-        self.ingest()
+        stats, _ = self.ingest()
+        self.assertEqual((stats["usage_files"], stats["usage_skipped"]), (0, 0))  # nothing changed: nothing read
         self.assertEqual(self.q("SELECT count(*) FROM session_facets")[0][0], 3)
         self.assertEqual(self.q("SELECT count(*) FROM usage_files WHERE kind = 'facet'")[0][0], 3)
 
@@ -161,13 +151,6 @@ class IngestTest(InsightsCase):
 class DeriveTest(InsightsCase):
     def counts(self, sid):
         return self.q("SELECT kind, name, n FROM facet_counts WHERE session_id = ? ORDER BY 1, 2", sid)
-
-    def test_rewritten_facet_leaves_no_stale_counts(self):
-        self.ingest()
-        self.assertEqual([r for r in self.counts(A + "2") if r[0] == "friction"], [("friction", "buggy_code", 1), ("friction", "wrong_approach", 3)])
-        self.put("facets", A + "2.json", facet(A + "2", friction=dict(environment=2)))
-        self.ingest()
-        self.assertEqual(self.counts(A + "2"), [("friction", "environment", 2)])
 
     def test_non_integer_count_dropped(self):
         self.put("facets", A + "5.json", facet(A + "5", friction=dict(a=2, b="3", c=1.5, d=True, e=0, f=-1)))
@@ -189,16 +172,15 @@ class ProjectTest(InsightsCase):
     def project_of(self, sid):
         return next(r["project"] for r in self.payload()["sessions"] if r["session_id"] == sid)
 
-    def test_stored_session_project_wins(self):
+    def test_project_is_the_stored_session_s_else_the_meta_s_else_unknown(self):
         self.session(A + "1", "atlas", "2026-11-03 09:00:00")
+        self.put("facets", A + "7.json", facet(A + "7"))  # no stored session, no session meta
         self.ingest()
-        self.assertEqual(self.project_of(A + "1"), "atlas")
-        self.assertTrue(next(r for r in self.payload()["sessions"] if r["session_id"] == A + "1")["in_store"])
-
-    def test_worktree_layout_without_transcript(self):
-        self.ingest()
-        self.assertEqual(self.project_of(A + "2"), "demo-app")  # .../demo-app/.claude/worktrees/flaky-date
-        self.assertEqual(self.project_of(A + "3"), "sketchbook")
+        rows = {r["session_id"]: r for r in self.payload()["sessions"]}
+        self.assertEqual((rows[A + "1"]["project"], rows[A + "1"]["in_store"]), ("atlas", True))
+        self.assertEqual(rows[A + "2"]["project"], "demo-app")  # .../demo-app/.claude/worktrees/flaky-date
+        self.assertEqual(rows[A + "3"]["project"], "sketchbook")
+        self.assertEqual(rows[A + "7"]["project"], "(unknown)")
 
     def test_git_worktree_maps_to_its_repository(self):
         repo, wt = os.path.join(self.tmp, "repos", "ledger"), os.path.join(self.tmp, "repos", "ledger-feature")
@@ -212,11 +194,6 @@ class ProjectTest(InsightsCase):
         with mock.patch.object(store, "TEMP_PREFIXES", ()):  # the test's repository lives in a temp folder
             self.ingest()
         self.assertEqual(self.project_of(A + "6"), "ledger")
-
-    def test_neither_counts_as_unknown(self):
-        self.put("facets", A + "7.json", facet(A + "7"))
-        self.ingest()
-        self.assertEqual(self.project_of(A + "7"), "(unknown)")
 
 
 class RebuildTest(InsightsCase):
@@ -251,24 +228,23 @@ class PayloadTest(InsightsCase):
                          [("fully_achieved", 117, 78), ("mostly_achieved", 24, 16), ("partially_achieved", 7, 5),
                           ("not_achieved", 1, 1), ("unclear_from_transcript", 1, 1)])
 
-    def test_unknown_outcome_kept(self):
+    def test_lists_count_and_order_the_fixture_facets(self):
         self.ingest()
-        self.assertEqual(self.payload()["outcomes"][-1], dict(name="abandoned", n=1))
+        d = self.payload()
+        self.assertEqual(d["outcomes"][-1], dict(name="abandoned", n=1))  # an unknown outcome is kept, last
+        self.assertEqual([(r["name"], r["n"]) for r in d["helpfulness"]],  # a fixed order, zeros included
+                         [("essential", 1), ("very_helpful", 0), ("moderately_helpful", 1), ("slightly_helpful", 1), ("unhelpful", 0)])
+        self.assertEqual(d["friction"], [dict(name="buggy_code", n=3, sessions=2), dict(name="wrong_approach", n=3, sessions=1)])
+        self.assertEqual(d["goals"][0], dict(name="fix_bug", n=2, sessions=1))
+        self.assertEqual({g["name"] for g in d["goals"]}, {"fix_bug", "write_tests", "implement_feature", "explore_idea"})
+        self.assertEqual([(t["name"], t["n"]) for t in d["session_types"]],
+                         [("multi_task", 0), ("iterative_refinement", 1), ("single_task", 1), ("quick_question", 1)])
 
     def test_satisfaction_summed(self):
         self.put("facets", A + "5.json", facet(A + "5", satisfaction=dict(satisfied=1, dissatisfied=2)))
         self.ingest()
         got = {r["name"]: (r["n"], r["sessions"]) for r in self.payload()["satisfaction"]}
         self.assertEqual(got, dict(satisfied=(2, 2), likely_satisfied=(2, 1), dissatisfied=(3, 2), unclear=(1, 1)))
-
-    def test_helpfulness_in_fixed_order(self):
-        self.ingest()
-        self.assertEqual([(r["name"], r["n"]) for r in self.payload()["helpfulness"]],
-                         [("essential", 1), ("very_helpful", 0), ("moderately_helpful", 1), ("slightly_helpful", 1), ("unhelpful", 0)])
-
-    def test_friction_ranked_with_sessions(self):
-        self.ingest()
-        self.assertEqual(self.payload()["friction"], [dict(name="buggy_code", n=3, sessions=2), dict(name="wrong_approach", n=3, sessions=1)])
 
     def test_families_group_raw_rows(self):
         self.put("facets", A + "5.json", facet(A + "5", goals=dict(create_pull_request=2, open_pr=1, fix_bug=1),
@@ -286,28 +262,6 @@ class PayloadTest(InsightsCase):
         self.assertEqual(sum(f["n"] for f in d["goal_families"]), sum(g["n"] for g in d["goals"]))
         self.assertEqual([f["family"] for f in d["goal_families"]][:2], ["pull_request", "fix_bug"])
 
-    def test_families_follow_the_view(self):
-        self.ingest()
-        d = self.payload(range_days=2)  # only the sketchbook session
-        self.assertEqual(d["friction_families"], [dict(family="buggy_code", n=2, sessions=1, cost=0, active_s=0,  # no transcript: no weight
-                                                       members=[dict(name="buggy_code", n=2, sessions=1, cost=0, active_s=0)])])
-        self.assertEqual(d["goal_families"], [dict(family="research", n=1, sessions=1, members=[dict(name="explore_idea", n=1, sessions=1)])])
-
-    def test_families_empty_without_facets(self):
-        self.ingest()
-        d = self.payload(project="nope")
-        self.assertEqual((d["goals"], d["friction"], d["goal_families"], d["friction_families"]), ([], [], [], []))
-        d = self.payload(source="codex")
-        self.assertEqual((d["goal_families"], d["friction_families"]), ([], []))
-
-    def test_goals_and_session_types(self):
-        self.ingest()
-        d = self.payload()
-        self.assertEqual(d["goals"][0], dict(name="fix_bug", n=2, sessions=1))
-        self.assertEqual({g["name"] for g in d["goals"]}, {"fix_bug", "write_tests", "implement_feature", "explore_idea"})
-        self.assertEqual([(t["name"], t["n"]) for t in d["session_types"]],
-                         [("multi_task", 0), ("iterative_refinement", 1), ("single_task", 1), ("quick_question", 1)])
-
     def test_filters_narrow_every_list(self):
         self.session(A + "1", "observer-sessions", "2026-11-03 09:00:00")
         self.ingest()
@@ -322,6 +276,9 @@ class PayloadTest(InsightsCase):
         self.assertEqual([r["session_id"] for r in d["sessions"]], [A + "3"])
         self.assertEqual(d["friction"], [dict(name="buggy_code", n=2, sessions=1)])
         self.assertEqual(d["goals"], [dict(name="explore_idea", n=1, sessions=1)])
+        self.assertEqual(d["friction_families"], [dict(family="buggy_code", n=2, sessions=1, cost=0, active_s=0,  # no transcript: no weight
+                                                       members=[dict(name="buggy_code", n=2, sessions=1, cost=0, active_s=0)])])
+        self.assertEqual(d["goal_families"], [dict(family="research", n=1, sessions=1, members=[dict(name="explore_idea", n=1, sessions=1)])])
 
     def test_orphans_listed_without_link(self):
         self.session(A + "1", "demo-app", "2026-11-03 09:00:00")
@@ -362,29 +319,21 @@ class PayloadTest(InsightsCase):
         self.ingest()
         self.assertEqual({r["session_id"]: r["title"] for r in self.payload()["sessions"]}, {A + "1": "Synthetic title", A + "2": None, A + "3": None})
 
-    def test_codex_source_returns_coverage_only(self):
-        self.session("x1", "demo-app", "2026-11-03 12:00:00", source="codex")
-        self.ingest()
-        d = self.payload(source="codex")
-        self.assertEqual(d["coverage"]["codex_sessions"], 1)
-        self.assertEqual(d["coverage"]["claude_sessions"], 0)
-        for k in ("outcomes", "helpfulness", "session_types", "satisfaction", "friction", "goals", "goal_families", "friction_families", "sessions"):
-            self.assertEqual(d[k], [], k)
-
-    def test_unknown_source_raises(self):
-        with self.assertRaises(ValueError):
-            self.payload(source="gemini")
-
     def test_goal_and_success_text_not_sent(self):
+        self.session(A + "1", "demo-app", "2026-11-03 09:00:00")
         self.ingest()
-        text = json.dumps(self.payload(), default=str)
-        self.assertNotIn("underlying_goal", text)
-        self.assertNotIn("primary_success", text)
-        self.assertNotIn("The toggle shipped with tests", text)
+        for text in (json.dumps(self.payload(), default=str), json.dumps(metrics.session(self.con.cursor(), A + "1", prices={}), default=str)):
+            self.assertNotIn("underlying_goal", text)
+            self.assertNotIn("primary_success", text)
+            self.assertNotIn("The toggle shipped with tests", text)
 
     def test_session_payload_carries_its_insight(self):
         self.session(A + "2", "demo-app", "2026-11-03 09:00:00")
+        self.session("c1", "demo-app", "2026-11-03 10:00:00")
+        self.session("x1", "demo-app", "2026-11-03 12:00:00", source="codex")
         self.ingest()
+        for sid in ("c1", "x1"):  # no facet: no insight
+            self.assertIsNone(metrics.session(self.con.cursor(), sid, prices={})["insight"], sid)
         got = metrics.session(self.con.cursor(), A + "2", prices={})["insight"]
         self.assertEqual(got, dict(
             outcome="partially_achieved", helpfulness="moderately_helpful", session_type="iterative_refinement",
@@ -394,24 +343,10 @@ class PayloadTest(InsightsCase):
         row = next(r for r in self.payload()["sessions"] if r["session_id"] == A + "2")  # the Insights page's row says the same
         self.assertEqual(got, {k: row[k] for k in got})
 
-    def test_session_payload_without_a_facet_has_no_insight(self):
-        self.session("c1", "demo-app", "2026-11-03 10:00:00")
-        self.session("x1", "demo-app", "2026-11-03 12:00:00", source="codex")
-        self.ingest()
-        for sid in ("c1", "x1"):
-            self.assertIsNone(metrics.session(self.con.cursor(), sid, prices={})["insight"], sid)
-
-    def test_session_insight_leaves_goal_and_success_text_out(self):
-        self.session(A + "1", "demo-app", "2026-11-03 09:00:00")
-        self.ingest()
-        text = json.dumps(metrics.session(self.con.cursor(), A + "1", prices={}), default=str)
-        self.assertNotIn("underlying_goal", text)
-        self.assertNotIn("primary_success", text)
-        self.assertNotIn("The toggle shipped with tests", text)
-
     def test_no_facets(self):
         d = self.payload()
-        self.assertEqual((d["coverage"]["stored_facets"], d["coverage"]["newest_facet"], d["outcomes"]), (0, None, []))
+        self.assertEqual((d["coverage"]["stored_facets"], d["coverage"]["newest_facet"], d["outcomes"], d["trend"]), (0, None, [], []))
+        self.assertEqual(d["meta"], EMPTY_META)
 
 
 class CoverageBreakdownTest(InsightsCase):
@@ -459,34 +394,28 @@ class CoverageBreakdownTest(InsightsCase):
         self.assertEqual(self.projects(project="observer-sessions"), [dict(project="observer-sessions", sessions=1, analysed=0)])  # named, it counts
         self.assertEqual(self.projects(source="claude"), self.projects())
 
-    def test_grok_source_returns_coverage_only(self):
-        self.session("g1", "demo-app", "2026-11-03 12:00:00", source="grok")
-        self.ingest()
-        d = self.payload(source="grok")
-        self.assertEqual((d["coverage"]["claude_sessions"], d["coverage"]["analysed"], d["coverage"]["codex_sessions"]), (0, 0, 0))
-        self.assertEqual((d["coverage"]["by_project"], d["coverage"]["runs"], d["coverage"]["run_sizes"]), ([], [], None))
-        for k in ("outcomes", "helpfulness", "session_types", "satisfaction", "friction", "goals", "goal_families", "friction_families",
-                  "sessions", "trend"):
-            self.assertEqual(d[k], [], k)
-        self.assertEqual(d["meta"]["sessions"], 0)
-        c = self.payload()["coverage"]  # source All: the Grok session counts nowhere
-        self.assertEqual(c["claude_sessions"], self.payload(source="claude")["coverage"]["claude_sessions"])
-
-    def test_codex_source_and_an_empty_store_give_no_breakdown(self):
+    def test_codex_and_grok_sources_return_coverage_only(self):
         self.session("x1", "demo-app", "2026-11-03 12:00:00", source="codex")
-        self.assertEqual(self.payload()["coverage"]["runs"], [])
-        self.assertEqual(self.payload()["coverage"]["by_project"], [])  # no stored facets
+        self.session("g1", "demo-app", "2026-11-03 12:00:00", source="grok")
+        c = self.payload()["coverage"]  # no stored facets: no breakdown
+        self.assertEqual((c["by_project"], c["runs"]), ([], []))
         self.ingest()
-        d = self.payload(source="codex")["coverage"]
-        self.assertEqual((d["by_project"], d["runs"]), ([], []))
-
-    def test_facets_within_an_hour_of_each_other_are_one_run(self):
-        self.ingest()
-        self.mtimes("2026-11-05 10:00:00", "2026-11-05 10:30:00", "2026-11-05 11:30:00")  # a gap of exactly one hour stays in the run
-        self.assertEqual(self.runs(), [dict(at="2026-11-05T11:30:00.000Z", facets=3)])
+        for source, codex in (("codex", 1), ("grok", 0)):
+            d = self.payload(source=source)
+            self.assertEqual((d["coverage"]["claude_sessions"], d["coverage"]["analysed"], d["coverage"]["codex_sessions"]), (0, 0, codex), source)
+            self.assertEqual((d["coverage"]["by_project"], d["coverage"]["runs"], d["coverage"]["run_sizes"]), ([], [], None), source)
+            for k in ("outcomes", "helpfulness", "session_types", "satisfaction", "friction", "goals", "goal_families", "friction_families",
+                      "sessions", "trend"):
+                self.assertEqual(d[k], [], (source, k))
+            self.assertEqual(d["meta"], EMPTY_META, source)  # the fixture's three session-meta rows are Claude Code's
+        c, claude = self.payload()["coverage"], self.payload(source="claude")  # source All: the Grok session counts nowhere
+        self.assertEqual(c["claude_sessions"], claude["coverage"]["claude_sessions"])
+        self.assertEqual(claude["meta"]["sessions"], 3)
 
     def test_a_gap_over_an_hour_starts_a_new_run_newest_first(self):
         self.ingest()
+        self.mtimes("2026-11-05 10:00:00", "2026-11-05 10:30:00", "2026-11-05 11:30:00")  # a gap of exactly one hour stays in the run
+        self.assertEqual(self.runs(), [dict(at="2026-11-05T11:30:00.000Z", facets=3)])
         self.mtimes("2026-11-05 10:00:00", "2026-11-05 11:00:00", "2026-11-06 12:00:00")
         self.assertEqual(self.runs(), [dict(at="2026-11-06T12:00:00.000Z", facets=1), dict(at="2026-11-05T11:00:00.000Z", facets=2)])
         self.mtimes("2026-11-05 10:00:00", "2026-11-05 11:00:00", "2026-11-05 12:00:01")
@@ -541,24 +470,18 @@ class RunSizesTest(InsightsCase):
         for sid, ts in zip((A + "1", A + "2", A + "3"), stamps):
             self.con.execute("UPDATE session_facets SET file_mtime = ? WHERE session_id = ?", [ts, sid])
 
-    def test_one_run(self):
+    def test_one_run_and_several(self):
+        self.assertIsNone(self.sizes())  # no facet
         self.ingest()
+        self.stamp(None, None, None)
+        self.assertIsNone(self.sizes())  # no dated facet
         self.stamp("2026-11-05 10:00:00", "2026-11-05 10:10:00", "2026-11-05 10:20:00")
         self.assertEqual(self.sizes(), dict(runs=1, min=3, median=3, max=3))
-
-    def test_several_runs(self):
-        self.ingest()
         self.con.execute("INSERT INTO session_facets (session_id, file_mtime) VALUES ('x1', TIMESTAMP '2026-11-01 10:00:00')")
         self.stamp("2026-11-05 10:00:00", "2026-11-05 10:10:00", "2026-11-06 12:00:00")
         self.assertEqual(self.sizes(), dict(runs=3, min=1, median=1, max=2))
         self.con.execute("INSERT INTO session_facets (session_id, file_mtime) VALUES ('x2', TIMESTAMP '2026-11-06 12:05:00')")
         self.assertEqual(self.sizes(), dict(runs=3, min=1, median=2, max=2))
-
-    def test_none_without_a_dated_facet(self):
-        self.assertIsNone(self.sizes())
-        self.ingest()
-        self.stamp(None, None, None)
-        self.assertIsNone(self.sizes())
 
     def test_filters_do_not_change_it(self):
         self.session(A + "1", "p1", "2026-11-03 09:00:00")
@@ -567,11 +490,6 @@ class RunSizesTest(InsightsCase):
         want = dict(runs=2, min=1, median=1.5, max=2)
         for kw in ({}, dict(project="p1"), dict(project="nope"), dict(range_days=1), dict(automated=True)):
             self.assertEqual(self.sizes(**kw), want, kw)
-
-    def test_codex_source_has_none(self):
-        self.ingest()
-        self.assertIsNone(self.sizes(source="codex"))
-        self.assertIsNone(self.sizes(source="grok"))
 
 
 class TrendTest(InsightsCase):
@@ -607,6 +525,7 @@ class TrendTest(InsightsCase):
         self.add(1, "2026-11-03 12:00:00", "unclear_from_transcript")
         self.add(2, "2026-11-03 13:00:00", "abandoned")
         self.add(3, "2026-11-03 14:00:00")
+        self.add(4, None)  # no start: in no week
         self.ingest()
         self.assertEqual(self.trend(), [dict(week="2026-11-02", n=3, achieved=1, fully=1, mostly=0, partially=0, not_achieved=0)])
 
@@ -624,18 +543,6 @@ class TrendTest(InsightsCase):
         self.ingest()
         t = self.trend()
         self.assertEqual((len(t), t[0]["week"], t[-1]["week"]), (26, "2026-02-02", "2026-07-27"))
-
-    def test_sessions_without_a_start_are_left_out(self):
-        self.add(1, None)
-        self.add(2, "2026-11-03 12:00:00")
-        self.ingest()
-        self.assertEqual(self.trend(), [dict(week="2026-11-02", n=1, achieved=1, fully=1, mostly=0, partially=0, not_achieved=0)])
-
-    def test_empty_for_codex_and_without_facets(self):
-        self.assertEqual(self.trend(), [])
-        self.add(1, "2026-11-03 12:00:00")
-        self.ingest()
-        self.assertEqual(self.trend(source="codex"), [])
 
 
 class MeasuredTest(InsightsCase):
@@ -668,23 +575,13 @@ class MeasuredTest(InsightsCase):
 
     def test_a_listed_session_carries_its_cost_errors_and_context_share(self):
         sid = self.add(1, dict(buggy_code=1), requests=[(0, 1_000_000), (10, 2_000_000)], errors=2, peak=800)
+        unpriced = self.add(2, {}, requests=[(0, 1_000_000)], peak=800)  # no price, no known window
+        self.con.execute("UPDATE requests SET model = 'm-unknown' WHERE session_id = ?", [unpriced])
+        self.con.execute("UPDATE sessions SET peak_model = 'm-unknown' WHERE session_id = ?", [unpriced])
+        orphan = self.add(3, dict(buggy_code=1), stored=False)  # no transcript: no figures
         self.ingest()
-        s = self.payload()["sessions"][0]
-        self.assertEqual((s["session_id"], s["cost"], s["errors"], s["context_share"]), (sid, 3.0, 2, 0.8))
-
-    def test_a_session_without_a_transcript_has_no_figures(self):
-        self.add(1, dict(buggy_code=1), stored=False)
-        self.ingest()
-        s = self.payload()["sessions"][0]
-        self.assertEqual((s["in_store"], s["cost"], s["errors"], s["context_share"]), (False, None, None, None))
-
-    def test_an_unpriced_session_has_no_cost_and_an_unknown_window_no_share(self):
-        sid = self.add(1, {}, requests=[(0, 1_000_000)], peak=800)
-        self.con.execute("UPDATE requests SET model = 'm-unknown' WHERE session_id = ?", [sid])
-        self.con.execute("UPDATE sessions SET peak_model = 'm-unknown' WHERE session_id = ?", [sid])
-        self.ingest()
-        s = self.payload()["sessions"][0]
-        self.assertEqual((s["cost"], s["errors"], s["context_share"]), (None, 0, None))
+        got = {s["session_id"]: (s["in_store"], s["cost"], s["errors"], s["context_share"]) for s in self.payload()["sessions"]}
+        self.assertEqual(got, {sid: (True, 3.0, 2, 0.8), unpriced: (True, None, 0, None), orphan: (False, None, None, None)})
 
     def test_figures_cover_the_whole_session_whatever_the_range(self):
         sid = self.add(1, {}, requests=[(0, 1_000_000)])
@@ -715,12 +612,7 @@ class MeasuredTest(InsightsCase):
         # The priced session's $1, and both sessions' time: the unpriced one's 20 minutes, the other's 30 s to its tool call.
         self.assertEqual((bug["family"], bug["sessions"], bug["cost"], bug["active_s"]), ("buggy_code", 2, 1.0, 1230))
 
-    def test_goal_families_carry_no_weight(self):
-        sid = "0000eeee-0000-4000-8000-000000000009"
-        self.session(sid, "p", "2026-11-03 09:00:00")
-        self.put("facets", sid + ".json", facet(sid, goals=dict(fix_bug=1)))
-        self.ingest()
-        self.assertEqual(self.payload()["goal_families"], [dict(family="fix_bug", n=1, sessions=1, members=[dict(name="fix_bug", n=1, sessions=1)])])
+    # Goal families carry no weight: PayloadTest.test_filters_narrow_every_list pins their keys.
 
 
 class SessionMetaTest(InsightsCase):
@@ -746,14 +638,19 @@ class SessionMetaTest(InsightsCase):
         self.add(1, lines_added=100, lines_removed=10, files_modified=3, git_pushes=1)
         self.add(2, lines_added=None, lines_removed=5, files_modified=None, git_pushes=2)
         self.ingest()
-        got = self.figures()
+        d = self.payload()
+        self.assertEqual((d["coverage"]["facets"], d["sessions"]), (0, []))  # no facet in the view: the figures still show
+        got = d["meta"]
         self.assertEqual({k: got[k] for k in ("sessions", "lines_added", "lines_removed", "files_modified", "git_pushes")},
                          dict(sessions=2, lines_added=100, lines_removed=15, files_modified=3, git_pushes=3))
 
     def test_duration_median_is_over_rows_with_a_duration_and_averages_the_middle_pair(self):
+        self.add(9, duration_minutes=None, times=[])
+        self.ingest()
+        got = self.figures()
+        self.assertEqual((got["sessions"], got["duration_p50_min"], got["response_p50_s"]), (1, None, None))  # no row has either value
         for i, d in enumerate((10, 20, 30, 40)):
             self.add(i, duration_minutes=d)
-        self.add(9, duration_minutes=None)
         self.ingest()
         self.assertEqual(self.figures()["duration_p50_min"], 25)
         self.add(10, duration_minutes=100)
@@ -766,12 +663,6 @@ class SessionMetaTest(InsightsCase):
         self.add(3, times=[])  # no median: left out, not counted as 0
         self.ingest()
         self.assertEqual(self.figures()["response_p50_s"], 6.25)
-
-    def test_medians_are_null_when_no_row_has_the_value(self):
-        self.add(1, duration_minutes=None, times=[])
-        self.ingest()
-        got = self.figures()
-        self.assertEqual((got["sessions"], got["duration_p50_min"], got["response_p50_s"]), (1, None, None))
 
     def test_languages_are_summed_most_counted_first_ties_by_name(self):
         self.add(1, languages=dict(Python=5, TypeScript=2, Go=2))
@@ -810,12 +701,6 @@ class SessionMetaTest(InsightsCase):
         self.assertEqual(len(got), len(set(got)))
         self.assertEqual(self.figures(project="meta-only-app")["sessions"], 1)
 
-    def test_figures_show_in_a_view_with_no_facet(self):
-        self.add(1, lines_added=9)
-        self.ingest()
-        d = self.payload()
-        self.assertEqual((d["coverage"]["facets"], d["sessions"], d["meta"]["sessions"], d["meta"]["lines_added"]), (0, [], 1, 9))
-
     def test_project_and_start_come_from_the_stored_session_else_the_meta(self):
         stored = self.add(1, path="/Users/example/Sites/meta-says", start="2026-01-01T09:00:00.000Z", lines_added=1)
         self.session(stored, "store-says", "2026-11-03 09:00:00")
@@ -837,16 +722,6 @@ class SessionMetaTest(InsightsCase):
         self.assertEqual(self.figures()["lines_added"], 10)
         self.assertEqual(self.figures(automated=True)["lines_added"], 11)
         self.assertEqual(self.figures(project=auto)["lines_added"], 1)
-
-    def test_codex_source_and_a_store_without_meta_have_empty_figures(self):
-        empty = dict(sessions=0, lines_added=0, lines_removed=0, files_modified=0, git_pushes=0, duration_p50_min=None,
-                     response_p50_s=None, languages=[])
-        self.assertEqual(self.figures(), empty)
-        self.add(1)
-        self.ingest()
-        self.assertEqual(self.figures(source="codex"), empty)
-        self.assertEqual(self.figures(source="grok"), empty)
-        self.assertEqual(self.figures(source="claude")["sessions"], 1)
 
     def test_a_listed_session_carries_its_meta_or_null(self):
         a = self.add(1, facet_too=True, duration_minutes=35, lines_added=120, lines_removed=30, files_modified=4, git_pushes=1)

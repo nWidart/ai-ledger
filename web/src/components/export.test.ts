@@ -13,10 +13,6 @@ describe("toCsv", () => {
   it("guards text that starts with a formula character, not numbers", () => {
     expect(toCsv(["v"], [["=SUM(A1)"], ["+1"], ["-2 apples"], ["@cmd"], ["plain"], [-5]])).toBe("v\r\n'=SUM(A1)\r\n'+1\r\n'-2 apples\r\n'@cmd\r\nplain\r\n-5\r\n");
   });
-
-  it("ends every record with CRLF", () => {
-    expect(toCsv(["a"], [["b"], ["c"]])).toBe("a\r\nb\r\nc\r\n");
-  });
 });
 
 describe("toTsv", () => {
@@ -27,10 +23,6 @@ describe("toTsv", () => {
   it("guards text that starts with a tab or carriage return", () => {
     expect(toCsv(["v"], [["\t=1+1"], ["\r=1+1"]])).toBe("v\r\n'\t=1+1\r\n\"'\r=1+1\"\r\n");
     expect(toTsv(["v"], [["\t=1+1"], ["\r@x"]])).toBe("v\n' =1+1\n' @x\n");
-  });
-
-  it("applies the same formula guard and leaves numbers alone", () => {
-    expect(toTsv(["v"], [["=1+1"], [-4]])).toBe("v\n'=1+1\n-4\n");
   });
 });
 

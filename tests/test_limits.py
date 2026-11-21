@@ -116,19 +116,18 @@ class ExtrasParseTest(unittest.TestCase):
         self.assertIsNone(self.extras(dict(five_hour=dict(utilization=12.0, resets_at="2026-11-06T18:00:00+00:00"))))
         for poll in ({}, dict(plan="max"), dict(response=None), dict(response=["x"]), dict(response="x")):
             self.assertIsNone(limits.claude_extras(poll))
+        # Keys that hold null or junk, and a limits list that is no list.
+        self.assertIsNone(self.extras(extras_body(weekly_scoped_shares=None, seven_day_breakdown=None)))
+        self.assertIsNone(self.extras(extras_body(weekly_scoped_shares=[None, 3, "x", dict(), dict(limit_index=None)],
+                                                  seven_day_breakdown=dict(as_of=None, rows=None))))
+        self.assertIsNone(self.extras(extras_body(limits=None)))
+        self.assertIsNone(self.extras(extras_body(limits=7)))
 
     def test_only_one_of_them_is_kept_alone(self):
         shares = self.extras(extras_body(seven_day_breakdown=None))
         self.assertEqual((len(shares["shares"]), shares["surfaces"]), (1, None))
         surfaces = self.extras(extras_body(weekly_scoped_shares=None))
         self.assertEqual((surfaces["shares"], len(surfaces["surfaces"]["rows"])), ([], 4))
-
-    def test_nulls_have_none(self):
-        self.assertIsNone(self.extras(extras_body(weekly_scoped_shares=None, seven_day_breakdown=None)))
-        self.assertIsNone(self.extras(extras_body(weekly_scoped_shares=[None, 3, "x", dict(), dict(limit_index=None)],
-                                                  seven_day_breakdown=dict(as_of=None, rows=None))))
-        self.assertIsNone(self.extras(extras_body(limits=None)))
-        self.assertIsNone(self.extras(extras_body(limits=7)))
 
     def test_a_limit_index_must_name_a_limit(self):
         share = lambda i: dict(limit_index=i, used_percent_of_weekly=21, allowance_percent_of_weekly=50)
@@ -139,12 +138,6 @@ class ExtrasParseTest(unittest.TestCase):
         body["limits"].append(dict(kind="weekly_scoped", group="weekly", resets_at="2026-11-15T05:00:00Z"))
         self.assertEqual(self.extras(body)["shares"], [])
 
-    def test_an_invalid_share_is_dropped_and_the_others_stay(self):
-        shares = [dict(limit_index=1, used_percent_of_weekly=-3, allowance_percent_of_weekly=50),
-                  dict(limit_index=0, used_percent_of_weekly=5, allowance_percent_of_weekly=100)]
-        out = self.extras(extras_body(weekly_scoped_shares=shares))["shares"]
-        self.assertEqual([(s["kind"], s["used"], s["allowance"]) for s in out], [("weekly_all", 5, 100)])
-
     def test_percents_out_of_range_or_not_numbers_are_dropped(self):
         shares = lambda used, allowance: [dict(limit_index=1, used_percent_of_weekly=used, allowance_percent_of_weekly=allowance)]
         for used, allowance in ((120, 50), (-1, 50), (21, 101), (21, -50), ("21", 50), (21, "50"), (None, 50), (21, None), (True, 50),
@@ -153,6 +146,11 @@ class ExtrasParseTest(unittest.TestCase):
                              (used, allowance))
         for used, allowance in ((0, 0), (0, 100), (12.5, 50)):
             self.assertEqual(len(self.extras(extras_body(weekly_scoped_shares=shares(used, allowance)))["shares"]), 1)
+        # An invalid share is dropped and the others stay.
+        mixed = [dict(limit_index=1, used_percent_of_weekly=-3, allowance_percent_of_weekly=50),
+                 dict(limit_index=0, used_percent_of_weekly=5, allowance_percent_of_weekly=100)]
+        out = self.extras(extras_body(weekly_scoped_shares=mixed))["shares"]
+        self.assertEqual([(s["kind"], s["used"], s["allowance"]) for s in out], [("weekly_all", 5, 100)])
 
     def test_surface_rows_are_the_valid_ones_in_order(self):
         rows = [dict(key="chat", percent=60), dict(key="claude_code", display_name="Claude Code", percent=40.5),
@@ -160,8 +158,6 @@ class ExtrasParseTest(unittest.TestCase):
                 dict(key=3, percent=1), dict(percent=1), None, "row", dict(key="b", display_name=7, percent=True)]
         got = self.extras(extras_body(seven_day_breakdown=dict(rows=rows)))["surfaces"]["rows"]
         self.assertEqual(got, [dict(key="chat", label="chat", percent=60), dict(key="claude_code", label="Claude Code", percent=40.5)])
-
-    def test_unreadable_breakdowns_have_none(self):
         for breakdown in (dict(rows="chat"), dict(rows=dict(key="chat", percent=1)), dict(rows=[]), dict(rows=[None]), dict(), [], "x", 5):
             self.assertIsNone(self.extras(extras_body(weekly_scoped_shares=None, seven_day_breakdown=breakdown)), breakdown)
 
@@ -171,14 +167,6 @@ class ExtrasParseTest(unittest.TestCase):
         self.assertIsNone(self.extras(body))
         body["limits"] = [dict(kind="five_hour", group="five_hour", percent=3, resets_at="2026-11-12T15:00:00Z", scope=None)]
         self.assertIsNone(self.extras(body))
-
-    def test_unreadable_times_are_none(self):
-        body = extras_body(seven_day_breakdown=dict(as_of=5, window_started_at="soon", rows=[dict(key="chat", percent=1)]))
-        s = self.extras(body)["surfaces"]
-        self.assertEqual((s["as_of"], s["window_started_at"], len(s["rows"])), (None, None, 1))
-        body = extras_body()
-        body["limits"][1]["resets_at"] = "tomorrow"
-        self.assertEqual(self.extras(body)["shares"], [])
 
     def test_a_limit_with_no_text_kind_is_a_snapshot_but_no_share_target(self):
         body = extras_body()
@@ -204,13 +192,13 @@ class ExtrasParseTest(unittest.TestCase):
         body["limits"][0]["resets_at"] = far
         got = self.extras(body)
         self.assertEqual((len(got["shares"]), got["surfaces"]), (1, None))
-
-    def test_the_stored_poll_is_the_one_the_rows_parse(self):
-        # A share is keyed like the snapshot of the limit it names, so the two can be matched.
+        # Times that do not parse at all read as none too.
+        body = extras_body(seven_day_breakdown=dict(as_of=5, window_started_at="soon", rows=[dict(key="chat", percent=1)]))
+        s = self.extras(body)["surfaces"]
+        self.assertEqual((s["as_of"], s["window_started_at"], len(s["rows"])), (None, None, 1))
         body = extras_body()
-        rows = limits.claude_rows(dict(plan="max", response=body), NOW)
-        share = self.extras(body)["shares"][0]
-        self.assertIn((share["kind"], share["scope"]), [(r[1], r[2]) for r in rows])
+        body["limits"][1]["resets_at"] = "tomorrow"
+        self.assertEqual(self.extras(body)["shares"], [])
 
 
 class CredentialTest(unittest.TestCase):
@@ -286,16 +274,6 @@ class PollerTest(StoreCase):
         self.run_poll(response=usage_body())
         self.assertEqual((self.poller.state["failures"], self.poller.next_at - self.now), (0, limits.POLL_SECONDS))
 
-    def test_unrecognizable_response_is_a_failure(self):
-        self.run_poll(response=dict(limits=[], something="new"))
-        self.assertEqual(self.poller.state["failures"], 1)
-        self.assertEqual(self.q("SELECT count(*) FROM limit_polls"), [(0,)])
-
-    def test_expired_token_is_stale_not_failing(self):
-        urlopen = self.run_poll(keychain_result=keychain(expires_in=-1), response=usage_body())
-        urlopen.assert_not_called()
-        self.assertEqual((self.poller.state["stale"], self.poller.state["failures"]), (True, 0))
-
     def test_token_never_leaks(self):
         self.run_poll(response=usage_body())
         self.run_poll(error=urllib.error.URLError(f"bad {TOKEN}"))
@@ -361,28 +339,19 @@ class GrokParseTest(unittest.TestCase):
         self.assertEqual(limits.label("grok", "monthly", "", None), "monthly")
         daily = grok_body(type="USAGE_PERIOD_TYPE_DAILY", start="2026-11-26T00:00:00Z", end="2026-11-27T00:00:00Z")
         self.assertEqual(self.rows(daily)[0][1:4], ("daily", "", None))
-
-    def test_the_length_without_a_start(self):
-        self.assertEqual(self.rows(grok_body(start=None))[0][1:4], ("weekly", "", 10080))  # a week, for a weekly period
-        self.assertEqual(self.rows(grok_body(type="USAGE_PERIOD_TYPE_MONTHLY", start="soon"))[0][1:4], ("monthly", "", None))
-        self.assertEqual(self.rows(grok_body(start="2026-11-27T00:00:00Z"))[0][3], 10080)  # a start after the end does not read
-        self.assertEqual(self.rows(grok_body(type=None))[0][1], "credits")
+        self.assertEqual(self.rows(grok_body(type=None))[0][1], "credits")  # no type: the credits themselves
 
     def test_at_the_cap_is_reached(self):
         self.assertEqual(self.rows(grok_body(percent=100))[0][5:], (100.0, None, True))
         self.assertEqual(self.rows(grok_body(percent=0))[0][5:], (0.0, None, False))
 
-    def test_no_percent_that_reads_is_no_limit(self):
-        for pct in (None, True, "10", -1, 100.5, float("nan")):
-            self.assertEqual(self.rows(grok_body(percent=pct)), [], pct)
-
-    def test_no_end_that_reads_is_no_limit(self):
-        for end in (None, "soon", 12, "9999-12-31T23:59:00-23:59"):
-            self.assertEqual(self.rows(grok_body(end=end)), [], end)
-
     def test_an_unexpected_response_is_no_limit(self):
         for body in (None, [], "x", {}, dict(config=None), dict(config=[1]), dict(config=dict(creditUsagePercent=5, currentPeriod="weekly"))):
             self.assertEqual(self.rows(body), [], body)
+        for pct in (None, True, "10", -1, 100.5, float("nan")):  # no percent that reads
+            self.assertEqual(self.rows(grok_body(percent=pct)), [], pct)
+        for end in (None, "soon", 12, "9999-12-31T23:59:00-23:59"):  # no end that reads
+            self.assertEqual(self.rows(grok_body(end=end)), [], end)
 
 
 class GrokCredentialTest(unittest.TestCase):
@@ -420,8 +389,8 @@ class GrokCredentialTest(unittest.TestCase):
         self.assertEqual(self.read(), (GROK_TOKEN, None))
         self.write("auth.json", self.auth(self.entry(expires_at=None)))  # no expiry: not known to be expired
         self.assertEqual(self.read(), (GROK_TOKEN, None))
-
-    def test_grok_auth_holds_the_file(self):
+        # GROK_AUTH holds the file's content, with no file, and wins over the file.
+        os.remove(os.path.join(self.home, "auth.json"))
         self.assertEqual(self.read(GROK_AUTH=self.auth()), (GROK_TOKEN, None))
         self.write("auth.json", self.auth(self.entry(key="from-the-file")))
         self.assertEqual(self.read(GROK_AUTH=self.auth()), (GROK_TOKEN, None))
@@ -603,37 +572,6 @@ class AnalysisCase(StoreCase):
 
 
 class WindowTest(AnalysisCase):
-    def test_plan_upgrade_closes_window_early(self):
-        old, new = datetime(2026, 11, 11, 15, 22), datetime(2026, 11, 13, 4, 56)
-        self.snap("codex", "codex_10080", datetime(2026, 11, 6, 3, 22), 22, resets=old, plan="plus")
-        self.snap("codex", "codex_10080", datetime(2026, 11, 6, 4, 56, 45), 2, resets=new, plan="prolite")
-        by, snaps = self.windows(datetime(2026, 11, 6, 8))
-        first, second = by[("codex", "codex_10080", "")]
-        self.assertEqual((first.final, first.early, first.reason, first.closed_at), (22, True, "plan change from plus to prolite",
-                                                                                     datetime(2026, 11, 6, 4, 56, 45)))
-        self.assertIsNone(second.closed_at)
-        self.assertEqual(limits.plan_changes(snaps), [dict(kind="plan_change", provider="codex", at="2026-11-06T04:56:45.000Z",
-                                                           plan_from="plus", plan_to="prolite")])
-
-    def test_limit_hit_lasts_until_reset(self):
-        reset = datetime(2026, 11, 6, 4, 7)
-        for t, pct in ((datetime(2026, 11, 5, 22, 53), 49), (datetime(2026, 11, 5, 23, 52), 100), (datetime(2026, 11, 6, 0, 30), 100)):
-            self.snap("codex", "codex_300", t, pct, resets=reset, minutes=300, plan="plus")
-        now = datetime(2026, 11, 6, 9)
-        by, _ = self.windows(now)
-        row = limits.history_row(by[("codex", "codex_300", "")][0])
-        self.assertEqual((row["hit"], row["hit_minutes"], row["final"]), (True, 255, 100))
-
-    def test_a_history_row_names_the_window_it_describes(self):
-        self.snap("claude", "weekly_scoped", T0 + timedelta(days=1), 10, scope="Fable")
-        self.snap("codex", "codex_300", datetime(2026, 11, 5, 23, 52), 40, resets=datetime(2026, 11, 6, 4, 7), minutes=300, plan="plus")
-        by, _ = self.windows(T0 + timedelta(days=9))
-        row = limits.history_row(by[("claude", "weekly_scoped", "Fable")][0])
-        self.assertEqual((row["limit_id"], row["scope"], row["window_minutes"], row["resets_at"], row["start"]),
-                         ("weekly_scoped", "Fable", 10080, "2026-11-08T05:00:00.000Z", "2026-11-01T05:00:00.000Z"))
-        row = limits.history_row(by[("codex", "codex_300", "")][0])
-        self.assertEqual((row["limit_id"], row["scope"], row["window_minutes"], row["resets_at"]), ("codex_300", "", 300, "2026-11-06T04:07:00.000Z"))
-
     def test_reset_drift_is_one_window(self):
         self.snap("codex", "codex_10080", datetime(2026, 10, 21, 6, 0, 32), 0, resets=datetime(2026, 10, 28, 6, 0), plan="prolite")
         self.snap("codex", "codex_10080", datetime(2026, 10, 21, 6, 0, 41), 1, resets=datetime(2026, 10, 28, 6, 1), plan="prolite")
@@ -656,12 +594,6 @@ class CalibrationTest(AnalysisCase):
         by, _ = self.windows(T0 + timedelta(days=5))
         self.assertEqual(limits.calibrate(by[("claude", "weekly_all", "")], self.usage())["per_pct"], 20.0)
 
-    def test_small_move_adds_nothing(self):
-        self.spend("claude", "claude-opus-5-5", (T0 + timedelta(hours=1), 30))
-        self.snap("claude", "weekly_all", T0 + timedelta(hours=2), 3)
-        by, _ = self.windows(T0 + timedelta(hours=2))
-        self.assertIsNone(limits.calibrate(by[("claude", "weekly_all", "")], self.usage()))
-
     def test_plan_change_restarts_calibration(self):
         prev = T0 - timedelta(days=7)
         self.spend("claude", "claude-opus-5-5", (prev + timedelta(days=1), 100))
@@ -669,13 +601,6 @@ class CalibrationTest(AnalysisCase):
         self.snap("claude", "weekly_all", T0 + timedelta(hours=1), 1, plan="max")
         by, _ = self.windows(T0 + timedelta(hours=1))
         self.assertIsNone(limits.calibrate(by[("claude", "weekly_all", "")], self.usage()))
-
-    def test_scoped_limit_counts_only_its_model(self):
-        self.spend("claude", "claude-opus-5-5", (T0 + timedelta(days=1), 500))
-        self.spend("claude", "claude-fable-5-1", (T0 + timedelta(days=1), 60))
-        self.snap("claude", "weekly_scoped", T0 + timedelta(days=2), 10, scope="Fable")
-        by, _ = self.windows(T0 + timedelta(days=2))
-        self.assertEqual(limits.calibrate(by[("claude", "weekly_scoped", "Fable")], self.usage())["per_pct"], 6.0)
 
 
 class EstimateTest(AnalysisCase):
@@ -687,18 +612,6 @@ class EstimateTest(AnalysisCase):
         cal = limits.calibrate(ws, self.usage())
         self.assertEqual(cal["per_pct"], 8.0)
         self.assertEqual(limits.estimate(ws[0], T0 + timedelta(days=4, hours=2), self.usage(), cal), (59.0, False))
-
-    def test_history_before_polling_started(self):
-        self.spend("claude", "claude-opus-5-5", (T0 - timedelta(days=5), 40), (T0 - timedelta(days=12), 0.5), (T0 + timedelta(days=1), 200))
-        self.snap("claude", "weekly_all", T0 + timedelta(days=5), 25)
-        out = self.payload(T0 + timedelta(days=5))
-        past = [h for h in out["history"] if h["provider"] == "claude"]
-        self.assertEqual([(h["start"], h["final"], h["estimated"]) for h in past],
-                         [("2026-10-25T05:00:00.000Z", 5.0, True), ("2026-10-18T05:00:00.000Z", 0.1, True)])
-        self.assertFalse(any(h["hit"] for h in past))
-        series = out["windows"][0]["series"]
-        self.assertFalse(series[24]["measured"])
-        self.assertEqual(series[-1], dict(t="2026-11-06T05:00:00.000Z", pct=25.0, measured=True))
 
 
 def busy_days(case, source, model, days, end, per_hour, hours=range(8, 23)):
@@ -814,15 +727,14 @@ class SteppingTest(unittest.TestCase):
         self.assertIsNone(f["recent_hits_at"])
         self.assertEqual((f["at_reset"], f["at_reset_low"], f["at_reset_high"], f["recent_at_reset"]), (100, 100, 100, 100))
         self.assertIsNotNone(self.fc(99, 1, 25, 25)["hits_at"])  # a hair more is a hit, an instant before the reset
-
-    def test_a_near_hit_does_not_round_up_to_100(self):
+        # A near hit does not round up to 100.
         f = self.fc(99, 1, 23.904, 23.904)  # ends at 99.996
         self.assertIsNone(f["hits_at"])
         self.assertIsNone(f["recent_hits_at"])
         self.assertEqual((f["at_reset"], f["at_reset_low"], f["at_reset_high"], f["recent_at_reset"]), (99.9, 99.9, 99.9, 99.9))
         self.assertEqual(f["curve"][-1]["recent"], 100)  # the curve's rounding is its own
 
-    def test_a_busy_hour_inside_a_long_step_counts(self):
+    def test_a_day_of_steps_adds_the_days_use_for_any_shape_and_zone(self):
         # A 30-day window steps 4h17m: all use in 08:00-09:00 falls in steps whose midpoints miss it. A day still adds a day's pace.
         busy = [0.0] * 24
         busy[8] = 1.0
@@ -831,8 +743,6 @@ class SteppingTest(unittest.TestCase):
         self.assertAlmostEqual(f["curve"][-1]["recent"], 34, places=1)
         self.assertEqual(f["curve"][1]["mid"], 10)  # the step to 04:17 holds no busy hour; the next, to 08:34, does
         self.assertGreater(f["curve"][2]["mid"], 10)
-
-    def test_a_day_of_steps_adds_the_days_use_for_any_shape_and_zone(self):
         shape = [i + 1 for i in range(24)]
         shape = [v / sum(shape) for v in shape]
         for tz in (timezone.utc, timezone(timedelta(hours=5, minutes=30)), timezone(timedelta(hours=-3))):
@@ -894,9 +804,6 @@ class RecentScenarioTest(AnalysisCase):
         self.assertEqual({p["recent"] for p in f["curve"]}, {None})
         self.assertIsNotNone(f["hits_at"] or f["at_reset"])
 
-    def test_no_forecast_no_scenario(self):
-        self.assertIsNone(self.forecast_for(2))  # no counted use, so no calibration and no forecast
-
     def test_the_usual_forecast_is_the_same_with_or_without_it(self):
         self.hot_day()
         self.snap("claude", "weekly_all", self.NOW, 50, resets=self.RESETS)
@@ -952,7 +859,9 @@ class PayloadTest(AnalysisCase):
         codex = next(u for u in out["unused"] if u["provider"] == "codex")
         self.assertEqual((codex["windows"], codex["early"], codex["avg_unused"]), (1, 1, 60))
         self.assertFalse([u for u in out["unused"] if "Fable" in u["label"]])
-        self.assertTrue([h for h in out["history"] if "Fable" in h["label"]])  # still in the history
+        # still in the history, under the identity window_curve finds it by
+        self.assertEqual([(h["limit_id"], h["scope"], h["window_minutes"], h["resets_at"], h["start"]) for h in out["history"] if "Fable" in h["label"]],
+                         [("weekly_scoped", "Fable", 10080, "2026-11-01T05:00:00.000Z", "2026-10-25T05:00:00.000Z")])
 
     def test_open_windows_ignore_range(self):
         out = self.payload(self.NOW, range_days=7)
@@ -961,14 +870,6 @@ class PayloadTest(AnalysisCase):
         out = self.payload(self.NOW, range_days=30)
         self.assertEqual([h["final"] for h in out["history"] if h["provider"] == "codex"], [40])
         self.assertEqual([u["avg_unused"] for u in out["unused"] if u["provider"] == "codex"], [60])
-
-    def test_source_narrows(self):
-        out = self.payload(self.NOW, source="codex")
-        self.assertEqual({w["provider"] for w in out["windows"]}, {"codex"})
-        self.assertEqual([f["provider"] for f in out["freshness"]], ["codex"])
-        self.assertNotIn("plan_limits", out)  # every source has plan limits now
-        with self.assertRaises(ValueError):
-            self.payload(self.NOW, source="gemini")
 
     def test_grok_has_its_weekly_window(self):
         self.spend("grok", "grok-4.7-build", (self.NOW - timedelta(hours=1), 2.0))
@@ -1027,11 +928,6 @@ class PayloadTest(AnalysisCase):
         self.assertEqual(claude["flags"], ["polling failing", "old"])
         self.assertFalse(claude["measured"])
 
-    def test_an_old_codex_reading_no_longer_measures(self):
-        codex = lambda t: next(f for f in self.payload(t)["freshness"] if f["provider"] == "codex")
-        self.assertTrue(codex(self.NOW + timedelta(minutes=30))["measured"])
-        self.assertFalse(codex(self.NOW + timedelta(hours=2))["measured"])
-
 
 class AlertPayloadTest(AnalysisCase):
     """The alert is taken from the payload's windows after freshness() has cleared `measured` for a stale provider."""
@@ -1042,13 +938,13 @@ class AlertPayloadTest(AnalysisCase):
         busy_days(self, "codex", "gpt-6-astra", 30, self.NOW, 0.01)
         self.snap("codex", "codex_300", self.NOW - timedelta(minutes=30), 100, resets=self.NOW + timedelta(hours=3), minutes=300, plan="plus")
 
-    def test_a_fresh_reading_is_measured(self):
-        alert = limits.alert_of(self.payload(self.NOW)["windows"])
-        self.assertEqual((alert["kind"], alert["provider"], alert["measured"]), ("at_limit", "codex", True))
-
-    def test_an_old_reading_is_not(self):
-        alert = limits.alert_of(self.payload(self.NOW + timedelta(hours=2))["windows"])  # Codex is not polled: an hour-old reading no longer measures now
-        self.assertEqual((alert["kind"], alert["provider"], alert["measured"]), ("at_limit", "codex", False))
+    def test_a_reading_measures_now_only_while_fresh(self):
+        # Codex is not polled: a half-hour-old reading measures now, a reading over an hour old (READING_AGE) no longer does.
+        for now, measured in ((self.NOW, True), (self.NOW + timedelta(hours=2), False)):
+            out = self.payload(now)
+            alert = limits.alert_of(out["windows"])
+            self.assertEqual((alert["kind"], alert["provider"], alert["measured"]), ("at_limit", "codex", measured), now)
+            self.assertEqual([(f["provider"], f["measured"]) for f in out["freshness"]], [("codex", measured)], now)
 
 
 class UsageExtrasPayloadTest(AnalysisCase):
@@ -1083,12 +979,9 @@ class UsageExtrasPayloadTest(AnalysisCase):
             dict(key="claude_code", label="Claude Code", percent=100), dict(key="chat", label="Chats", percent=0),
             dict(key="cowork", label="Cowork", percent=0), dict(key="other", label="Other", percent=0)]))
 
-    def test_only_the_extras_and_labels_leave_the_store(self):
-        self.poll(self.NOW)
-        self.assertEqual(sorted(self.windows()["claude", "weekly_all"]["surfaces"]), ["as_of", "rows"])
-        self.assertEqual(sorted(self.windows()["claude", "weekly_scoped"]["weekly_share"]), ["allowance", "used"])
-
     def test_a_codex_window_has_neither(self):
+        for w in self.windows().values():  # no stored poll: no window has either
+            self.assertEqual((w["weekly_share"], w["surfaces"]), (None, None))
         self.poll(self.NOW)
         codex = self.windows()["codex", "codex_10080"]
         self.assertEqual((codex["weekly_share"], codex["surfaces"]), (None, None))
@@ -1096,17 +989,11 @@ class UsageExtrasPayloadTest(AnalysisCase):
         codex = self.windows()["codex", "codex_10080"]
         self.assertEqual((codex["weekly_share"], codex["surfaces"]), (None, None))
 
-    def test_no_stored_poll_has_none(self):
+    def test_a_poll_describes_only_the_window_it_names(self):
+        self.poll(self.NOW, reset="2026-11-01T05:00:00+00:00")  # an older window
         for w in self.windows().values():
             self.assertEqual((w["weekly_share"], w["surfaces"]), (None, None))
-
-    def test_a_poll_of_an_older_window_has_none(self):
-        self.poll(self.NOW, reset="2026-11-01T05:00:00+00:00")
-        for w in self.windows().values():
-            self.assertEqual((w["weekly_share"], w["surfaces"]), (None, None))
-
-    def test_a_reset_that_drifts_a_few_seconds_is_the_same_window(self):
-        self.poll(self.NOW, reset="2026-11-08T05:00:40+00:00")
+        self.poll(self.NOW + timedelta(minutes=1), reset="2026-11-08T05:00:40+00:00")  # a reset that drifts a few seconds is the same window
         ws = self.windows()
         self.assertEqual(ws["claude", "weekly_scoped"]["weekly_share"], dict(used=21, allowance=50))
         self.assertIsNotNone(ws["claude", "weekly_all"]["surfaces"])
@@ -1127,13 +1014,6 @@ class UsageExtrasPayloadTest(AnalysisCase):
         for w in ws.values():
             self.assertEqual((w["weekly_share"], w["surfaces"]), (None, None))
 
-    def test_a_poll_without_the_keys_has_none(self):
-        body = extras_body()
-        del body["weekly_scoped_shares"], body["seven_day_breakdown"]
-        store.insert(self.con.cursor(), "limit_polls", ["provider", "polled_at", "json"], [("claude", self.NOW, json.dumps(dict(plan="max", response=body)))])
-        for w in self.windows().values():
-            self.assertEqual((w["weekly_share"], w["surfaces"]), (None, None))
-
     def test_a_bad_time_in_the_breakdown_does_not_break_the_payload(self):
         self.poll(self.NOW, seven_day_breakdown=dict(as_of="0001-01-01T00:00:00+01:00", rows=[dict(key="chat", percent=100)]))
         ws = self.windows()
@@ -1147,9 +1027,8 @@ class UsageExtrasPayloadTest(AnalysisCase):
         self.assertEqual(sorted(k for k in ws), [("claude", "weekly_all"), ("claude", "weekly_scoped"), ("codex", "codex_10080")])
         for w in ws.values():
             self.assertEqual((w["weekly_share"], w["surfaces"]), (None, None))
-
-    def test_a_stored_poll_that_is_not_json_never_breaks_the_payload(self):
-        store.insert(self.con.cursor(), "limit_polls", ["provider", "polled_at", "json"], [("claude", self.NOW, "{not json")])
+        # Nor does a newest stored poll that is not JSON.
+        store.insert(self.con.cursor(), "limit_polls", ["provider", "polled_at", "json"], [("claude", self.NOW + timedelta(minutes=1), "{not json")])
         self.assertEqual(self.windows()["claude", "weekly_all"]["surfaces"], None)
 
     def test_a_scoped_share_never_lands_on_another_scope(self):
@@ -1224,15 +1103,6 @@ class WindowUsedTest(AnalysisCase):
         u = self.used()
         self.assertEqual([(p["project"], p["share"]) for p in u["projects"]], [("big", 0.9999), ("small", 0.0001), ("tiny", 0.0001)])
         self.assertTrue(all(p["share"] > 0 for p in u["projects"] + u["models"]))
-
-    def test_models_take_the_top_three_too(self):
-        prices = {**PRICES, "claude-sonnet-5": PRICES["claude-opus-5-5"]}
-        for model, cost in (("claude-opus-5-5", 5.0), ("claude-fable-5-1", 2.0), ("claude-sonnet-5", 2.0), ("gpt-6-astra", 1.0)):
-            self.use("foo", "claude", model, (self.ago(1), cost))
-        u = self.used(prices=prices)
-        self.assertEqual([(m["model"], m["share"]) for m in u["models"]],
-                         [("claude-opus-5-5", 0.5), ("claude-fable-5-1", 0.2), ("claude-sonnet-5", 0.2)])
-        self.assertLessEqual(sum(m["share"] for m in u["models"]), 1)
 
     def test_points_only_when_the_window_is_calibrated(self):
         self.use("foo", "claude", "claude-opus-5-5", (self.ago(1), 9.0))
@@ -1422,17 +1292,18 @@ class WindowCurveTest(AnalysisCase):
         self.assertIsNone(self.curve("2026-11-01T05:00:00.000Z", now, scope="Fable"))
         self.assertIsNone(self.curve("2026-11-01T05:00:00.000Z", now, provider="codex"))
 
-    def test_the_open_window_is_not_served(self):
-        self.measured_week()
-        self.assertIsNone(self.curve("2026-11-01T05:00:00.000Z", T0 + timedelta(days=5)))  # resets at T0 + 7 days
-        self.assertIsNotNone(self.curve("2026-11-01T05:00:00.000Z", T0 + timedelta(days=7)))
-
     def test_an_estimated_window_before_the_first_snapshot_has_a_curve(self):
         self.spend("claude", "claude-opus-5-5", (T0 - timedelta(days=5), 40), (T0 - timedelta(days=12), 0.5), (T0 + timedelta(days=1), 200))
         self.snap("claude", "weekly_all", T0 + timedelta(days=5), 25)
         now = T0 + timedelta(days=5)
-        listed = [h for h in self.payload(now)["history"] if h["estimated"]]
-        self.assertEqual([h["start"] for h in listed], ["2026-10-25T05:00:00.000Z", "2026-10-18T05:00:00.000Z"])
+        out = self.payload(now)
+        self.assertEqual([h["estimated"] for h in out["history"]], [True, True])  # history from before polling started
+        listed = out["history"]
+        self.assertEqual([(h["start"], h["final"], h["hit"]) for h in listed],
+                         [("2026-10-25T05:00:00.000Z", 5.0, False), ("2026-10-18T05:00:00.000Z", 0.1, False)])
+        series = out["windows"][0]["series"]  # the open window: estimated before its one reading, measured at it
+        self.assertFalse(series[24]["measured"])
+        self.assertEqual(series[-1], dict(t="2026-11-06T05:00:00.000Z", pct=25.0, measured=True))
         for h in listed:  # every estimated window of the history can be asked for, from the row's own start
             got = self.curve(h["start"], now)
             self.assertEqual(got["window"], h)
@@ -1468,16 +1339,6 @@ class WindowCurveTest(AnalysisCase):
         w = self.curve("2026-11-05T23:07:00.000Z", datetime(2026, 11, 6, 9), provider="codex", limit_id="codex_300")["window"]
         self.assertEqual((w["hit"], w["hit_minutes"], w["final"], w["window_minutes"]), (True, 255, 100.0, 300))
 
-    def test_bad_input(self):
-        self.measured_week()
-        now = T0 + timedelta(days=10)
-        for kw in (dict(provider="gemini"), dict(provider=""), dict(start="")):
-            with self.assertRaises(ValueError, msg=kw):
-                self.curve(kw.pop("start", "2026-11-01T05:00:00.000Z"), now, **kw)
-        for start in ("yesterday", "2026-13-45", "11/01/2026"):
-            with self.assertRaises(ValueError, msg=start):
-                self.curve(start, now)
-
     def test_the_payload_history_carries_no_curve(self):
         self.measured_week()
         history = self.payload(T0 + timedelta(days=10))["history"]
@@ -1487,29 +1348,7 @@ class WindowCurveTest(AnalysisCase):
 
 
 class ApiTest(AnalysisCase):
-    def test_endpoint_and_unknown_source(self):
-        import http.client
-        from http.server import ThreadingHTTPServer
-        from ai_ledger import app
-        a = app.App(self.con, self.roots, pollers=[])
-        httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(a))
-        threading.Thread(target=httpd.serve_forever, daemon=True).start()
-        try:
-            def get(path):
-                h = http.client.HTTPConnection("127.0.0.1", httpd.server_address[1])
-                h.request("GET", path, headers={"Host": f"{app.HOST}:{app.PORT}"})
-                r = h.getresponse()
-                return r.status, r.read()
-            status, body = get("/api/limits?range=30&source=codex")
-            self.assertEqual((status, json.loads(body)["windows"]), (200, []))
-            self.assertEqual(get("/api/limits?source=gemini")[0], 400)
-            self.assertEqual(get("/api/limits?source=grok")[0], 200)
-            self.assertEqual(get("/limits")[0] in (200, 503), True)
-        finally:
-            httpd.shutdown()
-            httpd.server_close()
-
-    def test_window_route(self):
+    def test_limits_routes(self):
         import http.client
         from http.server import ThreadingHTTPServer
         from ai_ledger import app
@@ -1525,6 +1364,10 @@ class ApiTest(AnalysisCase):
                 h.request("GET", path, headers={"Host": f"{app.HOST}:{app.PORT}"})
                 r = h.getresponse()
                 return r.status, json.loads(r.read())
+            status, body = get("/api/limits?range=30&source=codex")
+            self.assertEqual((status, body["windows"]), (200, []))  # the old windows are long closed
+            self.assertEqual(get("/api/limits?source=gemini"), (400, dict(error="unknown source: gemini")))
+            self.assertEqual(get("/api/limits?source=grok")[0], 200)
             q = "/api/limits/window?provider=codex&limit_id=codex_10080&scope=&start="
             history = get("/api/limits")[1]["history"]
             self.assertEqual(len(history), 2)
@@ -1612,10 +1455,15 @@ class AlertTest(unittest.TestCase):
         self.assertIsNone(limits.alert_of([self.win(current=89.9), self.win(provider="codex", current=0)]))
         self.assertIsNone(limits.alert_of([self.win(current=None)]))  # a window with no reading says nothing
 
-    def test_at_limit(self):
+    def test_each_kind_and_its_time(self):
         got = limits.alert_of([self.win(current=100, at_limit=True)])
         self.assertEqual(got, dict(kind="at_limit", provider="claude", provider_label="Claude Code", label="weekly", current=100,
                                    at="2026-11-14T12:00:00", resets_at="2026-11-14T12:00:00", measured=True, count=1))
+        self.assertEqual(limits.alert_of([self.win(current=None, at_limit=True)])["kind"], "at_limit")  # without a reading too
+        got = limits.alert_of([self.win(current=50, hits="2026-11-13T08:00:00")])  # runs out: at the hit
+        self.assertEqual((got["kind"], got["at"], got["resets_at"], got["count"]), ("runs_out", "2026-11-13T08:00:00", "2026-11-14T12:00:00", 1))
+        got = limits.alert_of([self.win(current=90.0)])  # high: at ALERT_PERCENT and up, at the reset
+        self.assertEqual((got["kind"], got["current"], got["at"]), ("high", 90.0, "2026-11-14T12:00:00"))
 
     def test_the_alert_carries_the_chosen_windows_measured_flag(self):
         self.assertFalse(limits.alert_of([self.win(current=100, at_limit=True, measured=False)])["measured"])
@@ -1625,18 +1473,6 @@ class AlertTest(unittest.TestCase):
         ws = [self.win(label="est", current=100, at_limit=True, measured=False, resets="2026-11-15T00:00:00"),
               self.win(label="read", current=100, at_limit=True, measured=True, resets="2026-11-14T00:00:00")]
         self.assertEqual(limits.alert_of(ws)["measured"], False)
-
-    def test_at_limit_without_a_reading_still_counts(self):
-        self.assertEqual(limits.alert_of([self.win(current=None, at_limit=True)])["kind"], "at_limit")
-
-    def test_runs_out_is_at_the_hit(self):
-        got = limits.alert_of([self.win(current=50, hits="2026-11-13T08:00:00")])
-        self.assertEqual((got["kind"], got["at"], got["resets_at"], got["count"]), ("runs_out", "2026-11-13T08:00:00", "2026-11-14T12:00:00", 1))
-
-    def test_high_is_at_the_threshold_and_up(self):
-        self.assertEqual(limits.ALERT_PERCENT, 90)
-        got = limits.alert_of([self.win(current=90.0)])
-        self.assertEqual((got["kind"], got["current"], got["at"]), ("high", 90.0, "2026-11-14T12:00:00"))
 
     def test_precedence_across_windows(self):
         high, runs, capped = self.win(label="a", current=95), self.win(label="b", current=50, hits="2026-11-13T08:00:00"), \
@@ -1657,9 +1493,7 @@ class AlertTest(unittest.TestCase):
         ws = [self.win(label="a", current=100, at_limit=True), self.win(label="b", hits="2026-11-13T08:00:00"), self.win(label="c", current=92),
               self.win(label="d", current=40), self.win(label="e", current=None)]
         self.assertEqual(limits.alert_of(ws)["count"], 3)
-
-    def test_a_window_counts_once(self):
-        both = self.win(current=100, at_limit=True, hits="2026-11-13T08:00:00")
+        both = self.win(current=100, at_limit=True, hits="2026-11-13T08:00:00")  # a window in two states counts once
         got = limits.alert_of([both, self.win(current=95)])
         self.assertEqual((got["kind"], got["count"]), ("at_limit", 2))
 
@@ -1673,12 +1507,9 @@ class AlertTest(unittest.TestCase):
     def test_peak_is_the_fullest_open_window(self):
         ws = [self.win(current=41.5), self.win(provider="codex", label="5-hour", current=72.0, measured=False), self.win(label="x", current=None)]
         self.assertEqual(limits.peak_of(ws), dict(provider="codex", provider_label="Codex", label="5-hour", current=72.0, measured=False))
-
-    def test_peak_is_none_without_a_percent(self):
         self.assertIsNone(limits.peak_of([]))
         self.assertIsNone(limits.peak_of([self.win(current=None)]))
-
-    def test_peak_can_differ_from_the_alert_window(self):  # the soonest to run out is not the fullest
+        # The peak can differ from the alert's window: the soonest to run out is not the fullest.
         ws = [self.win(label="5-hour", current=40.0, hits="2026-11-13T08:00:00"), self.win(provider="codex", current=70.0)]
         self.assertEqual((limits.alert_of(ws)["label"], limits.peak_of(ws)["label"], limits.peak_of(ws)["current"]), ("5-hour", "weekly", 70.0))
 

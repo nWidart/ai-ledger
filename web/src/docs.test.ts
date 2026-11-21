@@ -87,9 +87,8 @@ describe("docs registry", () => {
 });
 
 describe("docs registry matches the docs site", () => {
-  it("finds the content", () => expect(existsSync(CONTENT)).toBe(true));
-
-  it("has a content file for each path", () => {
+  it("finds the content, with a content file for each path", () => {
+    expect(existsSync(CONTENT)).toBe(true);
     const missing = entries.filter(([, e]) => !contentFile(e.path)).map(([k, e]) => `${k}: no content file for "${e.path}"`);
     expect(missing).toEqual([]);
   });

@@ -2,7 +2,7 @@ import { useId, useState, type ReactNode } from "react";
 import "./DataTable.css";
 
 /** A wrapper that scrolls sideways: a named region that takes focus, so the keyboard can scroll it. */
-export function ScrollRegion({ label, className = "scroll", children }: { label: string; className?: string; children: ReactNode }) {
+function ScrollRegion({ label, className = "scroll", children }: { label: string; className?: string; children: ReactNode }) {
   return <div className={className} tabIndex={0} role="region" aria-label={label}>{children}</div>;
 }
 

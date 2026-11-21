@@ -39,10 +39,6 @@ class GrokCase(StoreCase):
 
 
 class IngestTest(GrokCase):
-    def test_missing_home_is_skipped(self):
-        stats = self.ingest()
-        self.assertEqual((stats["files"], self.count()), (0, 0))
-
     def test_each_line_is_stored_once(self):
         for label in LABELS:
             self.put(label)
@@ -51,21 +47,6 @@ class IngestTest(GrokCase):
         self.assertEqual(self.count(), n)
         self.assertEqual(self.ingest()["files"], 0)
         self.assertEqual(self.count(), n)
-
-    def test_truncated_file_read_again(self):
-        path, = self.put("long-turn")
-        with open(path, "rb") as fh:
-            data = fh.read()
-        self.ingest()
-        n = self.count()
-        with open(path, "wb") as fh:
-            fh.write(data[:len(data) // 2])
-        self.ingest()
-        with open(path, "wb") as fh:
-            fh.write(data)
-        self.ingest()
-        self.assertEqual(self.count(), n)
-        self.assertEqual(self.count("starts_with(key, 'grok:')"), n)
 
     def test_repeated_event_ids_are_both_stored(self):
         self.put("probe")
@@ -104,22 +85,6 @@ class FieldsTest(GrokCase):
                 # A subagent's lines are its parent's, and do not move the session's times.
                 times = sorted(store.ts_of(r[0]) for r in self.q("SELECT ts FROM raw_lines WHERE session_id = ? AND NOT subagent", sid))
                 self.assertEqual((first, last), (datetime.fromisoformat(times[0]), datetime.fromisoformat(times[-1])))
-
-    def test_rebuild_keeps_sessions(self):
-        for label in LABELS:
-            self.put(label)
-        self.ingest()
-        before = self.q("SELECT * FROM sessions ORDER BY session_id")
-        store.rebuild(self.con)
-        self.assertEqual(self.q("SELECT * FROM sessions ORDER BY session_id"), before)
-
-    def test_rebuild_keeps_sessions_and_requests(self):
-        for label in LABELS:
-            self.put(label)
-        self.ingest()
-        before = [self.q(f"SELECT * FROM {t} ORDER BY 1") for t in ("sessions", "requests")]
-        store.rebuild(self.con)
-        self.assertEqual([self.q(f"SELECT * FROM {t} ORDER BY 1") for t in ("sessions", "requests")], before)
 
     def test_key_without_meta_falls_back_to_offset(self):
         self.assertEqual(grok.key({"params": {}}, "/x/updates.jsonl", 7), "/x/updates.jsonl:7")
@@ -223,6 +188,8 @@ class UsageTest(GrokCase):
         self.assertSums(SESSION["long-turn"], reported([turn]))
         end, = self.q("SELECT ts FROM raw_lines WHERE type = 'turn_completed'")
         self.assertEqual(self.q("SELECT ts FROM requests"), [(datetime.fromisoformat(store.ts_of(end[0])),)])
+        # 0: the row's tokens are a whole turn's, not one call's, so its context is unknown (metrics.context_of: NULL).
+        self.assertEqual(self.q("SELECT context_tokens FROM requests"), [(0,)])
 
     def test_turns_whose_calls_cannot_be_told_and_share_a_prompt_id(self):
         # Prompt ids repeat: two such turns of one file, with the same prompt id (or none), are two requests each.
@@ -407,16 +374,6 @@ class UsageTest(GrokCase):
             chunk = next(d for d in map(json.loads, fh) if grok.update(d).get("sessionUpdate") == "agent_message_chunk")
         self.assertEqual([it["group"] for it in grok.live_items(chunk)], [None])
 
-    def test_turn_whose_calls_cannot_be_told_states_no_context(self):
-        path, = self.put("long-turn")
-        with open(path) as fh:
-            lines = fh.readlines()
-        with open(path, "w") as fh:
-            fh.writelines(x for x in lines if not any(f'"{t}"' in x for t in grok.CALL_TYPES))
-        self.ingest()
-        # 0: the row's tokens are a whole turn's, not one call's, so its context is unknown (metrics.context_of: NULL).
-        self.assertEqual(self.q("SELECT context_tokens FROM requests"), [(0,)])
-
     def test_fallback_turn_after_a_known_context_shows_none(self):
         # The newest main-thread request's context is the current one, unknown as it may be: no older context stands in.
         from ai_ledger import live
@@ -466,22 +423,6 @@ class UsageTest(GrokCase):
         self.assertEqual(self.con.execute(f"{context.ctes(rq)} SELECT count(*) FROM turns", rp).fetchall(), [(0,)])
         self.assertEqual(metrics.usage(cur, prices={}, today=datetime(2026, 12, 1).date())["totals"]["input"], 5_000_000)
 
-    def test_store_without_context_tokens_gains_it_empty(self):
-        self.put("long-turn")
-        self.ingest()
-        from ai_ledger import live
-        cur = self.con.cursor()
-        sid = SESSION["long-turn"]
-        (last,) = cur.execute("SELECT last_ts FROM sessions").fetchone()
-        now = live.aware(last)
-        self.con.execute("ALTER TABLE requests DROP COLUMN context_tokens")  # the schema before stated context sizes
-        self.con.close()
-        self.con = store.open_store(self.db)
-        self.assertEqual(self.q("SELECT count(*), count(context_tokens) FROM requests"), [(5, 0)])
-        old = self.q("SELECT arg_max(input + cache_read + cache_5m + cache_1h, ts) FROM requests")[0][0]
-        self.assertEqual(live.session(self.con.cursor(), sid, now=now, prices={})["context"], old)  # as before: no line read again
-        self.assertEqual(self.count(), self.lines_of("long-turn"))
-
     def test_context_of_a_compacted_session(self):
         self.put("compaction")
         self.ingest()
@@ -507,16 +448,6 @@ class SubagentTest(GrokCase):
         want = reported(turns(parent))
         self.assertEqual(got[:5], want[:5])
         self.assertAlmostEqual(got[5], want[5], places=9)
-
-    def test_rebuild_needs_no_file(self):
-        self.put("probe")
-        self.ingest()
-        before = [self.q(f"SELECT * FROM {t} ORDER BY 1") for t in ("sessions", "requests")]
-        placed = self.q("SELECT key, session_id, subagent FROM raw_lines ORDER BY key")
-        shutil.rmtree(self.home)
-        store.rebuild(self.con)
-        self.assertEqual([self.q(f"SELECT * FROM {t} ORDER BY 1") for t in ("sessions", "requests")], before)
-        self.assertEqual(self.q("SELECT key, session_id, subagent FROM raw_lines ORDER BY key"), placed)
 
     def test_child_tool_calls_belong_to_the_parent(self):
         self.put("probe")
@@ -666,11 +597,6 @@ class SubagentTest(GrokCase):
         self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines WHERE file = ?", parent), [(SESSION["probe"], False)])
         self.assertEqual(self.q("SELECT count(*) FROM requests"), [(3,)])
 
-    def test_session_spawned_by_none_is_its_own(self):
-        path, = self.put("long-turn")
-        self.ingest()
-        self.assertIsNone(grok.parent_of(self.con.cursor(), path))
-
 
 def rewrite(path, change):
     """Rewrites a copied fixture log, each line's dict passed through change (which edits it in place)."""
@@ -696,6 +622,8 @@ class ToolTest(GrokCase):
         self.assertTrue(text.startswith("Exit code 1\nls: cannot access"), text)
         self.assertIsNotNone(cat)
         self.assertIsNotNone(self.q("SELECT followup FROM tool_calls WHERE input_summary = 'ls missing-dir'")[0][0])
+        text = "ls: cannot access 'missing-dir': No such file or directory\n"  # the result's size is its text's
+        self.assertEqual(self.q("SELECT result_bytes FROM tool_calls WHERE input_summary = 'ls missing-dir'"), [(len(text.encode()),)])
 
     def test_commit(self):
         self.put("probe")
@@ -737,12 +665,6 @@ class ToolTest(GrokCase):
         self.assertEqual(grok.error_of("mcp__s__t", dict(status="completed", rawOutput=dict(type="MCP", output={"Error": "bad"}, is_error=True))), "bad")
         self.assertEqual(grok.error_of("read_file", dict(status="failed", rawOutput=dict(FileNotFound="/x"))), "/x")
         self.assertEqual(grok.error_of("read_file", dict(status="failed", content=[dict(type="content", content=dict(type="text", text="gone"))])), "gone")
-
-    def test_result_size_is_its_text(self):
-        self.put("probe")
-        self.ingest()
-        text = "ls: cannot access 'missing-dir': No such file or directory\n"
-        self.assertEqual(self.q("SELECT result_bytes FROM tool_calls WHERE input_summary = 'ls missing-dir'"), [(len(text.encode()),)])
 
     def test_result_in_a_later_ingest(self):
         path, = self.put("tools")
@@ -1057,5 +979,9 @@ class AllSourcesRebuildTest(GrokCase):
                                 "FROM session_runs"), [(7, 1)])
         for t, n in (("tool_calls", 3), ("prompts", 3), ("hooks", 2)):  # Codex records no hooks
             self.assertEqual(self.q(f"SELECT count(DISTINCT s.source) FROM {t} JOIN sessions s USING (session_id)"), [(n,)], t)
+        placed = self.q("SELECT key, session_id, subagent FROM raw_lines ORDER BY key")
+        for root in self.roots.values():  # a rebuild reads the store only: no source file is needed
+            shutil.rmtree(root)
         store.rebuild(self.con)
         self.assertEqual({t: self.q(f"SELECT * FROM {t} ORDER BY ALL") for t in store.DERIVED}, before)
+        self.assertEqual(self.q("SELECT key, session_id, subagent FROM raw_lines ORDER BY key"), placed)

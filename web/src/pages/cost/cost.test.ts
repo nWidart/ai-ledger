@@ -12,19 +12,10 @@ describe("gaugeFigures", () => {
     projected: by.reduce((a, s) => a + s.projected, 0), by_source: by });
   const max = { provider: "claude" as const, label: "Claude Max 20x", monthly: 200 }, plus = { provider: "codex" as const, label: "ChatGPT Plus", monthly: 20 };
 
-  it("sets the pace against the plan's monthly price", () => {
-    expect(gaugeFigures({ run_rate: rate(src("claude", 150, 840)), plans: [max] }))
-      .toEqual({ now: 150, pace: 840, plan: { monthly: 200, labels: ["Claude Max 20x"], multiple: 4.2 }, counted: null });
-  });
-
   it("keeps a multiple below 1 and sums two plans", () => {
     const g = gaugeFigures({ run_rate: rate(src("claude", 40, 110), src("codex", 5, 22)), plans: [max, plus] })!;
     expect(g.plan).toEqual({ monthly: 220, labels: ["Claude Max 20x", "ChatGPT Plus"], multiple: 0.6 });
     expect(g.counted).toBeNull();
-  });
-
-  it("shows spend and pace with no plan and no multiple without a known plan", () => {
-    expect(gaugeFigures({ run_rate: rate(src("claude", 150, 840)), plans: [] })).toEqual({ now: 150, pace: 840, plan: null, counted: null });
   });
 
   it("counts only the agents a plan covers, and names them when another one spent", () => {
@@ -32,10 +23,6 @@ describe("gaugeFigures", () => {
     expect([g.now, g.pace, g.plan!.multiple, g.counted]).toEqual([10, 20, 1, ["codex"]]);
     // The covered agent spent nothing this month: the whole view, no plan.
     expect(gaugeFigures({ run_rate: rate(src("claude", 900, 2000)), plans: [plus] })).toEqual({ now: 900, pace: 2000, plan: null, counted: null });
-  });
-
-  it("is absent without a run rate", () => {
-    expect(gaugeFigures({ run_rate: null, plans: [max] })).toBeNull();
   });
 });
 

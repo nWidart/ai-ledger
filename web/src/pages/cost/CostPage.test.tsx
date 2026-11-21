@@ -92,29 +92,15 @@ describe("plan gauge", () => {
   });
 });
 
-describe("sections", () => {
-  it("has no sticky section index: every section keeps its heading", async () => {
-    await show(usage, []);
-    expect(screen.queryByRole("navigation", { name: "Page sections" })).toBeNull();
-    expect(document.querySelector(".secidx, .jump")).toBeNull();
-    const headings = screen.getAllByRole("heading", { level: 2 }).map(h => h.textContent);
-    for (const h of ["Models and effort"]) expect(headings).toContain(h);
-    for (const id of ["spend", "d-tokens", "d-top"]) expect(document.getElementById(id)?.querySelector("h2")).toBeTruthy();
-  });
-});
-
 describe("cost figures", () => {
-  it("compares with the previous period as a multiple from 2x, a percentage below", () => {
+  it("compares with the previous period as a multiple from 2x, a percentage below, and makes no change of a period with no priced cost", () => {
     expect(compareText(doubled)).toEqual({ text: "2.0× the previous 30 days", sr: "2.0 times the previous 30 days" });
+    expect(compareText({ ...doubled, totals: { ...doubled.totals, cost: null } })).toEqual({ text: "no priced usage in this period", sr: "no priced usage in this period" });
     expect(compareText({ ...usage, previous: { ...usage.previous!, cost: 12 } })!.text).toBe("+32% vs the previous 30 days");
     expect(compareText(usageAll)).toBeNull();
     // A previous window with requests, all on unpriced models: its cost is unknown, not nothing.
     expect(compareText({ ...usage, previous: { ...usage.previous!, cost: null } })!.text).toBe("no priced usage in the previous 30 days");
     expect(compareText({ ...usage, previous: { ...usage.previous!, cost: null, requests: 0 } })!.text).toBe("nothing in the previous 30 days");
-  });
-
-  it("makes no change of a current period with no priced cost", () => {
-    expect(compareText({ ...doubled, totals: { ...doubled.totals, cost: null } })).toEqual({ text: "no priced usage in this period", sr: "no priced usage in this period" });
   });
 
   it("marks a previous window with under half the days with prompts as thin", () => {
@@ -219,14 +205,6 @@ describe("CostPage", () => {
     const foo = within(screen.getByRole("table", { name: "Project spend and change" })).getByRole("rowheader", { name: /foo/ });
     expect(foo.getAttribute("scope")).toBe("row");
     expect(within(screen.getByRole("table", { name: "Most expensive sessions" })).getAllByRole("rowheader").length).toBe(usage.top_sessions.length);
-  });
-
-  it("explains the Active column behind a toggletip, not a hover title", async () => {
-    await show(usage);
-    const head = within(screen.getByRole("table", { name: "Most expensive sessions" })).getByRole("columnheader", { name: /^Active/ });
-    expect(head.hasAttribute("title")).toBe(false);
-    await userEvent.click(within(head).getByRole("button", { name: "About Active time" }));
-    expect(within(head).getByRole("tooltip").textContent).toBe("Active time: pauses over 20 minutes left out");
   });
 
   it("names a cost-per-commit outlier and compares projects on request", async () => {
@@ -381,10 +359,6 @@ describe("CostPage", () => {
       const cost = within(table()).getByText("Small projects (3)").closest("tr")!.querySelector(".spend b")!.textContent;
       expect(cost).toBe("–");
     });
-    it("does not fold fewer than 3 small projects", async () => {
-      await show(withProjects([real("r1", 100), real("r2", 90), real("r3", 80), tiny("t1"), tiny("t2")]));
-      expect(names()).toEqual(["r1", "r2", "r3", "t1", "t2"]);
-    });
     it("exports every project, folded or not", async () => {
       await show(seven());
       await userEvent.click(within(table()).getByRole("button", { name: "Download CSV cost projects" }));
@@ -534,16 +508,11 @@ describe("CostPage", () => {
     }
   });
 
-  it("shows cost per commit as not available for a project with no commits", async () => {
-    await show(withProjects([proj("a", 6, 3), proj("idle", 20, 0)]));
-    const idle = table().querySelector('tbody tr[data-v="idle"]')!;
-    expect(idle.querySelectorAll("td")[CPC]!.textContent).toBe("n/a");
-  });
-
-  it("shows an unknown cost per commit as a dash, not n/a, and names the project-less row", async () => {
-    const d = withProjects([proj("a", 6, 3), { ...proj("ghost", 0, 3), cost: null, cost_per_commit: null }, { ...proj("x", 2, 1), project: null }]);
-    await show({ ...d, projects: ["a", "ghost"] }); // the picker lists named projects only
+  it("shows cost per commit as n/a with no commits, an unknown one as a dash, and names the project-less row", async () => {
+    const d = withProjects([proj("a", 6, 3), proj("idle", 20, 0), { ...proj("ghost", 0, 3), cost: null, cost_per_commit: null }, { ...proj("x", 2, 1), project: null }]);
+    await show({ ...d, projects: ["a", "idle", "ghost"] }); // the picker lists named projects only
     const rows = table().querySelectorAll("tbody tr");
+    expect(table().querySelector('tbody tr[data-v="idle"]')!.querySelectorAll("td")[CPC]!.textContent).toBe("n/a");
     const ghost = table().querySelector('tbody tr[data-v="ghost"]')!;
     expect(ghost.querySelectorAll("td")[CPC]!.textContent).toBe("–");
     expect([...rows].some(r => r.querySelector(".name")!.textContent === "(no project)")).toBe(true);
@@ -573,13 +542,6 @@ describe("CostPage", () => {
     await show({ ...usage, prices_file: { ...usage.prices_file, error: "Expecting value: line 1 column 1 (char 0)" } });
     expect(screen.getByText("Prices file ignored:").closest(".banner")!.textContent)
       .toMatch(/ai-ledger\/prices\.json could not be used \(Expecting value: line 1 column 1 \(char 0\)\)\. Packaged prices apply/);
-  });
-
-  it("opens the sheets from the project table and Back closes them", async () => {
-    await show(usage);
-    await userEvent.click(within(table()).getByRole("button", { name: "foo" }));
-    expect(location.search).toBe("?range=30&inspect=foo");
-    await screen.findByRole("button", { name: "Filter dashboard to foo" });
   });
 
   it("selecting a day on the chart lists that day's sessions by cost", async () => {

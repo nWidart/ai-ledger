@@ -12,7 +12,7 @@ export const planMarks = (w: LimitWindow, events: PlanChange[]) =>
 
 /** The percent line in contiguous runs, each one solid (both ends measured) or dashed (an end estimated), sharing their joins, so
  *  measured points either side of an estimate never draw a solid line over it; lone: the measured points in no solid run. */
-export function percentRuns(series: LimitPoint[]) {
+function percentRuns(series: LimitPoint[]) {
   const runs: (LimitPoint[] & { meas?: boolean })[] = [];
   series.forEach((p, i) => {
     const q = series[i - 1], last = runs.at(-1);

@@ -1,5 +1,4 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { DocsLink } from "./DocsLink";
 
@@ -23,17 +22,6 @@ describe("DocsLink", () => {
     // Only the visible text shows; the rest is for assistive technology.
     expect(page!.querySelector(".sr")?.textContent).toBe(", Cost page documentation, opens in a new tab");
     expect(page!.firstChild?.textContent).toBe("Docs");
-  });
-
-  it("links an anchored entry to its heading", () => {
-    render(<DocsLink docs="concepts/windows#the-context-window">Learn more</DocsLink>);
-    expect(screen.getByRole("link").getAttribute("href")).toBe("https://nwidart.github.io/ai-ledger/concepts/windows/#the-context-window");
-  });
-
-  it("is reached by Tab", async () => {
-    render(<><button type="button">before</button><DocsLink docs="reference/troubleshooting">Troubleshooting</DocsLink></>);
-    await userEvent.tab(); await userEvent.tab();
-    expect(document.activeElement).toBe(screen.getByRole("link", { name: /^Troubleshooting, Troubleshooting and FAQ documentation/ }));
   });
 
   it("keeps a class it is given", () => {

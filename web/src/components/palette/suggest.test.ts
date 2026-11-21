@@ -96,6 +96,7 @@ describe("suggest docs commands", () => {
     for (const q of [">docs", ">documentation", ">help", ">doc", "help"]) expect(docs(q)[0]?.value).toBe("docs");
     expect(docs(">help").length).toBe(PER_KIND);
     expect(docs(">docs windows").map(r => r.label)).toEqual(["Docs: Context windows and plan limit windows"]);
+    expect(rowName(docs(">docs windows")[0]!)).toBe("Docs: Context windows and plan limit windows, command, Documentation, opens in a new tab");
     expect(docs(">help windows").map(r => r.label)).toEqual(["Docs: Context windows and plan limit windows"]);
     expect(docs(">glossary").map(r => r.value)).toEqual(["docs:reference/glossary"]);
     expect(docs(">docs windows")[0]!.ranges).toEqual([[0, 4], [14, 21]]);

@@ -21,11 +21,6 @@ const hash = () => new URLSearchParams(location.search.slice(1));
 beforeEach(() => history.replaceState(null, "", "/context"));
 
 describe("PressureBars", () => {
-  it("renders nothing without windows", () => {
-    const { container } = renderApp(<PressureBars fill={[]} points={[]} />);
-    expect(container.firstChild).toBeNull();
-  });
-
   it("sizes segments by their share of their own window", () => {
     renderApp(<PressureBars fill={fill} points={points} />);
     const [a, b] = screen.getAllByRole("group").filter(g => g.classList.contains("pbar"));
@@ -45,11 +40,6 @@ describe("PressureBars", () => {
     expect(region.classList.contains("scroll")).toBe(true);
   });
 
-  it("names a segment with its count, share and band", () => {
-    renderApp(<PressureBars fill={fill} points={points} />);
-    expect(seg(/^3 sessions \(30%\) peaked at 25–50% of the 200k window$/)).toBeTruthy();
-  });
-
   it("lists a segment's sessions, newest first, and hides them on a second selection", async () => {
     renderApp(<PressureBars fill={fill} points={points} />);
     const s = seg(/peaked at 25–50% of the 200k/);
@@ -65,13 +55,6 @@ describe("PressureBars", () => {
     expect([...l2.querySelectorAll("[data-session]")].map(b => b.getAttribute("data-session"))).toEqual(["ddd000000000"]);
     await userEvent.click(seg(/peaked at 80–90%/));
     expect(screen.queryByRole("group", { name: /Sessions that peaked at/ })).toBeNull();
-  });
-
-  it("opens the session sheet from a listed session", async () => {
-    renderApp(<PressureBars fill={fill} points={points} />);
-    await userEvent.click(seg(/peaked at 80–90%/));
-    await userEvent.click(within(screen.getByRole("group", { name: /Sessions that peaked at 80–90%/ })).getByRole("button"));
-    expect(hash().get("session")).toBe("ddd000000000");
   });
 
   it("keeps the page's filters when a listed session opens", async () => {

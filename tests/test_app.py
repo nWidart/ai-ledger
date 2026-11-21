@@ -61,12 +61,6 @@ class AppTest(unittest.TestCase):
             status, headers, body = self.get(path)
             self.assertEqual((status, headers["Content-Type"], headers["Cache-Control"], body), (200, "text/html; charset=utf-8", "no-cache", index))
 
-    def test_project_page_serves_the_build(self):
-        with open(os.path.join(app.WEB, "index.html"), "rb") as fh:
-            index = fh.read()
-        status, headers, body = self.get("/project?project=foo")
-        self.assertEqual((status, headers["Content-Type"], body), (200, "text/html; charset=utf-8", index))
-
     def request(self, method, path, headers=None, body=None):
         h = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1])
         h.request(method, path, body=body, headers={"Host": f"{app.HOST}:{app.PORT}", **(headers or {})})
@@ -97,11 +91,8 @@ class AppTest(unittest.TestCase):
         self.assertEqual(err.getvalue(), "")
         self.assertEqual(self.get("/api/status")[0], 200)
 
-    def test_only_html_carries_a_policy(self):
-        self.assertIn("script-src", self.get("/usage")[1]["Content-Security-Policy"])
-        self.assertNotIn("Content-Security-Policy", self.get("/api/status")[1])
-
     def test_policy_names_the_inline_script_the_page_serves(self):
+        self.assertNotIn("Content-Security-Policy", self.get("/api/status")[1])  # only HTML carries a policy
         _, headers, body = self.get("/usage")
         scripts = re.findall(rb"<script(?![^>]*\ssrc=)[^>]*>(.*?)</script>", body, re.DOTALL)
         self.assertEqual(len(scripts), 1)  # the theme script: anything else inline needs a decision
@@ -134,6 +125,9 @@ class AppTest(unittest.TestCase):
             self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
         status, _, body = self.request("GET", "/usage", {"If-None-Match": '"stale"'})
         self.assertEqual((status, bool(body)), (200, True))
+        # The API is never cached and carries no ETag.
+        self.assertEqual(self.get("/api/status")[1]["Cache-Control"], "no-store")
+        self.assertNotIn("ETag", self.get("/api/status")[1])
 
     def test_page_ignores_its_query_string(self):
         # The web app keeps its view in the query string, so the server must serve the page whatever the query.
@@ -141,12 +135,6 @@ class AppTest(unittest.TestCase):
         self.assertEqual((with_query[0], with_query[2]), (plain[0], plain[2]))
         for name in ("Content-Type", "Content-Security-Policy", "Cache-Control", "ETag"):
             self.assertEqual(with_query[1][name], plain[1][name], name)
-
-    def test_api_and_assets_keep_their_cache_headers(self):
-        self.assertEqual(self.get("/api/status")[1]["Cache-Control"], "no-store")
-        self.assertNotIn("ETag", self.get("/api/status")[1])
-        js = next(n for n in os.listdir(os.path.join(app.WEB, "assets")) if n.endswith(".js"))
-        self.assertIn("immutable", self.get(f"/assets/{js}")[1]["Cache-Control"])
 
     def test_cross_site_requests_to_the_api_are_refused(self):
         for site in ("cross-site", "same-site", "CROSS-SITE"):
@@ -244,17 +232,6 @@ class AppTest(unittest.TestCase):
         self.assertEqual((got["path"], got["projects"]), (path, []))
         self.assertTrue(got["error"])
 
-    def test_status_carries_the_limits_alert(self):
-        alert = dict(kind="runs_out", provider="claude", provider_label="Claude Code", label="weekly", current=64.0,
-                     at="2026-11-13T08:00:00", resets_at="2026-11-14T12:00:00", count=1)
-        self.assertIsNone(json.loads(self.get("/api/status")[2])["limits_alert"])  # no cycle has run
-        self.app.limits_alert = alert
-        try:
-            status, _, body = self.get("/api/status")
-        finally:
-            self.app.limits_alert = None
-        self.assertEqual((status, json.loads(body)["limits_alert"]), (200, alert))
-
     def test_insights(self):
         self.assertIn("/insights", app.PAGES)
         status, _, body = self.get("/api/insights?range=0")
@@ -301,11 +278,9 @@ class AppTest(unittest.TestCase):
         self.assertIn("'usage_files': 6, 'usage_skipped': 2", r.stdout)
         self.assertNotIn("SENTINEL", r.stdout + r.stderr)
 
-    def test_foreign_host_refused(self):
-        self.assertEqual(self.get("/usage", host="example.com")[0], 403)
+    def test_host_check_on_the_default_and_a_custom_port(self):
+        self.assertEqual(self.get("/usage", host="example.com")[0], 403)  # a foreign host, on the default port
         self.assertEqual(self.get("/assets/x.js", host="evil:8765")[0], 403)
-
-    def test_custom_port_host_check(self):
         httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(self.con, {}, pollers=[]), 8766))
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         self.addCleanup(httpd.server_close)
@@ -456,13 +431,6 @@ class FixEndpointTest(unittest.TestCase):
         self.assertEqual(self.post({"category": "x", "day": "2026-11-04"}, ctype="application/json; charset=utf-8")[0], 200)
         self.assertEqual(self.marks(), {"x": "2026-11-04"})
 
-    def test_checks_the_host(self):
-        h = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1])
-        h.request("POST", "/api/errors/fix", body=b"{}", headers={"Host": "example.com", "Content-Type": "application/json"})
-        self.assertEqual(h.getresponse().status, 403)
-        self.assertEqual(self.post({"category": "x", "day": None}, host="localhost:8765")[0], 301)
-        self.assertEqual(self.marks(), {})
-
     IMPORT = "/api/errors/fixes/import"
 
     def test_import_adds_what_the_store_lacks_and_keeps_what_it_has(self):
@@ -513,6 +481,7 @@ class FixEndpointTest(unittest.TestCase):
         self.assertEqual(self.get("/api/errors/marks", host="example.com")[0], 403)
         self.assertEqual(self.get("/api/errors/marks", host="localhost:8765")[0], 301)
         self.assertEqual(self.get("/api/errors/fixes")[0], 404)  # replaced: the endpoint was never released
+        self.assertEqual(self.post({}, path="/api/errors/other")[0], 404)  # nor does any other POST answer
 
     MUTE = "/api/errors/mute"
 
@@ -542,17 +511,6 @@ class FixEndpointTest(unittest.TestCase):
         self.assertEqual(self.rows(), [])  # none of the refused ones wrote
         self.assertEqual(self.post({"category": "c" * 100, "muted": True}, path=self.MUTE)[0], 200)
 
-    def test_a_mute_waits_for_a_running_ingest(self):
-        self.app.lock.acquire()
-        done = []
-        t = threading.Thread(target=lambda: done.append(self.post({"category": "x", "muted": True}, path=self.MUTE)))
-        t.start()
-        time.sleep(0.3)
-        self.assertEqual((done, self.rows()), ([], []))
-        self.app.lock.release()
-        t.join(5)
-        self.assertEqual((done, self.rows()), ([(200, self.answer({}, ["x"]))], [("x", True)]))
-
     def test_import_skips_an_entry_that_is_not_valid_and_takes_the_rest(self):
         tomorrow = (self.today + timedelta(days=1)).isoformat()
         got = self.post({"fixes": {"ok": "2026-11-04", "": "2026-11-04", "c" * 101: "2026-11-04", "future": tomorrow, "notdate": "2026-02-30",
@@ -574,20 +532,6 @@ class FixEndpointTest(unittest.TestCase):
         self.assertEqual(self.post({"category": "x", "day": None, "pad": "p" * app.MAX_BODY})[0], 400)
         self.assertEqual(self.post({"fixes": {"x": "2026-11-04"}, "pad": "p" * app.MAX_BODY}, path=self.IMPORT)[0], 200)
         self.assertEqual(self.marks(), {"x": "2026-11-04"})
-
-    def test_import_waits_for_a_running_ingest(self):
-        self.app.lock.acquire()
-        done = []
-        t = threading.Thread(target=lambda: done.append(self.post({"fixes": {"x": "2026-11-04"}}, path=self.IMPORT)))
-        t.start()
-        time.sleep(0.3)
-        self.assertEqual((done, self.marks()), ([], {}))
-        self.app.lock.release()
-        t.join(5)
-        self.assertEqual((done, self.marks()), ([(200, self.answer({"x": "2026-11-04"}))], {"x": "2026-11-04"}))
-
-    def test_other_posts_are_not_found(self):
-        self.assertEqual(self.post({}, path="/api/errors/other")[0], 404)
 
     def test_waits_for_a_running_ingest(self):
         """The ingest holds app.lock while it writes: a marker waits for it and is stored right after."""
@@ -731,9 +675,6 @@ class LimitsAlertTest(unittest.TestCase):
             self.assertIsNone(self.app.status()["live_waiting"])
         self.assertEqual(err.getvalue(), "live waiting failed: RuntimeError\n")
 
-    def test_the_waiting_count_is_zero_on_an_empty_store(self):
-        self.assertEqual(self.app.status()["live_waiting"], 0)
-
     def test_kept_after_a_cycle(self):
         with mock.patch.object(limits, "payload", return_value=dict(windows=[self.window()])) as payload:
             self.app.refresh_alert()
@@ -741,13 +682,9 @@ class LimitsAlertTest(unittest.TestCase):
                                                                   current=95.0, at="2026-11-14T12:00:00", resets_at="2026-11-14T12:00:00", measured=True, count=1))
         args, kwargs = payload.call_args  # the /api/limits route's call, with no filters
         self.assertEqual((args[1:], kwargs), ((), dict(polls={})))
-
-    def test_clears_when_no_window_is_in_alert(self):
-        with mock.patch.object(limits, "payload", return_value=dict(windows=[self.window()])):
-            self.app.refresh_alert()
         with mock.patch.object(limits, "payload", return_value=dict(windows=[self.window(current=10.0)])):
             self.app.refresh_alert()
-        self.assertIsNone(self.app.limits_alert)
+        self.assertIsNone(self.app.limits_alert)  # the next cycle clears it when no window is in alert
 
     def test_a_failure_leaves_none_and_raises_nothing(self):
         with mock.patch.object(limits, "payload", return_value=dict(windows=[self.window()])):

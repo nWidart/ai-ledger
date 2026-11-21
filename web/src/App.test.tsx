@@ -45,16 +45,6 @@ describe("App", () => {
     await waitFor(() => expect(document.querySelector<HTMLDialogElement>("dialog.palette")?.open).toBe(false));
   });
 
-  it("renders the page as the one main landmark, #content, on every route", async () => {
-    for (const [path, cls] of PAGES) {
-      const { unmount } = pending(path);
-      const main = await page(cls);
-      expect(main.id, path).toBe("content");
-      expect(screen.getAllByRole("main").length, path).toBe(1);
-      unmount();
-    }
-  });
-
   it("starts with a skip link that moves focus to the page heading, without touching the URL", async () => {
     pending("/usage");
     await page("pg-activity");
@@ -81,10 +71,12 @@ describe("App", () => {
   });
 
   describe("one sheet host", () => {
-    it("mounts the sheets once, in the shell and outside the page, on every route", async () => {
+    it("renders the page as the one main landmark, #content, and mounts the sheets once, in the shell and outside it, on every route", async () => {
       for (const [path, cls] of PAGES) {
         const { unmount } = pending(path);
         const main = await page(cls);
+        expect(main.id, path).toBe("content");
+        expect(screen.getAllByRole("main").length, path).toBe(1);
         const sheets = document.querySelectorAll("dialog.sheet");
         expect(sheets.length, path).toBe(1);
         expect(main.contains(sheets[0]!), path).toBe(false);

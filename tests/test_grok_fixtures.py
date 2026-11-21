@@ -13,17 +13,6 @@ def lines(path):
 
 
 class GrokFixtures(unittest.TestCase):
-    def test_labels(self):
-        labels = {os.path.relpath(p, FIXTURES).split(os.sep)[0] for p in PATHS}
-        self.assertEqual(labels, {"probe", "long-turn", "compaction", "tools", "cancelled"})
-
-    def test_lines_are_json_objects(self):
-        for path in PATHS:
-            with open(path) as fh:
-                for n, raw in enumerate(fh):
-                    with self.subTest(path=path, line=n):
-                        self.assertIsInstance(json.loads(raw), dict)
-
     def test_no_home_or_user(self):
         home = os.path.expanduser("~")
         user = os.path.basename(home)

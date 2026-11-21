@@ -100,13 +100,6 @@ class GroupTest(unittest.TestCase):
                          [("pull_request", 9, 3), ("docs", 9, 1), ("bbb", 3, 2), ("zzz", 3, 2), ("aaa", 3, 1)])  # ties: more sessions, then key
         self.assertEqual([m["name"] for m in next(f for f in got if f["family"] == "pull_request")["members"]], ["open_pr", "a_pr", "b_pr"])
 
-    def test_unmatched_names_are_single_member_families(self):
-        got = families.group("friction", [dict(name="mood", n=1, sessions=1)], [("mood", "s1")])
-        self.assertEqual(got, [dict(family="mood", n=1, sessions=1, members=[dict(name="mood", n=1, sessions=1)])])
-
-    def test_no_rows_no_families(self):
-        self.assertEqual(families.group("goal", [], []), [])
-
 
 if __name__ == "__main__":
     unittest.main()

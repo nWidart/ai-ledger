@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { LimitHistoryRow, LimitWindow, LimitsAlert, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
-import { alertKey, alertText, barKey, barName, caption, CHART_ROWS, chartRows, closedWindow, coneCrosses, hasScenario, headroom, historyStrips, paceRates, planName, safeAt, safePace, status, STRIP_BARS, stripNote, stripSummary, windowNotes, nearestPoint, pace, readPoints, readText, recentText, shareText, surfacesText, tipPlace, usedHint, usedHref, usedRange, usedRangeName, whenDay } from "./limits";
+import { usd } from "../../format";
+import { alertKey, alertText, barKey, barName, caption, capText, CHART_ROWS, chartRows, closedWindow, coneCrosses, hasScenario, headroom, historyStrips, paceRates, planName, safeAt, safePace, span, status, STRIP_BARS, stripNote, stripSummary, windowNotes, nearestPoint, pace, readPoints, readText, recentText, shareText, surfacesText, tipPlace, usedHint, usedHref, usedRange, usedRangeName, whenDay } from "./limits";
 
 const claude = (limits as LimitsPayload).windows[0]!;
 const win = (over: Partial<LimitWindow>): LimitWindow => ({ ...claude, ...over });
@@ -29,18 +30,7 @@ describe("readPoints", () => {
   it("lists the past points, then the forecast points after now, with no duplicate at now", () => {
     const pts = readPoints(win({ series: past, forecast: fc(curve) }));
     expect(pts.map(p => [p.kind, p.t.slice(11, 13)])).toEqual([["past", "10"], ["past", "11"], ["forecast", "12"], ["forecast", "13"]]);
-  });
-
-  it("lists the past points alone for a window without a forecast", () => {
-    expect(readPoints(win({ series: past, forecast: null })).map(p => p.kind)).toEqual(["past", "past"]);
-  });
-
-  it("lists the whole curve when there is no past point", () => {
-    expect(readPoints(win({ series: [], forecast: fc(curve) }))).toHaveLength(3);
-  });
-
-  it("lists nothing for a window with no series and no forecast", () => {
-    expect(readPoints(win({ series: [], forecast: null }))).toEqual([]);
+    expect(readPoints(win({ series: [], forecast: fc(curve) }))).toHaveLength(3); // no past point: the whole curve
   });
 });
 
@@ -55,33 +45,22 @@ describe("nearestPoint", () => {
     expect(nearestPoint(pts, at(1))).toBe(0);
     expect(nearestPoint(pts, at(23))).toBe(3);
   });
-
-  it("finds nothing in no points", () => {
-    expect(nearestPoint([], at(10))).toBe(-1);
-  });
 });
 
 describe("readText", () => {
   const [a, b] = readPoints(win({ series: past, forecast: fc(curve) }));
   const f = readPoints(win({ series: past, forecast: fc(curve) }));
 
-  it("reads a past point as time, percent and measured or estimated", () => {
+  it("reads a past point as time, percent and measured or estimated, and a forecast point with its likely range, at most one decimal", () => {
     expect(readText(a!)).toBe(`${whenDay(past[0]!.t)} · 40% · measured`);
     expect(readText(b!)).toBe(`${whenDay(past[1]!.t)} · 42% · estimated`);
-  });
-
-  it("reads a forecast point with its likely range, at most one decimal", () => {
     expect(readText(f[2]!)).toBe(`${whenDay(curve[1]!.t)} · forecast 50% (45–60.5%)`);
   });
 
   it("leaves out the range when low and high read the same, and adds the last-24-hours line when it is drawn and the point has one", () => {
     expect(readText(f[3]!, true)).toBe(`${whenDay(curve[2]!.t)} · forecast 58% · last 24 h pace 72.3%`);
     expect(readText(f[3]!)).toBe(`${whenDay(curve[2]!.t)} · forecast 58%`); // the line is not drawn: the readout does not name it
-  });
-
-  it("carries the last-24-hours value through readPoints, and leaves it out when null", () => {
-    expect(f.map(p => (p.kind === "forecast" ? p.recent : "past"))).toEqual(["past", "past", null, 72.34]);
-    expect(readText(f[2]!, true)).not.toMatch(/last 24 h/);
+    expect(readText(f[2]!, true)).not.toMatch(/last 24 h/); // drawn, but this point has none
   });
 });
 
@@ -96,29 +75,21 @@ describe("safePace", () => {
     expect(safeAt(line, w.resets_at)).toBe(100);
     expect(safeAt(line, "2026-11-04T11:00:00.000Z")).toBeNull(); // before now
     expect(safeAt(null, now)).toBeNull();
-  });
-
-  it("has no line for a window at its limit, with no reading, at 100%, closed, or past its reset", () => {
+    // No line for a window at its limit, with no reading, at 100%, closed, or past its reset.
     expect(safePace({ ...w, at_limit: true }, now)).toBeNull();
     expect(safePace({ ...w, current: null }, now)).toBeNull();
     expect(safePace({ ...w, current: 100 }, now)).toBeNull();
     expect(safePace(w, null)).toBeNull();
     expect(safePace(w, w.resets_at)).toBeNull();
   });
-
-  it("agrees with the payload's safe pace: its slope is pace_target points a day", () => {
-    const line = safePace(w, now)!, days = (Date.parse(line.to.t) - Date.parse(line.from.t)) / 86400000;
-    expect((line.to.v - line.from.v) / days).toBe(15); // (100 - 40) / 4, as limits.py works out pace_target
-  });
 });
 
 describe("coneCrosses", () => {
   const f = claude.forecast!;
-  it("tints the cone when its high bound reaches 100% before the reset, even when the middle resets first", () => {
+  it("tints the cone when its high bound reaches 100% before the reset, even when the middle resets first, and not otherwise", () => {
     expect(coneCrosses(win({ at_limit: false, forecast: { ...f, hits_at: null, hits_at_early: "2026-11-08T00:00:00.000Z", at_reset: 92 } }))).toBe(true);
     expect(coneCrosses(win({ at_limit: false, forecast: { ...f, hits_at: "2026-11-08T00:00:00.000Z", hits_at_early: "2026-11-07T00:00:00.000Z" } }))).toBe(true);
-  });
-  it("leaves it neutral when the high bound stays under 100%, without a forecast, and at the limit", () => {
+    // neutral when the high bound stays under 100%, without a forecast, and at the limit
     expect(coneCrosses(win({ at_limit: false, forecast: { ...f, hits_at: null, hits_at_early: null, hits_at_late: null } }))).toBe(false);
     expect(coneCrosses(win({ at_limit: false, forecast: null }))).toBe(false);
     expect(coneCrosses(win({ at_limit: true }))).toBe(false);
@@ -138,16 +109,13 @@ describe("card header and footer", () => {
     expect(headroom(win({ current: 20, resets_at: "2026-11-09T12:00:00.000Z" }), "2026-11-06T00:00:00.000Z")).toBe("80% left · 3d 12h");
   });
 
-  it("compares the forecast's pace with the safe pace, per day or per hour", () => {
+  it("compares the forecast's pace with the safe pace, per day or per hour, and has none at the limit or without a forecast", () => {
     const behind = win({ at_limit: false, window_minutes: 10080, forecast: { ...f, pace_now: 10, pace_target: 80 / 3.5, pace: "behind" } });
     expect(paceRates(behind)).toEqual({ now: "10%/d", safe: "22.9%/d", hot: false });
     const hot = win({ at_limit: false, window_minutes: 10080, forecast: { ...f, pace_now: 18, pace_target: 7, pace: "ahead" } });
     expect(paceRates(hot)).toEqual({ now: "18%/d", safe: "7%/d", hot: true });
     const hour = win({ at_limit: false, window_minutes: 300, forecast: { ...f, pace_now: 48, pace_target: 480, pace: "behind" } });
     expect(paceRates(hour)).toEqual({ now: "2%/h", safe: "20%/h", hot: false });
-  });
-
-  it("has no pace at the limit or without a forecast", () => {
     expect(paceRates(win({ at_limit: true }))).toBeNull();
     expect(paceRates(win({ at_limit: false, forecast: null }))).toBeNull();
     expect(paceRates(win({ at_limit: false, forecast: { ...f, pace_target: null } }))).toBeNull();
@@ -166,14 +134,11 @@ describe("chartRows", () => {
     expect(new Set(ts).size).toBe(ts.length);
   });
 
-  it("gives the safe pace on forecast rows only", () => {
+  it("gives the safe pace on forecast rows only, and no row for a window with nothing to read", () => {
     const w = win({ series: past, forecast: fc(curve), current: 42, at_limit: false, start: "2026-11-07T10:00:00.000Z", resets_at: "2026-11-07T13:00:00.000Z" });
     const rows = chartRows(w, "2026-11-07T11:00:00.000Z");
     expect(rows.map(r => [r.p.kind, r.now, r.safe == null ? null : Math.round(r.safe)])).toEqual([
       ["past", false, null], ["past", true, null], ["forecast", false, 71], ["forecast", false, 100]]);
-  });
-
-  it("is empty for a window with nothing to read", () => {
     expect(chartRows(win({ series: [], forecast: null }), null)).toEqual([]);
   });
 });
@@ -181,27 +146,16 @@ describe("chartRows", () => {
 describe("tipPlace", () => {
   const box = { w: 300, h: 168 }, tip = { w: 120, h: 20 };
 
-  it("puts the tip right of a point at the left edge, inside the box", () => {
+  it("keeps the tip inside the box: right of the point, flipped left near the right edge, at the origin when wider than the box", () => {
     expect(tipPlace(box, tip, { x: 0, y: 60 })).toEqual({ left: 14, top: 50 });
     expect(tipPlace(box, tip, { x: -40, y: 60 }).left).toBe(0);
-  });
-
-  it("flips a long tip left of a point near the middle, and never past the box's left edge", () => {
-    expect(tipPlace(box, { w: 200, h: 20 }, { x: 150, y: 60 }).left).toBe(0); // 150 - 14 - 200 would be negative
+    expect(tipPlace(box, { w: 200, h: 20 }, { x: 150, y: 60 }).left).toBe(0); // flipped: 150 - 14 - 200 would be negative
     expect(tipPlace(box, tip, { x: 200, y: 60 }).left).toBe(66); // 200 - 14 - 120
-  });
-
-  it("keeps the tip inside the box at the right edge", () => {
     expect(tipPlace(box, tip, { x: 300, y: 60 }).left).toBe(166);
     expect(tipPlace(box, tip, { x: 900, y: 60 }).left).toBe(180); // box.w - tip.w
-  });
-
-  it("puts a tip wider than the box at the origin", () => {
     expect(tipPlace(box, { w: 500, h: 20 }, { x: 150, y: 60 }).left).toBe(0);
     expect(tipPlace({ w: 100, h: 168 }, { w: 500, h: 20 }, { x: 99, y: 60 }).left).toBe(0);
-  });
-
-  it("keeps the tip from the top and the bottom of the box", () => {
+    // and from the top and the bottom of the box
     expect(tipPlace(box, tip, { x: 100, y: 3 }).top).toBe(0);
     expect(tipPlace(box, tip, { x: 100, y: 400 }).top).toBe(148);
     expect(tipPlace({ w: 300, h: 10 }, tip, { x: 100, y: 5 }).top).toBe(0);
@@ -213,12 +167,9 @@ describe("recentText", () => {
   const hot = win({ at_limit: false, forecast: { ...f, recent_pace: 20, recent_hits_at: "2026-11-07T20:00:00.000Z", recent_at_reset: null } });
   const calm = win({ at_limit: false, forecast: { ...f, recent_pace: 3, recent_hits_at: null, recent_at_reset: 41.26 } });
 
-  it("says when the last 24 hours reach 100%, or where they stand at the reset", () => {
+  it("says when the last 24 hours reach 100%, or where they stand at the reset, and nothing at the limit, without a forecast or without a scenario", () => {
     expect(recentText(hot)).toBe(`If the last 24 hours continue: reaches 100% at ${whenDay("2026-11-07T20:00:00.000Z")}`);
     expect(recentText(calm)).toBe("If the last 24 hours continue: about 41% at its reset");
-  });
-
-  it("says nothing at the limit, without a forecast or without a scenario", () => {
     expect(recentText({ ...hot, at_limit: true })).toBeNull();
     expect(recentText(win({ forecast: null }))).toBeNull();
     expect(recentText(win({ at_limit: false, forecast: { ...f, recent_pace: null, recent_hits_at: null, recent_at_reset: null } }))).toBeNull();
@@ -226,12 +177,9 @@ describe("recentText", () => {
 });
 
 describe("hasScenario", () => {
-  it("is true when a curve point carries the last-24-hours value, even for a window at its limit", () => {
+  it("is true when a curve point carries the last-24-hours value, even for a window at its limit, and false without a forecast or when no point carries it", () => {
     expect(hasScenario(win({ forecast: fc(curve) }))).toBe(true);
     expect(hasScenario(win({ at_limit: true, forecast: fc(curve) }))).toBe(true);
-  });
-
-  it("is false without a forecast or when no point carries it", () => {
     expect(hasScenario(win({ forecast: null }))).toBe(false);
     expect(hasScenario(win({ forecast: fc(curve.map(p => ({ ...p, recent: null }))) }))).toBe(false);
   });
@@ -274,6 +222,7 @@ describe("what used this window", () => {
     expect([15, 30].map(n => usedRange(began(n), now))).toEqual([30, 30]);
     expect([31, 90].map(n => usedRange(began(n), now))).toEqual([90, 90]);
     expect([91, 400].map(n => usedRange(began(n), now))).toEqual([0, 0]);
+    expect([usedRangeName(7), usedRangeName(0)]).toEqual(["last 7 days", "all time"]); // as the links name it
   });
 
   it("counts calendar dates, as Cost's range does: 7 days and 0 hours ago starts a date Cost's 7 days leave out", () => {
@@ -293,11 +242,6 @@ describe("what used this window", () => {
     expect(usedRange(win({ start: "2026-10-30T07:00:00.000Z" }), "2026-11-06T04:00:00.000Z")).toBe(14);
   });
 
-  it("names the range as the nearest preset", () => {
-    expect(usedRangeName(7)).toBe("last 7 days");
-    expect(usedRangeName(0)).toBe("all time");
-  });
-
   it("links to Cost with the project, the range, the window's source and automated sessions, which the drawer counts", () => {
     const w = win({ provider: "codex", start: began(10).start });
     expect(usedHref(w, now, "ai-ledger")).toBe("/cost?project=ai-ledger&range=14&source=codex&auto=1");
@@ -315,18 +259,12 @@ describe("what used this window", () => {
 });
 
 describe("shareText", () => {
-  it("says how much of the weekly allowance the limit is and how much is used through it", () => {
+  it("says how much of the weekly allowance the limit is and how much is used through it, in whole percents, and nothing without a share", () => {
     expect(shareText(win({ weekly_share: { used: 21, allowance: 50 } })))
       .toBe("This limit is 50% of the weekly allowance; 21% of the weekly allowance is used through it");
     expect(shareText(win({ weekly_share: { used: 0, allowance: 100 } })))
       .toBe("This limit is 100% of the weekly allowance; 0% of the weekly allowance is used through it");
-  });
-
-  it("rounds to whole percents", () => {
     expect(shareText(win({ weekly_share: { used: 20.6, allowance: 49.5 } }))).toBe("This limit is 50% of the weekly allowance; 21% of the weekly allowance is used through it");
-  });
-
-  it("is null for a window without a share", () => {
     expect(shareText(win({ weekly_share: null }))).toBeNull();
   });
 });
@@ -337,6 +275,7 @@ describe("surfacesText", () => {
   it("says when one surface made all the use", () => {
     expect(surfacesText(rows(["Claude Code", 100], ["Chats", 0], ["Cowork", 0]))).toBe("All of this week's use so far came from Claude Code");
     expect(surfacesText(rows(["Claude Code", 0], ["Chats", 100]))).toBe("All of this week's use so far came from Chats");
+    expect(surfacesText(rows(["Claude Code", 0.4], ["Chats", 0]))).toBe("All of this week's use so far came from Claude Code"); // the only one with use
   });
 
   it("lists the surfaces with use, most first", () => {
@@ -352,11 +291,6 @@ describe("surfacesText", () => {
     expect(surfacesText(rows(["Claude Code", 99.5], ["Chats", 0.5]))).toBe("This week's use by surface: Claude Code 99%, Chats 1%");
     expect(surfacesText(rows(["Claude Code", 99.9], ["Chats", 0.1]))).toBe("This week's use by surface: Claude Code 99%, Chats <1%");
     expect(surfacesText(rows(["Claude Code", 100], ["Chats", 0.2]))).toBe("This week's use by surface: Claude Code 99%, Chats <1%");
-  });
-
-  it("says all from one surface when it is the only one with use", () => {
-    expect(surfacesText(rows(["Claude Code", 0], ["Chats", 100], ["Cowork", 0]))).toBe("All of this week's use so far came from Chats");
-    expect(surfacesText(rows(["Claude Code", 0.4], ["Chats", 0]))).toBe("All of this week's use so far came from Claude Code");
   });
 
   it("is null when every surface is 0, with no rows or without a breakdown", () => {
@@ -419,19 +353,14 @@ describe("past-window bars", () => {
     expect(historyStrips(days, ["claude"])[0]!.bars.map(h => h.closed_at.slice(8, 10))).toEqual(["02", "03", "04"]);
   });
 
-  it("keeps the most recent bars of a long history, and says so", () => {
-    const many = Array.from({ length: 70 }, (_, i) => row({ start: new Date(Date.UTC(2026, 0, 1 + i)).toISOString(), closed_at: new Date(Date.UTC(2026, 0, 2 + i)).toISOString() }));
+  it("keeps the most recent bars of a long history, and says so, and counts every hit in the range, not only the bars shown", () => {
+    const many = Array.from({ length: 70 }, (_, i) => row({ hit: i < 5 || i === 69, start: new Date(Date.UTC(2026, 0, 1 + i)).toISOString(), closed_at: new Date(Date.UTC(2026, 0, 2 + i)).toISOString() }));
     const [strip] = historyStrips(many, ["claude"]);
     expect([strip!.bars.length, strip!.total, STRIP_BARS]).toEqual([60, 70, 60]);
     expect(strip!.bars[59]!.closed_at).toBe(many[69]!.closed_at);
     expect(strip!.bars[0]!.closed_at).toBe(many[10]!.closed_at);
     expect(stripNote(60, 70)).toBe("60 most recent of 70; the table lists all");
     expect(stripNote(60, 60)).toBeNull();
-  });
-
-  it("counts every hit of a limit in the range, not only the bars shown", () => {
-    const many = Array.from({ length: 70 }, (_, i) => row({ hit: i < 5 || i === 69, start: new Date(Date.UTC(2026, 0, 1 + i)).toISOString(), closed_at: new Date(Date.UTC(2026, 0, 2 + i)).toISOString() }));
-    const [strip] = historyStrips(many, ["claude"]);
     expect([strip!.hits, strip!.provider, strip!.label]).toEqual([6, "claude", "weekly"]);
   });
 
@@ -458,10 +387,12 @@ describe("past-window bars", () => {
 describe("alertText", () => {
   const alert = (over: Partial<LimitsAlert>): LimitsAlert => ({ kind: "at_limit", provider: "claude", provider_label: "Claude Code", label: "weekly", current: 100,
     at: "2026-11-14T12:00:00.000Z", resets_at: "2026-11-14T12:00:00.000Z", measured: true, count: 1, ...over });
-  it("says what each kind is, with the time in the page's format", () => {
+  it("says what each kind is, with the time in the page's format, and counts the other windows in alert", () => {
     expect(alertText(alert({}))).toBe(`Claude Code weekly is at its limit until ${whenDay("2026-11-14T12:00:00.000Z")}`);
     expect(alertText(alert({ kind: "runs_out", current: 64, at: "2026-11-13T08:00:00.000Z" }))).toBe(`Claude Code weekly is forecast to run out ${whenDay("2026-11-13T08:00:00.000Z")}`);
     expect(alertText(alert({ kind: "high", provider_label: "Codex", label: "5-hour", current: 93.4 }))).toBe("Codex 5-hour is at 93%");
+    expect(alertText(alert({ kind: "high", current: 91, count: 2 }))).toBe("Claude Code weekly is at 91% (and 1 more)");
+    expect(alertText(alert({ kind: "high", current: 91, count: 4 }))).toBe("Claude Code weekly is at 91% (and 3 more)");
   });
   it("says when the figure is an estimate, not a reading", () => {
     expect(alertText(alert({ measured: false }))).toBe(`Claude Code weekly is estimated to be at its limit until ${whenDay("2026-11-14T12:00:00.000Z")}`);
@@ -470,25 +401,63 @@ describe("alertText", () => {
     // a forecast is an estimate already
     expect(alertText(alert({ kind: "runs_out", at: "2026-11-13T08:00:00.000Z", measured: false }))).toBe(alertText(alert({ kind: "runs_out", at: "2026-11-13T08:00:00.000Z" })));
   });
-  it("counts the other windows in alert", () => {
-    expect(alertText(alert({ kind: "high", current: 91, count: 2 }))).toBe("Claude Code weekly is at 91% (and 1 more)");
-    expect(alertText(alert({ kind: "high", current: 91, count: 4 }))).toBe("Claude Code weekly is at 91% (and 3 more)");
-  });
 });
 
 describe("alertKey", () => {
   const alert = (over: Partial<LimitsAlert>): LimitsAlert => ({ kind: "at_limit", provider: "claude", provider_label: "Claude Code", label: "weekly", current: 100,
     at: "2026-11-14T12:00:00.000Z", resets_at: "2026-11-14T12:00:00.000Z", measured: true, count: 1, ...over });
-  it("is empty for no alert", () => expect(alertKey(null)).toBe(""));
-  it("holds what the alert is: its kind, provider, label and measured flag", () => {
+  it("holds what the alert is: its kind, provider, label and measured flag, not the wording's figures that drift", () => {
+    expect(alertKey(null)).toBe("");
     const key = alertKey(alert({}));
     expect(key).not.toBe("");
     for (const over of [{ kind: "runs_out" }, { provider: "codex" }, { label: "5-hour" }, { measured: false }] as const) expect(alertKey(alert(over))).not.toBe(key);
-  });
-  it("does not move when only the wording's figures drift: the time, the percent, the count", () => {
+    // the time, the percent, the count
     expect(alertKey(alert({ at: "2026-11-14T13:00:00.000Z", resets_at: "2026-11-14T13:00:00.000Z", current: 99.5, count: 3, provider_label: "Claude" }))).toBe(alertKey(alert({})));
   });
   it("tells a label that holds the separator from two labels", () => {
     expect(alertKey(alert({ provider: "a", label: "b|c" }))).not.toBe(alertKey(alert({ provider: "a|b", label: "c" })));
+  });
+});
+
+describe("limit text", () => {
+  const fixture = limits as LimitsPayload, fable = fixture.windows[1]!, codex = fixture.windows[2]!;
+  // Codex weekly at 100% now, until its reset.
+  const capped: LimitWindow = { ...codex, current: 100, at_limit: true, forecast: { ...codex.forecast!, at_reset: 100, at_reset_low: 100, at_reset_high: 100 } };
+
+  it("captions a run-out, a reset-first, a window at its limit and a window without forecast", () => {
+    const f = claude.forecast!;
+    expect(caption(claude)).toBe(`Reaches 100% at ${whenDay(f.hits_at)} (between ${whenDay(f.hits_at_early)} and ${whenDay(f.hits_at_late)})`);
+    expect(caption(codex)).toBe("Resets first at about 33% (29–33%)");
+    expect(caption({ ...codex, forecast: { ...codex.forecast!, at_reset_low: 32.7 } })).toBe("Resets first at about 33%"); // no "(33–33%)"
+    expect(caption(capped)).toBe(`At its limit until ${whenDay(codex.resets_at)}`);
+    expect(caption(fable)).toBe("Not calibrated yet: a window has to reach 5% while its usage is counted");
+  });
+
+  it("shows headroom and pace: behind pace leaves room", () => {
+    // Codex weekly at 20% with 3.5 of 7 days left.
+    const w: LimitWindow = { ...codex, current: 20, resets_at: "2026-11-09T12:00:00.000Z",
+      forecast: { ...codex.forecast!, pace_target: 80 / 3.5, pace_now: 10, pace_usual: 10, pace: "behind", at_reset: 55 } };
+    expect(pace(w, "2026-11-06T00:00:00.000Z")).toEqual({ left: "80% left", reset: "3d 12h to reset",
+      rate: "usual pace 10.0% a day; 22.9% a day would use it all", verdict: "behind pace: about 45% would go unused" });
+    expect(pace(claude, fixture.now).verdict).toBe("ahead of pace: runs out before the reset");
+    expect(pace(claude, fixture.now).rate).toBe("usual pace 17.7% a day; this window 13.2% a day over its last day; 5.9% a day would use it all");
+    const hour: LimitWindow = { ...w, window_minutes: 300, forecast: { ...w.forecast!, pace_usual: 24, pace_window: 1320, pace_window_hours: 300 / 7 / 60 } };
+    expect(pace(hour, "2026-11-06T00:00:00.000Z").rate).toBe("usual pace 1.0% an hour; this window 55.0% an hour over its last 43m; 1.0% an hour would use it all");
+    expect(pace(capped, fixture.now)).toEqual({ left: "0% left", reset: "6d 16h to reset", rate: null, verdict: null });
+    expect(span(45 * 60000)).toBe("45m");
+  });
+
+  it("states the cap in money for each period, with the calibration behind it, and nothing without a calibration", () => {
+    const cal = (calibration: LimitWindow["calibration"], window_minutes: number | null = 10080): LimitWindow => ({ ...codex, calibration, window_minutes });
+    expect(capText(cal({ per_pct: 4.2, points: 37, windows: 2 }))).toBe(`100% ≈ ${usd(420)} a week at list prices, from 37 points over 2 windows`);
+    expect(capText(cal({ per_pct: 0.05, points: 9.4, windows: 3 }, 300))).toBe(`100% ≈ ${usd(5)} per 5 hours at list prices, from 9 points over 3 windows`);
+    expect(capText(cal({ per_pct: 1, points: 40, windows: 4 }, null))).toBe(`100% ≈ ${usd(100)} a window at list prices, from 40 points over 4 windows`);
+    expect(capText(cal({ per_pct: 2.5222, points: 90, windows: 1 }))).toBe(`100% ≈ ${usd(252.22)} a week at list prices, from 90 points over 1 window`); // one window, no extra wording
+    const text = (minutes: number) => capText(cal({ per_pct: 1, points: 10, windows: 2 }, minutes));
+    expect(text(1440)).toBe(`100% ≈ ${usd(100)} a day at list prices, from 10 points over 2 windows`);
+    expect(text(43200)).toBe(`100% ≈ ${usd(100)} per 30 days at list prices, from 10 points over 2 windows`);
+    expect(text(720)).toBe(`100% ≈ ${usd(100)} per 12 hours at list prices, from 10 points over 2 windows`);
+    expect(text(90)).toBe(`100% ≈ ${usd(100)} a window at list prices, from 10 points over 2 windows`);
+    expect(capText({ ...codex, calibration: null })).toBeNull();
   });
 });

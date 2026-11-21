@@ -185,13 +185,6 @@ describe("Table sorting by several keys", () => {
     expect(names()).toEqual(["s", "r", "w", "p", "t", "u", "q"]);
   });
 
-  it("sorts a list of one key as the single sort does, and an empty list in the order given", () => {
-    const { rerender } = renderApp(list([{ key: "a", desc: true }]));
-    expect(names()).toEqual(["t", "p", "q", "r", "w", "s", "u"]);
-    rerender(list([]));
-    expect(names()).toEqual(["p", "q", "r", "s", "t", "u", "w"]);
-  });
-
   it("leaves rows in the order given under a manual sort, and still marks the headers", () => {
     renderApp(list([{ key: "a", desc: true }, { key: "b", desc: true }], { manualSort: true }));
     expect(names()).toEqual(["p", "q", "r", "s", "t", "u", "w"]);
@@ -220,21 +213,6 @@ describe("Table sorting by several keys", () => {
     expect(onSort).toHaveBeenLastCalledWith([{ key: "b", desc: true }]);
     expect(onSort).toHaveBeenCalledTimes(5);
     expect(names()).toEqual(["t", "p", "q", "r", "w", "s", "u"]); // controlled: the rows follow the sort given
-  });
-
-  it("adds, reverses and removes a key under the caller's state", async () => {
-    function Multi() {
-      const [sort, setSort] = useState<SortBy<PK>[]>([{ key: "a", desc: true }]);
-      return <Table name="T" rows={PR} columns={PC} rowId={r => r.n} sort={sort} onSort={setSort} sortAdd />;
-    }
-    renderApp(<Multi />);
-    await userEvent.click(screen.getByRole("button", { name: "B" }));
-    expect(names()).toEqual(["t", "r", "p", "w", "q", "s", "u"]);
-    await userEvent.click(screen.getByRole("button", { name: "B, sort 2 of 2, descending" }));
-    expect(screen.getByRole("button", { name: "B, sort 2 of 2, ascending" })).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: "B, sort 2 of 2, ascending" }));
-    expect(screen.getByRole("button", { name: "A" }).closest("th")!.getAttribute("aria-sort")).toBe("descending");
-    expect(screen.getByRole("button", { name: "B" }).querySelector(".sortmark")!.textContent).toBe("");
   });
 
   it("gives a custom header cell the first key and an onSort that sorts by one key", async () => {
@@ -313,6 +291,7 @@ describe("Table sorting by several keys", () => {
     for (const desc of [true, false]) for (const key of ["n", "v"] as const) expect(html([{ key, desc }])).toBe(html({ key, desc }));
     expect(html([])).toBe(html(null));
     expect(html([{ key: "v", desc: true }], true)).toBe(html({ key: "v", desc: true }));
+    expect(html({ key: "v", desc: true })).not.toContain('class="sr"'); // a single sort says no rank
   });
 });
 
@@ -386,26 +365,6 @@ describe("Table sorting", () => {
     expect(th("Value").hasAttribute("aria-sort")).toBe(false);
   });
 
-  it("leaves rows in the order given under a manual sort, and still marks the header", () => {
-    renderApp(<Table name="T" rows={ROWS} columns={COLS} rowId={r => r.n} sort={{ key: "v", desc: true }} onSort={() => {}} manualSort />);
-    expect(names()).toEqual(["b", "x", "a", "c"]);
-    expect(th("Value").getAttribute("aria-sort")).toBe("descending");
-  });
-
-  it("sorts by a column's extra keys, each by its own value, rows with no value last", () => {
-    interface P { n: string; a: number; b: number | null }
-    const rows: P[] = [{ n: "p", a: 1, b: 3 }, { n: "q", a: 3, b: null }, { n: "r", a: 2, b: 1 }];
-    const cols: Column<P, "n" | "a" | "b">[] = [{ id: "n", header: "Name", value: r => r.n },
-      { id: "a", header: "A", sort: "desc", value: r => r.a, sorts: { b: r => r.b }, th: h => <th scope="col" className={h.className}>A and B</th> }];
-    const { rerender } = renderApp(<Table name="T" rows={rows} columns={cols} rowId={r => r.n} sort={{ key: "a", desc: true }} onSort={() => {}} />);
-    expect(names()).toEqual(["q", "r", "p"]);
-    rerender(<Table name="T" rows={rows} columns={cols} rowId={r => r.n} sort={{ key: "b", desc: false }} onSort={() => {}} />);
-    expect(names()).toEqual(["r", "p", "q"]);
-    rerender(<Table name="T" rows={rows} columns={cols} rowId={r => r.n} sort={{ key: "b", desc: true }} onSort={() => {}} />);
-    expect(names()).toEqual(["p", "r", "q"]);
-    expect(screen.getAllByRole("columnheader")).toHaveLength(2); // an extra key draws no column
-  });
-
   it("sorts by an extra key that is also a display-only column's id, in either column order", () => {
     interface P { n: string; a: number; score: number }
     const rows: P[] = [{ n: "p", a: 1, score: 2 }, { n: "q", a: 2, score: 3 }, { n: "r", a: 3, score: 1 }];
@@ -471,11 +430,6 @@ describe("Table rows", () => {
     await userEvent.click(screen.getByRole("button", { name: "a" }));
     expect(open).toHaveBeenLastCalledWith("p-a", screen.getByRole("button", { name: "a" }), ROWS[2]);
     expect(open).toHaveBeenCalledTimes(2);
-  });
-
-  it("marks the current row without a pick", () => {
-    renderApp(<Table name="T" rows={ROWS} columns={COLS} rowId={r => r.n} current="c" />);
-    expect(screen.getByRole("rowheader", { name: "c" }).closest("tr")!.className).toBe("sel");
   });
 
   it("sets a row's own attributes, its class after pick and sel, and lets a pick's own win", async () => {

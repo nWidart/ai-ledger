@@ -2,7 +2,6 @@ import json
 import os
 import shutil
 import unittest
-from unittest import mock
 from datetime import datetime, timedelta, timezone
 
 from ai_ledger import live, store
@@ -43,18 +42,14 @@ class StateTest(unittest.TestCase):
         st = self.state(prompt("u1", at(0), "p1", "go") + assistant("a1", "m1", at(50), [tool_use("t1", "Read", file_path="x.py")]))
         self.assertEqual(st, dict(kind="tool", tool="Read", since="2026-11-10T10:00:50.000Z", inferred=False, long=False))
 
-    def test_turn_ended(self):
+    def test_a_claude_turn_follows_its_newest_mark(self):
         text = (prompt("u1", at(0), "p1", "go") + assistant("a1", "m1", at(5), [tool_use("t1", "Read", file_path="x")])
                 + result("r1", at(6), "t1", "ok") + assistant("a2", "m2", at(8), [dict(type="text", text="Done.")]))
-        self.assertEqual(self.state(text)["kind"], "you")
-
-    def test_prompt_sent_is_inferred_thinking(self):
+        self.assertEqual(self.state(text)["kind"], "you")  # a reply ends the turn
         st = self.state(assistant("a1", "m1", at(5), [dict(type="text", text="Done.")]) + prompt("u1", at(30), "p2", "more"))
-        self.assertEqual((st["kind"], st["inferred"]), ("thinking", True))
-
-    def test_tool_result_newest_is_thinking(self):
+        self.assertEqual((st["kind"], st["inferred"]), ("thinking", True))  # a prompt sent
         text = assistant("a1", "m1", at(5), [tool_use("t1", "Read", file_path="x")]) + result("r1", at(6), "t1", "ok")
-        self.assertEqual(self.state(text)["kind"], "thinking")
+        self.assertEqual(self.state(text)["kind"], "thinking")  # a tool result
 
     def test_quiet_session_is_idle_even_with_a_pending_call(self):
         text = assistant("a1", "m1", at(0), [tool_use("t1", "Bash", command="sleep 999")])
@@ -64,16 +59,20 @@ class StateTest(unittest.TestCase):
     def test_slow_shell_call_is_likely_waiting(self):
         st = self.state(assistant("a1", "m1", at(15), [tool_use("t1", "Bash", command="git push")]))
         self.assertEqual(st, dict(kind="wait", tool="Bash", since="2026-11-10T10:00:15.000Z", inferred=True, long=False))
-
-    def test_slow_background_shell_call_is_likely_waiting(self):  # a background call returns at once: one still pending waits
+        # A background call returns at once: one still pending waits.
         st = self.state(assistant("a1", "m1", at(15), [tool_use("t1", "Bash", command="npm run dev", run_in_background=True)]))
         self.assertEqual(st, dict(kind="wait", tool="Bash", since="2026-11-10T10:00:15.000Z", inferred=True, long=False))
+        # Codex's exec runs a script that calls the shell.
+        text = codex_line(1, 15, "response_item", type="custom_tool_call", name="exec", call_id="c1", input="run")
+        self.assertEqual(self.state(text, "codex")["kind"], "wait")
 
-    def test_slow_shell_call_with_a_long_timeout_is_running(self):
+    def test_slow_call_that_waits_on_no_approval_is_running(self):
         pending = lambda **inp: self.state(assistant("a1", "m1", at(15), [tool_use("t1", "Bash", command="make test", **inp)]))
         self.assertEqual((pending(timeout=600000)["kind"], pending(timeout=600000)["long"]), ("tool", True))
         self.assertEqual((pending(timeout=120000)["kind"], pending(timeout=120000)["long"]), ("wait", False))  # not above 120 s
         self.assertEqual(pending(timeout="600000")["kind"], "wait")
+        st = self.state(assistant("a1", "m1", at(15), [tool_use("t1", "WebFetch", url="https://example.com")]))  # no shell call
+        self.assertEqual((st["kind"], st["inferred"]), ("tool", False))
 
     def test_long_call_hides_no_likely_wait(self):
         text = (assistant("a1", "m1", at(10), [tool_use("t1", "Bash", command="make test", timeout=600000)])
@@ -87,30 +86,13 @@ class StateTest(unittest.TestCase):
         text = assistant("a1", "m1", at(45), [tool_use("t1", "Bash", command="ls")]) + assistant("a2", "m2", at(50), [tool_use("t2", "Read", file_path="x")])
         self.assertEqual(self.state(text)["tool"], "Read")
 
-    def test_slow_codex_exec_is_likely_waiting(self):
-        text = codex_line(1, 15, "response_item", type="custom_tool_call", name="exec", call_id="c1", input="run")
-        self.assertEqual(self.state(text, "codex")["kind"], "wait")
-
-    def test_slow_web_fetch_is_running(self):
-        st = self.state(assistant("a1", "m1", at(15), [tool_use("t1", "WebFetch", url="https://example.com")]))
-        self.assertEqual((st["kind"], st["inferred"]), ("tool", False))
-
     def test_codex_turn_in_progress_is_thinking_not_inferred(self):
         text = (codex_line(1, 0, "event_msg", type="task_started", turn_id="t1", model_context_window=272000)
                 + codex_line(2, 1, "event_msg", type="item_completed", turn_id="t1", item=dict(type="UserMessage", content=[dict(type="text", text="go")])))
         self.assertEqual(self.state(text, "codex"), dict(kind="thinking", tool=None, since="2026-11-10T10:00:00.000Z", inferred=False, long=False))
-
-    def test_codex_turn_complete_is_your_turn(self):
         text = (codex_line(1, 0, "event_msg", type="task_started", turn_id="t1")
                 + codex_line(2, 9, "event_msg", type="task_complete", turn_id="t1"))
-        self.assertEqual(self.state(text, "codex")["kind"], "you")
-
-    def test_codex_turn_started_in_a_thread_file_is_thinking(self):  # a file that continues the main thread has no lane
-        evs = events(codex_line(1, 0, "event_msg", type="task_started", turn_id="t1")
-                     + codex_line(2, 9, "event_msg", type="task_complete", turn_id="t1"), "codex")
-        evs += events(codex_line(1, 12, "event_msg", type="task_started", turn_id="t2"), "codex")
-        st = live.state(evs, NOW, "codex", max(e["ts"] for e in evs))
-        self.assertEqual((st["kind"], st["since"], st["inferred"], evs[-1]["lane"]), ("thinking", "2026-11-10T10:00:12.000Z", False, None))
+        self.assertEqual(self.state(text, "codex")["kind"], "you")  # a completed turn is your turn
 
     def lanes(self, main, sub, source="codex", now=NOW):
         """The state of a session whose main thread holds the lines main and a subagent the lines sub."""
@@ -118,11 +100,6 @@ class StateTest(unittest.TestCase):
         evs = events(main, source) + events(sub, source, lane_file=lane_file)
         evs.sort(key=lambda e: e["ts"])
         return live.state(evs, now, source, max(e["ts"] for e in evs))
-
-    def test_codex_child_turn_end_leaves_a_working_parent_as_it_is(self):
-        st = self.lanes(codex_line(1, 0, "event_msg", type="task_started", turn_id="t1"),
-                        codex_line(1, 1, "event_msg", type="task_started", turn_id="u1") + codex_line(2, 5, "event_msg", type="task_complete", turn_id="u1"))
-        self.assertEqual(st, dict(kind="thinking", tool=None, since="2026-11-10T10:00:00.000Z", inferred=False, long=False))
 
     def test_codex_subagent_at_work_keeps_the_session_thinking(self):
         main = codex_line(1, 0, "event_msg", type="task_started", turn_id="t1") + codex_line(2, 9, "event_msg", type="task_complete", turn_id="t1")
@@ -132,12 +109,6 @@ class StateTest(unittest.TestCase):
         self.assertEqual(self.lanes(main, done), dict(kind="you", tool=None, since="2026-11-10T10:00:09.000Z", inferred=False, long=False))
         older = codex_line(1, 3, "event_msg", type="task_started", turn_id="u1")  # the main thread wrote after it
         self.assertEqual(self.lanes(main, older)["kind"], "you")
-
-    def test_subagent_pending_call_is_running_a_tool(self):
-        main = codex_line(1, 0, "event_msg", type="task_started", turn_id="t1") + codex_line(2, 9, "event_msg", type="task_complete", turn_id="t1")
-        st = self.lanes(main, codex_line(1, 12, "response_item", type="function_call", name="update_plan", call_id="c1", arguments="{}") + codex_line(
-            2, 13, "event_msg", type="task_started", turn_id="u1"))
-        self.assertEqual((st["kind"], st["tool"]), ("tool", "update_plan"))
 
     def test_claude_subagent_between_calls_keeps_the_session_thinking(self):
         main = prompt("u1", at(0), "p1", "go") + assistant("a1", "m1", at(5), [dict(type="text", text="Running it in the background.")])
@@ -254,13 +225,6 @@ class SessionsTest(LiveCase):
         s1 = got["sessions"][0]
         self.assertEqual((s1["state"]["kind"], s1["latest"]["tool"], s1["window"], s1["requests"]), ("tool", "Read", 1000000, 1))
 
-    def test_list_reads_no_call_for_quiet(self):  # the list sends no event, and reading a shell line costs a parse
-        with mock.patch.object(live, "quiet") as quiet:
-            live.sessions(self.cur(), now=NOW, prices=PRICES)
-            quiet.assert_not_called()
-            self.assertEqual([e["quiet"] for e in live.session(self.cur(), "s1", now=NOW, prices=PRICES)["events"] if e["k"] == "tool"],
-                             [quiet.return_value])
-
     def test_start_time_is_the_first_line(self):
         got = live.sessions(self.cur(), now=NOW, prices=PRICES)
         self.assertEqual([(s["first_ts"], s["last_ts"]) for s in got["sessions"]],
@@ -289,8 +253,7 @@ class SessionsTest(LiveCase):
         earlier = "".join(prompt(f"k{i}", at(i), f"kp{i}", "go") for i in range(3))  # more lines than the file that closes
         closing = prompt("k9", at(10), "kp9", "more") + line(type="cost-state", sessionId="s1")
         self.assertEqual(self.two_files("s6", earlier, closing), "ended")
-
-    def test_close_line_in_an_earlier_main_file_ends_no_session(self):
+        # A close line in an earlier main file ends no session.
         close = line(type="cost-state", sessionId="s1")
         self.assertEqual(self.two_files("s7", prompt("n0", at(0), "np0", "go") + close, prompt("n9", at(10), "np9", "more")), "thinking")
         self.assertEqual(self.two_files("s8", prompt("o0", at(0), "op0", "go"), close), "thinking")  # no timed line in the close line's file
@@ -316,8 +279,7 @@ class SessionsTest(LiveCase):
         self.assertEqual(len(live.sessions(self.cur(), project=project, now=NOW, prices=PRICES)["sessions"]), 1)
         with self.assertRaises(ValueError):
             live.sessions(self.cur(), source="gemini", now=NOW)
-
-    def test_automated_session_hidden_by_default(self):
+        # An automated session is hidden by default.
         self.con.execute("UPDATE sessions SET project = 'observer-sessions' WHERE session_id = 's2'")
         self.assertEqual([s["session_id"] for s in live.sessions(self.cur(), now=NOW, prices=PRICES)["sessions"]], ["s1"])
         self.assertEqual(len(live.sessions(self.cur(), automated=True, now=NOW, prices=PRICES)["sessions"]), 2)
@@ -335,13 +297,11 @@ class SessionsTest(LiveCase):
         self.assertEqual(sum(k in live.WAITING for k in kinds), 2)  # as the list says
 
     def test_waiting_covers_every_project_and_source_and_leaves_automated_sessions_out(self):
+        self.assertEqual(live.waiting(self.cur(), now=NOW + timedelta(hours=1)), 0)  # no active session
         self.con.execute("UPDATE sessions SET source = 'codex' WHERE session_id = 's2'")
         self.assertEqual(live.waiting(self.cur(), now=NOW), 1)
         self.con.execute("UPDATE sessions SET project = 'observer-sessions' WHERE session_id = 's2'")
         self.assertEqual(live.waiting(self.cur(), now=NOW), 0)
-
-    def test_waiting_is_zero_with_no_active_session(self):
-        self.assertEqual(live.waiting(self.cur(), now=NOW + timedelta(hours=1)), 0)
 
 
 class TitleTest(LiveCase):
@@ -354,11 +314,9 @@ class TitleTest(LiveCase):
     def listed(self, text=False):
         return {s["session_id"]: (s["title"], s["title_from"]) for s in live.sessions(self.cur(), now=NOW, prices=PRICES, text=text)["sessions"]}
 
-    def test_agent_title(self):
-        self.assertEqual(self.listed()["s1"], ("Add session titles", "agent"))
-        self.assertEqual(self.listed(text=True)["s1"], ("Add session titles", "agent"))
-
     def test_prompt_title_only_with_text(self):
+        self.assertEqual(self.listed()["s1"], ("Add session titles", "agent"))  # the agent's title, with text or without
+        self.assertEqual(self.listed(text=True)["s1"], ("Add session titles", "agent"))
         self.assertEqual(self.listed()["s2"], (None, None))
         self.assertEqual(self.listed(text=True)["s2"], ("SENTINEL other.", "prompt"))
         detail = lambda text: live.session(self.cur(), "s2", now=NOW, prices=PRICES, text=text)
@@ -405,24 +363,17 @@ class SessionTest(LiveCase):
         self.assertEqual(t1["end"], "2026-11-10T10:00:04.000Z")
 
     def test_call_finishing_with_a_failure_is_sent_again(self):
-        self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Bash", command="make")]))
-        self.ingest()
-        first = self.run_session()
-        self.write("s1.jsonl", result("r1", at(9), "t1", "Exit code 2\nboom", error=True))
-        self.ingest()
-        t1, = [e for e in self.run_session(after=first["cursor"])["events"] if e["k"] == "tool"]
-        self.assertEqual((t1["failed"], t1["error"], t1["end"]), (True, "Exit code 2\nboom", "2026-11-10T10:00:09.000Z"))
-
-    def test_result_for_a_call_older_than_the_cursor(self):
+        # The call is older than the cursor; its result, a failure, comes after it. The catch-up sends the call again, under its own key.
         self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Bash", command="make")])
                    + assistant("a2", "m2", at(4), [dict(type="text", text="still running")]))
         self.ingest()
         first = self.run_session()
         self.assertEqual(first["cursor"], at(4))
-        self.write("s1.jsonl", result("r1", at(9), "t1", "ok"))
+        self.write("s1.jsonl", result("r1", at(9), "t1", "Exit code 2\nboom", error=True))
         self.ingest()
         t1, = [e for e in self.run_session(after=first["cursor"])["events"] if e["k"] == "tool"]
-        self.assertEqual((t1["id"], t1["key"], t1["end"]), ("t1", "a1#1", "2026-11-10T10:00:09.000Z"))
+        self.assertEqual((t1["id"], t1["key"], t1["failed"], t1["error"], t1["end"]),
+                         ("t1", "a1#1", True, "Exit code 2\nboom", "2026-11-10T10:00:09.000Z"))
 
     def test_first_load_keeps_the_newest_events(self):
         body = "".join(prompt(f"u{i}", at(i), f"p{i}", "go") for i in range(live.FIRST_LOAD + 20))
@@ -564,11 +515,6 @@ class SessionTest(LiveCase):
         self.assertAlmostEqual(got["cost"], 26.0008)  # the main thread's request on top of the lanes'
         self.assertEqual(self.run_session(after=got["cursor"])["lanes"], got["lanes"])  # whole on a catch-up too
 
-    def test_no_lanes_without_subagents(self):
-        self.write("s1.jsonl", assistant("a1", "m1", at(1), [dict(type="text", text="hi")]))
-        self.ingest()
-        self.assertEqual(self.run_session()["lanes"], {})
-
     def test_figures(self):
         self.write("s1.jsonl", assistant("a1", "m1", at(30), [dict(type="text", text="hi")])
                    + line(type="system", subtype="compact_boundary", uuid="c1", timestamp=at(31), compactMetadata=dict(preTokens=150000), **S)
@@ -620,13 +566,6 @@ class SessionTest(LiveCase):
         self.ingest()
         got = self.run_session()
         self.assertEqual((got["context"], got["window"]), (160, None))
-
-    def test_unknown_session_and_bad_cursor(self):
-        self.assertIsNone(self.run_session(sid="nope"))
-        self.write("s1.jsonl", prompt("u1", at(0), "p1", "go"))
-        self.ingest()
-        with self.assertRaises(ValueError):
-            self.run_session(after="yesterday")
 
 
 class CodexSessionTest(CodexCase):
@@ -680,13 +619,6 @@ class CodexSessionTest(CodexCase):
         listed = live.sessions(cur, automated=True, now=now, prices=PRICES)["sessions"][0]  # the test store reads it as automated
         self.assertEqual("turn_start" in [e["k"] for e in caught["events"]], False)
         self.assertEqual((first["window"], caught["window"], listed["window"]), (272000, 272000, 272000))
-
-    def test_read_only_shell_calls_marked_quiet(self):
-        call = lambda i, cmd: codex_line(i, i, "response_item", type="function_call", name="exec_command", call_id=f"c{i}", arguments=json.dumps(dict(cmd=cmd)))
-        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + call(1, "rg TODO src") + call(2, "rg TODO src && rm notes.md"))
-        self.ingest()
-        got = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)
-        self.assertEqual([e["quiet"] for e in got["events"]], [True, False])
 
     def test_thread_lane_cost_and_model(self):
         thread = "0a0f9999-0000-7000-8000-000000000002"

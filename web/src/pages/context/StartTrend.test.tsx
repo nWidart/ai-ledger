@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { dayLabel } from "../../format";
 import { prevented } from "../../testing";
@@ -87,7 +87,9 @@ describe("StartTrend", () => {
     render(<StartTrend trend={trend} />);
     expect(screen.queryByRole("table")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Show data table" }));
-    expect(screen.getAllByRole("row")).toHaveLength(4);
+    const rows = screen.getAllByRole("row");
+    expect(rows).toHaveLength(4);
+    expect(within(rows[1]!).getAllByRole("cell")[0]!.textContent).toBe("24k");
   });
 
   it("draws one dot and no line for one week, and nothing for none", () => {

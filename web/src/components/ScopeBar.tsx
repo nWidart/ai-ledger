@@ -10,7 +10,7 @@ import "./ScopeBar.css";
 const ALL: FilterSet = { project: true, range: true, source: true, automated: true };
 /** The shared filters a page shows: each only where it changes what the page shows. Activity, Cost, Context and the Project
  *  page show all four. A path that is no page (on its way to Activity) shows Activity's. */
-export function scopeOf(path: string, judgments: boolean): FilterSet {
+function scopeOf(path: string, judgments: boolean): FilterSet {
   switch (path) {
     case "/live": return { ...ALL, range: false }; // a running session has no range
     case "/limits": return { project: false, range: false, source: true, automated: false }; // per account; the range sits in Past windows
