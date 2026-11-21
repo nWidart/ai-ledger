@@ -240,7 +240,7 @@ Activity SHALL let the user sort the Sessions, Project metrics and Tools tables 
 - **THEN** the tool with the highest rate is first and the header reads as sorted
 
 ### Requirement: Sort Sessions over the whole list
-Sessions SHALL sort the whole matching list on the server, not the loaded page; the server SHALL answer 400 for a sort it does not know. The "near limit" action and a day or week picked on the chart SHALL clear the Sessions sort; the Output speed vital SHALL set it to active time. The sort SHALL NOT be kept in the URL.
+Sessions SHALL sort the whole matching list on the server, not the loaded page; the server SHALL answer 400 for a sort it does not know. The "near limit" action and a day or week picked on the chart SHALL clear the Sessions sort; the Output speed vital SHALL set it to output speed, fastest first. The sort SHALL NOT be kept in the URL.
 
 #### Scenario: Costliest session
 - **WHEN** the view has 250 sessions and the user sorts Sessions by cost, descending
@@ -283,7 +283,7 @@ Activity SHALL stack the work chart's bars by the projects that have a colour of
 - **THEN** the bars are not stacked
 
 ### Requirement: Show the selected day's own figures
-Selecting a day or a week on the work chart SHALL show, for each of its sessions, those days' figures, and a session's Active time SHALL be those days' active time. Peak context and compactions SHALL stay whole-session figures, and a tooltip SHALL say so. The selection SHALL narrow every workbench tab. The lead, attention summary, chart and vitals SHALL keep the range's figures.
+Selecting a day or a week on the work chart SHALL show, for each of its sessions, those days' figures, and a session's Active time SHALL be those days' active time. Model time, output speed, peak context and compactions SHALL stay whole-session figures, and a tooltip SHALL say so. The selection SHALL narrow every workbench tab. The lead, attention summary, chart and vitals SHALL keep the range's figures.
 
 #### Scenario: Session spanning two days
 - **WHEN** a session worked 30 minutes on March 3 and 2 hours on March 4 and the user selects March 3
@@ -497,7 +497,7 @@ While a day or a week is selected, the chart header SHALL show a chip naming it,
 - **THEN** the first Escape ends the reading and the second clears the week
 
 ### Requirement: Link each vital to its destination
-Each vital SHALL be a link or a button to the place that explains it: Sessions to the Sessions tab, Errors per 100 calls to the Errors page for the same view, Test runs passed to the failed test runs, Subagents to Project metrics sorted by subagent share, and Output speed to the Sessions tab sorted by active time. A vital or attention action SHALL clear a selected day or week, since its figure covers the range, and SHALL move focus only once. Activity SHALL show at most six vitals.
+Each vital SHALL be a link or a button to the place that explains it: Sessions to the Sessions tab, Errors per 100 calls to the Errors page for the same view, Test runs passed to the failed test runs, Subagents to Project metrics sorted by subagent share, and Output speed to the Sessions tab sorted by output speed. A vital or attention action SHALL clear a selected day or week, since its figure covers the range, and SHALL move focus only once. Activity SHALL show at most six vitals.
 
 #### Scenario: Tests tile
 - **WHEN** the user activates the Test runs passed tile
@@ -514,6 +514,10 @@ Each vital SHALL be a link or a button to the place that explains it: Sessions t
 #### Scenario: Errors tile
 - **WHEN** the user views project `foo` for the last 30 days and activates Errors per 100 calls
 - **THEN** the Errors page opens for `foo` over the last 30 days
+
+#### Scenario: Output speed tile
+- **WHEN** the user activates the Output speed tile
+- **THEN** the Sessions tab opens sorted by output speed, fastest first
 
 ### Requirement: Show the output speed trend
 The Output speed vital SHALL show a sparkline of output speed per chart bucket, when at least two buckets hold a session that records model time. A session SHALL count in the bucket of its first request in the view. The sparkline SHALL be hidden from assistive technology.
@@ -565,3 +569,22 @@ In every metric and bucket, a segment of the work chart's stacked bars with a va
 #### Scenario: A tiny split bar
 - **WHEN** a day has 1 commit in `a` and 1 in `c`, in a view whose busiest day has 200
 - **THEN** both segments show, and the bar may be a few pixels taller than 2 commits drawn to scale
+
+### Requirement: Show model time and output speed in Sessions
+Sessions SHALL show each session's model time and output speed, output tokens per second of model time, as whole-session figures counted as the Output speed vital counts them, and SHALL sort by either. A session that records no model time, every Codex session and older Claude Code ones, SHALL read "–" in both, SHALL sort last in either direction and SHALL add nothing to the vital. The sorted column SHALL stay shown at every width.
+
+#### Scenario: Run with no model time
+- **WHEN** a session's only run records 0 ms of model time beside sessions that average 98 tok/s
+- **THEN** the session reads "–" and the Output speed vital still reads 98 tok/s
+
+#### Scenario: Narrow window
+- **WHEN** the user activates the Output speed tile in a window 1,000px wide, where Tok/s is otherwise hidden
+- **THEN** the Tok/s column shows, sorted fastest first
+
+#### Scenario: Fastest first
+- **WHEN** session `a` wrote 150,000 output tokens in 30 minutes of model time and `b` 85,200 in 10, and the user sorts Sessions by output speed, descending
+- **THEN** `b` (142 tok/s) comes before `a` (83 tok/s)
+
+#### Scenario: No model time
+- **WHEN** the view holds a Codex session and the user sorts Sessions by output speed or model time, in either direction
+- **THEN** the Codex session reads "–" in both columns and comes after every session that records model time
