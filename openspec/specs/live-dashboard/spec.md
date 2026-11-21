@@ -252,11 +252,19 @@ The page SHALL offer a Wall view with one tile per active session, grouped by st
 - **THEN** the Wall says no session is active
 
 ### Requirement: Show each session on its wall tile
-A wall tile SHALL show the project, state, title, latest action, context fill, tool count, errors, cost, branch, source and model. The error count SHALL agree in number with its noun: "1 error", "2 errors".
+A wall tile SHALL show the project, state, title, latest action, context fill, tool count, errors, cost, branch, source and model. The error count SHALL agree in number with its noun: "1 error", "2 errors". The tile SHALL be a toggle whose pressed state says whether it is pinned. Its accessible name SHALL come from its content: "Pin" and the session's name, then all the tile shows, in words, current after each update.
 
 #### Scenario: One error
 - **WHEN** a session has one failed tool call
 - **THEN** its tile reads "1 error"
+
+#### Scenario: A screen reader on a tile
+- **WHEN** a screen reader reaches the tile of a session titled "Fix login" in project foo
+- **THEN** it reads "Pin Fix login", then the project, state, latest action, context, tools, errors, cost, branch, source and model, and not pressed
+
+#### Scenario: A tile that updates
+- **WHEN** the tile's state or figures change while a screen reader is on it
+- **THEN** the tile's name says the new state and figures
 
 ### Requirement: Show state time and title on a wall tile
 A tile in *your turn*, *thinking* or *idle* SHALL show how long the session has been in that state, and one running a tool its name and run time. A tile in *your turn* SHALL have a border. The title SHALL take one line under the project, cut with an ellipsis when it does not fit, with the full title on hover. A tile with no title SHALL leave that line out.
@@ -419,6 +427,14 @@ The stream SHALL be a log (`role="log"`) that the user reads by moving through i
 #### Scenario: Follow on
 - **WHEN** Follow is on and tool calls arrive
 - **THEN** the page announces nothing
+
+#### Scenario: Follow turned off with its checkbox
+- **WHEN** 2 events arrive with Follow on, the user clears the Follow checkbox, and 1 more event arrives
+- **THEN** the status says "1 new event"
+
+#### Scenario: A full buffer
+- **WHEN** the stream holds as many events as it keeps, Follow is off, and 1 event arrives, dropping the oldest
+- **THEN** Jump to latest shows and the status says "1 new event"
 
 ### Requirement: Pause the page's requests while the tab is hidden
 While the tab is hidden, the Live page SHALL stop its interval requests and its per-second timers, SHALL hold the events it is told of, and SHALL NOT draw them. On return to the tab it SHALL fetch what it missed and the app's status once, draw the newest state, and resume. This SHALL NOT change a Pause the user chose: a paused page stays paused.
