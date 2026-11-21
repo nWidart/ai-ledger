@@ -154,6 +154,14 @@
   min-width: min(12rem, calc(100vw - 16px)); max-width: calc(100vw - 16px); max-height: var(--available-height, none); overflow-y: auto; overscroll-behavior: contain;
   padding: var(--space-5) var(--space-6); background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); }
 .pg-activity #sessions .cols-pop .linkish { margin-top: var(--space-2); }
+/* The selection column: the label fills the cell, so the whole cell toggles the box; a selected row is marked at its start. */
+.pg-activity #sessions :is(td, th).pickcol { position: relative; width: 2.25rem; min-width: 2.25rem; padding: 0; }
+.pg-activity #sessions td.pickcol label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.pg-activity #sessions td.pickcol input:disabled { cursor: default; }
+.pg-activity #sessions tbody tr.chosen td.pickcol { box-shadow: inset 3px 0 0 var(--accent); }
+/* The selection bar: the count and its actions, between the hint and the table, while a session is selected. */
+.pg-activity #sessions .selbar.on { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-7); margin-bottom: var(--space-3);
+  font-size: .8125rem; color: var(--text-secondary); }
 .pg-activity #projects th:first-child, .pg-activity #projects td:first-child { position: sticky; left: 0; background: var(--bg); z-index: var(--z-raised); box-shadow: 1px 0 0 var(--border); }
 .pg-activity #projects th:first-child { z-index: var(--z-raised-2); }
 .pg-activity #projects tr.sel :is(td, th):first-child { background: color-mix(in srgb, var(--accent) 11%, var(--bg)); }

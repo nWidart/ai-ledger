@@ -1431,8 +1431,9 @@ describe("Sessions columns", () => {
     await userEvent.click(columnsButton());
     await userEvent.click(box("Compactions"));
     expect(heads()).not.toContain("compactions");
-    expect(heads()).toHaveLength(12);
-    expect(document.querySelector("#sessions tbody tr")!.children).toHaveLength(12);
+    // 12 of the 13 columns, after the selection column.
+    expect(heads()).toHaveLength(13);
+    expect(document.querySelector("#sessions tbody tr")!.children).toHaveLength(13);
     await userEvent.click(box("Commits"));
     expect(stored()).toEqual({ compactions: false, commits: false });
     expect(columnsButton().textContent).toBe("Columns, 2 hidden");
@@ -1447,7 +1448,7 @@ describe("Sessions columns", () => {
     const reset = within(list()).getByRole("button", { name: "Reset columns" });
     await userEvent.click(reset);
     expect(stored()).toBeNull();
-    expect(heads()).toHaveLength(13);
+    expect(heads()).toHaveLength(14);
     expect(columnsButton().textContent).toBe("Columns");
     expect(document.activeElement).toBe(reset);
     expect(box("Compactions").checked).toBe(true);
@@ -1483,13 +1484,13 @@ describe("Sessions columns", () => {
   it("ignores a stored choice it cannot read, and a column the table does not have", async () => {
     localStorage.setItem(COLUMNS_KEY, "{oops");
     await visit();
-    expect(heads()).toHaveLength(13);
+    expect(heads()).toHaveLength(14);
     cleanup();
     resetColumnChoice();
     localStorage.setItem(COLUMNS_KEY, JSON.stringify({ gone: false, compactions: false }));
     await visit();
     expect(heads()).not.toContain("compactions");
-    expect(heads()).toHaveLength(12);
+    expect(heads()).toHaveLength(13);
     expect(columnsButton().textContent).toBe("Columns, 1 hidden");
   });
 
@@ -1716,5 +1717,221 @@ describe("Sessions sort by several columns", () => {
     await user.click(several());
     await user.click(sortButton("prompts"));
     await waitFor(() => expect(hint()).toBe("0 sessions match, costliest first, then most prompts first."));
+  });
+});
+
+describe("Sessions selection", () => {
+  beforeEach(() => { resetColumnChoice(); });
+  afterEach(() => { resetColumnChoice(); });
+
+  const panel = () => within(document.getElementById("sessions")!);
+  const box = (name: string) => panel().getByRole<HTMLInputElement>("checkbox", { name: `Select ${name}` });
+  const boxes = () => [...document.querySelectorAll<HTMLInputElement>("#sessions tbody input[type=checkbox]")];
+  /** What the selection bar's status says; empty with nothing selected. */
+  const status = () => panel().getByRole("status").textContent;
+  const clearButton = () => panel().queryByRole("button", { name: "Clear selection" });
+  const searchBox = () => panel().getByRole("searchbox", { name: "Search sessions" });
+  const rowOf = (name: string) => panel().getByRole("button", { name }).closest("tr")!;
+  /** A row's cell under the header of a sort key. */
+  const cellOf = (name: string, key: string) => {
+    const at = [...document.querySelectorAll("#sessions thead th")].indexOf(document.querySelector(`#sessions thead th[data-sort="${key}"]`)!);
+    return rowOf(name).children[at] as HTMLElement;
+  };
+  const listed = (n: number) => waitFor(() => expect(document.querySelectorAll("#sessions tbody tr")).toHaveLength(n));
+  /** The page with all its sessions on server pages; a search keeps the sessions whose title holds it. */
+  const serveMany = (all: ReturnType<typeof many>, o: { usage?: (q: URLSearchParams) => unknown } = {}) => mockApi({
+    "/api/usage": o.usage ?? (() => usage),
+    "/api/sessions": q => paged(q.get("q") ? all.filter(s => s.title.includes(q.get("q")!)) : all)(q),
+  });
+
+  it("selects a session from its checkbox or by Space without opening its sheet, while the rest of the row still opens it", async () => {
+    serve(usage);
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    await listed(sessions.sessions.length);
+    // The checkbox column comes first, under a header only assistive technology reads; Session stays the row header.
+    const first = document.querySelector("#sessions thead th")!;
+    expect([first.textContent, first.querySelector(".sr")?.textContent, first.getAttribute("scope")]).toEqual(["Select", "Select", "col"]);
+    expect(within(screen.getByRole("table", { name: "Sessions" })).getAllByRole("rowheader").map(h => h.querySelector("button")!.textContent)).toEqual(["#s2", "#s1", "#s3"]);
+    expect([...document.querySelectorAll("#sessions tbody tr")].every(r => r.firstElementChild!.matches("td") && r.children[1]!.matches('th[scope="row"]'))).toBe(true);
+    expect(box("#s1").closest("label")!.parentElement!.tagName).toBe("TD");
+    await userEvent.click(box("#s1"));
+    expect(box("#s1").checked).toBe(true);
+    expect(rowOf("#s1").classList.contains("chosen")).toBe(true);
+    expect(rowOf("#s2").classList.contains("chosen")).toBe(false);
+    expect(location.search).toBe("?range=30");
+    // Space on the checkbox, then Tab to the row's session button.
+    act(() => box("#s2").focus());
+    await userEvent.keyboard(" ");
+    expect(box("#s2").checked).toBe(true);
+    await userEvent.tab();
+    expect(document.activeElement).toBe(panel().getByRole("button", { name: "#s2" }));
+    expect(location.search).toBe("?range=30");
+    // A click on the label around the box, beside it, toggles it too.
+    await userEvent.click(box("#s2").closest("label")!);
+    expect(box("#s2").checked).toBe(false);
+    expect(location.search).toBe("?range=30");
+    // The cost cell opens the sheet, and the row stays selected.
+    await userEvent.click(cellOf("#s1", "cost"));
+    expect(location.search).toBe("?range=30&session=s1");
+    expect(box("#s1").checked).toBe(true);
+  });
+
+  it("says how many are selected, that one more is needed, and that four is the most; then disables the other rows", async () => {
+    serveMany(many(6));
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    await listed(6);
+    expect(status()).toBe("");
+    expect(clearButton()).toBeNull();
+    await userEvent.click(box("Session 3"));
+    expect(status()).toBe("1 selected. Select 1 more to compare.");
+    expect(clearButton()).toBeTruthy();
+    await userEvent.click(box("Session 1"));
+    expect(status()).toBe("2 selected.");
+    await userEvent.click(box("Session 0"));
+    await userEvent.click(box("Session 5"));
+    expect(status()).toBe("4 selected. 4 is the most that compare.");
+    expect(boxes().filter(b => b.disabled).map(b => b.getAttribute("aria-label"))).toEqual(["Select Session 2", "Select Session 4"]);
+    expect(boxes().filter(b => b.checked)).toHaveLength(4);
+    await userEvent.click(box("Session 1"));
+    expect(status()).toBe("3 selected.");
+    expect(boxes().some(b => b.disabled)).toBe(false);
+  });
+
+  it("clears the selection with Clear selection, which moves focus to the search field", async () => {
+    serveMany(many(6));
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    await listed(6);
+    for (const n of [0, 1, 2]) await userEvent.click(box(`Session ${n}`));
+    expect(status()).toBe("3 selected.");
+    await userEvent.click(clearButton()!);
+    expect(boxes().some(b => b.checked)).toBe(false);
+    expect(status()).toBe("");
+    expect(clearButton()).toBeNull();
+    expect(document.activeElement).toBe(searchBox());
+  });
+
+  it("keeps the bar and Clear selection usable while the rows are stale, and the row checkboxes inert with their rows", async () => {
+    const found = held<unknown>();
+    mockApi({ "/api/usage": () => usage, "/api/sessions": q => (q.get("q") ? found.p : paged(many(6))(q)) });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    await listed(6);
+    await userEvent.click(box("Session 0"));
+    await userEvent.type(searchBox(), "needle");
+    await waitFor(() => expect(document.querySelector("#sessions tbody")!.hasAttribute("inert")).toBe(true));
+    expect(box("Session 0").checked).toBe(true);
+    expect(box("Session 1").disabled).toBe(true);
+    expect(status()).toBe("1 selected. Select 1 more to compare.");
+    await userEvent.click(clearButton()!);
+    expect(status()).toBe("");
+    expect(document.activeElement).toBe(searchBox());
+    await act(async () => { found.resolve({ total: 0, offset: 0, sessions: [] }); await found.p; });
+  });
+
+  it("keeps the selection through Show more, a sort, a search that leaves a session out, a refresh and a tab change", async () => {
+    const all = many(250);
+    serveMany(all);
+    at();
+    const { client } = renderApp(<ActivityPage />);
+    await loaded();
+    await listed(100);
+    await userEvent.click(box("Session 0"));
+    await userEvent.click(box("Session 1"));
+    await userEvent.click(panel().getByRole("button", { name: "Show more sessions" }));
+    await listed(200);
+    expect([box("Session 0").checked, box("Session 1").checked, box("Session 150").checked]).toEqual([true, true, false]);
+    await userEvent.click(panel().getByRole("button", { name: "Est. cost" }));
+    await waitFor(() => expect(fetched().map(String)).toContain("/api/sessions?range=30&sort=cost&desc=1"));
+    await waitFor(() => expect(box("Session 0").disabled).toBe(false));
+    expect([box("Session 0").checked, box("Session 1").checked]).toEqual([true, true]);
+    // A search that leaves Session 1 out still counts it.
+    await userEvent.type(searchBox(), "Session 0");
+    await listed(1);
+    expect(box("Session 0").checked).toBe(true);
+    expect(status()).toBe("2 selected.");
+    const before = fetched().filter(u => String(u).includes("q=Session+0")).length;
+    ingested(client);
+    await waitFor(() => expect(fetched().filter(u => String(u).includes("q=Session+0")).length).toBeGreaterThan(before));
+    await waitFor(() => expect(document.querySelector("#sessions tbody")!.getAttribute("aria-busy")).toBeNull());
+    expect(status()).toBe("2 selected.");
+    await userEvent.clear(searchBox());
+    await waitFor(() => expect(box("Session 1").checked).toBe(true));
+    await openTab("Projects");
+    await openTab("Sessions");
+    await waitFor(() => expect(box("Session 1").disabled).toBe(false));
+    expect([box("Session 0").checked, box("Session 1").checked]).toEqual([true, true]);
+    expect(status()).toBe("2 selected.");
+    expect(location.search).toBe("?range=30");
+  });
+
+  it("clears the selection at once when the range changes or a day is picked on the chart", async () => {
+    mockApi({ "/api/usage": q => ({ ...usage, range: Number(q.get("range")) }), "/api/sessions": () => sessions });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    await listed(sessions.sessions.length);
+    await userEvent.click(box("#s1"));
+    await userEvent.click(box("#s2"));
+    act(() => setSearch({ range: 7 }));
+    expect(status()).toBe("");
+    await waitFor(() => expect(box("#s1").disabled).toBe(false));
+    expect(boxes().some(b => b.checked)).toBe(false);
+    act(() => setSearch({ range: 30 }));
+    await waitFor(() => expect(box("#s1").disabled).toBe(false));
+    await userEvent.click(box("#s1"));
+    await userEvent.click(box("#s3"));
+    expect(status()).toBe("2 selected.");
+    const chart = screen.getByRole("group", { name: /^Commits/ });
+    act(() => chart.focus());
+    fireEvent.keyDown(chart, { key: "End" });
+    fireEvent.keyDown(chart, { key: "Enter" });
+    expect(location.search).toBe("?range=30&day=2026-11-05");
+    expect(status()).toBe("");
+  });
+
+  it("disables the row checkboxes while the rows on screen belong to the view before, and takes nothing from them", async () => {
+    const wait = held<unknown>();
+    mockApi({ "/api/usage": q => (q.get("range") === "7" ? wait.p : usage), "/api/sessions": () => sessions });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    await listed(sessions.sessions.length);
+    await userEvent.click(box("#s1"));
+    act(() => setSearch({ range: 7 }));
+    await waitFor(() => expect(fetched().map(String)).toContain("/api/usage?range=7"));
+    // The 30-day rows stay on screen, not inert, with every checkbox disabled and nothing selected.
+    expect(status()).toBe("");
+    expect(document.querySelector("#sessions tbody")!.hasAttribute("inert")).toBe(false);
+    expect(boxes().map(b => [b.disabled, b.checked])).toEqual([[true, false], [true, false], [true, false]]);
+    await userEvent.click(box("#s2"));
+    fireEvent.click(box("#s3"));
+    expect(status()).toBe("");
+    // Once the 7-day figures and rows arrive, the checkboxes are enabled.
+    await act(async () => { wait.resolve({ ...usage, range: 7 }); await wait.p; });
+    await waitFor(() => expect(fetched().map(String)).toContain("/api/sessions?range=7"));
+    await waitFor(() => expect(boxes().every(b => !b.disabled)).toBe(true));
+    await userEvent.click(box("#s2"));
+    expect(status()).toBe("1 selected. Select 1 more to compare.");
+  });
+
+  it("keeps the row checkboxes disabled when the view asked for fails to load, and the rows still open their sheet", async () => {
+    mockApi({ "/api/usage": q => (q.get("range") === "7" ? undefined : usage), "/api/sessions": () => sessions });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    await listed(sessions.sessions.length);
+    act(() => setSearch({ range: 7 }));
+    await waitFor(() => expect(document.querySelector(".banner[role=alert]")?.textContent).toMatch(/^Could not load/));
+    expect(boxes().every(b => b.disabled)).toBe(true);
+    await userEvent.click(cellOf("#s2", "cost"));
+    expect(location.search).toBe("?range=7&session=s2");
+    expect(status()).toBe("");
   });
 });
