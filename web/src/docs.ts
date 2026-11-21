@@ -73,8 +73,6 @@ export const DOCS = {
   "reference/glossary#errors": { path: "reference/glossary/", anchor: "errors", title: "Metric glossary" },
   "reference/glossary#limits": { path: "reference/glossary/", anchor: "limits", title: "Metric glossary" },
   "reference/glossary#judgments": { path: "reference/glossary/", anchor: "judgments", title: "Metric glossary" },
-  "reference/glossary#live": { path: "reference/glossary/", anchor: "live", title: "Metric glossary" },
-  "reference/glossary#project": { path: "reference/glossary/", anchor: "project", title: "Metric glossary" },
 } as const satisfies Record<string, DocsEntry>;
 
 export type DocsKey = keyof typeof DOCS;
@@ -91,9 +89,12 @@ const PAGE_DOCS: Readonly<Record<string, DocsKey>> = {
 };
 
 /** The docs page for a route: each page's own, Activity's Judgments view (view=judgments) the Judgments page, anything
- *  else the docs home. `search` is the query string ("?view=judgments", with or without "?") or the parsed keys. */
+ *  else the docs home. It names the page the route shows: Codex has no judgments, so that view shows Overview, and
+ *  Project with no project redirects to Activity. `search` is the query string (with or without "?") or the parsed keys. */
 export function docsForRoute(path: string, search: string | Readonly<Record<string, unknown>> = ""): DocsKey {
-  const view = typeof search === "string" ? new URLSearchParams(search).get("view") : search.view;
-  if (path === "/usage" && view === "judgments") return "pages/insights";
+  const params = typeof search === "string" ? new URLSearchParams(search) : null;
+  const get = (k: string) => (params ? params.get(k) : (search as Readonly<Record<string, unknown>>)[k]);
+  if (path === "/usage" && get("view") === "judgments" && get("source") !== "codex") return "pages/insights";
+  if (path === "/project" && !get("project")) return "pages/activity";
   return Object.hasOwn(PAGE_DOCS, path) ? PAGE_DOCS[path]! : "home";
 }

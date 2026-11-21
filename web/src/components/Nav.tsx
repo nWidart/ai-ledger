@@ -35,7 +35,7 @@ const BookIcon = () => <svg viewBox="0 0 16 16" width="16" height="16" fill="non
   <path d="M8 4.5C6.6 3.4 4.6 3 2 3v9c2.6 0 4.6.4 6 1.5 1.4-1.1 3.4-1.5 6-1.5V3c-2.6 0-4.6.4-6 1.5ZM8 4.5v9" /></svg>;
 
 // What the bar reads of the URL: the shared query string its links carry, and the view, which picks Activity's docs page.
-const navSearch = (raw: Readonly<Record<string, string>>) => ({ shared: sharedSearch(raw), project: raw.project || "", view: raw.view || "" });
+const navSearch = (raw: Readonly<Record<string, string>>) => ({ shared: sharedSearch(raw), project: raw.project || "", view: raw.view || "", source: raw.source || "" });
 
 // An exact time: the time alone for today, with the date for an older day.
 const exact = (d: Date) => d.toDateString() === new Date().toDateString() ? d.toLocaleTimeString() : d.toLocaleString();
@@ -174,11 +174,11 @@ function PageChooser({ path, shared, sig, docs }: { path: string; shared: string
 /** The shared top bar: brand, page tabs in two groups (keeping project, range, source and auto) or the page chooser, the
  *  palette button, the current page's Docs link, and the freshness control: Refresh, and the last ingest's state with its details in a toggletip. */
 export function Nav() {
-  const path = usePathname(), { shared, project, view } = useSearchOf(navSearch), theme = useTheme(), next = nextTheme(theme);
+  const path = usePathname(), { shared, project, view, source } = useSearchOf(navSearch), theme = useTheme(), next = nextTheme(theme);
   const nav = useRef<HTMLElement>(null);
   const { refresh, state: st } = useRefresh(), flash = useFlash();
   const label = freshLabel(st) || "No ingest yet";
-  const sig = signalsOf(st), { alert } = sig, docs = docsForRoute(path, { view });
+  const sig = signalsOf(st), { alert } = sig, docs = docsForRoute(path, { view, source, project });
   // What a screen reader is told of the alert: its sentence, kept as it was while the alert stays the same alert (the forecast time
   // in the sentence drifts every cycle), changed when the alert's kind, window or measured flag change, and emptied, with no
   // announcement of its own, when it goes. Set while rendering, from the key: the usual way to derive state from a change.

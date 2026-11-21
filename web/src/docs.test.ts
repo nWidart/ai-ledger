@@ -56,7 +56,11 @@ describe("docs registry", () => {
     expect(docsForRoute("/usage", { view: "judgments", project: "x" })).toBe("pages/insights");
     expect(docsForRoute("/usage", "?range=7")).toBe("pages/activity");
     expect(docsForRoute("/project", "?project=ai-ledger")).toBe("pages/project");
-    expect(docsUrl(docsForRoute("/project", ""))).toBe("https://nwidart.github.io/ai-ledger/pages/project/");
+    expect(docsUrl(docsForRoute("/project", { project: "ai-ledger" }))).toBe("https://nwidart.github.io/ai-ledger/pages/project/");
+    // The page the route shows: Codex has no judgments, so Overview shows; Project with no project redirects to Activity.
+    expect(docsForRoute("/usage", "?view=judgments&source=codex")).toBe("pages/activity");
+    expect(docsForRoute("/usage", { view: "judgments", source: "claude" })).toBe("pages/insights");
+    expect(docsForRoute("/project", "")).toBe("pages/activity");
     for (const [path, key] of [["/live", "pages/live"], ["/limits", "pages/limits"], ["/context", "pages/context"], ["/errors", "pages/errors"]] as const)
       expect(docsForRoute(path)).toBe(key);
     // view=judgments belongs to Activity only; an unknown path, the root and the old /insights open the docs home.
