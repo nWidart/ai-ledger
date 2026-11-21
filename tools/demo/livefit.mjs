@@ -1,6 +1,7 @@
-// Checks Live's layout in a real browser, which the jsdom tests cannot lay out: the stream's width at 1440 x 900, the rail
-// holding 8 sessions without scrolling, the Full text warning moving nothing, and at 390 x 844 no horizontal page scroll with
-// the first event on the first screen. On the Wall it pins two sessions and measures them. It runs locally, not in CI.
+// Checks Live's layout in a real browser, which the jsdom tests cannot lay out: the stream wider than 798px at 1440 x 900,
+// the rail holding 8 sessions without scrolling, the Full text warning moving nothing, and at 390 x 844 no horizontal page
+// scroll with the first event on the first screen, the directory shown, and the pulse's readout inside the screen. On the
+// Wall it pins two sessions and measures them. It runs locally, not in CI.
 // It needs the demo server and the pinned Playwright:
 //   cd web && npm ci && npm run build;  cd tools/demo && npm ci && uv run seed.py && uv run serve.py   (DEMO_PORT moves it)
 //   node livefit.mjs        prints the figures, and exits 1 naming a check that fails
@@ -56,6 +57,8 @@ try {
   const w = await measure(wide);
   console.log(`1440x900: stream ${w.stream}px wide, top at ${w.streamTop}px; rail ${w.railHeight}px high, 8 sessions in 5 groups take ${w.railContent}px: ${w.railFits ? "fit" : "SCROLL"}; first event at ${w.firstEvent.top}px`);
   if (!w.railFits) fails.push("the rail scrolls with 8 sessions at 1440 x 900");
+  // The width the stream had beside the agent panel, which this layout must beat (live-dashboard spec: Stream width).
+  if (!(w.stream > 798)) fails.push(`the stream is ${w.stream}px wide at 1440 x 900, not wider than 798px`);
   await wide.getByRole("checkbox", { name: "Full text" }).check();
   await wide.waitForTimeout(600);
   const t = await measure(wide);
@@ -72,6 +75,17 @@ try {
   const nt = await measure(narrow);
   console.log(`390x844, Full text on: stream top at ${nt.streamTop}px (moved ${nt.streamTop - n.streamTop}px)`);
   if (nt.streamTop !== n.streamTop) fails.push("the Full text warning moves the stream at 390 x 844");
+  // The directory stays on a phone, cut to the screen; the pulse's readout, opened by keyboard on its last minute, too.
+  const cwd = await narrow.evaluate(() => { const r = document.querySelector(".pg-live .strip .cwd")?.getBoundingClientRect(); return r && { left: Math.round(r.left), right: Math.round(r.right), width: Math.round(r.width) }; });
+  console.log(`390x844: directory ${cwd ? `${cwd.width}px wide, ${cwd.left}-${cwd.right}px` : "MISSING"}`);
+  if (!cwd || cwd.width < 40 || cwd.left < 0 || cwd.right > 390) fails.push("the directory is not shown within the screen at 390 x 844");
+  await narrow.locator(".pg-live .strip .pulse .chart").focus();
+  await narrow.keyboard.press("End");
+  await narrow.waitForTimeout(200);
+  const ro = await measure(narrow), box = await narrow.evaluate(() => { const r = document.querySelector(".pg-live .pulse .readout").getBoundingClientRect(); return { left: Math.round(r.left), right: Math.round(r.right), text: document.querySelector(".pg-live .pulse .readout").textContent }; });
+  console.log(`390x844, pulse readout open: page ${ro.scrollWidth}px wide in ${ro.clientWidth}px (${ro.hscroll ? "HORIZONTAL SCROLL" : "no horizontal scroll"}); readout ${box.left}-${box.right}px, "${box.text}"`);
+  if (!box.text) fails.push("End on the pulse opens no readout at 390 x 844");
+  if (ro.hscroll || box.left < 0 || box.right > ro.clientWidth) fails.push("the pulse readout passes the screen's edge at 390 x 844");
 
   const wall = await (await b.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" })).newPage();
   await wall.route(LIST, route => route.fulfill({ json: list }));

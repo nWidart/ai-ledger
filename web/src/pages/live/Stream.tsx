@@ -232,7 +232,7 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
           const id = r.lane.id, v = views.get(id)!;
           if (v.hidden) return null;
           return <div className="ev" key={"lane:" + id} ref={mark("lane:" + id)}><span className="t">{time(r.lane.start, today)}</span>
-            <Lane lane={r.lane} fig={s.lanes[id]} v={v} now={v.ticks ? now : undefined} today={today} text={text} open={open} toggle={toggle}
+            <Lane lane={r.lane} fig={Object.hasOwn(s.lanes, id) ? s.lanes[id] : undefined} v={v} now={v.ticks ? now : undefined} today={today} text={text} open={open} toggle={toggle}
               target={target} newest={newest} fold={fold} all={all} /></div>;
         }
         const e = r.e;

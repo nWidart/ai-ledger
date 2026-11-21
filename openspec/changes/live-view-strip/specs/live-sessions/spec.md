@@ -2,12 +2,12 @@
 
 ### Requirement: Report the agent's figures
 For one session, the app SHALL report:
-- the context of its newest main-thread request, and the model's context window when it is known;
+- its newest main-thread request's context, and its window when known, alike on a first load, a catch-up and the list;
 - its compactions, with the context before each;
-- its cost, requests, tool calls, failed tool calls and cache-read share;
+- its cost, requests, tool calls, failed calls and cache-read share;
 - its working directory, when known;
-- its pulse of the last 10 minutes: each main-thread request's context, from the last one before, and each tool call that ended, failed or not;
-- the newest plan-limit use for the session's source.
+- its pulse of the 10 minutes up to now: each main-thread request's context, from the last one before, and each tool call that ended;
+- the newest plan-limit use for its source.
 
 #### Scenario: Known context window
 - **WHEN** the newest request used 55,000 tokens of context on a model with a 1,000,000-token window
@@ -24,3 +24,11 @@ For one session, the app SHALL report:
 #### Scenario: Subagent request
 - **WHEN** a subagent made a request in the last 10 minutes
 - **THEN** the pulse's context leaves it out
+
+#### Scenario: Line stamped after now
+- **WHEN** the app reports a pulse ending at 08:10 and the store holds a request stamped 08:11
+- **THEN** the pulse leaves that request out
+
+#### Scenario: Window on a catch-up
+- **WHEN** a Codex session on a model with no price states a 272,000-token window at a turn's start, more than a minute before a catch-up's cursor
+- **THEN** the catch-up, the first load and the active list all report the 272,000-token window

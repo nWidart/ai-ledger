@@ -604,6 +604,17 @@ class SessionTest(LiveCase):
         self.assertEqual(p["context"], [dict(ts=at(-600), tokens=40000), dict(ts=at(40), tokens=62000)])  # no subagent request
         self.assertEqual(p["ticks"], [dict(ts=at(42), failed=True), dict(ts=at(43), failed=False), dict(ts=at(50), failed=True)])
 
+    def test_pulse_ends_at_now(self):  # a request or a call stamped after now falls past the pulse's end: none counts
+        none = dict(input_tokens=0, cache_read_input_tokens=0, cache_creation_input_tokens=0, cache_creation=dict())
+        self.write("s1.jsonl", assistant("a1", "m1", at(40), [tool_use("t1", "Bash", command="ls")], **dict(none, input_tokens=40000))
+                   + result("r1", at(45), "t1", "x")
+                   + assistant("a2", "m2", at(71), [tool_use("t2", "Read", file_path="x")], **dict(none, input_tokens=90000))
+                   + result("r2", at(72), "t2", "ok"))
+        self.ingest()
+        p = self.run_session()["pulse"]  # NOW is 10:01:00, at(71) 10:01:11
+        self.assertEqual(p["end"], "2026-11-10T10:01:00.000Z")
+        self.assertEqual((p["context"], p["ticks"]), ([dict(ts=at(40), tokens=40000)], [dict(ts=at(45), failed=False)]))
+
     def test_unknown_window(self):
         self.write("s1.jsonl", assistant("a1", "m1", at(30), [dict(type="text", text="hi")], model="mystery-1"))
         self.ingest()
@@ -635,6 +646,22 @@ class CodexSessionTest(CodexCase):
         self.assertEqual((got["state"]["kind"], got["window"]), ("tool", 272000))
         self.assertEqual((exec_ev["long"], got["state"]["long"], got["lanes"]), (False, False, {}))
         self.assertEqual([e["quiet"] for e in got["events"] if e["k"] == "tool"], [False, False])
+
+    def test_window_the_same_on_a_first_load_a_catch_up_and_the_list(self):
+        # An unpriced model: only the turn's start states the window, and it is older than a catch-up's one-minute overlap.
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0))
+                   + codex_line(1, 1, "event_msg", type="task_started", turn_id="t1", model_context_window=272000)
+                   + codex_line(2, 2, "turn_context", turn_id="t1", model="mystery-1")
+                   + codex_line(3, 3, "token_usage_record", turn_id="t1", response_id="r1", usage=dict(input_tokens=900, output_tokens=40))
+                   + codex_line(4, 100, "event_msg", type="task_complete", turn_id="t1")
+                   + codex_line(5, 110, "response_item", type="custom_tool_call", name="exec", call_id="c1", input="run tests"))
+        self.ingest()
+        cur, now = self.con.cursor(), NOW + timedelta(seconds=60)
+        first = live.session(cur, THREAD, now=now, prices=PRICES)
+        caught = live.session(cur, THREAD, after=first["cursor"], now=now, prices=PRICES)
+        listed = live.sessions(cur, automated=True, now=now, prices=PRICES)["sessions"][0]  # the test store reads it as automated
+        self.assertEqual("turn_start" in [e["k"] for e in caught["events"]], False)
+        self.assertEqual((first["window"], caught["window"], listed["window"]), (272000, 272000, 272000))
 
     def test_read_only_shell_calls_marked_quiet(self):
         call = lambda i, cmd: codex_line(i, i, "response_item", type="function_call", name="exec_command", call_id=f"c{i}", arguments=json.dumps(dict(cmd=cmd)))

@@ -24,6 +24,8 @@ describe("Live search", () => {
     expect(validateSearch({ pin: "a,b" })).toEqual({ pin: "a,b" });
     expect(validateSearch({ pin: "a,b,c" })).toEqual({ pin: "b,c" });
     expect(validateSearch({ pin: "a,a,b" })).toEqual({ pin: "a,b" });
+    expect(validateSearch({ pin: "a,b,a,c,bad id" })).toEqual({ pin: "b,c" }); // each once at its first place, then the last two
+    expect(validateSearch({ pin: "constructor" })).toEqual({ pin: "constructor" }); // any well-formed id, the page's to find
     expect(validateSearch({ pin: "a b,<x>,c" })).toEqual({ pin: "c" });
     expect(validateSearch({ pin: "," })).toEqual({});
     expect(validateSearch({ pin: 3 })).toEqual({});

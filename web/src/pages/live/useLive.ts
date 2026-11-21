@@ -62,11 +62,17 @@ export function useLive(view: View, selected: string, text: boolean, paused: boo
   const client = useQueryClient(), visible = usePageVisible();
   const listQ = useQuery(queries.liveList(view, text)), sessionQ = useQuery({ ...queries.liveSession(selected, text), enabled: !!selected });
   // The pins, one query each, kept as the selected session is: through Full text turning on, until the text arrives.
+  // Kept in a Map: a pin is any id the URL names, and an object would answer "constructor" with its own.
   const pinQs = useQueries({ queries: pins.map(id => queries.liveSession(id, text)) });
-  const [keptPins, setKeptPins] = useState<Readonly<Record<string, LiveSession>>>({});
-  const fresh = pinQs.flatMap(q => (q.data && keptPins[q.data.session_id] !== q.data ? [q.data] : []));
-  if (fresh.length) setKeptPins(Object.fromEntries([...pins.flatMap(id => (keptPins[id] ? [[id, keptPins[id]] as const] : [])), ...fresh.map(s => [s.session_id, s] as const)]));
-  const pinned = pins.map((id, i) => ({ id, session: pinQs[i]!.data ?? (text ? keptPins[id] : undefined), error: pinQs[i]!.error ?? undefined }));
+  const [keptPins, setKeptPins] = useState<ReadonlyMap<string, LiveSession>>(() => new Map());
+  const fresh = pinQs.flatMap(q => (q.data && keptPins.get(q.data.session_id) !== q.data ? [q.data] : []));
+  if (fresh.length) setKeptPins(new Map([...[...keptPins].filter(([id]) => pins.includes(id)), ...fresh.map(s => [s.session_id, s] as const)]));
+  // Each pin's failure, held while it is asked again, as useLastError holds the session's.
+  const [pinErrors, setPinErrors] = useState<ReadonlyMap<string, Error>>(() => new Map());
+  const errs = pins.flatMap((id, i) => { const q = pinQs[i]!, e = q.error ?? (q.isLoading ? pinErrors.get(id) : undefined); return e ? [[id, e] as const] : []; });
+  if (errs.length !== pinErrors.size || errs.some(([id, e]) => pinErrors.get(id) !== e)) setPinErrors(new Map(errs));
+  const errOf = new Map(errs);
+  const pinned = pins.map((id, i) => ({ id, session: pinQs[i]!.data ?? (text ? keptPins.get(id) : undefined), error: errOf.get(id) }));
   // How a notice asks for a pin again: through its observer, as for the selected session. Read from a ref, so the
   // handlers below, and with them the notice stream, keep their identity when the pins change.
   const pinAsk = useRef(new Map<string, () => Promise<unknown>>());

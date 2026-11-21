@@ -4,6 +4,8 @@ import { SOURCE_LABELS } from "../../components/Filters";
 import { ProjectName } from "../../components/ProjectDot";
 import { num, pct, plural, usd } from "../../format";
 import { subjectAttrs } from "../../components/menu/subject";
+import { sessionLink } from "../../components/sheets/session";
+import { ApiError } from "../../useApi";
 import { NEAR_FULL, StateTag, Strip } from "./Strip";
 import { Stream } from "./Stream";
 import { groupSessions, INFERRED_WHY, latestText, NO_FILTERS, stateNow, stateText, type LaneChoices } from "./live";
@@ -44,25 +46,30 @@ export function Wall({ sessions, now, pins, toggle }: { sessions: LiveListSessio
   </div>)}</section>;
 }
 
-/** A stream pinned beside the tiles: its head with Open in Stream and Unpin, its strip, and its stream with its own
+/** A stream pinned beside the tiles: its head with Session sheet, Open in Stream and Unpin, its strip, and its stream with its own
  *  filters and Follow, on when pinned. The lane choices are the page's, as they are kept by lane. */
 export function Pinned({ id, name, s, error, now, text, choices, setChoices, sheet, open, unpin }: {
   id: string; name: string; s: LiveSession | undefined; error: Error | undefined; now: number; text: boolean;
   choices: LaneChoices; setChoices: (c: LaneChoices) => void; sheet: string; open: () => void; unpin: () => void;
 }) {
   const [follow, setFollow] = useState(true), [filters, setFilters] = useState(NO_FILTERS);
-  return <section className="panel pin" aria-label={`Pinned: ${name}`} data-pin={id}>
+  const missing = error instanceof ApiError && error.status === 404;
+  return <section className="panel pin" aria-label={`Pinned: ${name}`} data-pin={id} aria-busy={!s && !error || undefined}>
     <div className="stream-head pin-head">
       <h2 className="stream-title" title={name}>{name}</h2>
       <span className="spacer" />
+      <a href={sheet} {...sessionLink(id)}>Session sheet</a>
       <button type="button" onClick={open}>Open in Stream</button>
       <button type="button" onClick={unpin} aria-label={`Unpin ${name}`}>Unpin</button>
     </div>
+    {/* A failed update keeps what the pin showed, and says so. */}
+    {s && error && <p className="banner pin-err" role="alert"><b>Could not update this session.</b> {error.message}</p>}
     {s ? <>
       <Strip s={s} st={stateNow(s.state, now)} now={now} failedOnly={filters.errors} setFailedOnly={errors => setFilters({ ...filters, errors })} />
       <Stream s={s} now={now} text={text} follow={follow} setFollow={setFollow} filters={filters} setFilters={setFilters}
         choices={choices} setChoices={setChoices} sheet={sheet} />
-    </> : error ? <p className="muted loading">Could not load this session. {error.message}</p>
+    </> : missing ? <p className="muted loading">Session not found. It may be from another store, or its id is mistyped. Unpin removes it.</p>
+      : error ? <p className="muted loading" role="alert">Could not load this session. {error.message}</p>
       : <p className="muted loading">Loading…</p>}
   </section>;
 }

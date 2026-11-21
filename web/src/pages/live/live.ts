@@ -193,11 +193,11 @@ export function pulseMinutes(p: LivePulse): PulseMinute[] {
   return out;
 }
 
-/** The pulse in words, for its name: the context from its first level to its last, and the calls. */
+/** The pulse in words, for its name: the context from its lowest level to its highest, the line's scale, and the calls. */
 export function pulseSummary(p: LivePulse): string {
-  const calls = p.ticks.length, failed = p.ticks.filter(t => t.failed).length;
-  const first = p.context[0]?.tokens, last = p.context.at(-1)?.tokens;
-  const ctx = first == null ? "no request" : first === last ? `context ${tokensShort(first)} tokens` : `context ${tokensShort(first)} to ${tokensShort(last!)} tokens`;
+  const calls = p.ticks.length, failed = p.ticks.filter(t => t.failed).length, levels = p.context.map(c => c.tokens);
+  const lo = levels.length ? tokensShort(Math.min(...levels)) : null, hi = levels.length ? tokensShort(Math.max(...levels)) : null;
+  const ctx = lo == null ? "no request" : lo === hi ? `context ${lo} tokens` : `context ${lo} to ${hi} tokens`;
   return `Last 10 minutes: ${ctx}, ${calls === 1 ? "1 tool call" : `${calls} tool calls`}, ${failed} failed.`;
 }
 

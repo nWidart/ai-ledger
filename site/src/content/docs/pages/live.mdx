@@ -124,13 +124,13 @@ The filters combine, stay on when you open another session, and change only what
 | Context | The context of the newest main-thread request out of the model's window, such as `55k / 1M · 6%`, with a meter and a mark at each compaction, then the compaction count. The meter turns to the warning color above 80%. With no known window, it shows tokens only and says the window is not known. |
 | **Cost**, **Tools**, **Errors** | The session's cost, tool calls and failed tool calls so far. |
 | **Cache read** | The share of the session's prompt tokens read from the cache, with a toggletip that says so. |
-| Plan limits | One item per open plan limit of the session's source, such as `5h 42%`. Above 80% it takes the warning color and adds "near". The reset time is on hover and for a screen reader; the [Limits](/ai-ledger/pages/limits/) page shows every window in full. |
+| Plan limits | One item per open plan limit of the session's source, such as `5h 42%`. Above 80% it takes the warning color and adds "near". A toggletip beside it gives the reset time, by pointer, tap or keyboard; the [Limits](/ai-ledger/pages/limits/) page shows every window in full. |
 | Pulse | The last 10 minutes (see below). |
-| Directory | The session's working directory, cut from its start so the end of the path shows. Hidden below 721 pixels wide. |
+| Directory | The session's working directory, cut from its start so the end of the path shows. A screen reader reads the whole path. Below 721 pixels wide it takes its own line beside Copy resume. |
 
 The strip shows no request count or model: the model is in the stream's head, and the session sheet's Models table counts the requests of each model.
 
-**The pulse** draws the last 10 minutes of the session. A line follows the context of each main-thread request, so it rises as the context grows and stays flat when requests only reread the cache. It is scaled from its lowest to its highest value, so small growth shows; the readout gives the numbers. Along the foot, each tool call that ended has a tick: an upright line for a success, a ✕ for a failure. Subagent calls count too. The pulse's name gives its summary to a screen reader, such as "Last 10 minutes: context 40k to 62k tokens, 18 tool calls, 2 failed." Tab to it and use Left and Right to read one minute at a time, Home and End for the first and the last, and Escape to dismiss the readout. The readout, such as "10:04 to 10:05: context 52k, 3 calls, 1 failed", shows under the pulse and is read politely. Hovering it reads the minute under the pointer.
+**The pulse** draws the last 10 minutes of the session. A line follows the context of each main-thread request, so it rises as the context grows and stays flat when requests only reread the cache. It is scaled from its lowest to its highest value, so small growth shows; the readout gives the numbers. Along the foot, each tool call that ended has a tick: an upright line for a success, a ✕ for a failure. Subagent calls count too. The pulse's name gives its summary to a screen reader, such as "Last 10 minutes: context 40k to 62k tokens, 18 tool calls, 2 failed." The range is the lowest and highest context the line plots, so a peak shows even when the context fell back; a flat line names one level. Tab to it and use Left and Right to read one minute at a time, Home and End for the first and the last, and Escape to dismiss the readout. The readout, such as "10:04 to 10:05: context 52k, 3 calls, 1 failed", shows under the pulse and is read politely. Below 721 pixels wide it shows under the strip and wraps, so it stays on the screen. Hovering it reads the minute under the pointer.
 
 **Controls**
 
@@ -156,10 +156,15 @@ A tile's border follows its state: your turn, approval? and running a tool each 
 
 **Controls** Selecting a tile pins its stream beside the tiles, and selecting it again unpins it. A pinned tile says **Pinned**, and a screen reader reads it as a pressed button named "Pin" and the session. The Wall holds two pinned streams at most: pinning a third unpins the oldest, and a status says so, such as "Pinned graft. Unpinned notes: 2 pins at most."
 
-A pinned stream shows its head, a status strip without the directory and Copy resume, and its stream, with its own stream filters and its own Follow, on when pinned. Its head has two buttons:
+A pinned stream shows its head, a status strip without the directory and Copy resume, and its stream, with its own stream filters and its own Follow, on when pinned. Its head has:
 
-- **Open in Stream** opens the session in the Stream view. The pins stay in the URL for when you come back to the Wall.
-- **Unpin** removes the stream and puts the keyboard focus on the session's tile.
+- **Session sheet**, which opens the session's sheet over the Wall. The pinned streams keep updating under it.
+- **Open in Stream**, which opens the session in the Stream view and puts the keyboard focus on the stream's heading. The pins stay in the URL for when you come back to the Wall.
+- **Unpin**, which removes the stream and puts the keyboard focus on the session's tile. When the session has no tile, because it left the active list or the store does not hold it, the focus goes to the other pin's first button, else the first tile, else the page's heading.
+
+A pinned session stays pinned when it ends or leaves the active list. While a pin first loads, it says "Loading…" and a screen reader reads it as busy. When an update fails, the pin keeps its stream and says "Could not update this session." A pin the store does not hold says "Session not found", and Unpin still removes it.
+
+The URL's `pin=` keeps each well-formed id once, at its first place; of more than two, the last two stay. `pin=a,b,a,c` pins b and c.
 
 From 1100 pixels wide, the tiles stand in one column with the pinned streams beside them, and the page fits the window's height. Below that, the pinned streams go under the tiles.
 

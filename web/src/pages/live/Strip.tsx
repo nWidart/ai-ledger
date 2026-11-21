@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { LiveSession, LiveState } from "../../api";
 import { copyText } from "../../components/export";
 import { resumeCommand } from "../../components/menu/resume";
@@ -20,17 +20,25 @@ export function StateTag({ st, now, plain, why }: { st: LiveState; now: number; 
       : <span className="inf"> (inferred)</span>)}</span>;
 }
 
-/** Copy resume: the command that resumes the session in its agent, as the session sheet's, said politely. */
+/** Copy resume: the command that resumes the session in its agent, as the session sheet's, said politely. The result
+ *  said is the last attempt's: Strip keys this by session, so another session's strip never says it. */
 function CopyResume({ s }: { s: LiveSession }) {
   const [state, setState] = useState<"" | "copied" | "failed">("");
+  const attempt = useRef(0);
   useEffect(() => {
     if (!state) return;
     const t = setTimeout(() => setState(""), 2000);
     return () => clearTimeout(t);
   }, [state]);
   const cmd = resumeCommand({ source: s.source, session_id: s.session_id, cwd: s.cwd });
+  const copy = async () => {
+    const n = ++attempt.current;
+    setState("");
+    const ok = await copyText(cmd);
+    if (n === attempt.current) setState(ok ? "copied" : "failed");
+  };
   return <>
-    <button type="button" className="copy" title={cmd} onClick={async () => setState(await copyText(cmd) ? "copied" : "failed")}>
+    <button type="button" className="copy" title={cmd} onClick={copy}>
       {state === "copied" ? "Copied" : state === "failed" ? "Copy failed" : "Copy resume"}</button>
     <span className="sr" aria-live="polite">{state === "copied" ? "Resume command copied to clipboard." : state === "failed" ? "Could not copy to clipboard." : ""}</span>
   </>;
@@ -67,15 +75,18 @@ export function Strip({ s, st, now, failedOnly, setFailedOnly, full }: {
       <span className="sr" id={why}>Show failed calls only</span></span>
     <span className="it"><span className="k">Cache read</span> <b>{pct(s.cache_read)}</b>
       <Toggletip term="cache read">The share of this session's prompt tokens read from the prompt cache, at a fraction of the input price.</Toggletip></span>
+    {/* A plan limit's reset time is behind a toggletip, which hover, a tap and the keyboard reach alike. */}
     {s.limits.map(l => {
-      const near = l.used_percent > NEAR_FULL * 100, resets = l.resets_at ? `resets ${when(l.resets_at)}` : "";
-      return <span key={l.label} className={"it lim" + (near ? " warn" : "")} title={resets || undefined}>
-        <span className="k">{l.label}</span> <b>{num(l.used_percent)}%</b>{near && <> near</>}{resets && <span className="sr">, {resets}</span>}</span>;
+      const near = l.used_percent > NEAR_FULL * 100;
+      return <span key={l.label} className={"it lim" + (near ? " warn" : "")}>
+        <span className="k">{l.label}</span> <b>{num(l.used_percent)}%</b>{near && <> near</>}
+        {l.resets_at && <Toggletip term={`the ${l.label} limit`}>The {l.label} limit resets {when(l.resets_at)}. The Limits page has
+          every window.</Toggletip>}</span>;
     })}
     <span className="it"><span className="k" aria-hidden="true">10 min</span> <Pulse p={s.pulse} /></span>
     {full && <span className="it where">
       {s.cwd && <code className="cwd" title={s.cwd}><bdi>{s.cwd}</bdi></code>}
-      <CopyResume s={s} />
+      <CopyResume key={s.session_id} s={s} />
     </span>}
   </div>;
 }

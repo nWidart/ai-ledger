@@ -31,4 +31,5 @@
 
 - [x] 6.1 Update README, CHANGELOG `[Unreleased]`, the Live docs page, the glossary and the playbooks that name the agent panel.
 - [x] 6.2 Record the Live screenshots (`live-strip` in place of `live-status`, `live-rail`, `live-stream`, `live-wall`) and the Live GIF.
-- [x] 6.3 Run `uv run ruff check`, the Python tests, `cd web && npm run check`, `cd site && npm run check`, `openspec validate --specs --strict` and `openspec validate live-view-strip --strict`.
+- [x] 6.3 Review fixes: pin data in a `Map`; pin states (busy, failed update, not found); focus after Unpin with no tile, Open in Stream and Dismiss; the empty Wall; one message for a failed session; Copy resume scoped to its session; the plan limit's reset behind a toggletip; the pulse's name from its lowest to its highest level, and its queries bounded at now; one window figure on a catch-up; the directory and the readout on a phone, checked by `tools/demo/livefit.mjs`.
+- [x] 6.4 Run `uv run ruff check`, the Python tests, `cd web && npm run check`, `cd site && npm run check`, `openspec validate --specs --strict` and `openspec validate live-view-strip --strict`.

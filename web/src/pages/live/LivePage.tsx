@@ -29,6 +29,7 @@ export function LivePage() {
   const view = viewOf(h), mode = search.view === "wall" ? "wall" : "stream";
   const [text, setText] = useState(false); // off on every load: transcript text can hold secrets
   const [warned, setWarned] = useState(false); // the Full text warning, dismissed since Full text was turned on
+  const fullText = useRef<HTMLInputElement>(null);
   const [paused, setPaused] = useState(false);
   const [follow, setFollow] = useState(true);
   const [filters, setFilters] = useState(NO_FILTERS); // off on every load, and kept from one session to the next
@@ -48,34 +49,44 @@ export function LivePage() {
   const sheetHref = (id: string) =>
     sessionSheetHref("/live", { project: view.project, source: view.source, auto: view.automated, view: search.view, pin: search.pin, session: h.session }, id);
   // Pinning a third drops the oldest, and a polite status names both. Unpinning from a stream's own button hands the
-  // focus to the session's tile, which the stream leaves for.
+  // focus to the session's tile, which the stream leaves for; with no tile (the session aged out of the list, or is
+  // unknown), to the other pin's first control, else the first tile, else the page's heading. Open in Stream hands it
+  // to the stream's heading, else its region.
   const [pinNote, setPinNote] = useState("");
-  const refocus = useRef("");
+  /** Where the focus goes after the next render that has it: null while the page has not drawn it yet. */
+  const refocus = useRef<(() => HTMLElement | null) | null>(null);
   const label = (id: string) => nameOf(sessions.find(s => s.session_id === id) ?? pinned.find(p => p.id === id)?.session);
   const togglePin = (id: string, fromPin = false) => {
     const was = pinsOf(search.pin);
     if (was.includes(id)) {
       set({ pin: was.filter(p => p !== id).join(",") || null });
       setPinNote(`Unpinned ${label(id)}.`);
-      if (fromPin) refocus.current = id;
+      if (fromPin) refocus.current = () => [...document.querySelectorAll<HTMLElement>(".walls [data-session]")].find(b => b.dataset.session === id)
+        ?? [...document.querySelectorAll<HTMLElement>(".pg-live .pin")].find(p => p.dataset.pin !== id)?.querySelector<HTMLElement>(".pin-head button")
+        ?? document.querySelector<HTMLElement>(".walls [data-session]") ?? document.getElementById("lede");
       return;
     }
     const next = [...was, id], out = next.length > MAX_PINS ? next.shift()! : "";
     set({ pin: next.join(",") });
     setPinNote(out ? `Pinned ${label(id)}. Unpinned ${label(out)}: ${MAX_PINS} pins at most.` : `Pinned ${label(id)}.`);
   };
+  const openPin = (id: string) => {
+    pick(id);
+    refocus.current = () => document.querySelector<HTMLElement>(".pg-live .main .stream-head h2") ?? document.querySelector<HTMLElement>(".pg-live .main");
+  };
   useEffect(() => {
-    const id = refocus.current;
-    if (!id) return;
-    refocus.current = "";
-    [...document.querySelectorAll<HTMLElement>(".walls [data-session]")].find(b => b.dataset.session === id)?.focus();
+    const el = refocus.current?.();
+    if (!el) return;
+    refocus.current = null;
+    el.focus();
   });
   const projects = [...new Set(sessions.map(s => s.project).filter((p): p is string => !!p))];
   const status = paused ? `Paused${held ? ` · ${plural(held, "update")} held` : ""}` : conn === "reconnecting" ? "Connection lost · reconnecting…"
     : conn === "live" ? "Updating live" : "Connecting…";
   const shown = session && session.session_id === selected ? session : undefined;
   const missing = !shown && sessionError instanceof ApiError && sessionError.status === 404;
-  const error = listError ?? (missing || mode === "wall" ? undefined : sessionError);
+  // A session that failed with nothing to show says so in its panel, in place of Loading…; one that failed to update, here.
+  const error = listError ?? (shown && mode === "stream" ? sessionError : undefined);
   // The tab title says how many listed sessions need the user, as the rail's footer does. App sets the page's own title
   // on each route, so this only adds the count to whatever title is there, and takes it off on leaving.
   const states = sessions.map(s => stateNow(s.state, now).kind), need = states.filter(needsYou).length;
@@ -123,21 +134,23 @@ export function LivePage() {
         <span className="spacer" />
         <p className={"conn" + (conn === "reconnecting" ? " lost" : "")} role="status" aria-live="polite">{status}</p>
         {mode === "stream" && <label className="chk"><input type="checkbox" checked={follow} onChange={e => setFollow(e.target.checked)} /> Follow</label>}
-        <label className={"chk ft" + (text ? " on" : "")}><input type="checkbox" checked={text} onChange={e => { setText(e.target.checked); setWarned(false); }} /> Full text</label>
+        <label className={"chk ft" + (text ? " on" : "")}><input ref={fullText} type="checkbox" checked={text} onChange={e => { setText(e.target.checked); setWarned(false); }} /> Full text</label>
         <button type="button" onClick={() => setPaused(p => !p)} aria-pressed={paused}>{paused ? "Resume" : "Pause"}</button>
-        {/* Over the page, under the bar: it takes no room, so nothing moves when it opens or goes. */}
+        {/* Over the page, under the bar: it takes no room, so nothing moves when it opens or goes. Dismiss hands the focus
+            back to Full text, which the note belongs to. */}
         {text && !warned && <div className="banner ft-warn" role="note"><b>Full text on.</b> Prompts, replies and tool output show as written, secrets included.
           The app only listens on 127.0.0.1; turn this off before sharing your screen.{" "}
-          <button type="button" className="linkish" onClick={() => setWarned(true)}>Dismiss</button></div>}
+          <button type="button" className="linkish" onClick={() => { setWarned(true); fullText.current?.focus(); }}>Dismiss</button></div>}
       </div>
       {error && <div className="banner" role="alert"><b>Could not load.</b> {error.message}</div>}
       {/* With a session in the URL the stream's own panel says it is loading; the placeholder is for the bare page. */}
       {bare && !h.session && <PageSkeleton />}
-      {list && !sessions.length && !h.session && !pins.length && <Empty newest={list.newest} href={sheetHref} />}
+      {/* The Wall shows no stream session: one left in the URL from the Stream view does not hide the empty state. */}
+      {list && !sessions.length && (mode === "wall" ? !pins.length : !h.session) && <Empty newest={list.newest} href={sheetHref} />}
       {mode === "wall" && (sessions.length > 0 || pins.length > 0) && <div className={"wallgrid" + (pins.length ? " pinned" : "")}>
         <Wall sessions={sessions} now={now} pins={pins} toggle={togglePin} />
         {pinned.map(p => <Pinned key={p.id} id={p.id} name={label(p.id)} s={p.session} error={p.error} now={now} text={text}
-          choices={choices} setChoices={setChoices} sheet={sheetHref(p.id)} open={() => pick(p.id)} unpin={() => togglePin(p.id, true)} />)}
+          choices={choices} setChoices={setChoices} sheet={sheetHref(p.id)} open={() => openPin(p.id)} unpin={() => togglePin(p.id, true)} />)}
       </div>}
       {mode === "wall" && <span className="sr" role="status">{pinNote}</span>}
       {mode === "stream" && (sessions.length > 0 || h.session) && <div className="grid">
@@ -150,13 +163,13 @@ export function LivePage() {
           <p className="foot">{plural(states.filter(k => WORKING.has(k)).length, "session")} working
             {need ? ` · ${need} waiting for you` : ""} · {usd(sessions.reduce((a, s) => a + (s.cost ?? 0), 0))} so far</p>
         </section>
-        <section className="panel main" aria-label="Session">
+        <section className="panel main" aria-label="Session" tabIndex={-1}>
           {shown ? <>
             <div className="stream-head">
               {/* The session's heading: its title, else its project. */}
-              {shown.title ? <><h2 className="stream-title" title={shown.title}>{shown.title}</h2>
+              {shown.title ? <><h2 className="stream-title" title={shown.title} tabIndex={-1}>{shown.title}</h2>
                 <ProjectName project={shown.project}><b>{shown.project ?? "(unknown)"}</b></ProjectName></>
-                : <h2 className="stream-proj"><ProjectName project={shown.project}><b>{shown.project ?? "(unknown)"}</b></ProjectName></h2>}
+                : <h2 className="stream-proj" tabIndex={-1}><ProjectName project={shown.project}><b>{shown.project ?? "(unknown)"}</b></ProjectName></h2>}
               {shown.branch && <code className="chip">{shown.branch}</code>}<span className="chip">{SOURCE_LABELS[shown.source]}</span>
               {shown.model && <span className="chip">{shown.model}</span>}
               <a href={sheetHref(shown.session_id)} {...sessionLink(shown.session_id)}>Session sheet</a>
@@ -166,6 +179,7 @@ export function LivePage() {
               choices={choices} setChoices={setChoices} sheet={sheetHref(shown.session_id)} />
           </> : missing ? <p className="muted loading">Session not found. It may be from another store, or its id is mistyped.{" "}
             <a href="/live" onClick={e => { e.preventDefault(); set({ session: null }); }}>Show the active sessions</a></p>
+            : sessionError ? <p className="muted loading" role="alert">Could not load this session. {sessionError.message}</p>
             : <p className="muted loading">Loading…</p>}
         </section>
       </div>}

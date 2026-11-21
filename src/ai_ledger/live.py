@@ -416,7 +416,7 @@ def recent(cur, sids):
     """The newest STATE_LINES lines of each session's main thread and, apart, of its subagents, in line order: enough to
     tell what it is doing now, and subagent traffic never pushes the main thread out. The newest turn mark of a Codex
     session's main thread and of each of its subagent files is read too, whatever its age: a long turn still reads
-    thinking, and a subagent in one still counts as at work."""
+    thinking, and a subagent in one still counts as at work. So is the newest turn start, which states the window."""
     lines = {}
     if sids:
         rows = cur.execute(f"""SELECT r.session_id, {ROW_COLS}, r.line_no FROM {ROW_FROM}
@@ -427,7 +427,8 @@ def recent(cur, sids):
                 WHERE list_contains(?, r.session_id) AND r.ts IS NOT NULL AND r.parsed AND r.type = 'event_msg'
                 AND list_bool_or(list_transform(?, lambda x: contains(r.json, x)))
                 AND list_contains(?, json_extract_string(r.json, '$.payload.type'))
-                QUALIFY row_number() OVER (PARTITION BY r.session_id, r.file ORDER BY r.ts DESC, r.line_no DESC) = 1""",
+                QUALIFY row_number() OVER (PARTITION BY r.session_id, r.file, json_extract_string(r.json, '$.payload.type') = 'task_started'
+                  ORDER BY r.ts DESC, r.line_no DESC) = 1""",
                             [sids, [f'"{m}"' for m in TURN_MARKS], list(TURN_MARKS)]).fetchall()
         seen = set()
         for row in sorted(rows, key=lambda r: (r[0], r[3], r[2], r[7])):
@@ -492,11 +493,14 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
     last = aware(s["last_ts"])
     cursor = max((r[2] for r in rows if r[2]), default=after or None)
     f = figures(cur, [sid], prices)[sid]
+    # The state and the window from the session's newest lines, as the active list reads them: a catch-up's rows can
+    # hold no turn start, and a first load's are a different set.
+    now_events = assemble(recent(cur, [sid]).get(sid, []), copied)[0]
     return dict(session_id=sid, **title_of(titles.titles(cur, [sid], prompts=text), sid), project=s["project"], source=s["source"], branch=s["git_branch"], cwd=s["cwd"], last_ts=iso(last),
                 now=iso(now), cursor=cursor, truncated=more,
-                state=state(assemble(recent(cur, [sid]).get(sid, []), copied)[0], now, s["source"], last, sid in closed(cur, [sid])),
+                state=state(now_events, now, s["source"], last, sid in closed(cur, [sid])),
                 events=[public(e, text) for e in events], lanes=lanes(cur, sid, prices),
-                window=window_of(f["model"], events, prices), compactions=compactions(cur, sid),
+                window=window_of(f["model"], now_events, prices), compactions=compactions(cur, sid),
                 pulse=pulse(cur, sid, now), limits=plan_limits(cur, s["source"], now), **f)
 
 
@@ -628,15 +632,17 @@ def compactions(cur, sid):
 def pulse(cur, sid, now):
     """The session over the last PULSE, oldest first: the context of each main-thread request (what it read: input and
     cache), with the last one before the span as its starting level, and each tool call that ended, subagents' included,
-    with whether it failed. Tokens per minute would count every cache reread as work; the context only grows with it."""
-    start = (now - PULSE).astimezone(timezone.utc).replace(tzinfo=None)
+    with whether it failed. Nothing after `now` counts: it would fall past the pulse's end. Tokens per minute would count
+    every cache reread as work; the context only grows with it."""
+    naive = now.astimezone(timezone.utc).replace(tzinfo=None)
+    start = naive - PULSE
     context = cur.execute("""SELECT ts, tokens FROM (
             SELECT ts, input + cache_read + cache_5m + cache_1h AS tokens, ts > ? AS inside,
               row_number() OVER (PARTITION BY ts > ? ORDER BY ts DESC) AS back
-            FROM requests WHERE session_id = ? AND NOT subagent AND ts IS NOT NULL)
-        WHERE inside OR back = 1 ORDER BY ts""", [start, start, sid]).fetchall()
+            FROM requests WHERE session_id = ? AND NOT subagent AND ts IS NOT NULL AND ts <= ?)
+        WHERE inside OR back = 1 ORDER BY ts""", [start, start, sid, naive]).fetchall()
     ticks = cur.execute("""SELECT end_ts, coalesce(is_error, false) FROM tool_calls
-        WHERE session_id = ? AND end_ts > ? ORDER BY end_ts""", [sid, start]).fetchall()
+        WHERE session_id = ? AND end_ts > ? AND end_ts <= ? ORDER BY end_ts""", [sid, start, naive]).fetchall()
     return dict(start=iso(aware(start)), end=iso(now), context=[dict(ts=iso(aware(ts)), tokens=n or 0) for ts, n in context],
                 ticks=[dict(ts=iso(aware(ts)), failed=bool(bad)) for ts, bad in ticks])
 

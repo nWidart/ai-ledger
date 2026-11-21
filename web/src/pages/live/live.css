@@ -206,7 +206,8 @@
 .pg-live .pin { display: flex; flex-direction: column; min-width: 0; }
 .pg-live .pin-head { flex-wrap: nowrap; }
 .pg-live .pin-head .stream-title { flex: 0 1 auto; min-width: 0; }
-.pg-live .pin-head button { flex: none; white-space: nowrap; }
+.pg-live .pin-head button, .pg-live .pin-head a { flex: none; white-space: nowrap; }
+.pg-live .pin-err { margin: 6px 14px; }
 .pg-live .pin > .stream { height: 60dvh; }
 
 /* From tablet width up the stream page fits the viewport: the rail and the stream scroll inside themselves, so the document
@@ -246,7 +247,11 @@
   .pg-live .stream.dated { --tw: 6.5rem; }
   .pg-live .ev { gap: 6px; }
   .pg-live .tool { grid-template-columns: 4rem minmax(0, 1fr) auto 1rem; gap: 6px; }
-  .pg-live .strip .where { justify-content: flex-start; }
-  .pg-live .strip { gap: 3px 12px; padding: 5px 12px; }
-  .pg-live .strip .cwd, .pg-live .strip .k[aria-hidden] { display: none; }
+  /* The directory stays, cut from its start to the room left beside Copy resume. */
+  .pg-live .strip .where { justify-content: flex-start; flex-basis: 100%; }
+  .pg-live .strip { gap: 3px 12px; padding: 5px 12px; position: relative; }
+  .pg-live .strip .k[aria-hidden] { display: none; }
+  /* The pulse's readout opens under the strip, across its width, and wraps: under the pulse it could pass the screen's edge. */
+  .pg-live .strip .pulse { position: static; }
+  .pg-live .strip .pulse .readout { left: 12px; right: 12px; white-space: normal; }
 }
