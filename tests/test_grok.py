@@ -534,6 +534,75 @@ class RunTest(GrokCase):
         self.assertEqual(runs, dict(model_ms=1_000_000, tool_ms=None, lines_added=None, lines_removed=None, output_per_s=100.0))
 
 
+class MalformedTest(GrokCase):
+    """Valid JSON lines with a field of the wrong type derive nothing and stop no ingest."""
+
+    def bad_lines(self, sid):
+        def line_of(n, update, **meta):
+            return dict(timestamp=1, method="session/update", params=dict(
+                sessionId=sid, update=update, _meta=dict(eventId=f"{sid}-9{n:03d}", agentTimestampMs=1794486999000 + n, **meta)))
+        usage = dict(inputTokens=10, outputTokens=5, costUsdTicks=10000)
+        bad = [dict(sessionUpdate="turn_completed", prompt_id="x1", stop_reason="end_turn", usage=dict(usage, modelUsage=["a", "b"])),
+               dict(sessionUpdate="turn_completed", prompt_id="x2", stop_reason="end_turn", usage=dict(usage, modelUsage="grok")),
+               dict(sessionUpdate="turn_completed", prompt_id={"a": 1}, stop_reason=["x"], elapsed_ms="3", usage="lots"),
+               dict(sessionUpdate="turn_completed", prompt_id="x3", stop_reason=["x"], usage=dict(usage, modelUsage={"m": "x"})),
+               dict(sessionUpdate="turn_completed", prompt_id=7, stop_reason=3, usage=[1, 2]),
+               dict(sessionUpdate="tool_call", toolCallId={"a": 1}, rawInput="ls", _meta="x"),
+               dict(sessionUpdate="tool_call", toolCallId="bad-1", rawInput=["ls"], _meta={"x.ai/tool": "run_terminal_command"}),
+               dict(sessionUpdate="tool_call_update", toolCallId=["x"], status="completed", rawOutput="out"),
+               dict(sessionUpdate="tool_call_update", toolCallId="bad-1", status="failed", rawOutput=["x"], content="text"),
+               dict(sessionUpdate="tool_call_update", toolCallId="bad-2", status={"s": 1}, rawOutput={"exit_code": "1"}, content=[1, "x"]),
+               dict(sessionUpdate="hook_execution", event_name={"e": 1}, prompt_id=["p"], runs="many"),
+               dict(sessionUpdate="hook_execution", event_name="stop", runs=[{"name": {"n": 1}, "status": "ok"}, "run"]),
+               dict(sessionUpdate=["agent_message_chunk"], content="hi"),
+               dict(sessionUpdate="agent_message_chunk", content=["hi"]),
+               dict(sessionUpdate="user_message_chunk", content={"text": 5}),
+               dict(sessionUpdate="auto_compact_started", context_window="256000"),
+               dict(sessionUpdate="auto_compact_completed", tokens_before="1"),
+               dict(sessionUpdate="subagent_spawned", child_session_id={"id": 1}),
+               "update"]
+        # A call line whose figures are text, before the turn x2 it would count in.
+        call = line_of(99, dict(sessionUpdate="agent_message_chunk", content=dict(type="text", text="x")),
+                       streamStartMs="soon", totalTokens="many", promptId="x2")
+        out = [line_of(i, u) for i, u in enumerate(bad)]
+        out.insert(1, call)
+        out += [dict(timestamp=1, params="text"), dict(timestamp=1, params=dict(sessionId=sid, update="u", _meta=["m"])),
+                dict(timestamp=1, params=dict(sessionId=sid, update=dict(sessionUpdate="tool_call", toolCallId="bad-3"), _meta=["m"]))]
+        return out
+
+    def test_bad_lines_derive_nothing_and_raise_nothing(self):
+        from ai_ledger import live
+        path, = self.put("long-turn")
+        sid = SESSION["long-turn"]
+        self.ingest()
+        good = {t: self.q(f"SELECT * FROM {t} ORDER BY ALL") for t in ("requests", "tool_calls", "prompts", "hooks", "session_runs")}
+        with open(path) as fh:
+            lines = fh.readlines()
+        bad = self.bad_lines(sid)
+        for d in bad:
+            grok.live_items(d)
+        live.assemble([(f"k{i}", path, None, False, "grok", json.dumps(d)) for i, d in enumerate(bad)])
+        # In a file read from its start: the bad lines after the good turn's end, before the lines that close the session.
+        end = next(i for i, x in enumerate(lines) if '"turn_completed"' in x) + 1
+        for t in ("raw_lines", "files", *store.DERIVED):
+            self.con.execute(f"DELETE FROM {t}")
+        with open(path, "w") as fh:
+            fh.writelines(lines[:end] + [json.dumps(d) + "\n" for d in bad] + lines[end:])
+        self.ingest()
+        self.assertEqual(self.count(), len(lines) + len(bad))
+        for t in ("tool_calls", "prompts", "hooks", "session_runs"):
+            self.assertEqual(self.q(f"SELECT * FROM {t} WHERE {'tool_use_id IS NULL OR NOT starts_with(tool_use_id, $$bad-$$)' if t == 'tool_calls' else 'TRUE'} "
+                                    "ORDER BY ALL"), good[t], t)
+        # A turn whose modelUsage is no breakdown is one request with the turn's totals and no model.
+        got = self.q("SELECT * FROM requests WHERE model IS NOT NULL ORDER BY ALL")
+        self.assertEqual(got, good["requests"])
+        self.assertEqual(self.q("SELECT model, input, output, reported_cost, stop_reason FROM requests WHERE model IS NULL "
+                                "ORDER BY stop_reason NULLS LAST"), [(None, 10, 5, 1e-6, "end_turn")] * 2 + [(None, 10, 5, 1e-6, None)])
+        before = {t: self.q(f"SELECT * FROM {t} ORDER BY ALL") for t in store.DERIVED}
+        store.rebuild(self.con)
+        self.assertEqual({t: self.q(f"SELECT * FROM {t} ORDER BY ALL") for t in store.DERIVED}, before)
+
+
 class AllSourcesRebuildTest(GrokCase):
     """A store holding Claude Code, Codex and Grok sessions: a rebuild gives every derived table as ingest made it."""
 

@@ -50,28 +50,37 @@ def update(d):
 def key(d, path, offset):
     """grok:<eventId>:<agentTimestampMs>: a resumed run repeats event ids, so the time tells its lines apart."""
     m = meta(d)
-    if m.get("eventId") and isinstance(m.get("agentTimestampMs"), int):
+    if string(m.get("eventId")) and store.is_int(m.get("agentTimestampMs")):
         return f"grok:{m['eventId']}:{m['agentTimestampMs']}"
     return f"{path}:{offset}"
 
 
+def string(v):
+    """v when it is a non-empty string, else None: a field of the wrong type is read as absent."""
+    return v if isinstance(v, str) and v else None
+
+
 def iso(ms):
-    """Epoch milliseconds as the store's transcript time: UTC ISO with milliseconds and a Z."""
-    if not isinstance(ms, int) or isinstance(ms, bool):
+    """Epoch milliseconds as the store's transcript time: UTC ISO with milliseconds and a Z. None for no time or one
+    out of range."""
+    if not store.is_int(ms):
         return None
-    return datetime.fromtimestamp(ms // 1000, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S") + f".{ms % 1000:03d}Z"
+    try:
+        return datetime.fromtimestamp(ms // 1000, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S") + f".{ms % 1000:03d}Z"
+    except (OverflowError, OSError, ValueError):
+        return None
 
 
 def fields(d, path):
     m = meta(d)
-    return ids(path)[0], m.get("eventId"), iso(m.get("agentTimestampMs"))
+    return ids(path)[0], string(m.get("eventId")), iso(m.get("agentTimestampMs"))
 
 
 def line_type(d):
     """The line's sessionUpdate, or its hook's event_name for a hook_execution line."""
     u = update(d)
-    t = u.get("sessionUpdate")
-    return u.get("event_name") or t if t == "hook_execution" else t
+    t = string(u.get("sessionUpdate"))
+    return string(u.get("event_name")) or t if t == "hook_execution" else t
 
 
 def parent_of(cur, session):
@@ -241,7 +250,7 @@ def live_items(d):
     its result, as no line ties the call to the child while it runs. A background shell call has no timeout: it
     returns at once. Thought chunks give nothing, and no request: Grok's usage comes once a turn ends."""
     u = update(d)
-    t = u.get("sessionUpdate")
+    t, tid = u.get("sessionUpdate"), string(u.get("toolCallId"))
     if t == "user_message_chunk":
         text = chunk_text(u)
         return [dict(k="turn_start", window=None)] + ([dict(k="prompt", text=text, join="\n")] if text else [])
@@ -252,18 +261,18 @@ def live_items(d):
         return ([dict(k="interrupt")] if u.get("stop_reason") == "cancelled" else []) + [dict(k="turn_end")]
     if t == "auto_compact_completed":
         return [dict(k="compaction", pre=u.get("tokens_before") if store.is_int(u.get("tokens_before")) else None)]
-    if t == "tool_call" and u.get("toolCallId"):
+    if t == "tool_call" and tid:
         name, _, summary = tool_of(u)
         raw = u.get("rawInput") if isinstance(u.get("rawInput"), dict) else {}
         background = raw.get("is_background") is True or raw.get("background") is True
-        return [dict(k="tool_use", id=u["toolCallId"], tool=name, summary=summary,
+        return [dict(k="tool_use", id=tid, tool=name, summary=summary,
                      description=raw.get("description") if isinstance(raw.get("description"), str) else None,
                      timeout=None if background else number(raw.get("timeout_ms")))]
-    if t == "tool_call_update" and u.get("toolCallId") and u.get("status"):
+    if t == "tool_call_update" and tid and string(u.get("status")):
         out = u.get("rawOutput") if isinstance(u.get("rawOutput"), dict) else {}
         agent = out.get("subagent_id") if out.get("type") == "SubagentCompleted" and isinstance(out.get("subagent_id"), str) else None
         shell = "run_terminal_command" if out.get("type") == "Bash" else None  # the update does not name its tool; its output's type does
-        return [dict(k="tool_result", id=u["toolCallId"], error=error_of(shell, u), output=content_text(u) or mcp_text(out), agent=agent)]
+        return [dict(k="tool_result", id=tid, error=error_of(shell, u), output=content_text(u) or mcp_text(out), agent=agent)]
     return []
 
 
@@ -292,9 +301,9 @@ class GrokDeriver(store.Deriver):
         ts = iso(m.get("agentTimestampMs"))
         when = store.ts_of(ts)
         t = u.get("sessionUpdate")
-        if t == "tool_call" and u.get("toolCallId"):
+        if t == "tool_call" and string(u.get("toolCallId")):
             self.tool_call(u, when)
-        elif t == "tool_call_update" and u.get("toolCallId") and u.get("status"):
+        elif t == "tool_call_update" and string(u.get("toolCallId")) and string(u.get("status")):
             self.tool_result(u, m, when)
         elif t in ("agent_message_chunk", "agent_thought_chunk"):
             said = chunk_text(u).strip()
@@ -312,9 +321,9 @@ class GrokDeriver(store.Deriver):
         if t == "turn_completed" and isinstance(u.get("usage"), dict):
             self.turn(d, u, s, when)
             self.run(u, m)
-            if u.get("stop_reason") == "cancelled" and u.get("prompt_id"):
+            if u.get("stop_reason") == "cancelled" and string(u.get("prompt_id")):
                 self.interrupted.add(stored_prompt(self.sid, u["prompt_id"]))
-        elif t == "auto_compact_started" and isinstance(u.get("context_window"), int):
+        elif t == "auto_compact_started" and store.is_int(u.get("context_window")):
             s["window"] = u["context_window"]
         elif t == "auto_compact_completed":
             s["compactions"] += 1
@@ -340,7 +349,7 @@ class GrokDeriver(store.Deriver):
         err = error_of(tool, u)
         text = content_text(u) or mcp_text(u.get("rawOutput"))
         self.seq += 1
-        self.results[tid] = dict(end_ts=ts, is_error=err is not None, error=err, prompt_id=stored_prompt(self.sid, m.get("promptId")),
+        self.results[tid] = dict(end_ts=ts, is_error=err is not None, error=err, prompt_id=stored_prompt(self.sid, string(m.get("promptId"))),
                                  session_id=self.sid, seq=self.seq, sub=self.sub, bytes=len(text.encode("utf-8")))
         if err is not None:
             self.pending[tid] = self.seq
@@ -353,11 +362,13 @@ class GrokDeriver(store.Deriver):
     def hook(self, u, ts):
         """One hooks row per run: source hook_execution, the hook event and the run's name (Grok's hook, as a command is
         Claude Code's). A user_prompt_submit line names the prompt the chunks after it belong to."""
-        event = u.get("event_name")
-        if event == "user_prompt_submit" and u.get("prompt_id"):
+        event = string(u.get("event_name"))
+        if event is None:
+            return
+        if event == "user_prompt_submit" and string(u.get("prompt_id")):
             self.prompt, self.prompt_known = u["prompt_id"], True
         for r in u.get("runs") if isinstance(u.get("runs"), list) else []:
-            if not isinstance(r, dict):
+            if not isinstance(r, dict) or not string(r.get("name")):
                 continue
             st = r.get("status") if isinstance(r.get("status"), dict) else {}
             ms = st.get("elapsed_ms")
@@ -395,8 +406,8 @@ class GrokDeriver(store.Deriver):
         (start,) = self.cur.execute("SELECT coalesce(max(byte_offset), -1) FROM raw_lines WHERE file = ? AND type = 'turn_completed' "
                                     "AND byte_offset < ?", [self.path, end]).fetchone()
         rows = self.cur.execute(
-            "SELECT stream, max(total) FROM (SELECT CAST(json_extract(json, '$.params._meta.streamStartMs') AS BIGINT) AS stream, "
-            "CAST(json_extract(json, '$.params._meta.totalTokens') AS BIGINT) AS total FROM raw_lines "
+            "SELECT stream, max(total) FROM (SELECT TRY_CAST(json_extract(json, '$.params._meta.streamStartMs') AS BIGINT) AS stream, "
+            "TRY_CAST(json_extract(json, '$.params._meta.totalTokens') AS BIGINT) AS total FROM raw_lines "
             f"WHERE file = ? AND parsed AND type IN ({','.join('?' * len(CALL_TYPES))}) "
             "AND json_extract_string(json, '$.params._meta.promptId') = ? AND byte_offset > ? AND byte_offset < ?) "
             "WHERE stream IS NOT NULL GROUP BY 1 ORDER BY 1",
@@ -406,17 +417,19 @@ class GrokDeriver(store.Deriver):
     def turn(self, d, u, s, ts):
         """The requests of a finished turn. Its calls cannot be told when no line states one or the turn names several
         models: it is then one request per model at the turn's end, keyed by the turn_completed line's key (prompt ids
-        repeat, so two turns of one prompt id stay two)."""
-        usage, pid = u["usage"], u.get("prompt_id")
-        models = {k: v for k, v in (usage.get("modelUsage") or {}).items() if isinstance(v, dict)} or {None: usage}
+        repeat, so two turns of one prompt id stay two). A modelUsage that is no breakdown by model counts as none: the
+        turn is then one request with the turn's totals and no model."""
+        usage, pid, stop = u["usage"], string(u.get("prompt_id")), string(u.get("stop_reason"))
+        by_model = usage.get("modelUsage") if isinstance(usage.get("modelUsage"), dict) else {}
+        models = {k: v for k, v in by_model.items() if isinstance(v, dict)} or {None: usage}
         calls = self.calls(d, pid) if pid and len(models) == 1 else []
         if not calls:
             for model, mu in models.items():
                 mid = f"{key(d, self.path, 0)}:{model or ''}"
-                self.request(mid, ts, model, counts(mu), cost_of(mu), u.get("stop_reason"))
+                self.request(mid, ts, model, counts(mu), cost_of(mu), stop)
             return
         (model, mu), = models.items()
-        weights = [size for _, size in calls]
+        weights = [max(size, 0) for _, size in calls]
         if sum(weights) <= 0:  # no line stated a context size: equal shares
             weights = [1] * len(calls)
         shares = list(zip(*(split(n, weights) for n in counts(mu))))  # one tuple of TOKEN_KINDS per call
@@ -427,7 +440,7 @@ class GrokDeriver(store.Deriver):
         for i, (stream, size) in enumerate(calls):
             last = i == len(calls) - 1
             self.request(f"grok:{self.sid}:{pid}:{stream}", store.ts_of(iso(stream)), model, shares[i], costs[i],
-                         u.get("stop_reason") if last else None)
+                         stop if last else None)
             if s and size > s["peak"]:
                 s["peak"], s["peak_model"] = size, model
 
