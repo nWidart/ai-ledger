@@ -14,10 +14,11 @@ import { tableFocus } from "./context";
 import { queries } from "../../queries";
 import { ErrorsPage } from "./ErrorsPage";
 import { sessionHref, typeRows } from "./model";
-import { when } from "../../format";
+import { dayRange, when } from "../../format";
+import { drawn, fakeECharts } from "../../components/echart/testing";
 import { lostPayload } from "./lostData";
 import { VIEW_KEY } from "./view";
-import { ingested, prevented, refreshed, renderApp, renderPage } from "../../testing";
+import { ingested, refreshed, renderApp, renderPage } from "../../testing";
 
 // typeRows and sessionHref (one call per example render) run through their own implementation; the mock only counts the calls.
 vi.mock("./model", async orig => { const a = await orig<typeof import("./model")>(); return { ...a, typeRows: vi.fn(a.typeRows), sessionHref: vi.fn(a.sessionHref) }; });
@@ -108,6 +109,16 @@ function serve(fixes: Record<string, string> = {}, refuse: ((b: Fix) => boolean)
 }
 
 const payloadGets = () => vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors").length;
+// The rate chart draws on the fake runtime, which draws nothing: what it draws is rateTracks.test.ts's. Here: the box, its
+// live region, its tooltip, and the series the page hands the chart.
+const chartBox = () => document.getElementById("chart")!;
+const chartSaid = () => document.querySelector("#chartView div.sr[aria-live]")!.textContent;
+const chartTip = () => within(chartBox()).queryByRole("tooltip");
+type Drawn = { id?: string; data?: unknown[][] };
+/** A series of the chart's last drawing, by id. */
+const series = async (id: string) => ((await drawn()).last!.series as Drawn[]).find(s => s.id === id);
+/** The bucket key of each point of the chart's last drawing. */
+const pointKeys = async () => ((await drawn()).last!.xAxis as { data: string[] }[])[0]!.data;
 const page = async () => {
   const { client } = renderPage(<ErrorsPage />); // with the shell's sheet host: Errors mounts no session or tool sheet of its own
   await screen.findByRole("heading", { level: 1, name: /failed tool calls/ });
@@ -194,7 +205,9 @@ describe("ErrorsPage", () => {
     serve({ x: "2026-11-04" });
     await page();
     expect(document.querySelector("#catBody .chip.fixed")?.textContent).toBe("✓ Fix applied Nov 4");
-    expect(document.querySelector('#chart .fix[data-c="x"]')?.textContent).toBe("✓ x");
+    const fix = (await series("fixes"))!.data!;
+    expect(fix).toHaveLength(1);
+    expect((await pointKeys())[fix[0]![0] as number]).toBe("2026-11-04"); // one marker, on its day
     expect(document.querySelector(".vitals")?.textContent).toContain("1Fixes applied");
     await userEvent.click(within(document.getElementById("catBody")!).getByRole("button", { name: "x" }));
     const d = document.getElementById("detail")!;
@@ -636,8 +649,9 @@ describe("ErrorsPage", () => {
       history.replaceState(null, "", "/errors?range=7&cat=x&noise=0");
       await page();
       await userEvent.click(muteBtn());
-      await waitFor(() => expect(document.querySelector("#chart svg")).toBeNull());
+      await waitFor(() => expect(document.querySelector("#chart .empty")).toBeTruthy());
       const chart = document.getElementById("chart")!, hash = location.search;
+      expect(fakeECharts.live).toEqual([]); // the message's box, with no chart in it
       expect(chart.textContent).toMatch(/No failed tool calls in this range/);
       chart.focus();
       // React reports an error thrown in a handler on the window, not out of fireEvent.
@@ -1394,12 +1408,11 @@ describe("ErrorsPage bucket selection", () => {
     history.replaceState(null, "", "/errors" + hash);
     return page();
   };
-  // jsdom has no layout: the chart is 800 wide, three buckets of 250 from x=40.
-  const clickBucket = (i: number) => {
-    const svg = document.querySelector("#chart svg")!;
-    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 320, right: 800, bottom: 320, x: 0, y: 0, toJSON() {} });
-    fireEvent.click(document.getElementById("hit")!, { clientX: 40 + 250 * i + 100, clientY: 50 });
+  const clickBucket = async (i: number) => {
+    const fake = await drawn();
+    fake.fire("click", fake.pointAt(i));
   };
+  const mark = async () => (await series("selected"))?.data;
   const rows = () => [...document.querySelectorAll("#catBody tr")].map(r => [r.querySelector(".tbtn")?.textContent, r.querySelector(".c-count")?.textContent]);
   const hashOf = () => Object.fromEntries(new URLSearchParams(location.search.slice(1)));
   const keys = () => { document.getElementById("chart")!.focus(); };
@@ -1408,7 +1421,7 @@ describe("ErrorsPage bucket selection", () => {
     await open("?range=30");
     const change = document.querySelector("#catBody .c-change")!.textContent;
     expect(rows()).toEqual([["x", "6"]]);
-    clickBucket(0);
+    await clickBucket(0);
     expect(location.search).toBe("?range=30&at=2026-11-03");
     expect(rows()).toEqual([["x", "2"]]);
     expect(document.getElementById("atClr")?.textContent).toBe("Nov 3 ✕");
@@ -1417,30 +1430,18 @@ describe("ErrorsPage bucket selection", () => {
     expect(screen.getByRole("heading", { level: 1 }).textContent).toMatch(/^6 failed tool calls/);
     expect(document.querySelector("#catBody .c-change")!.textContent).toBe(change);
     expect(document.querySelector(".types .hint")!.textContent).toContain("With a day selected, the types, Errors, Rate, the share, Time lost and Not recovered follow it; Trend and Change stay range-wide.");
-    // Marked on the chart by an outline and a marker, and for assistive tech.
-    expect(document.getElementById("atMark")?.getAttribute("data-at")).toBe("2026-11-03");
+    // Framed on the chart, and named for assistive tech.
+    expect(await mark()).toEqual([[0, 0]]);
     expect(document.getElementById("chart")!.getAttribute("aria-label")).toContain("Selected: Nov 3.");
     expect(JSON.parse(localStorage.getItem("claude-errors-view")!)).not.toHaveProperty("at");
-    clickBucket(0);
+    await clickBucket(0);
     expect(location.search).toBe("?range=30");
     expect(document.getElementById("atClr")).toBeNull();
-    expect(document.getElementById("atMark")).toBeNull();
+    expect(await mark()).toBeUndefined();
     expect(rows()).toEqual([["x", "6"]]);
   });
 
-  it("leaves keys with Alt, Ctrl, Meta or Shift to the browser on the chart, and never lets Enter or Space scroll it", async () => {
-    await open("?range=30");
-    keys();
-    const chart = document.getElementById("chart")!;
-    expect(prevented(chart)).toEqual([]);
-    expect(fireEvent.keyDown(chart, { key: " ", shiftKey: true })).toBe(true); // Shift+Space still scrolls the page up
-    expect(location.search).toBe("?range=30");
-    expect(document.getElementById("chartLive")!.textContent).toBe("");
-    for (const k of ["Enter", " "]) expect(fireEvent.keyDown(chart, { key: k })).toBe(false);
-    expect(location.search).toBe("?range=30"); // with no current point, nothing is selected
-  });
-
-  it("selects and clears from the keyboard with Enter and Space", async () => {
+  it("selects and clears from the keyboard with Enter and Space, saying each once in the chart's region with the point still read", async () => {
     await open("?range=30");
     keys();
     await userEvent.keyboard("{Enter}"); // no current point yet
@@ -1448,31 +1449,38 @@ describe("ErrorsPage bucket selection", () => {
     await userEvent.keyboard("{Home}{Enter}");
     expect(location.search).toBe("?range=30&at=2026-11-03");
     expect(document.getElementById("chart")!.getAttribute("aria-label")).toContain("Selected: Nov 3.");
-    await waitFor(() => expect(document.getElementById("detailLive")!.textContent).toMatch(/^Selected Nov 3, 2026/));
+    expect(chartSaid()).toBe("Selected Nov 3, 2026: the table and detail show only its errors.");
+    expect(chartTip()!.textContent).toMatch(/^Nov 3, 2026/); // the reading stays, so the same key acts on the same point
+    expect(document.getElementById("detailLive")!.textContent).toBe("");
     await userEvent.keyboard(" ");
     expect(location.search).toBe("?range=30");
+    expect(chartSaid()).toBe("Selection cleared: the table and detail cover the whole range.");
   });
 
-  it("can't select a folded stretch without calls", async () => {
+  it("can't select a folded stretch without calls, and says so in other words the second time", async () => {
     await open("?range=30", withDays([["2026-10-10", "foo", 10, 0, "claude"], ["2026-11-04", "foo", 10, 0, "claude"]]));
     keys();
     await userEvent.keyboard("{Home}{ArrowRight}");
-    expect(document.getElementById("chartLive")!.textContent).toContain(" – ");
+    expect(chartSaid()).toContain(" – ");
     await userEvent.keyboard("{Enter}");
     expect(location.search).toBe("?range=30");
-    await waitFor(() => expect(document.getElementById("detailLive")!.textContent).toBe("A stretch without tool calls cannot be selected."));
+    expect(chartSaid()).toBe("A stretch without tool calls cannot be selected.");
+    await userEvent.keyboard(" ");
+    expect(chartSaid()).toBe("This stretch has no tool calls to select.");
   });
 
-  it("Back clears a selection, and the chip's button clears it and keeps focus in the table", async () => {
+  it("Back clears a selection, and the chip's button clears it, says nothing in the chart's region and keeps focus in the table", async () => {
     await open("?range=30");
-    clickBucket(1);
+    await clickBucket(1);
     expect(location.search).toBe("?range=30&at=2026-11-04");
     await act(async () => { history.back(); });
     await waitFor(() => expect(location.search).toBe("?range=30"));
     expect(document.getElementById("atClr")).toBeNull();
-    clickBucket(1);
+    await clickBucket(1);
+    expect(chartSaid()).toBe("Selected Nov 4, 2026: the table and detail show only its errors.");
     await userEvent.click(document.getElementById("atClr")!);
     expect(location.search).toBe("?range=30");
+    expect(chartSaid()).toBe("");
     expect(document.activeElement).toBe(document.querySelector("#catBody button"));
   });
 
@@ -1551,31 +1559,36 @@ describe("ErrorsPage bucket selection", () => {
     expect(document.querySelector("#exList #ex-t07")).toBeTruthy();
   });
 
-  it("draws the no-activity band and legend key only for buckets with neither calls nor errors", async () => {
+  // The bands themselves, a run as one, are rateTracks.test.ts's.
+  it("keys no activity in the legend only for buckets with neither calls nor errors", async () => {
     const calls = (days: string[]): ErrorsPayload["calls"] => days.map(d => [d, "foo", 10, 0, "claude"]);
-    const bands = () => document.querySelectorAll("#chart svg rect.noact").length;
     const key = () => [...document.querySelectorAll("#legend .key")].some(k => k.textContent === "No activity");
-    // Weeks: a call on Oct 28 (week of Oct 26) and its error on Nov 4 (week of Nov 2): errors and no calls in the second week, so no band.
+    // Weeks: a call on Oct 28 (week of Oct 26) and its error on Nov 4 (week of Nov 2): errors and no calls in the second week.
     await open("?range=30&gran=week", { ...fixture, calls: calls(["2026-10-28"]) });
-    expect([bands(), key()]).toEqual([0, false]);
+    expect(key()).toBe(false);
     cleanup();
-    // Days: the same errors, and a call on Nov 5: Oct 29 to Nov 3 have neither (one merged band), Nov 4 has errors only.
+    // Days: the same errors, and a call on Nov 5: Oct 29 to Nov 3 have neither, Nov 4 has errors only.
     await open("?range=30", { ...fixture, calls: calls(["2026-10-28", "2026-11-05"]) });
-        expect([bands(), key()]).toEqual([1, true]);
-    const band = document.querySelector("#chart svg rect.noact")!;
-    expect(Number(band.getAttribute("width"))).toBeCloseTo(6 * (800 - 40 - 10) / 9); // six of the nine days
+    expect(key()).toBe(true);
   });
 
-  it("tells a screen reader the chart is a labelled group with its own keys, and describes it", async () => {
+  it("tells a screen reader the chart is a labelled group with its own keys, and describes it; under 14 points it names no zoom", async () => {
     await open("?range=30&at=2026-11-03");
     const chart = document.getElementById("chart")!;
     expect(chart.getAttribute("role")).toBe("group");
     expect(chart.hasAttribute("aria-roledescription")).toBe(false); // a group, read as one: no custom role name
     expect(chart.getAttribute("aria-describedby")).toBe("chartHint");
     expect(document.getElementById("chartHint")).toBeTruthy();
-    expect(chart.getAttribute("aria-label")).toMatch(/^Errors by type and error rate\. Use the left and right arrow keys.*Selected: Nov 3\.$/);
+    expect(chart.getAttribute("aria-label")).toBe("Errors by type and error rate. Use the left and right arrow keys to read each point, Enter or Space to "
+      + "select the day for the table and examples. Selected: Nov 3.");
     expect(screen.queryByRole("img", { name: /Errors by type/ })).toBeNull();
-    expect(document.getElementById("chartLive")!.getAttribute("aria-live")).toBe("polite");
+    expect(document.querySelector("#chartView div.sr")!.getAttribute("aria-live")).toBe("polite");
+    // Three points: no slider, no zoom words, and plus is the browser's.
+    expect((await drawn()).last!.dataZoom ?? []).toEqual([]);
+    expect(document.getElementById("chartHint")!.textContent).not.toContain("zoom");
+    chart.focus();
+    expect(fireEvent.keyDown(chart, { key: "+" })).toBe(true);
+    expect(screen.queryByRole("button", { name: "Show all days" })).toBeNull();
   });
 
   it("reads a point with errors and no calls as errors and no call that started, in the keyboard reading and the tooltip, never as no activity", async () => {
@@ -1583,15 +1596,15 @@ describe("ErrorsPage bucket selection", () => {
     await open("?range=30", withDays([["2026-11-03", "foo", 10, 0, "claude"], ["2026-11-05", "foo", 10, 0, "claude"]]));
     keys();
     await userEvent.keyboard("{Home}{ArrowRight}");
-    const live = document.getElementById("chartLive")!.textContent!;
+    const live = chartSaid()!;
     expect(live).toMatch(/^Nov 4, 2026: 4 errors, no tool call started in this day\./);
     expect(live).not.toMatch(/no activity/i);
-    const tip = document.getElementById("tip")!;
+    const tip = chartTip()!;
     expect(tip.textContent).toContain("4 errors, no tool call started in this day");
     expect(tip.textContent).not.toMatch(/no activity/i);
     expect(tip.textContent).toContain("x"); // its type rows still show
     await userEvent.keyboard("{ArrowRight}"); // Nov 5: calls, no errors
-    expect(document.getElementById("chartLive")!.textContent).toMatch(/^Nov 5, 2026: 0\.00% rate, 0 errors of 10 calls/);
+    expect(chartSaid()).toMatch(/^Nov 5, 2026: 0\.00% rate, 0 errors of 10 calls/);
   });
 
   it("reads a quiet day, reached by an arrow key, as too few calls for a steady rate", async () => {
@@ -1599,21 +1612,9 @@ describe("ErrorsPage bucket selection", () => {
     await open("?range=30", withDays([["2026-11-03", "foo", 4, 0, "claude"], ["2026-11-04", "foo", 300, 0, "claude"]]));
     keys();
     await userEvent.keyboard("{Home}{ArrowRight}{ArrowLeft}");
-    const live = document.getElementById("chartLive")!.textContent!;
-    expect(live).toMatch(/^Nov 3, 2026: 50\.00% rate, 2 errors of 4 calls, too few calls for a steady rate\. /);
+    expect(chartSaid()).toMatch(/^Nov 3, 2026: 50\.00% rate, 2 errors of 4 calls, too few calls for a steady rate\. /);
     await userEvent.keyboard("{ArrowRight}");
-    expect(document.getElementById("chartLive")!.textContent).not.toMatch(/too few calls/);
-  });
-
-  it("dismisses the tooltip and the reading with Escape, and the keys start over", async () => {
-    await open("?range=30", withDays([["2026-11-03", "foo", 10, 0, "claude"], ["2026-11-05", "foo", 10, 0, "claude"]]));
-    keys();
-    await userEvent.keyboard("{Home}");
-    expect(document.getElementById("tip")!.style.display).toBe("block");
-    await userEvent.keyboard("{Escape}");
-    expect(document.getElementById("tip")!.style.display).toBe("none");
-    await userEvent.keyboard("{ArrowLeft}"); // no point is current any more: Left starts from the last
-    expect(document.getElementById("tip")!.style.display).toBe("block");
+    expect(chartSaid()).not.toMatch(/too few calls/);
   });
 
   it("keeps Space working on the current point after Enter closes the open type", async () => {
@@ -1634,27 +1635,31 @@ describe("ErrorsPage bucket selection", () => {
     const six: ErrorsPayload = { ...two, errors: two.errors.map(e => ({ ...e, c: ty[ids.indexOf(e.id)]!, d: e.id === "t08" ? "2026-11-03" : "2026-11-04" })),
       error_days: ty.map(c => [c === "f" ? "2026-11-03" : "2026-11-04", "foo", c, 1, 0, "claude"] as ErrorsPayload["error_days"][number]) };
     await open("?range=30&cat=f", six);
-    expect(document.querySelector('#chart .layer[data-c="f"]')).toBeTruthy();
+    // The legend has a button per layer of the stack.
+    expect(document.querySelector('#legend button[data-c="f"]')).toBeTruthy();
     keys();
     await userEvent.keyboard("{Home}{ArrowRight}{Enter}");
     await waitFor(() => expect(location.search).toBe("?range=30&at=2026-11-04"));
-    expect(document.querySelector('#chart .layer[data-c="f"]')).toBeNull();
+    expect(document.querySelector('#legend button[data-c="f"]')).toBeNull();
     await userEvent.keyboard(" ");
     expect(location.search).toBe("?range=30");
   });
 
-  it("keeps the current point when new data shifts the chart's points", async () => {
+  // What moves the points (an earlier first day, a fold) is another view: rateTracks.test.ts has its key.
+  it("keeps the point read, with its tooltip, through newer data of the same view, and says nothing", async () => {
     const client = await open("?range=30");
+    const fake = await drawn(), drawings = fake.options.length;
     keys();
-    await userEvent.keyboard("{Home}{ArrowRight}{Enter}"); // Nov 4
-    expect(location.search).toBe("?range=30&at=2026-11-04");
-    // Ingestion adds an earlier first-call day: Nov 4 moves from the second point to the third.
-    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? { ...two, calls: [["2026-11-02", "foo", 10, 0, "claude"], ...two.calls] } : {})));
+    await userEvent.keyboard("{Home}{ArrowRight}"); // Nov 4
+    const said = chartSaid();
+    // An ingest adds calls on Nov 5, the last point: the same view.
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? { ...two, calls: [...two.calls, ["2026-11-05", "foo", 10, 0, "claude"]] } : {})));
     refreshed(client);
-    await waitFor(() => expect(document.getElementById("chart")!.textContent).toContain("Nov 2"));
-    expect(document.getElementById("atMark")?.getAttribute("data-at")).toBe("2026-11-04");
-    await userEvent.keyboard(" ");
-    expect(location.search).toBe("?range=30");
+    await waitFor(() => expect(fake.options.length).toBeGreaterThan(drawings));
+    expect(chartTip()!.textContent).toMatch(/^Nov 4, 2026/);
+    expect(chartSaid()).toBe(said);
+    await userEvent.keyboard("{Enter}");
+    expect(location.search).toBe("?range=30&at=2026-11-04");
   });
 
   it("clears a bucket the chart no longer draws after a project filter", async () => {
@@ -1664,6 +1669,61 @@ describe("ErrorsPage bucket selection", () => {
     expect(document.getElementById("atClr")).toBeNull();
   });
 
+});
+
+describe("ErrorsPage rate chart zoom", () => {
+  // Thirty days to Nov 5 with tool calls on each: thirty points, the fixture's errors on Nov 3 and Nov 4.
+  const month: ErrorsPayload = { ...fixture, calls: dayRange("2026-10-07", "2026-11-05").map(d => [d, "foo", 10, 0, "claude"]) };
+  const open = async () => {
+    stubErrors(month);
+    history.replaceState(null, "", "/errors?range=30");
+    await page();
+    return drawn();
+  };
+  const showAll = (name = "Show all days") => screen.queryByRole("button", { name });
+
+  it("zooms by plus around the point read and says the days shown, leaving the URL, the requests and the data table alone", async () => {
+    const fake = await open(), gets = vi.mocked(fetch).mock.calls.length;
+    expect(fake.last!.dataZoom).toHaveLength(1);
+    expect(chartBox().getAttribute("aria-label")).toContain(", and plus and minus to zoom.");
+    expect(document.getElementById("chartHint")!.textContent).toMatch(/ Plus and minus zoom\.$/);
+    act(() => chartBox().focus());
+    fireEvent.keyDown(chartBox(), { key: "End" });
+    fireEvent.keyDown(chartBox(), { key: "+", shiftKey: true });
+    expect(fake.shown).toEqual({ from: 15, to: 29 });
+    expect(chartSaid()).toBe("Showing Oct 22 to Nov 5, 15 of 30 days.");
+    expect(location.search).toBe("?range=30");
+    expect(vi.mocked(fetch).mock.calls).toHaveLength(gets);
+    await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
+    expect(within(screen.getByRole("table", { name: /per day$/ })).getAllByRole("row")).toHaveLength(31);
+  });
+
+  it("shows 'Show all days' while zoomed: it shows every day, goes away and returns the focus to the chart", async () => {
+    const fake = await open();
+    expect(showAll()).toBeNull();
+    fake.zoomTo(4, 13);
+    expect(chartSaid()).toBe("Showing Oct 11 to Oct 20, 10 of 30 days.");
+    await userEvent.click(showAll()!);
+    expect(fake.shown).toEqual({ from: 0, to: 29 });
+    expect(showAll()).toBeNull();
+    expect(document.activeElement).toBe(chartBox());
+    expect(chartSaid()).toBe("Showing all 30 days.");
+  });
+
+  it("keeps the zoom through a selection and a type, and shows every point after Week", async () => {
+    const fake = await open();
+    fake.zoomTo(4, 13);
+    fake.fire("click", fake.pointAt(8));
+    expect(location.search).toBe("?range=30&at=2026-10-15");
+    expect(fake.shown).toEqual({ from: 4, to: 13 });
+    await userEvent.click(within(document.getElementById("legend")!).getByRole("button", { name: /^x/ }));
+    await waitFor(() => expect(location.search).toContain("cat=x"));
+    expect(fake.shown).toEqual({ from: 4, to: 13 });
+    expect(showAll()).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Week" }));
+    expect(showAll()).toBeNull();
+    expect((await drawn()).last!.dataZoom).toEqual([]); // five weeks: no slider, every point
+  });
 });
 
 // Type x: Edit ×4 (t01, t02 on Nov 3; t03, t04 on Nov 4, Claude Code), mcp__srv__q (t08, Codex); type tests: Bash (t07, Codex).
@@ -1790,7 +1850,7 @@ describe("ErrorsPage tool and agent breakdown", () => {
       root.querySelectorAll("#detail, #detailLive").forEach(n => n.remove());
       document.getElementById("chart")!.focus();
       await userEvent.keyboard("{Home}");
-      return [root.innerHTML.replace(/_r_\w+_/g, "id"), document.getElementById("chartLive")!.textContent];
+      return [root.innerHTML.replace(/_r_\w+_/g, "id"), chartSaid()];
     };
     await open("?range=30&cat=x");
     const plain = await page_();
