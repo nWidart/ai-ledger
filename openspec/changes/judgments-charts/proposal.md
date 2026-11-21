@@ -9,11 +9,12 @@ The design re-review of `main` left one item partial (S1.32): Activity's Judgmen
 One form per kind of data, decided per breakdown (the reasons and the rejected forms are in `design.md`):
 
 - **Outcomes** becomes a chart: one stacked bar of the view's analysed sessions, split by outcome in the outcome trend's order and colors, over a row per outcome with its share and count. The rows stay the filter buttons.
-- **Claude's helpfulness** becomes the same chart, from essential to unhelpful. Its rows show the share, then the count, as Outcomes does (today the count, then the share).
+- **Claude's helpfulness** becomes the same chart, from essential to unhelpful, in two greens, amber and two reds. Its rows show the share, then the count, as Outcomes does (today the count, then the share).
 - **Session types** already is that bar. It moves to the shared bar, and so gains the minimum part width and the forced-colors frame it lacks today.
 - **Friction, Satisfaction, Goals, Languages, Coverage by project and Coverage by run** stay ledgers. Each is a ranking of open-ended names, or a dated list, and a ranked bar per row is the right chart for it.
 - A stacked bar that stands on fewer than 5 analysed sessions says so, as a trend week does.
 - Satisfaction and Claude's helpfulness sit side by side on a wide screen, and stacked on a narrow one.
+- `--warning` darkens one step in the light theme (`#c98500` to `#c68300`), so it keeps 3:1 as a fill on a panel. This applies on every page.
 - No payload change: the bars use the counts `/api/insights` already sends. No derived table changes, so no `rebuild`.
 
 ## Capabilities
@@ -30,6 +31,6 @@ None.
 
 - `web/src/pages/activity/judgments/`: `Judgments.tsx` (Outcomes, Feelings, SessionTypes), `figures.ts` (scale colors), `judgments.css`, a new stacked-bar component, and their tests.
 - `web/src/components/Ledger.tsx` and `Ledger.css`: a row can carry a color swatch in place of its bar.
-- `web/src/theme.css`: the forced-colors rule for bars covers the stacked bar and the swatches.
+- `web/src/theme.css`: the `--warning` token in the light theme, and the forced-colors rule for bars, which covers the stacked bar and the swatches.
 - `README.md`, `CHANGELOG.md`, `site/src/content/docs/pages/insights.mdx`, and the README's Judgments GIF.
 - No change under `src/ai_ledger/`, to the store, to the fixtures in `web/src/__fixtures__/`, or to dependencies.

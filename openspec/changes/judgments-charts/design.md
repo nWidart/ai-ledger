@@ -37,7 +37,8 @@ The payload (`insights.payload` in `src/ai_ledger/insights.py`) already sends wh
 
 - No new chart type, chart library or payload field. No change under `src/ai_ledger/`.
 - No change to the vitals, the lede, the outcome trend, the session list, the page order, or the drill-down filters and their URL keys.
-- No satisfaction filter and no clickable bar parts (see Decisions 4 and 7).
+- No satisfaction filter (declined by the user) and no clickable bar parts (see Decisions 4 and 7).
+- The vitals repeat part of what the Outcomes bar now shows. Trimming them is a follow-up change, agreed with the user, not part of this one.
 - Context's split bar (`.ctr-split-bar`) is a similar bar; moving it to the shared component is left for another change.
 
 ## Decisions
@@ -85,19 +86,24 @@ A new `MixBar` in `web/src/pages/activity/judgments/` takes parts (`{ key, n, co
 
 ### 5. Colors
 
-Outcomes use the trend's `TREND_PARTS` colors by outcome name, so `figures.ts` stays the one source. Helpfulness gets a five-step ramp from the same tokens. Unknown values, and "unclear", share `--proj-other`.
+Outcomes use the trend's `TREND_PARTS` colors by outcome name, so `figures.ts` stays the one source. Helpfulness gets five steps from the same tokens, in three tones: two greens, one amber, two reds. Unknown values, and "unclear", share `--proj-other`.
 
 | Scale step | Outcomes | Helpfulness | Token | On `--surface-1`, light / dark |
 |---|---|---|---|---|
 | Best | Fully achieved | Essential | `--good` | 3.27 / 5.19 |
 | Good | Mostly achieved | Very helpful | `--good-text` | 7.35 / 8.10 |
-| Middling | Partially achieved | Moderately helpful | `--warning` | 2.99 / 7.13 |
-| Poor | | Slightly helpful | `--warning-text` | 5.77 / 8.69 |
+| Middling | Partially achieved | Moderately helpful | `--warning` | 3.08 (after the nudge below) / 7.13 |
+| Poor | | Slightly helpful | `--critical-text` | 6.40 / 6.72 |
 | Worst | Not achieved | Unhelpful | `--critical` | 4.68 / 5.39 |
 | Neutral | Unclear, unknown | Unknown | `--proj-other` | 3.28 / 3.71 |
 
-- Neighbours are close to each other in contrast (green on green, amber on amber). The 2px of surface between parts separates them, as in the trend, and every part is also named by position, by its row's swatch and by text.
-- `--warning` in the light theme is 2.99:1 on `--surface-1`, a hair under the 3:1 the trend's spec already claims. This change moves the light value from `#c98500` to `#c68300` (3.08:1). The shift is not visible, and it applies wherever `--warning` is a fill. `--warning-soft` and `--warning-text` do not change.
+- Three tones are three verdicts: Claude helped (green), helped somewhat (amber), did not help much (red). That is the question the reader brings, and it is how Outcomes already reads: achieved, partially, not.
+- The ends and the middle match across the two bars: the best value is `--good`, the middle `--warning`, the worst `--critical`. The inner steps take the `-text` variant of their tone, as "mostly achieved" does.
+- The two steps of a tone are close to each other (the reds are 1.37:1 apart in light, 1.25:1 in dark; the greens 2.25:1 and 1.56:1). They share a verdict, so that is acceptable: the 2px of surface between parts separates them, as in the trend, and every part is also told by its position, its row's swatch and its name.
+- Rejected: amber for both "moderately" and "slightly helpful" (`--warning`, `--warning-text`). In the dark theme the two are 1.22:1 apart and read as one part, and it puts a poor rating in the middling tone.
+- Rejected: an orange mixed from amber and red for "slightly helpful". It lands on the clay accent, which the app keeps for interactive and pressed states, such as the active row right under the bar.
+- Rejected: grey for "moderately helpful". Grey already means "unclear" or "unknown" in both bars.
+- `--warning` in the light theme is 2.99:1 on `--surface-1`, a hair under the 3:1 the trend's spec already claims. This change moves the light value from `#c98500` to `#c68300` (3.08:1), as agreed with the user. The shift is not visible, and it applies wherever `--warning` is a fill. `--warning-soft` and `--warning-text` do not change.
 - Session types keep `TYPE_COLORS`: four project hues (each at least 3.6:1 on `--surface-1`) and `--proj-other` for an unknown type.
 - Rejected: a new single-hue ramp for helpfulness. It needs new tokens validated in two themes, and it would give "good" two meanings on one page (green in Outcomes, a dark step in Helpfulness).
 
@@ -132,7 +138,7 @@ Outcomes use the trend's `TREND_PARTS` colors by outcome name, so `figures.ts` s
 ## Risks / Trade-offs
 
 - [The two scales are very skewed: one part takes about 80% of the bar and the last parts are slivers] → The 3px floor and the 2px gaps keep every part visible; the rows give the exact figures, and the rows, not the bar, are the way into the small values (the filter buttons).
-- [Outcomes are now shown three ways: vitals, bar, trend] → Each answers a different question (the headline numbers, the split, the change). The vitals are out of scope; the bar replaces the ledger and adds no fourth.
+- [Outcomes are now shown three ways: vitals, bar, trend] → Each answers a different question (the headline numbers, the split, the change). The bar replaces the ledger and adds no fourth. A follow-up change trims the vitals.
 - [Nudging `--warning` touches every page] → One hex step in the light theme only (2.99 to 3.08 on `--surface-1`); checked by eye on Activity, Cost, Context, Errors and Limits in the browser pass.
 - [Helpfulness rows swap their two figures (share first)] → Tests and the docs page are updated in the same task; the figures themselves do not change.
 - [A ledger row without a bar is a new variant of a shared component] → Opt-in by one prop; rows without it render as before, covered by the existing ledger and page tests.

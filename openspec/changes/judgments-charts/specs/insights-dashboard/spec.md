@@ -57,11 +57,15 @@ A stacked bar SHALL span all the view's analysed sessions: each value with a ses
 - **THEN** each share is of the 40 analysed sessions, and no part stands for a Codex session
 
 ### Requirement: Color the parts of a scale
-The Outcomes bar SHALL use the outcome trend's colors for the four outcomes, and one neutral color for unclear and for a value the page does not recognize. The helpfulness bar SHALL run from green (essential, very helpful) through amber (moderately, slightly helpful) to red (unhelpful). Each color SHALL keep 3:1 against the panel surface in the light and the dark theme. Each row SHALL carry its part's color as a swatch beside its name, so a part is never told by color alone.
+The Outcomes bar SHALL use the outcome trend's colors for the four outcomes, and one neutral color for unclear and for a value the page does not recognize. The helpfulness bar SHALL use two greens (essential, very helpful), amber (moderately helpful) and two reds (slightly helpful, unhelpful). Each color SHALL keep 3:1 against the panel surface in the light and the dark theme. Each row SHALL carry its part's color as a swatch beside its name, so a part is never told by color alone.
 
 #### Scenario: Same colors as the trend
 - **WHEN** the Outcomes bar and the outcome trend both show
 - **THEN** fully, mostly, partially and not achieved have the same color in the bar, its rows' swatches and the trend's legend
+
+#### Scenario: Same ends on both bars
+- **WHEN** the Outcomes bar and the helpfulness bar both show
+- **THEN** essential has the green of fully achieved, moderately helpful the amber of partially achieved, and unhelpful the red of not achieved
 
 #### Scenario: Dark theme
 - **WHEN** the page is in the dark theme
