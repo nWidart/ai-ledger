@@ -5,6 +5,7 @@ import type { Source, UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
 import usageAll from "../../__fixtures__/usage-all";
 import usageCodex from "../../__fixtures__/usage-codex";
+import usageSources from "../../__fixtures__/usage-sources";
 import { setOrder, TOP } from "../../colors";
 import { niceMax } from "../../components/chart";
 import type { ChartEnv } from "../../components/echart/tokens";
@@ -73,6 +74,15 @@ describe("costModel", () => {
     expect(fills(model(d, "cost", { stack: "model" }), 0)).toEqual(["var(--series-1)", "var(--series-2)", "var(--series-3)"]);
     expect(fills(model(d, "cost", { stack: "source" }), 0)).toEqual(["var(--series-1)", "var(--series-2)"]);
     expect(model(d).totals).toEqual([19.5]);
+  });
+
+  it("stacks three agents by agent, Grok's reported cost in the third series color", () => {
+    const m = model(usageSources, "cost", { stack: "source" });
+    // Costliest first; each agent keeps its own color.
+    const colorOf = Object.fromEntries(m.kinds.map(k => [k.label, k.c]));
+    expect(colorOf).toEqual({ "Claude Code": "var(--series-1)", Codex: "var(--series-2)", Grok: "var(--series-3)" });
+    expect(fills(m, m.live)).toEqual(m.kinds.map(k => k.c));
+    expect(m.totals[m.live]).toBeCloseTo(usageSources.daily.at(-1)!.cost!, 9);
   });
 
   it("leaves a hidden kind out of the series, the values and the total", () => {
@@ -203,7 +213,7 @@ describe("costOption: tokens", () => {
 // The page fixtures through the model, against figures worked out here from the payload: a day's total is its cost (or its
 // tokens), the average the mean of its seven days, the peak the first largest day, and only the last day is hatched.
 describe("costModel on the page fixtures", () => {
-  const fixtures = { usage, "usage-all": usageAll, "usage-codex": usageCodex } as Record<string, UsagePayload>;
+  const fixtures = { usage, "usage-all": usageAll, "usage-codex": usageCodex, "usage-sources": usageSources } as Record<string, UsagePayload>;
   const tokensOf = (r: UsagePayload["daily"][number]) => r.input + r.output + r.cache_read + r.cache_5m + r.cache_1h;
 
   describe.each(Object.keys(fixtures))("%s", name => {
@@ -281,7 +291,7 @@ describe("Cost's chart colors", () => {
   it("hands env.color only declared color tokens, in every metric and stacking", () => {
     const seen = new Set<string>();
     const recording = env({ color: s => { seen.add(s); return s; } });
-    for (const f of [usage, usageAll, usageCodex, d, long]) {
+    for (const f of [usage, usageAll, usageCodex, usageSources, d, long]) {
       setOrder(f.project_order ?? ["A"]);
       for (const stack of ["project", "model", "source"] as const) costOption(model(f, "cost", { stack }), recording);
       costOption(model(f, "tokens"), recording);
