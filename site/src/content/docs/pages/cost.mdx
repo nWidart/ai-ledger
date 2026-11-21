@@ -28,7 +28,7 @@ import modelsLight from "../../../assets/shots/cost-models-light.png";
 | --- | --- |
 | Project | A searchable list of projects, plus "All projects". |
 | Time range | 7d, 14d, 30d, 90d, All. The default is 30d. |
-| Source | All, Claude Code, Codex. |
+| Source | All, Claude Code, Codex, Grok. |
 | Include automated sessions | On or off. |
 
 The filters live in the page URL, together with the inspected project and the open session. The project filter changes only through these controls, through a project key in the chart's legend, or through a "Filter dashboard to" button in a sheet; selecting a project or session elsewhere opens a sheet and leaves the filter alone. See [Filters](/ai-ledger/everywhere/filters/).
@@ -88,7 +88,7 @@ The gauge sits beside the heading; the filters are in the scope bar above. It me
 
 ### Banners
 
-- **Unpriced models** appears when some model has no price. It lists each model with its tokens. Their tokens are counted; their cost is unknown and left out of totals. To price one, add it to the user prices file, whose full path the banner names, in the shape of the packaged `prices.json`. The next page load uses it, with no rebuild.
+- **Unpriced models** appears when some model has no price. It lists each model with its tokens. Their tokens are counted; their cost is unknown and left out of totals. To price one, add it to the user prices file, whose full path the banner names, in the shape of the packaged `prices.json`. The next page load uses it, with no rebuild. A Grok model is never listed: a Grok request costs what Grok reported. See [Reported cost](/ai-ledger/concepts/cost-estimates/#reported-cost).
 - **Prices file ignored** appears when the user prices file cannot be used. It names the file and the reason. Packaged prices apply until it is fixed. See [Configuration](/ai-ledger/reference/configuration/).
 
 A "+?" chip beside a cost means the figure leaves out some requests from unpriced models. A screen reader reads "plus an unknown cost for N requests from unpriced models", and its hover text shows the count.
@@ -104,7 +104,7 @@ A "+?" chip beside a cost means the figure leaves out some requests from unprice
 - **Cost measure.** Each bar is stacked by the chosen **Stack by** value:
   - **Project** (the default): the projects that have a color of their own (the busiest of all time), by spend in the view, then Other in grey. With one project selected, one series.
   - **Model**: the models that cost the most in the view, up to six series colors, then Other, labeled without the `claude-` prefix.
-  - **Agent**: one series per agent (Claude Code, Codex), no Other.
+  - **Agent**: one series per agent (Claude Code, Codex, Grok), no Other.
   - A day's total is the same in every stacking.
 - **Tokens measure.** Each bar is stacked by token kind: Input, Output, Thinking, Cache read, Cache write 5m, Cache write 1h. In **Volume**, a bar is the day's tokens, and cache reads usually dwarf the rest. In **Share**, every bar fills the plot from 0% to 100%, and each kind's segment is its share of that day's tokens, so you can see whether output grew or shrank. The title reads "Token share per day". Share draws no 7-day average and no peak label, since both describe the day's total; the tooltip, the screen-reader text and the data table give each kind's share and the day's total tokens. A day with no tokens has no bar.
 - A 7-day average line, in the Cost measure and in Volume, drawn when the view has 14 or more days. At a day, it is the mean of the 7 complete days ending there; today has none.
@@ -191,13 +191,13 @@ The count is the view's tokens.
 **Shows** four figures:
 
 - **Cache hit**: the share of input tokens that came from cache, and the share of cache writes that use the 1-hour lifetime.
-- **Subagent cost**: the share of estimated cost that came from subagents, with the amount, and the share of tokens.
+- **Subagent cost**: the share of estimated cost that came from subagents, with the amount, and the share of tokens. It leaves Grok out: a Grok subagent's tokens are part of its parent's turn.
 - **Per prompt**: estimated cost per prompt, and tokens per prompt.
 - **Per commit**: estimated cost per commit, and tokens per commit, or "n/a" with no commits.
 
 <ThemedImage dark={tokens} light={tokensLight} alt="The Tokens and cache drawer: the four figures, then each billed kind's share of tokens as a bar to the left of its name and its share of estimated cost as a bar to the right." />
 
-Under them, a two-sided chart compares each billed kind's share of tokens with its share of estimated cost: Input, Output + thinking (thinking is billed as output), Cache write (the 5-minute and 1-hour lifetimes together) and Cache read, biggest cost first. The share of tokens is a bar to the left of the kind's name, the share of estimated cost a bar to the right. Each side has its own 0 to 100% scale, and both shares are also written next to their bars. A share of 0% has an empty bar. When the chart is narrow (a phone, a Project column, large text), each kind's name goes above its two bars. A sentence above the chart names the kind where the two shares differ most, however small the gap, for example that cache reads are most of the tokens and a small part of the cost. When no request is priced, the sentence says so, and the cost shares read "–" and have no bar, not zero. When the priced requests cost $0.00 (models priced at zero rates), the sentence says so, and each kind's cost reads $0.00 with a share of 0.0%. **Show data table** opens the exact figures: each kind's full token count, share of tokens (one decimal), estimated cost (to the cent) and share of cost (one decimal), with the thinking tokens and each cache write lifetime under their kind. A last line gives the requests and how many came from the main thread.
+Under them, a two-sided chart compares each billed kind's share of tokens with its share of estimated cost: Input, Output + thinking (thinking is billed as output), Cache write (the 5-minute and 1-hour lifetimes together) and Cache read, biggest cost first. The cost side covers only requests priced from the price table, so it leaves Grok's reported cost out. The share of tokens is a bar to the left of the kind's name, the share of estimated cost a bar to the right. Each side has its own 0 to 100% scale, and both shares are also written next to their bars. A share of 0% has an empty bar. When the chart is narrow (a phone, a Project column, large text), each kind's name goes above its two bars. A sentence above the chart names the kind where the two shares differ most, however small the gap, for example that cache reads are most of the tokens and a small part of the cost. When no request is priced, the sentence says so, and the cost shares read "–" and have no bar, not zero. When the priced requests cost $0.00 (models priced at zero rates), the sentence says so, and each kind's cost reads $0.00 with a share of 0.0%. **Show data table** opens the exact figures: each kind's full token count, share of tokens (one decimal), estimated cost (to the cent) and share of cost (one decimal), with the thinking tokens and each cache write lifetime under their kind. A last line gives the requests and how many came from the main thread.
 
 ### Most expensive sessions
 

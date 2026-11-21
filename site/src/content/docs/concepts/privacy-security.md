@@ -7,7 +7,7 @@ AI Ledger runs entirely on your machine. It reads transcripts from your disk, ke
 
 ## The store holds everything, secrets included
 
-The store keeps every transcript line as the agent wrote it: your prompts, the agent's replies, every tool input and every tool result. That includes file contents the agent read, command output, and any secret that appeared in a session, such as an API key, a token or a line of a `.env` file. The store never deletes a line, so a secret stays in the store after the agent deletes its transcript.
+The store keeps every transcript line as the agent wrote it, for Claude Code, Codex and Grok alike: your prompts, the agent's replies, every tool input and every tool result. That includes file contents the agent read, command output, and any secret that appeared in a session, such as an API key, a token or a line of a `.env` file. The store never deletes a line, so a secret stays in the store after the agent deletes its transcript.
 
 The store is a single file, created readable and writable only by your user (mode `0600`), in a folder only your user can open (mode `0700`). The files DuckDB writes next to it get the same protection. Where the file is: [Data files and storage locations](/ai-ledger/reference/storage/).
 
@@ -21,7 +21,7 @@ To show Claude Code's limits, the app asks Anthropic's usage endpoint, `https://
 
 The token goes to that endpoint and nowhere else. The app never writes it to the store, a log, an API response or a page, and never refreshes it: refreshing would replace the token Claude Code relies on. When the token has expired, the app skips the request until Claude Code renews it. What the app stores is the answer: the percent used of each limit, its reset time and your plan's name.
 
-Where the Keychain is not there, as on Linux, the app sends nothing. Codex's limits come from Codex's own transcripts and need no request.
+Where the Keychain is not there, as on Linux, the app sends nothing. Codex's limits come from Codex's own transcripts and need no request. Grok reports no plan limits, so the app asks nothing about Grok either.
 
 ### The font
 

@@ -99,7 +99,7 @@ Habit: when you hand the agent a task and leave it to run, turn fast mode off fi
 Act on the cause that leads in **Breaks by cause**:
 
 - **model switch**: choose the model before the first prompt and keep it for the session. To change models, start a new session.
-- **expired**: the gap since the previous request was longer than the cache lifetime: 5 minutes in Claude Code, 30 minutes in Codex, 1 hour after a 1-hour cache write. Habit: when you come back to a long session after a longer break, and the next task is a new one, start a new session instead. It writes only the starting context to the cache, not the whole history. When the next task needs the history, keep the session: that break is the price of the history.
+- **expired**: the gap since the previous request was longer than the cache lifetime: 5 minutes in Claude Code, 30 minutes in Codex, 1 hour after a 1-hour cache write. A Grok break is never expired: xAI states no cache lifetime. Habit: when you come back to a long session after a longer break, and the next task is a new one, start a new session instead. It writes only the starting context to the cache, not the whole history. When the next task needs the history, keep the session: that break is the price of the history.
 - **other**: something before the cached part of the prompt changed. Do not edit `CLAUDE.md`, `AGENTS.md`, the MCP servers or the skills during a session; make the change, then start a new session.
 
 ### Stay under the long-prompt threshold

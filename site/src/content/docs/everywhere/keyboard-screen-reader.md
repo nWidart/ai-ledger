@@ -49,7 +49,7 @@ Charts and tab lists act on these keys only when you hold no Alt, Ctrl, Meta or 
 | Live tab | The tab's name adds the sessions that wait for you: "Live 2 sessions waiting for you". With none, it reads "Live". The badge's number itself is hidden from a screen reader. |
 | Limits tab | The tab's name adds what its pill shows: "Limits Highest open window: Codex weekly at 42%" ("at an estimated 42%" for an estimate). While a window is at its limit, forecast to run out, or at 90% or more, it reads "Limits alert: *sentence*". The alert's sentence is also announced once, when the alert appears. |
 | Page chooser | Its name adds "Limits alert" and the pill's percent while a window is in alert, and the sessions that wait for you: "Cost, Limits alert, highest open window at 100%, 2 sessions waiting for you". |
-| Judgments button | With Codex as the only source it is unavailable (`aria-disabled`), stays focusable, and is described by the reason shown beside it. |
+| Judgments button | With Codex or Grok as the only source it is unavailable (`aria-disabled`), stays focusable, and is described by the reason shown beside it. |
 | Theme button | Its name is "Theme: system", "Theme: light" or "Theme: dark". Each press steps System, Light, Dark, then System again. |
 | Chart | A `group` with a label that says what the chart shows and how to read it, with a live region that reads the point you move to. |
 | Toggletip | A button named for the term it explains. It exposes `aria-expanded`, opens on activation (and on hover), and closes on Esc, on a second activation and on a click outside it. When its text ends with a **Learn more** link, Tab from the open button reaches the link, and Esc on the link closes the toggletip and returns focus to the button. |

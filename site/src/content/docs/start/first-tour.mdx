@@ -23,7 +23,7 @@ In this tour we open each page of AI Ledger once, with our own data, and read th
 
 Before we start, AI Ledger must be running and its first ingest done: the navigation bar shows the time of the last ingest, not **Ingesting…**. If it is not running, follow [Install and first run](/ai-ledger/start/install/) first.
 
-Every stop is a tab in the navigation bar at the top, except two: Judgments is a view of Activity, and the last stop has no tab. The tabs are in two groups, **Now** (Live, Limits) and **Review** (Activity, Cost, Context, Errors). The filters in the scope bar, under the navigation, start on the last 30 days, all projects and both agents; we leave them so.
+Every stop is a tab in the navigation bar at the top, except two: Judgments is a view of Activity, and the last stop has no tab. The tabs are in two groups, **Now** (Live, Limits) and **Review** (Activity, Cost, Context, Errors). The filters in the scope bar, under the navigation, start on the last 30 days, all projects and every agent; we leave them so.
 
 ## Activity: what got done
 
@@ -69,7 +69,7 @@ More: [Errors](/ai-ledger/pages/errors/).
 
 Select the **Limits** tab. Its heading names the fullest plan limit window, for example "No limit runs out at the current pace. Fullest: Claude Code weekly, about 80% at reset."
 
-If the heading says "No plan limits seen yet.", AI Ledger has no limit data yet. On a Mac it asks Anthropic for Claude Code's limits every 5 minutes; Codex records its limits in its own transcripts.
+If the heading says "No plan limits seen yet.", AI Ledger has no limit data yet. On a Mac it asks Anthropic for Claude Code's limits every 5 minutes; Codex records its limits in its own transcripts. Grok reports none.
 
 <ThemedImage dark={windows} light={windowsLight} alt="The open plan limit windows on Limits, with demo data: Claude Code and Codex, weekly and 5-hour, each with its pace and forecast." />
 
@@ -89,7 +89,7 @@ More: [Judgments](/ai-ledger/pages/insights/).
 
 Select the **Live** tab. It lists the sessions that wrote in the last 10 minutes, grouped by who needs us first: **approval?**, **your turn**, **working**, **idle** and **ended**.
 
-If it says "No session is active in this view.", open another terminal, start Claude Code or Codex in any project and send a prompt. The session appears on Live within a second, under **working**, and moves to **your turn** when the agent finishes.
+If it says "No session is active in this view.", open another terminal, start Claude Code, Codex or Grok in any project and send a prompt. The session appears on Live within a second, under **working**, and moves to **your turn** when the agent finishes.
 
 <ThemedImage dark={rail} light={railLight} alt="The Active · last 10 min list on Live, with demo data: sessions grouped by who needs us first." />
 

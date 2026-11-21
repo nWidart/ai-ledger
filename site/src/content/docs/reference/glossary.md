@@ -18,13 +18,13 @@ Four words mark where a figure comes from:
 
 | Term | Definition |
 | --- | --- |
-| Session | One Claude Code or Codex conversation, with its subagents. A session is in a view when it has a request in the range; Activity's Judgments view counts it by its start time instead. |
-| Source | The agent that wrote the session: Claude Code or Codex. |
+| Session | One Claude Code, Codex or Grok conversation, with its subagents. A session is in a view when it has a request in the range; Activity's Judgments view counts it by its start time instead. |
+| Source | The agent that wrote the session: Claude Code, Codex or Grok. |
 | Project | The repository or folder a session ran in. |
 | Automated session | A session of a known automated project, a session with no user prompt, or a session in a temporary folder with at most one prompt. Left out unless **Include automated** is on; Errors has no such control and always counts them. See [Filters](/ai-ledger/everywhere/filters/#include-automated). |
 | Main thread | The session's own requests and tool calls, as opposed to its subagents'. |
-| Subagent | An agent that the session started for part of the work. Its requests count in tokens and cost, never as turns. |
-| Request | One model response in a transcript, counted once. |
+| Subagent | An agent that the session started for part of the work. Its requests count in tokens and cost, never as turns. A Grok subagent's tool calls show on its parent session; its tokens are part of the parent's turn and count once. |
+| Request | One model response in a transcript, counted once. For Grok, one model call: Grok reports usage per turn, and the app splits it over the turn's calls by their context size, so a call's share is an estimate. |
 | Prompt | A message that you sent. A run of `/context` is not a prompt. |
 | Interrupted prompt | A prompt whose work you stopped before the agent finished. |
 | Turn | On Context: a main-thread request with at least 2,000 prompt tokens. On Activity, "turns per prompt" counts every main-thread request. |
@@ -34,10 +34,10 @@ Four words mark where a figure comes from:
 | Commit | A `git commit` shell call that succeeded. |
 | Test run | A shell call that runs tests, a build, a linter or a type check. |
 | Active time | The time between a session's main-thread requests and tool calls, less every pause over 20 minutes. |
-| Model time, tool time | The time a Claude Code session spent waiting on the model and running tools, subagents included, from the line Claude Code writes when the session ends. Codex and older Claude Code sessions record none. Model time can exceed active time, because subagents run at the same time. |
+| Model time, tool time | The time a Claude Code session spent waiting on the model and running tools, subagents included, from the line Claude Code writes when the session ends. A Grok session has model time from the API time each turn reports, and no tool time. Codex and older Claude Code sessions record none. Model time can exceed active time, because subagents run at the same time. |
 | Active day | A day with at least one prompt. |
 | Previous period | The same number of days just before the range. The **All** range has none. |
-| Estimated cost | Each request's tokens times its model's API list price. See [How cost is estimated](/ai-ledger/concepts/cost-estimates/). |
+| Estimated cost | Each request's tokens times its model's API list price. A Grok request costs what Grok reported instead. See [How cost is estimated](/ai-ledger/concepts/cost-estimates/). |
 | Unpriced model | A model with no price in the price table. Its tokens count; its cost is unknown and left out of totals. |
 | Cache read | Prompt tokens read from the prompt cache, at a fraction of the input price. |
 | Cache write | Prompt tokens written to the cache, with a 5-minute or a 1-hour lifetime. Costs more than plain input. |
@@ -68,7 +68,7 @@ See [Activity](/ai-ledger/pages/activity/).
 | Prompts interrupted | The share and count of prompts that were interrupted. In Claude Code, a tool call you reject counts as an interruption. Marked worse when it goes up. | The line under the heading | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
 | Subagents | The share of tokens that came from subagents. | **Work health**; **Project metrics** | – |
 | Median session | The median active time of a session. The tile's note also gives the active time in all and, when recorded, the thinking time. | The **Sessions** tile | – |
-| Output speed | Output tokens per second of model time, over the sessions that record model time. Claude Code only, whole-session, subagents included. Its note adds the time waiting on the model and running tools, and a small line its trend. Marked worse when it goes down. | **Work health**; session sheet | – |
+| Output speed | Output tokens per second of model time, over the sessions that record model time. Claude Code and Grok only, whole-session, subagents included. Its note adds the time waiting on the model and running tools, and a small line its trend. Marked worse when it goes down. | **Work health**; session sheet | – |
 | Work per day, or per week | Commits, prompts or sessions per day, with errors per 100 calls on a track under the bars. One bar per week when the view spans more than 60 days. Select a bar to narrow the tabs to its days. | **Work per day** | [Weekly review](/ai-ledger/improve/weekly-review/) |
 | Peak context | The largest request of a session, with its share of the window when that is 80% or more. | **Sessions** tab | [Keep context lean](/ai-ledger/improve/lean-context/) |
 | Failed, Compactions, Commits, Tests | Per session: failed tool calls, compactions, commits, and test runs passed of run. | **Sessions** tab | [Retro on one project](/ai-ledger/improve/project-retro/) |
@@ -124,7 +124,7 @@ See [Context](/ai-ledger/pages/context/). Every figure comes from the transcript
 | Main thread / Subagents | Tool result bytes read by the main thread, and by subagents, which never entered the main context. | **What fills context** | [Keep context lean](/ai-ledger/improve/lean-context/) |
 | Largest tool results | The 25 largest main-thread tool results, with tool, input and session. | **Largest tool results** drawer | [Keep context lean](/ai-ledger/improve/lean-context/) |
 | Cache-hit ratio | Cache read tokens over all prompt tokens, per day or week and per project. | Context's **Cost** section | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
-| Cache break | A main-thread request after the first turn with at least 20,000 prompt tokens, less than half read from the cache. Its cause is a model switch, expired, or other. | Context's **Cost** section; **Sessions where caching broke** drawer | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
+| Cache break | A main-thread request after the first turn with at least 20,000 prompt tokens, less than half read from the cache. Its cause is a model switch, expired, or other. A Grok break is never expired: xAI states no cache lifetime. | Context's **Cost** section; **Sessions where caching broke** drawer | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 | Uncached tokens, Their input cost | The prompt tokens of a session's cache breaks that were not read from the cache, and their cost. | **Sessions where caching broke** drawer | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 | Long-prompt tier, Long-tier requests | The cost and the count of requests priced on the long-prompt tier. | Context's **Cost** section | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 

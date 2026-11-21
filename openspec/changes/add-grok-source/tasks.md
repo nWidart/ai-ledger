@@ -45,8 +45,8 @@ Each task names the model that does it: Sonnet for mechanical edits, Opus for st
 
 ## 7. Docs (after 4; parallel with 6)
 
-- [ ] 7.1 (Opus, with the `doc-coauthoring` skill) Update the docs site: `how-it-works.md` (paths, `--grok`, one shape for three agents), `compare-sources.md` (what Grok records and what it does not: usage per turn, the per-call split as an estimate, no effort, branch, limits or judgments), `cost-estimates.md` (reported cost), `cli.md`, `storage.md`, `glossary.md`, `filters.md`, `command-palette.mdx`, `context-menu.mdx`, `context.mdx` (cache lifetime), `limits.mdx`, `live.mdx`, `index.mdx`, `install.md`, `privacy-security.md`. Run `npm run check` in `site/`.
-- [ ] 7.2 (Sonnet) Update `README.md` (tagline, what is ingested, `--grok`, the Grok caveats) and add the change to `[Unreleased]` in `CHANGELOG.md`.
+- [x] 7.1 (Opus, with the `doc-coauthoring` skill) Update the docs site: `how-it-works.md` (paths, `--grok`, one shape for three agents), `compare-sources.md` (what Grok records and what it does not: usage per turn, the per-call split as an estimate, no effort, branch, limits or judgments), `cost-estimates.md` (reported cost), `cli.md`, `storage.md`, `glossary.md`, `filters.md`, `command-palette.mdx`, `context-menu.mdx`, `context.mdx` (cache lifetime), `limits.mdx`, `live.mdx`, `index.mdx`, `install.md`, `privacy-security.md`. Run `npm run check` in `site/`.
+- [x] 7.2 (Sonnet) Update `README.md` (tagline, what is ingested, `--grok`, the Grok caveats) and add the change to `[Unreleased]` in `CHANGELOG.md`.
 - [x] 7.3 (Sonnet) Add Grok sessions to `tools/demo/seed.py` and `serve.py`. Verify that the demo store builds and the source filter shows Grok. Do not record the GIFs again.
 
 ## 8. Integration (after all; the lead)

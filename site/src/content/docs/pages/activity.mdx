@@ -24,7 +24,7 @@ A switch above the heading picks the view: **Overview** or **Judgments**.
 
 - Overview is the default. Judgments is in the address as `view=judgments`, so a reload or a copied link opens the same view, and Back returns to the view before.
 - A switch keeps the project, the range, the source and Include automated. It drops the filters only the other view has: Overview's session search, near-limit filter, selected day or week and tab, and the Judgments view's outcome and friction filters.
-- With **Codex** as the source, Judgments cannot be picked, and the text beside the switch says why: "Codex writes no facets: /insights judges Claude Code sessions only." A link to the Judgments view with Codex as the source opens Overview.
+- With **Codex** or **Grok** as the source, Judgments cannot be picked, and the text beside the switch says why, naming the agent: "Grok writes no facets: /insights judges Claude Code sessions only." A link to the Judgments view with Codex or Grok as the source opens Overview.
 
 ## Filters
 
@@ -32,7 +32,7 @@ A switch above the heading picks the view: **Overview** or **Judgments**.
 | --- | --- |
 | Project | A searchable list of projects, plus "All projects". |
 | Time range | 7d, 14d, 30d, 90d, All. The default is 30d. |
-| Source | All, Claude Code, Codex. |
+| Source | All, Claude Code, Codex, Grok. |
 | Include automated sessions | On or off. A tooltip names the file that lists more automated projects. |
 
 The filters live in the page URL. The project filter changes only through these controls, or through a "Filter dashboard to" button in a sheet; selecting a project or session elsewhere opens a sheet and leaves the filter alone. See [Filters](/ai-ledger/everywhere/filters/) for how they behave on every page.
@@ -127,7 +127,7 @@ The Output speed tile draws a small line of output speed per bar of the work cha
 
 A session's active time leaves out every pause over 20 minutes. Two figures that display the same value read "unchanged".
 
-Model time and tool time come from the `cost-state` line that Claude Code writes when a session ends, in versions from about late October 2026. Codex sessions and older Claude Code sessions record none, and count in neither figure. Output speed divides the output tokens of the sessions that record model time by that model time. These are whole-session figures: they include subagent work and the session's time outside the range. Model time can exceed active time, because subagents run at the same time. On a store from an earlier version, run `ai-ledger rebuild` once, with the app stopped, to fill them for sessions already ingested; see [Upgrade and rebuild](/ai-ledger/start/upgrade/).
+Model time and tool time come from the `cost-state` line that Claude Code writes when a session ends, in versions from about late October 2026. A Grok session's model time is the API time each of its turns reports; Grok reports no tool time, so it counts in model time only. Codex sessions and older Claude Code sessions record none, and count in neither figure. Output speed divides the output tokens of the sessions that record model time by that model time. These are whole-session figures: they include subagent work and the session's time outside the range. Model time can exceed active time, because subagents run at the same time. On a store from an earlier version, run `ai-ledger rebuild` once, with the app stopped, to fill them for sessions already ingested; see [Upgrade and rebuild](/ai-ledger/start/upgrade/).
 
 ## Tabs
 
@@ -214,12 +214,12 @@ Shows the whole session, whatever the range filter says.
 - A line names the project (it opens the project sheet), the git branch, and the first and last time.
 - **Filter dashboard to *project*** or **Show all projects**.
 - **Source**: the first prompt as recorded. A long prompt is cut; **Show the whole prompt** loads all of it.
-- A line of figures: estimated cost (a "+" marks a subtotal when some model has no price; "Unknown" when none has), tokens, prompts and interrupted prompts, peak context with its share of the window, compactions, commits, active time. When the session records them, the line adds model time, tool time, output speed, and lines added and removed, as `+120 / −30`; a tooltip says they come from Claude Code and include subagents. See [Work health](#work-health).
-- **/insights judgment**, tagged model-judged, when the session has an `/insights` analysis: outcome, a "dissatisfied" marker when satisfaction includes it, helpfulness and session type, goal and friction categories, a brief summary and the friction detail, and **Open in Judgments**, which opens the Judgments view with the page's filters. Only Claude Code sessions are analysed; a Codex session never shows it. See [Judgments](/ai-ledger/pages/insights/).
+- A line of figures: estimated cost (a "+" marks a subtotal when some model has no price; "Unknown" when none has), tokens, prompts and interrupted prompts, peak context with its share of the window, compactions, commits, active time. When the session records them, the line adds model time, tool time, output speed, and lines added and removed, as `+120 / −30`; a tooltip says they come from Claude Code and include subagents. A Grok session records model time and output speed only: it has no tool time and no lines added or removed. See [Work health](#work-health).
+- **/insights judgment**, tagged model-judged, when the session has an `/insights` analysis: outcome, a "dissatisfied" marker when satisfaction includes it, helpfulness and session type, goal and friction categories, a brief summary and the friction detail, and **Open in Judgments**, which opens the Judgments view with the page's filters. Only Claude Code sessions are analysed; a Codex or Grok session never shows it. See [Judgments](/ai-ledger/pages/insights/).
 - **Timeline** of the session.
 - **Error loops** in the session, each with "Open in Errors".
 - **Commits**, **Models** (requests, tokens, estimated cost) and **Tools** (calls, failed, p50), each folded.
-- The session id, the working directory when the store has it, and the command that resumes the session, each with **Copy**. The resume command is `claude --resume <id>` or `codex resume <id>`, after `cd '<directory>' && ` when the directory is known. A copy says "Copied", or "Copy failed".
+- The session id, the working directory when the store has it, and the command that resumes the session, each with **Copy**. The resume command is `claude --resume <id>`, `codex resume <id>` or `grok --resume <id>`, after `cd '<directory>' && ` when the directory is known. A copy says "Copied", or "Copy failed".
 - **Wide** widens the sheet. The choice is kept in the browser.
 
 ### Project sheet

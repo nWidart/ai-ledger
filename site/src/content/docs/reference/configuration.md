@@ -56,7 +56,7 @@ When the file cannot be used, Cost shows "Prices file ignored", with the file's 
 
 ### Plans
 
-The Cost page compares the estimate with your plan. The plan comes from the newest plan-limit snapshot of each provider (`claude`, `codex`). Its monthly price comes from the `plans` table: the packaged one, plus the file's.
+The Cost page compares the estimate with your plan. The plan comes from the newest plan-limit snapshot of each provider (`claude`, `codex`). Grok reports no plan limits, so it has no plan. Its monthly price comes from the `plans` table: the packaged one, plus the file's.
 
 Key `plans` by provider, then by the plan name a snapshot records. A snapshot's plan matches an entry by its exact name, then by the part before a `/`.
 

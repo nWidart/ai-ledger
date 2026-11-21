@@ -24,7 +24,7 @@ On a narrow window (about 900px and below, or zoomed in), the bar is one **Filte
 | --- | --- | --- | --- |
 | Project | A project, or "All projects" | All projects | `project` |
 | Time range | 7d, 14d, 30d, 90d, All | 30d | `range` (`0` is All) |
-| Source | All, Claude Code, Codex | All | `source` (`claude`, `codex`) |
+| Source | All, Claude Code, Codex, Grok | All | `source` (`claude`, `codex`, `grok`) |
 | Include automated | On or off | Off | `auto=1` |
 
 The same filters are available in the [command palette](/ai-ledger/everywhere/command-palette/) as `#` terms.
@@ -62,9 +62,9 @@ When a project is set, the scope bar also ends with a **Brief →** link, named 
 
 ## Source
 
-The source filter has the choices All, Claude Code and Codex. A value in the URL that is not one of these reads as All, and the URL drops it.
+The source filter has the choices All, Claude Code, Codex and Grok. A value in the URL that is not one of these reads as All, and the URL drops it.
 
-Activity's [Judgments view](/ai-ledger/pages/insights/) covers Claude Code sessions only, because Claude Code's `/insights` analyses only those. With Codex selected, Activity shows Overview: the **Judgments** button of its view switch cannot be picked, and the text beside it says why, "Codex writes no facets: /insights judges Claude Code sessions only."
+Activity's [Judgments view](/ai-ledger/pages/insights/) covers Claude Code sessions only, because Claude Code's `/insights` analyses only those. With Codex or Grok selected, Activity shows Overview: the **Judgments** button of its view switch cannot be picked, and the text beside it says why, such as "Grok writes no facets: /insights judges Claude Code sessions only."
 
 ## Include automated
 

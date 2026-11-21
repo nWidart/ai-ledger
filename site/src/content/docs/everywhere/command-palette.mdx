@@ -32,7 +32,7 @@ A `#` term sets a filter. Each one writes the same URL state as the page's own c
 | Term | Sets |
 | --- | --- |
 | `#<project>` | The project. |
-| `#claude`, `#codex` | The source: Claude Code or Codex. |
+| `#claude`, `#codex`, `#grok` | The source: Claude Code, Codex or Grok. |
 | `#7d`, `#14d`, `#30d`, `#90d`, `#all` | The time range. |
 | `#automated` | Include automated sessions. The URL records it on every page. It takes effect on the pages that have the control; Errors always shows automated sessions, and Limits has no control. |
 
@@ -43,7 +43,7 @@ A `#` term that matches a tool, an MCP server or a skill is not a filter. The pa
 | Term | Opens or runs |
 | --- | --- |
 | `>live`, `>limits`, `>activity`, `>cost`, `>context`, `>errors` | That page. Filters you do not change in the palette carry over. |
-| `>judgments` | Activity's [Judgments view](/ai-ledger/pages/insights/). `>insights`, its name when it was a page, finds the same row. `>activity` from the Judgments view opens Overview. With Codex as the only source, the footer says that Overview opens: Codex has no judgments. |
+| `>judgments` | Activity's [Judgments view](/ai-ledger/pages/insights/). `>insights`, its name when it was a page, finds the same row. `>activity` from the Judgments view opens Overview. With Codex or Grok as the only source, the footer says that Overview opens: that agent has no judgments. |
 | `>project` | The Project page of the project the chips or the current view name. With no project, the palette does not offer the bare Project page. |
 | `>jobdesk` (a project name) | The project's page, in the Page group: the row "jobdesk · open project page" adds the project filter and the Project page together. The palette lists up to three such rows, for the best matches. |
 | A tool, MCP server or skill name | That subject's inspector sheet. |

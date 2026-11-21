@@ -37,7 +37,7 @@ Find out which of four causes you have. All steps but step 3 are on Context. The
    - If the 10th percentile is close to the median, the overhead is the problem. Go to step 3. Rule of thumb: "close" is three quarters of the median or more.
    - If the 10th percentile is far under the median, the first prompts are large (pasted logs, long attached files). Go to [Start a new session for each task](#start-a-new-session-for-each-task).
 3. Split the overhead. Open the project's [Project page](/ai-ledger/pages/project/#open-the-page) and go to **Context**. Select **Measure now**. It runs `claude -p "/context"` in the project's folder: it calls no model, but it starts the project's MCP servers and hooks as a new session does. The grid's legend then lists the overhead by category, such as **Memory files** and **MCP tools**, and **Largest overhead items** names the five largest MCP servers, memory files and skills. Note the largest category and its tokens.
-   - A Codex project has no **Measure now**: Codex records no `/context`. Use step 4 for its MCP servers, and read its `AGENTS.md` yourself.
+   - A Codex project has no **Measure now**: Codex records no `/context`. Use step 4 for its MCP servers, and read its `AGENTS.md` yourself. The same holds for a Grok project: `/context` is a Claude Code command.
 4. Back on Context, read the evidence line **MCP servers called (fewest calls first)** on the tip **Sessions start with a large context**. Set the range to **90d** first. The line lists only the servers that the sessions called. Compare it with the servers you configured:
 
    ```bash
@@ -125,7 +125,7 @@ Keep only the lines that match the **Tool** column of **Largest tool results**:
 | Tool in the list | Line to keep |
 | --- | --- |
 | `Read` | Read a large file in parts. |
-| `Bash`, or Codex's `exec_command` | Pipe long shell output. |
+| `Bash`, Codex's `exec_command` or Grok's `run_terminal_command` | Pipe long shell output. |
 | `Grep`, `Glob` | Cap a search. |
 | A tool with an MCP server under its name | Ask an MCP tool for a small page. |
 | Any of them, when **Main thread** holds nearly all of the bar | Use a subagent for bulk reading. |
