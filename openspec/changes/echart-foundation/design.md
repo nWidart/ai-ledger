@@ -114,9 +114,10 @@ Alternative: a static import in each chart. Rejected: ECharts would load with th
 
 `tokens.ts`:
 
-- `resolveColor(css)`: sets `probe.style.color = css` on one hidden `<span>` under `document.body` and returns `getComputedStyle(probe).color`. The probe has `forced-color-adjust: none`, so a series token gives the theme color in forced colors too. It accepts any CSS color: `var(--proj-3)`, `var(--text-muted)`, `CanvasText`. When the computed value is empty (jsdom), it returns its input.
-- Results are cached by string. The cache is cleared when the epoch changes.
-- `useChartEnv()` returns the environment and bumps the epoch when one of these changes: the theme (`useTheme()` from `theme.ts`, which covers the toggle and another tab), `(prefers-color-scheme: dark)`, `(forced-colors: active)` and `(prefers-reduced-motion: reduce)`. The media query lists are kept in module scope with their listeners.
+- `resolveColor(css)`: writes the probe's whole `style` attribute, its hiding rules and `color: <css>`, on one hidden, `aria-hidden` `<span>` under `document.body`, and returns `getComputedStyle(probe).color`. The style is rewritten whole on each call, so a value the browser drops leaves no earlier color behind; a probe that was removed from the document is made again. The probe has `forced-color-adjust: none`, so a series token gives the theme color in forced colors too. It accepts any CSS color: `var(--proj-3)`, `var(--text-muted)`, `CanvasText`. When the computed value is empty (jsdom), it returns its input.
+- Results are cached by string. The cache is cleared when the epoch or the theme changes: each call compares the epoch and the theme read from `<html>` (`getTheme()`, which `setTheme()` and another tab change) with those the cache was filled under.
+- The epoch counts media changes and first mounts. It bumps when `(prefers-color-scheme: dark)`, `(forced-colors: active)` or `(prefers-reduced-motion: reduce)` fires `change`, and when a first chart mounts after none was mounted: nothing watched the media meanwhile, so the cache may be stale. The media query lists are made when the first chart subscribes and dropped with the last one.
+- `useChartEnv(width, height)` returns the environment for a box of that size: a new object when the epoch, the theme (`useTheme()` from `theme.ts`, which covers the toggle and another tab) or the size changes, and the same one otherwise.
 - The project order (`useColors()`) stays with the chart: it changes which `var(--proj-N)` a project has, so the chart's option changes and is resolved again.
 
 ```ts
@@ -124,16 +125,18 @@ export interface ChartEnv {
   /** A CSS color, such as "var(--proj-2)", as a concrete rgb() or rgba() string. */
   color(css: string): string;
   /** The roles every chart draws with. System colors while forced colors is on. */
-  ink: { text: string; secondary: string; muted: string; grid: string; surface: string; border: string; cursor: string; accent: string };
+  ink: Ink;
   forced: boolean;     // (forced-colors: active)
   textScale: number;   // textScale() from chart.ts
   motion: boolean;     // motion() from chart.ts
   width: number;       // the box, in px
   height: number;
 }
+/** `cursor` is the translucent band over the point read; `tint` the translucent accent of a selected range, such as the zoom slider's window. */
+export interface Ink { text: string; secondary: string; muted: string; grid: string; surface: string; border: string; cursor: string; accent: string; tint: string }
 ```
 
-| `ink` role | Theme | Forced colors |
+| `ink` role | Theme (`THEME_INK`) | Forced colors (`FORCED_INK`) |
 |---|---|---|
 | `text` | `--text-primary` | `CanvasText` |
 | `secondary` | `--text-secondary` | `CanvasText` |
@@ -143,6 +146,9 @@ export interface ChartEnv {
 | `border` | `--border` | `CanvasText` |
 | `cursor` | `--text-primary` at 6% | `Highlight` at 40% |
 | `accent` | `--accent` | `Highlight` |
+| `tint` | `--accent` at 16% | `Highlight` at 25% |
+
+The two translucent roles take the resolved `rgb()` or `rgba()` color at a share of its alpha. Any other form, such as `color(srgb …)` or an unresolved `var()`, gives `transparent`: a band drawn opaque would hide the bars under it.
 
 Rules that keep this safe:
 
@@ -156,6 +162,17 @@ Alternative: a second token table in TypeScript. Rejected: two sources of truth 
 ### 5. The wrapper
 
 ```tsx
+/** The points a zoom shows, first and last, as indexes of every point. */
+export interface Shown { from: number; to: number }
+
+/** What a chart can ask of its box from outside it. */
+export interface EChartHandle {
+  /** Shows every point again, and says so in the live region. Nothing happens when every point shows. */
+  reset(): void;
+  /** Focuses the box, such as after a "Show all days" button that leaves with the reset. */
+  focus(): void;
+}
+
 export interface EChartProps {
   /** The group's accessible name: what the chart shows and how to read it. */
   label: string;
@@ -178,25 +195,29 @@ export interface EChartProps {
   tip?: (i: number) => ReactNode;
   /** The sentence the live region says for point i. */
   read: (i: number) => string;
-  /** Enter on the point being read, or a click on a point. */
-  onActivate?: (i: number) => void;
-  /** Show the zoom slider and take the zoom keys (decision 8). */
+  /** Enter on the point being read, or a click on a point. The reading ends with it, unless the handler returns false:
+   *  the point has nothing to open, and the reading stays. */
+  onActivate?: (i: number) => boolean | void;
+  /** The option draws the zoom slider (`zoomSlider()`): the box takes the zoom keys and follows the slider (decision 8). */
   zoom?: boolean;
   /** The days shown changed: the first and last point, or null for every point. */
-  onZoom?: (shown: { from: number; to: number } | null) => void;
+  onZoom?: (shown: Shown | null) => void;
   /** The sentence the live region says after a zoom change: alone, or after the reading when a reading key moved the days shown. */
-  readZoom?: (shown: { from: number; to: number } | null) => string;
+  readZoom?: (shown: Shown | null) => string;
   /** `reset()` shows every point again; `focus()` focuses the box. */
-  ref?: Ref<{ reset(): void; focus(): void }>;
+  ref?: Ref<EChartHandle>;
 }
 ```
+
+`Shown` and `EChartHandle` are exported, so a chart types its `onZoom` and its ref without restating them.
 
 The DOM, which keeps today's roles and classes:
 
 ```html
 <div class="echart …" role="group" tabindex="0" aria-label="…" aria-describedby="…" style="height: …px">
   <div class="echart-plot" aria-hidden="true"><!-- ECharts' svg --></div>
-  <div class="tip" role="tooltip"><!-- tip(i) --></div>
+  <div class="tip" role="tooltip"><!-- tip(i); rendered when the chart gives tip, hidden while nothing is read --></div>
+  <p class="echart-failed"><!-- only when the runtime failed to load --></p>
 </div>
 <div class="sr" aria-live="polite"><!-- "<read(i)>", or the zoom status --></div>
 ```
@@ -204,7 +225,7 @@ The DOM, which keeps today's roles and classes:
 Behavior:
 
 - **Loading.** The box has its height from the first render. Until the runtime resolves, `.echart-plot` is empty. If the import fails, the box shows "The chart could not be drawn. The data table below has its figures." in muted text. Keys, tooltip and readout work in all three states.
-- **Drawing.** On ready, and whenever `option`, the environment or the box size changes: `chart.setOption(option(env), { replaceMerge: ["series", "xAxis", "yAxis", "grid"] })`. Series that are gone are dropped, and the zoom window is kept, because the option never names `startValue` or `endValue`.
+- **Drawing.** On ready, and whenever `option`, the environment or the box size changes: `chart.setOption(option(env), { replaceMerge: ["series", "xAxis", "yAxis", "grid", "dataZoom"] })`. A series, an axis or a slider the new option leaves out is dropped. An item with the id of one drawn before merges into it: the slider's fixed `id: "zoom"` (`zoomSlider()`) keeps the zoom window through a redraw, since no option names its start or its end, and an option without the slider removes it. A new view resets the window, which the merged slider would otherwise keep.
 - **View.** A new `option` function means one of two things, and the wrapper must tell them apart: newer data for the same chart (a background ingest refetches every page's data about every minute while a session runs), or another chart (the user changed the range, a filter, the stacking). The `view` key is the chart's answer. While it is the same, a new function is drawn and the cursor and the zoom stay on their points. When it changes, the wrapper clears the cursor and resets the zoom. Without a key the option function is the view, so a chart that names none resets on every new function, as before.
   - Within a view a point keeps its index, and new points come at the end. The key therefore holds what fixes the first point: Cost's holds the first day drawn. A new day at the end keeps the view. A first day that moves makes another view: later, when a rolling range moves on at midnight, or earlier, when an all-time view gains older days (older transcripts ingested, or a filter that reaches further back). The wrapper maps nothing by key: a day axis needs no more, and a chart whose points can move inside a view must make that a view change.
   - After a same-view redraw the wrapper puts the window back on the indexes it showed: ECharts holds a dragged window as a share of the points, which is other points once their number changes (measured: 10 to 19 of 30 became 10 to 20 of 31).
@@ -215,16 +236,17 @@ Behavior:
     - a reading a key made, with the focus in the box, is said again, alone, when the newer data changed its sentence;
     - a reading the pointer made is not said again: the pointer can rest on a bar while the user reads another part of the page, and an ingest about every minute would interrupt them. Its tooltip shows the newer figures;
     - a zoom sentence that is no longer true (a point more, another window) is dropped, which says nothing. It is never reworded: a sentence with the new count would be spoken with no one asking.
-- **Resize.** One `ResizeObserver` on the box. It calls `chart.resize()` and updates `env.width` and `env.height` in an animation frame.
+- **Size.** The wrapper gives ECharts the size and never lets it measure the plot: `init` takes `{ renderer: "svg", width, height }`, and `chart.resize({ width, height })` runs when either changes, so the drawing and `env` agree, and a chart made while its box is hidden still has one. The height is the `height` prop. The width is the box's `clientWidth`, read once the box is laid out and again in an animation frame after each change seen by one `ResizeObserver`; until then, while the box is hidden, and in jsdom it is 800px.
 - **Disposal.** `chart.dispose()` in the effect's cleanup. A mount, unmount and mount again (StrictMode) leaves one chart.
-- **Reduced motion.** `env.motion` false: the option sets `animation: false`. The base option sets `animationDurationUpdate: 0` always, so only the first draw animates.
-- **Pointer.** The wrapper listens on zrender: `mousemove` (inside the grid, `convertFromPixel` gives the day; the tooltip follows the pointer with `tipAt`, written to the element's style with no render), `globalout` (clears the cursor) and `click` (`onActivate`). ECharts moves the band itself on pointer moves.
-- **Keys.** `modified(ev)` first. Left, Right, Home and End move the cursor as today, then the wrapper sends the `updateAxisPointer` action at the point's pixel and places the tooltip there. Enter calls `onActivate`. Escape clears the cursor. Blur clears it.
-- **Escape anywhere.** While a reading is open, a `keydown` listener on the document clears it on an unmodified Escape, as `WorkChart` does today. The spec asks for it on Cost; `CostChart` handles Escape only while focused.
+- **Reduced motion.** `env.motion` false: the base option sets `animation: false`, and the wrapper sets it again over whatever option it draws, so no option builder can forget it. The base option sets `animationDurationUpdate: 0` always, so only the first draw animates.
+- **Pointer.** The wrapper listens on zrender: `mousemove` (inside the grid, as `containPixel` tells, `convertFromPixel` gives the day; the tooltip follows the pointer with `tipAt`, written to the element's style with no render), `globalout` (clears the cursor), `click` (`onActivate`) and `mousedown` (the start of a slider drag, decision 8). A move over a day of a chart that has `onActivate` sets the hand cursor, on each move, since zrender resets it before each one; everywhere else the cursor is the default.
+- **Band.** One effect moves ECharts' band to the React cursor, whatever moved it (a key, the pointer, Escape, a redraw, a zoom), with the `updateAxisPointer` action at the point's pixel, and hides it with `currTrigger: "leave"`. A key's tooltip is placed with it, so the two never sit over different days.
+- **Keys.** `modified(ev)` first. Left, Right, Home and End move the cursor as today. Enter calls `onActivate` only while a point is read, and is prevented only in a chart that has a handler. Escape clears the cursor and is not prevented, since what is around the chart may have its own use for it. Blur clears it.
+- **Escape anywhere.** While a reading is open, a `keydown` listener on the document clears it on an unmodified Escape, as `WorkChart` does today. A key from inside the box is left to the box's own handler. The spec asks for it on Cost; the hand-written `CostChart` handled Escape only while focused.
 - **Focus ring.** The global `:focus-visible` outline, with `outline-offset: 4px` and `border-radius: 4px` as `.chart` has today. Forced colors keeps outlines.
 - **Name and description.** The label is the chart's own sentence, as today. The plot is `aria-hidden`. ECharts' `aria` option is not registered.
 
-**Extension points for the later charts.** This change builds only what Cost uses. The names below are reserved, so that ten builders do not invent ten shapes. Each is added by the first migration that needs it, in the wrapper, with its tests.
+**Extension points for the later charts.** This change builds only what Cost uses, with one exception: the optional `id`, `xAxisIndex` and `yAxisIndex` of `stackSeries()` (decision 6). The names below are reserved, so that ten builders do not invent ten shapes. Each is added by the first migration that needs it, in the wrapper, with its tests.
 
 | Later need | Charts | Reserved prop |
 |---|---|---|
@@ -243,8 +265,9 @@ Behavior:
 `stack.ts` exports `stackSeries()`, an ECharts custom series whose `renderItem` draws one day's whole stack, and the pure `stackRects()` it calls.
 
 - `stackRects(values, y0, top, x, w)` returns the rectangles of one bar, bottom first, from `stackHeights()` with the minimums today's code passes (1px for the first segment, 3px for the others: 1px painted and a 2px gap). The top segment gets a 3px top radius when it is taller than 4px.
-- `stackSeries({ kinds, values, hatched, env, width? })` draws each rectangle in its kind's resolved color. A hatched day draws each rectangle a second time with a `decal` of surface-colored stripes at 60%, as the `partial-day` pattern does today. In forced colors each rectangle gets a 0.75px edge in `ink.text`, as today's rule gives `.bar-seg`.
+- `stackSeries({ kinds, values, hatched, env, width?, id?, xAxisIndex?, yAxisIndex? })` draws each rectangle in its kind's resolved color. A hatched day draws each rectangle a second time with a `decal` of surface-colored stripes at 60%, as the `partial-day` pattern does today. In forced colors each rectangle gets a 0.75px edge in `ink.text`, as today's rule gives `.bar-seg`. The series is `silent`: the wrapper, not ECharts, reads the pointer.
 - The bar's width is the band less `min(4, band × .25)`, as `dayAxis` has it. `width` lets Errors keep its own rule.
+- The series has a stable id, `"stack"` by default, so a redraw under `replaceMerge` updates it in place and the bars grow on the first draw only. `id`, `xAxisIndex` and `yAxisIndex` (0 by default) are the one thing this change builds that Cost does not use: a review asked for them, so that a later chart with two stacks in one option, or a stack on each of several grids, gives each its own id and axes instead of meeting ECharts' error for two series with one id.
 - With motion on, the group grows from the baseline on its first draw (`enterFrom: { scaleY: 0 }`), with a delay of 6ms per day up to 60 days.
 
 Why: standard stacked bars lose a 0.1% segment (spike), and the spec forbids that. The custom series keeps the exact slot arithmetic, and Work, OutcomeTrend, Cache and Errors need the same bars.
@@ -260,18 +283,20 @@ Alternative: feed standard bars with values adjusted to the minimum height. Reje
 - `baseOption(env)`: `animation`, `animationDuration: 500`, `animationDurationUpdate: 0`, and `textStyle` (the body font, `11 × textScale` px).
 - `categoryAxis(env, labels, format)`: no tick, no line, muted labels, `hideOverlap`, and the shadow axis pointer in `ink.cursor` with no label.
 - `valueAxis(env, { max, step, format })`: `min: 0`, the given `max` and `interval`, grid lines in `ink.grid`, muted labels.
-- `pointLabel(env, { index, value, text })`: a one-item custom series that draws a haloed label over a point, anchored start, middle or end by the rule of `peakLabelAt`, above the lines. Cost's peak label uses it; Work's will.
-- `zoomSlider(env)`: the slider under the grid: 20px high, no detail text, no brush, `minValueSpan: 6`, in `ink` colors.
+- `pointLabel(env, { index, value, text })`: a one-item custom series that draws a haloed label over a point, anchored start, middle or end by the rule of `peakLabelAt`, above the lines. A point outside the days shown draws nothing. Cost's peak label uses it; Work's will.
+- `zoomSlider(env)`: the slider under the grid, with the fixed `id: "zoom"` (decision 5): 20px high and 4px off the bottom, no detail text, no brush, at least 7 points wide (`MIN_SHOWN`, so `minValueSpan: 6`). It is drawn so it reads as something to drag: a transparent track in a muted frame with a faint trend, the days shown tinted in `ink.tint` between two solid accent handles, round-cornered bars 8 by 20.
+- The helpers read `OptionEnv`, a structural slice of `ChartEnv`, so their tests need no full environment.
 
 `niceMax(max, niceStep)` is taken out of `dayAxis` in `chart.ts` (the lines that compute `yMax` and `step`), and `dayAxis` calls it, so both paths give the same ticks.
 
 ### 8. Zoom
 
-- Shown when `zoom` is set and `points >= 14`. The chart adds 28px to `height` for it.
+- Cost sets `zoom` and draws `zoomSlider()` when the view has 14 days or more, and adds 28px to `height` and to the grid's bottom for it. The wrapper takes the zoom keys only while the option draws a slider; turning `zoom` off shows every point.
 - The value axis keeps the view's `max`: zooming shows fewer, wider days on the same scale.
-- The wrapper reads the window from the `datazoom` event (`getOption().dataZoom[0].startValue` and `endValue`) and sets it with the `dataZoom` action.
-- Keys on the focused box: `+` or `=` halves the span, `-` doubles it, around the cursor, or the last point when nothing is read. Shift is allowed with these keys, since `+` needs it on most layouts; Alt, Ctrl and Meta are not.
-- When the cursor moves outside the window, the window shifts to include it.
+- The wrapper reads the window after each move as point indexes (`getOption().dataZoom[0].startValue` and `endValue`) and sets it with the `dataZoom` action, sent silently: the `datazoom` listener is for the slider.
+- Keys on the focused box: `+` or `=` halves the span, `-` doubles it, around the cursor, or the last point when nothing is read. The cursor keeps its place along the window, or the window is centred on it when it is outside. The span stops at 7 points and at every point. Shift is allowed with these keys, since `+` needs it on most layouts; Alt, Ctrl and Meta are not.
+- When the cursor moves outside the window, the window shifts by as little as it can to include it.
+- The slider: each step of a drag updates the days shown, and a reading the new window leaves out ends, so the band and the cursor never sit apart. The live region speaks once per drag, on the pointer's release: ECharts sends a step about every 100ms while the pointer is down and nothing when it lets go, so the wrapper marks a zrender `mousedown` and says the days shown on the document's next `pointerup` or `pointercancel` (zrender reports a release outside the chart only where it captures the pointer, which it does not where touch events exist). A change with the pointer up, such as a click on the slider's track, is said at once.
 - The wrapper tells the chart the days shown through `onZoom`, and takes `reset()` and `focus()` on its ref, so the chart can render "Show all days" beside its legend and return focus to the box.
 - The readout says the days shown after each change: "Showing Oct 11 to Oct 20, 10 of 30 days." The chart supplies the wording through `readZoom`. A zoom key, the slider and `reset()` say it alone. When an arrow key, Home or End moves the window to include the point it reads, the one live region says both in one message, the reading first: "Oct 30, 2026 so far: … Showing Oct 21 to Oct 30, 10 of 30 days." The user asked for the day; the move is what else changed. That zoom sentence is said once: when the reading's words change later, the reading is said alone.
 - The zoom belongs to the view (decision 5): newer data and a hidden kind keep it, a new view resets it. Cost's view is the range, the first day drawn, the project, the source, the automated filter, the measure, the stacking and the scale.
@@ -279,7 +304,7 @@ Alternative: feed standard bars with values adjusted to the minimum height. Reje
 
 ### 9. Cost chart: every behavior and its ECharts form
 
-`CostChart.tsx` splits in two. `costDaily.ts` is pure: `costModel(d, metric, hidden, stack, scale)` returns the kinds, the days, the drawn values, the averages, the peak and the flags, and `costOption(model, env)` returns the option. It is not named `costChart.ts`: on a case-insensitive file system, as macOS has by default, that name clashes with `CostChart.tsx`. `CostChart.tsx` keeps the heading, the switches, the legend, the texts and the table, and renders `<EChart>`.
+`CostChart.tsx` splits in two. `costDaily.ts` is pure: `costModel(d, metric, hidden, stack, scale)` returns the kinds, the days, the totals, the drawn values, the averages, the peak, today's index (`live`), the value axis's `max` and step, and the flags (`cost`, `share`, `none`, `showAvg`, `zoom`), and `costOption(model, env)` returns the option. It is not named `costChart.ts`: on a case-insensitive file system, as macOS has by default, that name clashes with `CostChart.tsx`. `CostChart.tsx` keeps the heading, the switches, the legend, the texts and the table, and renders `<EChart>`.
 
 | Behavior today | ECharts form |
 |---|---|
@@ -296,7 +321,7 @@ Alternative: feed standard bars with values adjusted to the minimum height. Reje
 | Tooltip lists the top three inside Other, then "+ N more" | Unchanged React, in `tip(i)` |
 | Arrow keys, Home, End; Escape; blur | The wrapper |
 | Live readout, with stacking, unpriced requests, average | Unchanged text, in `read(i)` |
-| Click or Enter opens the day's sessions; an empty day does nothing | `onActivate`; `pick()` keeps its guard |
+| Click or Enter opens the day's sessions; an empty day does nothing | `onActivate`; `pick()` keeps its guard and returns `false` on an empty day, so the reading stays |
 | Legend key filters to a project or an agent, and focus returns to the first key | Unchanged HTML and effect |
 | All kinds hidden: message and "Show every kind" | Unchanged; `<EChart hidden>` |
 | Thin segment at least 1px, gaps kept | `stackRects` |
@@ -314,7 +339,7 @@ What will look or behave differently:
 4. Bars grow once, when the chart first draws. Today they grow each time new data lands (`.grow`).
 5. In forced colors the day being read is a highlight-colored band, not a 2px frame.
 6. Escape closes a tooltip the pointer opened while the focus is elsewhere.
-7. The pointer is a hand over the whole plot.
+7. The pointer is a hand only over a day inside the grid, set by the wrapper on each move in a chart that has an activation handler; the day labels, the margins and the slider keep their own cursors. An empty day shows the hand too: the wrapper cannot tell which days the handler declines.
 8. The peak label is not drawn while the zoom leaves the peak day out.
 9. Tick label positions, the grid's exact pixels and the hatch's stripe spacing may differ by a pixel or two.
 
@@ -328,10 +353,10 @@ What will look or behave differently:
 | `EChart.test.tsx` | The wrapper on the fake runtime | Keys, modified keys, Enter, Escape focused and on the document, blur, tooltip, readout, the actions sent to the runtime, a redraw on a theme change, `resize()`, `dispose()`, `animation: false`, the box's height before load, the failure text, zoom keys and reset |
 | `CostChart.test.tsx` | The component on the fake runtime | The kept tests: tooltip rows, Other's names, unpriced wording, "so far", stack switch, legend keys and filters, the data table, Share readings |
 | `CostChart.real.test.tsx` | The component on real ECharts, SVG, in jsdom | The option is one ECharts accepts: an `<svg>` appears in the plot, it has paths in the series colors, and unmount removes it |
-| `tools/demo/chartfit.mjs` | The built app in Chromium on the demo store | What jsdom cannot show: colors in light, dark and after an OS flip with no reload, forced colors, 200% text, the thin segments drawn, the band under pointer and keys, click and Enter, zoom, and no CSP violation |
+| `tools/demo/chartfit.mjs` | The built app in Chromium on its own seeded demo store | What jsdom cannot show: colors in light, dark and after an OS flip with no reload, the slider's handles against the panel, forced colors, 200% text, the thin segments drawn, the band under pointer and keys, before and after a zoom, click and Enter and a declined empty day, the hand cursor, the zoom keys, a slider drag said once on release, "Show all days", the hint on one line at 1440px, newer figures that keep the zoom and say nothing, and no CSP violation or console error |
 
 - `test-setup.ts` makes `HTMLCanvasElement.prototype.getContext` return null, and mocks `components/echart/load` with the fake runtime from `echart/testing.ts`. `CostChart.real.test.tsx` unmocks it.
-- The fake runtime records `init`, `setOption`, `dispatchAction`, `resize` and `dispose`, and lets a test fire zrender and `datazoom` events.
+- The fake runtime records `init`, `setOption`, `dispatchAction`, `resize` and `dispose`, and lets a test fire zrender and `datazoom` events. Its `setOption` follows ECharts 6's merge rules (`replaceMerge`, matching by id, then name, then index, and an error for two items with one id), so a redraw that would drop the zoom or keep a dead series fails on it as it would on ECharts. `testing.test.ts` tests the fake itself.
 - The kept tests no longer mock `getBoundingClientRect` for the plot.
 - No payload changes, so the page fixtures are not regenerated.
 
@@ -339,11 +364,11 @@ What will look or behave differently:
 
 `web/scripts/check-bundle.mjs`, run at the end of `npm run check` and in CI's `web-build` job after the build. It reads `src/ai_ledger/web/assets/`, gzips at level 9 and fails when:
 
-- there is not exactly one `echarts-*.js`, or it is over **195 kB** (measured: 181.4 kB);
-- `index-*.js` is over **120 kB** (today: 111.3 kB), which catches a static import of ECharts;
-- `CostPage-*.js` is over **20 kB** (today: 12.5 kB).
+- there is not exactly one `echarts-*.js`, or it is over **195 kB** (spike: 181.4 kB; built at the change's head: 176.5 kB);
+- `index-*.js` is over **120 kB** (before the change: 111.3 kB; at its head: 111.5 kB), which catches a static import of ECharts;
+- `CostPage-*.js` is over **20 kB** (before the change: 12.5 kB; at its head: 16.7 kB).
 
-It prints each size. `vite.config.ts` sets `chunkSizeWarningLimit: 600`, so the build stays quiet about the one large chunk.
+It prints each size, and exits 1 naming each chunk over its limit or missing. `vite.config.ts` sets `chunkSizeWarningLimit: 600`, so the build stays quiet about the one large chunk.
 
 ### 12. Content-Security-Policy
 
@@ -369,9 +394,9 @@ Stays until the other charts migrate:
 
 - **A wrong color that tests cannot see.** jsdom does not resolve `var()`, so a bad token or a stale cache passes every unit test. → `tokens.test.ts` checks the declarations, and `chartfit.mjs` reads drawn colors in a browser in both themes and after a flip.
 - **An option that ECharts rejects or draws wrong.** The builder tests check an object, not a drawing. → The real-ECharts smoke test and `chartfit.mjs`.
-- **A redraw that loses the zoom or keeps a dead series.** `setOption` merges by default. → `replaceMerge`, and wrapper tests for a stack switch and a theme change while zoomed.
-- **The cursor band and the React cursor disagree.** Two things track one index. → One function moves both; `chartfit.mjs` checks the band's place after keys and after a pointer move.
-- **A larger download and package.** 182 kB gzip more for a page with a chart; the wheel grows by 0.54 MB. → Served from localhost, loaded once, cached by ETag; the budget stops silent growth.
+- **A redraw that loses the zoom or keeps a dead series.** `setOption` merges by default. → `replaceMerge` with the slider's fixed id, a fake runtime that merges as ECharts does, and wrapper tests for a stack switch and a theme change while zoomed.
+- **The cursor band and the React cursor disagree.** Two things track one index. → One effect moves the band to the React cursor, whatever moved it; `chartfit.mjs` checks the band's place after keys and after a pointer move.
+- **A larger download and package.** 182 kB gzip more for a page with a chart; the wheel grows by 0.54 MB. → Served from localhost under `/assets/` with a hashed name and `Cache-Control: public, max-age=31536000, immutable` (`src/ai_ledger/app.py`), so the browser loads it once per build; the budget stops silent growth.
 - **ECharts' enter animation in a custom series.** Not measured in the spike. → If it misbehaves, drop the grow; the spec does not require it.
 - **The slider is not keyboard-operable by itself.** → The plus and minus keys and "Show all days" cover the same function, and the reading reaches every day.
 - **Later charts may need a prop not reserved here.** → The table in decision 5 lists each chart's needs from reading its code; a new prop is added in that chart's change, in the wrapper, not around it.
