@@ -15,6 +15,8 @@ export { sleep };
 const DEMO = new URL("..", import.meta.url).pathname, ROOT = join(DEMO, "../..");
 export const W = 1440, H = 900, LOCALE = "en-US";
 const SHOTS = process.env.SHOTS;
+/** A request the demo server dropped, by its failure, and the loads of a page tried before the run stops on it. */
+const DROPPED = /net::ERR_(CONNECTION_RESET|SOCKET_NOT_CONNECTED)\b/, LOADS = 3;
 
 /** A port nothing listens on, from the system. */
 const freePort = () => new Promise((resolve, reject) => {
@@ -49,6 +51,8 @@ export async function run(pages) {
   process.once("SIGINT", () => { stop(); rmSync(dir, { recursive: true, force: true }); process.exit(130); });
   /** What the pages reported: CSP violations, console errors and page errors. */
   const reported = [];
+  /** The requests the server dropped after their page's kept load: named when a check then stops the run. */
+  const late = [];
   try {
     execFileSync("uv", ["run", "--project", ROOT, "python", "seed.py"], { cwd: dir, stdio: ["ignore", "ignore", "inherit"] });
     server = spawn("uv", ["run", "--project", ROOT, "python", "serve.py"], { cwd: dir, env: { ...process.env, DEMO_PORT: String(port) }, stdio: ["ignore", "pipe", "ignore"], detached: true });
@@ -78,27 +82,56 @@ export async function run(pages) {
        *  setup, when given, runs in the page before its scripts, before init; with answer, the chart's payload (the request
        *  data matches) is answer(payload). */
       async open({ path, root, ready, setup = null, data = null, answer = null }, name, options = {}, init = null) {
-        const ctx = await b.newContext({ viewport: { width: W, height: H }, locale: LOCALE, colorScheme: "light", reducedMotion: "reduce", ...options });
-        const page = await ctx.newPage();
-        page.errors = [];
-        page.requests = [];
-        page.on("console", m => { if (m.type() === "error") page.errors.push(`console: ${m.text()} ${m.location().url}`); });
-        page.on("pageerror", e => page.errors.push(`page error: ${e.message}`));
-        page.on("request", r => { if (new URL(r.url()).pathname.startsWith("/api/")) page.requests.push(r.url()); });
-        await page.addInitScript(readers, root);
-        if (setup) await page.addInitScript(setup);
-        if (init) await page.addInitScript(init);
-        if (answer) await page.route(data, route => h.answer(route, answer));
-        page.done = async () => {
-          // A refetch may still be on its way through a route: let it go, or its failed fetch ends the run.
-          await page.unrouteAll({ behavior: "ignoreErrors" });
-          for (const v of await page.evaluate(() => window.__csp)) reported.push(`${name}: CSP ${v}`);
-          for (const e of page.errors) reported.push(`${name}: ${e}`);
-          await ctx.close();
-        };
-        await page.goto(`${BASE}${path}`);
-        await ready(page);
-        return page;
+        // The demo server's listen queue is 5: on a loaded machine it drops connections, and a page whose script chunk or
+        // /api/ request is dropped may never draw. So a load with a dropped request is thrown away and the page loaded
+        // afresh, in a new context, up to LOADS times. This must never hide anything else: a discarded load's other console
+        // errors, page errors and CSP violations are still reported, a drop on every load stops the run naming the page,
+        // and a drop after the kept load is drawn (during the checks) is reported as before.
+        for (let load = 1; ; load++) {
+          const ctx = await b.newContext({ viewport: { width: W, height: H }, locale: LOCALE, colorScheme: "light", reducedMotion: "reduce", ...options });
+          const page = await ctx.newPage();
+          page.errors = [];
+          page.requests = [];
+          let dropped = null, kept = false, onDrop;
+          const drop = new Promise((_, reject) => { onDrop = reject; });
+          drop.catch(() => {});
+          page.on("console", m => { if (m.type() === "error") page.errors.push(`console: ${m.text()} ${m.location().url}`); });
+          page.on("pageerror", e => page.errors.push(`page error: ${e.message}`));
+          page.on("request", r => { if (new URL(r.url()).pathname.startsWith("/api/")) page.requests.push(r.url()); });
+          page.on("requestfailed", r => {
+            if (!DROPPED.test(r.failure()?.errorText ?? "")) return;
+            if (kept) return void late.push(`${name}: ${r.url()}`);
+            if (dropped) return;
+            dropped = r.url();
+            onDrop(new Error(`dropped ${dropped}`));
+          });
+          await page.addInitScript(readers, root);
+          if (setup) await page.addInitScript(setup);
+          if (init) await page.addInitScript(init);
+          if (answer) await page.route(data, route => h.answer(route, answer));
+          /** Records what the page reported, under name, and closes it; except lets some reports go. */
+          const close = async (except = () => false) => {
+            // A refetch may still be on its way through a route: let it go, or its failed fetch ends the run.
+            await page.unrouteAll({ behavior: "ignoreErrors" });
+            const csp = await page.evaluate(() => window.__csp ?? []).catch(() => []);
+            for (const v of csp) reported.push(`${name}: CSP ${v}`);
+            for (const e of page.errors) if (!except(e)) reported.push(`${name}: ${e}`);
+            await ctx.close();
+          };
+          page.done = () => close();
+          try {
+            const loading = (async () => { await page.goto(`${BASE}${path}`); await ready(page); })();
+            loading.catch(() => {}); // after a drop it fails on the closed page, unheard
+            await Promise.race([loading, drop]);
+            if (!dropped) { kept = true; return page; }
+          } catch (e) {
+            if (!dropped) throw e;
+          }
+          // Only the drops of a discarded load go unreported: whatever else it logged still fails the run.
+          await close(e => e.startsWith("console: Failed to load resource:") && DROPPED.test(e));
+          if (load === LOADS) throw new Error(`${name}: the demo server kept dropping the connection on each of ${LOADS} loads of ${path}, last ${dropped}`);
+          await sleep(500 * load);
+        }
       },
       /** With SHOTS=<dir>, a screenshot of the element at root, as <dir>/<file>.png. */
       async shot(page, root, file) {
@@ -109,11 +142,11 @@ export async function run(pages) {
     };
     for (const page of pages) await page(h);
 
-    // Connection resets (net::ERR_CONNECTION_RESET) have been seen here when the machine is heavily loaded: the demo
-    // server's listen queue is small. Rerun on a quiet machine first.
+    // A connection the server dropped while a page loaded is retried in open(); one dropped later, during the checks,
+    // still fails here: rerun on a quieter machine.
     line("no CSP violation, console error or page error", !reported.length, reported.join("; "));
   } catch (e) {
-    console.log(`chartfit stopped: ${e.message.split("\n")[0]}`);
+    console.log(`chartfit stopped: ${e.message.split("\n")[0]}${late.length ? `; the demo server had dropped ${late.join(", ")}` : ""}`);
     failed = true;
   } finally {
     await b?.close();
