@@ -4,12 +4,14 @@ import { setNoticeSource, type NoticeSource } from "./useLive";
 
 export class FakeSource implements NoticeSource {
   static last: FakeSource | undefined;
+  /** How many the page opened, ever: a test compares it before and after. */
+  static made = 0;
   onopen: ((ev: Event) => void) | null = null;
   onerror: ((ev: Event) => void) | null = null;
   closed = false;
   readyState = 0; // EventSource's: 0 connecting, 1 open, 2 closed
   private changed: ((ev: MessageEvent<string>) => void)[] = [];
-  constructor(public url: string) { FakeSource.last = this; }
+  constructor(public url: string) { FakeSource.last = this; FakeSource.made++; }
   addEventListener(_type: "changed", f: (ev: MessageEvent<string>) => void) { this.changed.push(f); }
   close() { this.closed = true; this.readyState = 2; }
   /** The app's changed notice; null sessions: refetch everything. */

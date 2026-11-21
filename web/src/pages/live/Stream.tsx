@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { LiveEvent, LiveSession, LiveToolEvent, Ts } from "../../api";
 import { big, plural, usd } from "../../format";
 import { sessionLink } from "../../components/sheets/session";
@@ -124,6 +124,7 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
   sheet: string;
 }) {
   const box = useRef<HTMLDivElement>(null), drawn = useRef<HTMLDivElement>(null), newest = useRef<HTMLDivElement>(null);
+  const hint = useId(); // two pinned streams share the page
   const put = useRef({ top: 0, reach: 0 });
   const [open, setOpen] = useState(() => new Set<string>());
   const [seenAt, setSeenAt] = useState(s.events.length);
@@ -216,8 +217,8 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
   const said = fresh && told === fresh ? plural(fresh, "new event") : "";
   return <>
     <div className="stream-filters" role="group" aria-label="Stream filters">
-      <button type="button" aria-pressed={f.errors} aria-describedby="stream-errors-hint" onClick={() => setFilters({ ...f, errors: !f.errors })}>{plural(s.errors, "error")}</button>
-      <span id="stream-errors-hint" className="muted">show failed calls only</span>
+      <button type="button" aria-pressed={f.errors} aria-describedby={hint} onClick={() => setFilters({ ...f, errors: !f.errors })}>{plural(s.errors, "error")}</button>
+      <span id={hint} className="muted">show failed calls only</span>
       <label className="chk"><input type="checkbox" checked={f.main} onChange={e => setFilters({ ...f, main: e.target.checked })} /> Main thread only</label>
       <label className="chk"><input type="checkbox" checked={f.quiet} onChange={e => setFilters({ ...f, quiet: e.target.checked })} /> Hide read-only</label>
       {hidden > 0 && <span className="hid muted">{plural(hidden, "row")} hidden</span>}
@@ -231,7 +232,7 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
           const id = r.lane.id, v = views.get(id)!;
           if (v.hidden) return null;
           return <div className="ev" key={"lane:" + id} ref={mark("lane:" + id)}><span className="t">{time(r.lane.start, today)}</span>
-            <Lane lane={r.lane} fig={s.lanes[id]} v={v} now={v.ticks ? now : undefined} today={today} text={text} open={open} toggle={toggle}
+            <Lane lane={r.lane} fig={Object.hasOwn(s.lanes, id) ? s.lanes[id] : undefined} v={v} now={v.ticks ? now : undefined} today={today} text={text} open={open} toggle={toggle}
               target={target} newest={newest} fold={fold} all={all} /></div>;
         }
         const e = r.e;

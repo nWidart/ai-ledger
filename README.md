@@ -20,7 +20,7 @@ Needs [uv](https://docs.astral.sh/uv/). Runs on macOS and Linux. Your data stays
 
 | Page | Shows |
 | --- | --- |
-| **Live** | Every active session as it runs, sorted by who needs you first. Its tab counts the sessions that wait for you. |
+| **Live** | Every active session as it runs, sorted by who needs you first. A strip above the stream shows the session's state, context, cost, errors, plan limits and a 10-minute pulse of context growth and tool calls, with Copy resume. On the Wall, a tile pins up to two streams beside the tiles. Its tab counts the sessions that wait for you. |
 | **Limits** | Each plan limit window with its forecast cone and the safe pace to its reset, what used it, and how past windows ended. Its tab shows how full the fullest window is. |
 | **Activity** | What got done per day or week, by project, and what needs your attention. The work chart puts errors per 100 tool calls on a track under the bars; select a day or a week to narrow the tables. Each tile opens the place that explains it, and the tables sit in tabs: Sessions, Projects, Tools and MCP, Loops and tests. It also shows the output speed per model second, with its trend, and how long sessions wait on the model and tools. Its **Judgments** view shows how Claude Code's `/insights` judged your sessions: the outcome mix per week, what each judged session cost, and which friction the costliest sessions had. |
 | **Cost** | Estimated spend at API list prices per day, and the month's pace against your plan. One table shows each project's trend, spend, change, cost per commit and cache hit. The tokens chart can show each day's share by token kind, and the Tokens and cache drawer sets each kind's share of tokens beside its share of cost. |

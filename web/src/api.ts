@@ -421,15 +421,24 @@ export interface LiveMarkEvent extends LiveEventBase { k: "interrupt" | "turn_en
 export interface LiveTurnStart extends LiveEventBase { k: "turn_start"; window: number | null }
 export interface LiveCompaction extends LiveEventBase { k: "compaction"; pre: number | null }
 export type LiveEvent = LiveTextEvent | LiveToolEvent | LiveMarkEvent | LiveTurnStart | LiveCompaction;
+/** The session over its last 10 minutes, oldest first: each main-thread request's context (what it read), the first
+ *  being the last one before start when there is one, and each tool call that ended, subagents' included. */
+export interface LivePulse {
+  start: Ts; end: Ts;
+  context: { ts: Ts; tokens: number }[];
+  ticks: { ts: Ts; failed: boolean }[];
+}
 export interface LiveSession extends LiveFigures, LiveTitle {
   session_id: string; project: string | null; source: Source; branch: string | null; last_ts: Ts | null; now: Ts;
+  /** The directory the session runs in, when its lines say. */
+  cwd: string | null;
   /** Pass back as after= to get newer events, with those of the minute before sent again. */
   cursor: string | null; truncated: boolean; state: LiveState;
   events: LiveEvent[];
   /** Per subagent lane with a request, by the events' lane id: its cost (null when unpriced) and its newest request's model. */
   lanes: Record<string, { cost: number | null; model: string | null }>;
   compactions: { ts: Ts | null; pre: number | null }[];
-  spark: { points: number[]; per_minute: number; step: number };
+  pulse: LivePulse;
   limits: { label: string; used_percent: number; observed_at: Ts | null; resets_at: Ts | null }[];
 }
 

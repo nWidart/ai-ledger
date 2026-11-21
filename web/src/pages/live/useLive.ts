@@ -1,10 +1,11 @@
-// The Live page's data: the active list and the selected session, two queries (queries.ts) kept current by the app's
-// change notices (/api/live/events). A notice names the sessions that gained lines; the page then asks again for the list
-// and, when named, the selected session, whose query fetches only what is new: one request at a time for each, and one
+// The Live page's data: the active list, the selected session and the Wall's pins, queries (queries.ts) kept current by
+// the app's change notices (/api/live/events), over one stream whatever the page shows. A notice names the sessions that
+// gained lines; the page then asks again for the list and, when named, the selected session or a pin, whose query
+// fetches only what is new: one request at a time for each, and one
 // more after it for the notices that came meanwhile. Query fetches a key the page comes to show; every other fetch
 // starts here, so Pause and a hidden tab hold them by not asking. While the tab is hidden the page closes the stream, so
 // the app stops its one-second ingest for it, and stops its timers; on return it fetches once and opens the stream again.
-import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { liveEventsUrl, type LivePayload, type LiveSession, type View } from "../../api";
 import { queries } from "../../queries";
@@ -40,6 +41,8 @@ export interface LiveData {
   /** The last failure of each fetch, cleared by its next success; the session's also by opening another session. */
   listError: Error | undefined;
   sessionError: Error | undefined;
+  /** The Wall's pinned sessions, in the order asked for: each one's session once loaded, and its last failure. */
+  pinned: { id: string; session: LiveSession | undefined; error: Error | undefined }[];
 }
 
 /** The query's failure, held while it is asked again: Query drops the error of a query with no data when a fetch starts,
@@ -51,9 +54,29 @@ function useLastError(q: UseQueryResult<unknown, Error>, of = ""): Error | undef
   return error;
 }
 
-export function useLive(view: View, selected: string, text: boolean, paused: boolean): LiveData {
+/** What the page fetches on a notice: the list, the selected session, or a pinned one (pin:<id>). */
+type Asked = "list" | "session" | `pin:${string}`;
+const NO_PINS: readonly string[] = [];
+
+export function useLive(view: View, selected: string, text: boolean, paused: boolean, pins: readonly string[] = NO_PINS): LiveData {
   const client = useQueryClient(), visible = usePageVisible();
   const listQ = useQuery(queries.liveList(view, text)), sessionQ = useQuery({ ...queries.liveSession(selected, text), enabled: !!selected });
+  // The pins, one query each, kept as the selected session is: through Full text turning on, until the text arrives.
+  // Kept in a Map: a pin is any id the URL names, and an object would answer "constructor" with its own.
+  const pinQs = useQueries({ queries: pins.map(id => queries.liveSession(id, text)) });
+  const [keptPins, setKeptPins] = useState<ReadonlyMap<string, LiveSession>>(() => new Map());
+  const fresh = pinQs.flatMap(q => (q.data && keptPins.get(q.data.session_id) !== q.data ? [q.data] : []));
+  if (fresh.length) setKeptPins(new Map([...[...keptPins].filter(([id]) => pins.includes(id)), ...fresh.map(s => [s.session_id, s] as const)]));
+  // Each pin's failure, held while it is asked again, as useLastError holds the session's.
+  const [pinErrors, setPinErrors] = useState<ReadonlyMap<string, Error>>(() => new Map());
+  const errs = pins.flatMap((id, i) => { const q = pinQs[i]!, e = q.error ?? (q.isLoading ? pinErrors.get(id) : undefined); return e ? [[id, e] as const] : []; });
+  if (errs.length !== pinErrors.size || errs.some(([id, e]) => pinErrors.get(id) !== e)) setPinErrors(new Map(errs));
+  const errOf = new Map(errs);
+  const pinned = pins.map((id, i) => ({ id, session: pinQs[i]!.data ?? (text ? keptPins.get(id) : undefined), error: errOf.get(id) }));
+  // How a notice asks for a pin again: through its observer, as for the selected session. Read from a ref, so the
+  // handlers below, and with them the notice stream, keep their identity when the pins change.
+  const pinAsk = useRef(new Map<string, () => Promise<unknown>>());
+  pinAsk.current = new Map(pins.map((id, i) => [id, () => pinQs[i]!.refetch({ cancelRefetch: false })]));
   // What the page showed last, kept here rather than as placeholderData, which a failed fetch drops. The list stays
   // while another filter's list loads or fails, unless it was loaded with Full text and Full text is off now: its
   // first-prompt titles must leave the screen. Turning Full text on keeps the events, and with them the open rows and
@@ -69,8 +92,8 @@ export function useLive(view: View, selected: string, text: boolean, paused: boo
   const listError = useLastError(listQ), sessionError = useLastError(sessionQ, selected);
   const [conn, setConn] = useState<Conn>("connecting");
   const [held, setHeld] = useState(0);
-  const cur = useRef({ view, selected, text, paused, visible });
-  cur.current = { view, selected, text, paused, visible };
+  const cur = useRef({ view, selected, text, paused, visible, pins });
+  cur.current = { view, selected, text, paused, visible, pins };
 
   // A notice's fetch of the list or of the selected session: one request at a time, and one more after it for the
   // notices that came meanwhile, as the status below. No request is cancelled: with a notice a second and answers slower
@@ -79,26 +102,31 @@ export function useLive(view: View, selected: string, text: boolean, paused: boo
   // hidden: Pause counts it as one update held, whatever both queries owed, so that Resume fetches; the return to the
   // tab fetches anyway. Asked through the observers, not invalidateQueries, which cancels, and fetches with the options
   // of the query's last fetch: at the recheck's low priority after a recheck. The observer asks for the session
-  // selected now.
+  // selected now. A pin is asked for the same way, while it is pinned.
   const { refetch: askList } = listQ, { refetch: askSession } = sessionQ;
-  const asked = useRef({ list: { busy: false, again: false }, session: { busy: false, again: false } });
-  const ask = useCallback((of: "list" | "session") => {
-    const all = asked.current, p = all[of];
+  const asked = useRef(new Map<Asked, { busy: boolean; again: boolean }>());
+  const ask = useCallback((of: Asked) => {
+    const all = asked.current, p = all.get(of) ?? all.set(of, { busy: false, again: false }).get(of)!;
     if (p.busy) { p.again = true; return; }
     p.busy = true;
+    const pin = of.startsWith("pin:") ? of.slice(4) : null;
+    const key = pin ? ["live", "session", pin] : ["live", of];
+    const wanted = () => (pin ? cur.current.pins.includes(pin) : of === "list" || !!cur.current.selected);
     void (async () => {
       do {
-        p.again = client.isFetching({ queryKey: ["live", of] }) > 0;
-        await (of === "list" ? askList : askSession)({ cancelRefetch: false });
-      } while (p.again && !cur.current.paused && cur.current.visible && (of === "list" || cur.current.selected));
+        p.again = client.isFetching({ queryKey: key }) > 0;
+        await (pin ? pinAsk.current.get(pin)?.() : (of === "list" ? askList : askSession)({ cancelRefetch: false }));
+      } while (p.again && !cur.current.paused && cur.current.visible && wanted());
       p.busy = false;
-      if (p.again && cur.current.paused) { all.list.again = all.session.again = false; setHeld(n => n + 1); }
+      if (p.again && cur.current.paused) { for (const q of all.values()) q.again = false; setHeld(n => n + 1); }
       p.again = false;
     })();
   }, [client, askList, askSession]);
   const refresh = useCallback((sessions: string[] | null) => {
+    const { selected, pins } = cur.current, named = (id: string) => sessions === null || sessions.includes(id);
     ask("list");
-    if (cur.current.selected && (sessions === null || sessions.includes(cur.current.selected))) ask("session");
+    if (selected && named(selected)) ask("session");
+    for (const id of pins) if (named(id)) ask(`pin:${id}`);
   }, [ask]);
   // The nav's "Last ingest" follows the notices: one status request at a time, and one more after it for the notices
   // that came meanwhile, unless the user paused meanwhile.
@@ -169,11 +197,12 @@ export function useLive(view: View, selected: string, text: boolean, paused: boo
       const c = cur.current;
       client.fetchQuery(queries.liveList(c.view, c.text, LOW)).catch(() => {});
       if (c.selected) client.fetchQuery(queries.liveSession(c.selected, c.text, LOW)).catch(() => {});
+      for (const id of c.pins) client.fetchQuery(queries.liveSession(id, c.text, LOW)).catch(() => {});
     }, RECHECK_MS);
     return () => clearInterval(t);
   }, [paused, visible, client]);
 
-  return { list, session, conn, held, listError, sessionError };
+  return { list, session, conn, held, listError, sessionError, pinned };
 }
 
 /** A clock that ticks every second while not paused and the tab is showing, shared by every running timer on the page.

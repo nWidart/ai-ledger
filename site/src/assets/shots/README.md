@@ -46,7 +46,7 @@ Only the shots a page shows are kept: a shot no page references is deleted, and 
 | `project-limits` | "Plan limits". | Project |
 | `live-rail` | The "Active · last 10 min" session list. | Live, First tour |
 | `live-stream` | One session's stream: prompt, reply, tool calls, a subagent lane and a failed `npm test`. | Live |
-| `live-status` | The "Doing now" side panel: context window, session figures, tokens per minute, plan limits. | Live |
+| `live-strip` | The status strip above the stream: state, context meter, figures, plan limits, the pulse, the directory and Copy resume. | Live |
 | `live-wall` | Wall view: one tile per session. | Live |
 | `everywhere-palette` | The command palette, searching `atlas`: a project, its page and its sessions. | Command palette |
 | `everywhere-context-menu` | The right-click menu on a project row in Activity's Projects tab. | Context menu |

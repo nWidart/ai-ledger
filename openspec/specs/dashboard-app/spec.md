@@ -610,17 +610,6 @@ A page that is loading SHALL mark its content area `aria-busy` and SHALL NOT ann
 - **WHEN** a screen reader user opens a page whose data is still loading
 - **THEN** nothing about loading is announced, and the content area is `aria-busy` until the data arrives
 
-### Requirement: Explain terms without hover
-An explanation that a page gave only as hover text on a column header, a filter label, a facet, a figure of the Live agent panel or a figure of Limits SHALL be reachable from the keyboard: either as a visible hint, or behind a button, a toggletip, that shows the text on activation, is named for the term it explains, exposes `aria-expanded`, and closes on Escape, on activating it again and on a click outside it.
-
-#### Scenario: Column header explanation
-- **WHEN** the user tabs to the toggletip beside a column header and presses Enter
-- **THEN** the explanation shows, the button reads as expanded, and Escape hides it and keeps focus on the button
-
-#### Scenario: Agent panel figure
-- **WHEN** a screen reader user reaches the cache-read share in the Live agent panel
-- **THEN** its explanation is available without a pointer
-
 ### Requirement: Expose and fit a toggletip's text
 The text of a toggletip SHALL be exposed to assistive technology once it shows, as content right after the button in reading order, and SHALL NOT be announced through a live region. It SHALL fit in the viewport: a text taller than the room beside the button SHALL scroll, and SHALL then be the next stop after the button, so the keyboard can scroll it.
 
@@ -1349,3 +1338,14 @@ Each page SHALL show a shared filter only when it changes what the page shows; a
 #### Scenario: Back
 - **WHEN** the user follows an old `/insights` link from another site and presses Back
 - **THEN** the browser returns to that site, not to `/insights`
+
+### Requirement: Explain terms without a pointer
+An explanation that a page gave only as hover text on a column header, a filter label, a facet, a figure of the Live status strip or a figure of Limits SHALL be reachable from the keyboard: either as a visible hint, or behind a button, a toggletip, that shows the text on activation, is named for the term it explains, exposes `aria-expanded`, and closes on Escape, on activating it again and on a click outside it.
+
+#### Scenario: Column header explanation
+- **WHEN** the user tabs to the toggletip beside a column header and presses Enter
+- **THEN** the explanation shows, the button reads as expanded, and Escape hides it and keeps focus on the button
+
+#### Scenario: Status strip figure
+- **WHEN** a screen reader user reaches the cache-read share in the Live status strip
+- **THEN** its explanation is available without a pointer
