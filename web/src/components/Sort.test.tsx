@@ -165,4 +165,16 @@ describe("SortTh with several keys", () => {
     render(heads({ key: "a", desc: true }));
     expect(fireEvent.mouseDown(btn(), { shiftKey: true })).toBe(true);
   });
+
+  it("moves focus to the Shift-clicked button, so Enter then presses it", async () => {
+    const onSort = vi.fn<(s: SortBy<ABC>, shift: boolean) => void>(), user = userEvent.setup();
+    renderApp(heads([{ key: "a", desc: true }], onSort));
+    screen.getByRole("button", { name: "A" }).focus();
+    await user.keyboard("{Shift>}");
+    await user.click(screen.getByRole("button", { name: "B" }));
+    await user.keyboard("{/Shift}");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "B" }));
+    await user.keyboard("{Enter}");
+    expect(onSort).toHaveBeenLastCalledWith({ key: "b", desc: false }, false);
+  });
 });

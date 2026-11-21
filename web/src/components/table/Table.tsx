@@ -48,9 +48,9 @@ interface ColumnBase<T, K extends string> {
   col?: string;
 }
 
-/** What a custom header cell gets: the column's classes and the table's sort. sort: its first key; list: every key, first key first
- *  (empty: no sort); onSort: sort by that key alone, in either form of the table's sort. */
-export interface HeadContext<K extends string> { className: string | undefined; sort: SortBy<K> | null; list: readonly SortBy<K>[]; onSort?: (s: SortBy<K>) => void }
+/** What a custom header cell gets: the column's classes and the table's sort (with a list, its first key).
+ *  onSort sorts by that key alone, in the list form too. */
+export interface HeadContext<K extends string> { className: string | undefined; sort: SortBy<K> | null; onSort?: (s: SortBy<K>) => void }
 
 /** A row that opens something (a sheet): value, the row's data-v (null: the row opens nothing); open, run with the row's button;
  *  subject, what the row is for the context menu. */
@@ -144,7 +144,9 @@ export function Table<T extends RowData, K extends string = string>({ name, rows
     // One TanStack column per id, the sortable one: a display-only column whose id is also an extra sort key registers none.
     return [...columns.filter(c => c.sort || !extra.some(d => d.id === c.id)).map(c => def(c.id, c.value, !!c.sort)), ...extra];
   }, [columns]);
-  const list = isSortList(sort) ? sort : sort ? [sort] : [];
+  // A list sorted here keeps only the keys a column sorts by (TanStack skips the others), so the headers rank what orders the rows;
+  // rows that come sorted were ordered by every key.
+  const list = isSortList(sort) ? manualSort ? sort : sort.filter(s => defs.some(d => d.enableSorting && d.id === s.key)) : sort ? [sort] : [];
   // Keyed by the keys and directions, not the caller's objects, so an equal sort keeps TanStack's sorted rows.
   const sortKey = list.map(s => `${s.desc ? "-" : ""}${s.key}`).join();
   const sorting = useMemo<SortingState>(() => list.map(s => ({ id: s.key, desc: s.desc })), [sortKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -160,8 +162,8 @@ export function Table<T extends RowData, K extends string = string>({ name, rows
 
   const head = (c: Column<T, K>) => {
     const cls = classes(c);
-    if (c.th) return <Fragment key={c.id}>{c.th({ className: cls, sort: list[0] ?? null, list, onSort: toOne })}</Fragment>;
-    if (c.sort && onSort) return <SortTh key={c.id} k={c.id} sort={sort} onSort={press(c)} asc={c.sort === "asc"} className={cls} title={c.tip} term={c.tipTerm}
+    if (c.th) return <Fragment key={c.id}>{c.th({ className: cls, sort: list[0] ?? null, onSort: toOne })}</Fragment>;
+    if (c.sort && onSort) return <SortTh key={c.id} k={c.id} sort={isSortList(sort) ? list : sort} onSort={press(c)} asc={c.sort === "asc"} className={cls} title={c.tip} term={c.tipTerm}
       after={c.after}>{c.header}</SortTh>;
     return <th key={c.id} scope="col" className={cls}>{c.header}{c.tip && <Toggletip term={c.tipTerm ?? headerTerm(c.header)}>{c.tip}</Toggletip>}{c.after}</th>;
   };

@@ -47,7 +47,10 @@ export function SortTh<K extends string>({ k, sort, onSort, asc, className, titl
   const list = isSortList(sort) ? sort : sort ? [sort] : [], i = list.findIndex(s => s.key === k), on = list[i], many = list.length > 1;
   const dir = on && (on.desc ? "descending" : "ascending");
   return <th scope="col" className={className} data-sort={k} aria-sort={i === 0 ? dir : undefined}>
-    <button type="button" className="sortbtn" onMouseDown={isSortList(sort) ? e => { if (e.shiftKey) e.preventDefault(); } : undefined}
+    <button type="button" className="sortbtn" onMouseDown={isSortList(sort) ? e => {
+      // No text selection; the prevented default would also keep focus where it was, so the button takes it itself.
+      if (e.shiftKey) { e.preventDefault(); e.currentTarget.focus(); }
+    } : undefined}
       onClick={e => onSort({ key: k, desc: on ? !on.desc : !asc }, e.shiftKey)}>{children}
       <span className="sortmark" aria-hidden="true">{on ? (on.desc ? "↓" : "↑") + (many ? String(i + 1) : "") : ""}</span>
       {on && many && <span className="sr">{`, sort ${i + 1} of ${list.length}${i ? `, ${dir}` : ""}`}</span>}</button>

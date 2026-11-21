@@ -134,8 +134,10 @@ describe("Table types", () => {
 describe("Table sorting by several keys", () => {
   interface P { n: string; a: number | null; b: number | null }
   type PK = "n" | "a" | "b";
-  const PC: Column<P, PK>[] = [{ id: "n", header: "Name", value: r => r.n, sort: "asc" }, { id: "a", header: "A", value: r => r.a, align: "num", sort: "desc" },
-    { id: "b", header: "B", value: r => r.b, align: "num", sort: "desc" }];
+  // The columns, for a table whose sort keys may also hold X.
+  const pc = <X extends string = never>(): Column<P, PK | X>[] => [{ id: "n", header: "Name", value: r => r.n, sort: "asc" },
+    { id: "a", header: "A", value: r => r.a, align: "num", sort: "desc" }, { id: "b", header: "B", value: r => r.b, align: "num", sort: "desc" }];
+  const PC = pc();
   const PR: P[] = [{ n: "p", a: 1, b: 2 }, { n: "q", a: 1, b: null }, { n: "r", a: 1, b: 3 }, { n: "s", a: null, b: 5 }, { n: "t", a: 2, b: 1 },
     { n: "u", a: null, b: null }, { n: "w", a: 1, b: 2 }];
   const list = (sort: readonly SortBy<PK>[], rest: Partial<Pick<TableProps<P, PK>, "manualSort" | "columns">> = {}) =>
@@ -211,21 +213,43 @@ describe("Table sorting by several keys", () => {
     expect(screen.getByRole("button", { name: "B" }).querySelector(".sortmark")!.textContent).toBe("");
   });
 
-  it("gives a custom header cell the first key, the whole list, and an onSort that sorts by one key", async () => {
+  it("gives a custom header cell the first key and an onSort that sorts by one key", async () => {
     const onSort = vi.fn<(s: SortBy<PK>[]) => void>();
     const cols: Column<P, PK>[] = [PC[0]!, { ...PC[1]!, th: h => <th scope="col" className={h.className}>
-      <button type="button" onClick={() => h.onSort?.({ key: "b", desc: false })}>{`${h.sort?.key} of ${h.list.map(s => s.key).join(",")}`}</button></th> }, PC[2]!];
+      <button type="button" onClick={() => h.onSort?.({ key: "b", desc: false })}>{`first ${h.sort?.key}`}</button></th> }, PC[2]!];
     renderApp(<Table name="T" rows={PR} columns={cols} rowId={r => r.n} sort={[{ key: "b", desc: true }, { key: "a", desc: true }]} onSort={onSort} sortAdd />);
-    await userEvent.click(screen.getByRole("button", { name: "b of b,a" }));
+    await userEvent.click(screen.getByRole("button", { name: "first b" }));
     expect(onSort).toHaveBeenCalledWith([{ key: "b", desc: false }]);
   });
 
-  it("gives a custom header cell the single sort as its list", () => {
-    const cols: Column<R, K>[] = [COLS[0]!, { ...COLS[1]!, th: h => <th scope="col">{h.list.map(s => `${s.key}${s.desc ? "-" : "+"}`).join(",") || "none"}</th> }];
-    const { rerender } = renderApp(<Table name="T" rows={[]} columns={cols} rowId={r => r.n} sort={{ key: "v", desc: true }} onSort={() => {}} />);
-    expect(screen.getAllByRole("columnheader")[1]!.textContent).toBe("v-");
-    rerender(<Table name="T" rows={[]} columns={cols} rowId={r => r.n} sort={null} onSort={() => {}} />);
-    expect(screen.getAllByRole("columnheader")[1]!.textContent).toBe("none");
+  it("ranks and sorts only by the keys a column sorts by, unless the rows come sorted", async () => {
+    const cols: Column<P, PK | "x">[] = [...pc<"x">(), { id: "x", header: "X", value: r => r.a }];
+    const sort: SortBy<PK | "x">[] = [{ key: "x", desc: true }, { key: "b", desc: true }];
+    const onSort = vi.fn<(s: SortBy<PK | "x">[]) => void>(), user = userEvent.setup();
+    const { rerender } = renderApp(<Table name="T" rows={PR} columns={cols} rowId={r => r.n} sort={sort} onSort={onSort} />);
+    expect(names()).toEqual(["s", "r", "p", "w", "t", "q", "u"]);
+    const b = screen.getByRole("button", { name: "B" });
+    expect([b.closest("th")!.getAttribute("aria-sort"), b.querySelector(".sortmark")!.textContent]).toEqual(["descending", "↓"]);
+    await user.keyboard("{Shift>}");
+    await user.click(screen.getByRole("button", { name: "A" }));
+    await user.keyboard("{/Shift}");
+    expect(onSort).toHaveBeenLastCalledWith([{ key: "b", desc: true }, { key: "a", desc: true }]); // the next list holds no key it cannot sort by
+    // Under a manual sort the server ordered by every key: the list stays as given.
+    rerender(<Table name="T" rows={PR} columns={cols} rowId={r => r.n} sort={sort} onSort={onSort} manualSort />);
+    const mb = screen.getByRole("button", { name: "B, sort 2 of 2, descending" });
+    expect([mb.closest("th")!.hasAttribute("aria-sort"), mb.querySelector(".sortmark")!.textContent]).toEqual([false, "↓2"]);
+    expect(document.querySelectorAll("[aria-sort]")).toHaveLength(0);
+  });
+
+  it("sorts a list by a column's extra key, then by the next key", () => {
+    const [n, a] = pc<"z">();
+    const cols: Column<P, PK | "z">[] = [n!, { ...a!, sorts: { z: r => r.b }, th: h => <th scope="col" className={h.className}>A and Z</th> }];
+    renderApp(<Table name="T" rows={PR} columns={cols} rowId={r => r.n} sort={[{ key: "z", desc: true }, { key: "a", desc: true }]} onSort={() => {}} />);
+    // z (b's value) most first, no value last; ties on z ordered by a, most first.
+    expect(names()).toEqual(["s", "r", "p", "w", "t", "q", "u"]);
+    const rows: P[] = [{ n: "p", a: 1, b: 2 }, { n: "q", a: 3, b: 2 }, { n: "r", a: null, b: 2 }, { n: "s", a: 2, b: 2 }];
+    renderApp(<Table name="U" rows={rows} columns={cols} rowId={r => r.n} sort={[{ key: "z", desc: true }, { key: "a", desc: true }]} onSort={() => {}} />);
+    expect([...screen.getByRole("table", { name: "U" }).querySelectorAll("tbody tr")].map(tr => tr.firstElementChild!.textContent)).toEqual(["q", "s", "p", "r"]);
   });
 
   it("draws a list of one key, and an empty list, with the single sort's DOM", () => {
