@@ -696,6 +696,13 @@ describe("ActivityPage", () => {
     };
     expect(figures("s1")).toEqual(["2.8h", "100"]);
     expect(figures("s2")).toEqual(["–", "–"]);
+    // The sorted column is marked on its header and every cell, so a narrow screen keeps it shown.
+    const sortedCols = () => [...document.querySelectorAll<HTMLElement>("#sessions thead th.sorted")].map(c => c.dataset.sort);
+    expect(sortedCols()).toEqual([]);
+    await userEvent.click(vital("Output speed").closest("button")!);
+    await waitFor(() => expect(sortedCols()).toEqual(["output_per_s"]));
+    await waitFor(() => expect([...body.querySelectorAll("tr")].every(r => r.querySelectorAll(":scope > *")[col("output_per_s")]!.classList.contains("sorted"))).toBe(true));
+    expect(body.querySelectorAll(".sorted")).toHaveLength(body.querySelectorAll("tr").length);
   });
 
   it("sends each sortable Sessions column's own key, and the hint says the order", async () => {

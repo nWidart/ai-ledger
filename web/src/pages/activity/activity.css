@@ -120,24 +120,31 @@
 .pg-activity .ext :is(td, th).hook { max-width: 40rem; }
 @media (max-width: 56.25em) { .pg-activity .ext { grid-template-columns: minmax(0, 1fr); } .pg-activity .ext :is(td, th).hook { max-width: 18.75rem; } }
 /* The sessions table fits its box without scrolling sideways: the session column gives up room to the model time and
-   speed, then the least needed columns go first. */
+   speed, then the least needed columns go first (opt2, then opt1, then opt). The sorted column always shows. */
 .pg-activity #sessions :is(td, th).sess { max-width: 16rem; }
 .pg-activity #sessions :is(td, th).sess .small { overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 78.75em) {
   .pg-activity #sessions .opt2 { display: none; }
   .pg-activity #sessions :is(td, th).sess { max-width: 14.375rem; }
 }
+/* A hidden column shown because it is sorted takes its room from the session column. */
+@media (max-width: 66em) {
+  .pg-activity #sessions .opt1 { display: none; }
+  .pg-activity #sessions table:has(th.opt1.sorted) :is(td, th).sess { max-width: 12.5rem; }
+}
 @media (max-width: 56.25em) {
   .pg-activity #sessions :is(td, th).sess { max-width: 10.625rem; }
+  .pg-activity #sessions table:has(th.opt1.sorted) :is(td, th).sess { max-width: 9.25rem; }
   .pg-activity #sessions :is(td, th).name { max-width: 7.5rem; }
 }
 @media (max-width: 43.75em) {
-  .pg-activity #sessions :is(.opt, .opt2) { display: none; }
+  .pg-activity #sessions :is(.opt, .opt1, .opt2) { display: none; }
   .pg-activity .ext :is(td, th).hook { max-width: 9.375rem; }
   .pg-activity #sessions :is(td, th).name { max-width: 5.625rem; }
   .pg-activity #sessions :is(td, th).when { white-space: normal; }
   .pg-activity #sessions :is(td, th).when .small { overflow-wrap: anywhere; }
 }
+.pg-activity #sessions :is(td, th).sorted { display: table-cell; }
 .pg-activity #projects th:first-child, .pg-activity #projects td:first-child { position: sticky; left: 0; background: var(--bg); z-index: 1; box-shadow: 1px 0 0 var(--border); }
 .pg-activity #projects th:first-child { z-index: 2; }
 .pg-activity #projects tr.sel :is(td, th):first-child { background: color-mix(in srgb, var(--accent) 11%, var(--bg)); }
