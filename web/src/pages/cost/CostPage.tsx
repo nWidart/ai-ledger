@@ -8,6 +8,7 @@ import { InsightCard, rankInsights } from "../../components/InsightCard";
 import type { SortBy } from "../../components/Sort";
 import { ModelLedger } from "../../components/sheets/ProjectSheet";
 import { openSessionSheet } from "../../components/sheets/session";
+import { DocsLink } from "../../components/DocsLink";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
 import { big } from "../../format";
@@ -85,7 +86,7 @@ export function CostPage() {
         {d && <div className="top-side"><PlanGauge d={d} /></div>}
       </header>}
       {error && <div className="banner" role="alert"><b>Could not load {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(d)}.` : ""}</b>{" "}
-        <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
+        <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button>{" "}<DocsLink docs="reference/troubleshooting">Troubleshooting</DocsLink></div>}
       {d && d.unpriced.length > 0 && <div className="banner"><b>Unpriced models:</b> {d.unpriced.map((u, k) => <span key={k}>{k ? ", " : ""}<code>{u.model}</code> ({big(u.tokens)} tokens)</span>)}.
         Their tokens are counted; their cost is unknown and left out of totals. To price them, add them to <code>{d.prices_file.path}</code>,
         in the shape of the packaged <code>prices.json</code>; the next page load uses them, with no rebuild.</div>}

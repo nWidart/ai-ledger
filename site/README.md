@@ -41,6 +41,19 @@ A new page is not in the sidebar until you add it to `sidebar` in `astro.config.
 
 Link between pages with absolute paths that include the base and end in a slash: `[Cost](/ai-ledger/pages/cost/)`, `[Configuration](/ai-ledger/reference/configuration/#prices)`. The build checks every such link and anchor. In a component, build URLs from `import.meta.env.BASE_URL`, never from a literal `/`.
 
+## Links from the app
+
+The app links to these pages: the **Docs** link in its navigation, the palette's docs commands, **Learn more** in its explanations, and the links on a failed or empty page. Every address comes from one registry, `web/src/docs.ts`: one entry per content page, with its path and title, plus the headings the explanations link to.
+
+`cd web && npm run check` fails when:
+
+- a linked page's file moves or is removed;
+- a linked page's front matter `title` changes;
+- a linked heading is reworded, so its anchor changes;
+- a new content page has no entry in `web/src/docs.ts`.
+
+Fix the registry in the same pull request. That covers the current app only: an installed older app keeps linking to the old address. So when you rename or remove a page the app links to, redirect its old address to the page that replaced it, or to the home, with Astro's `redirects` option in `astro.config.mjs`. The site keeps none today: when Insights became a view of Activity, `pages/insights/` kept its address instead.
+
 ## Reference pages follow the specs
 
 `openspec/specs/` is the source of truth for what the app does. Each page under `pages/` and `everywhere/` names the specs it was written from in its front matter:

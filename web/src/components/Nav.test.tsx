@@ -826,6 +826,55 @@ describe("Nav", () => {
       expect(popup()!.textContent).toContain("The app did not answer its status request.");
     });
 
+    describe("troubleshooting link", () => {
+      const learn = () => popup()!.querySelector<HTMLAnchorElement>("a[href]");
+
+      it.each([
+        ["Failed", () => json({ ...status, error: "IO Error: lock held" })],
+        ["Offline", () => Promise.reject(new Error("down"))],
+      ] as const)("ends the details with Learn more, to the troubleshooting page, when %s", async (state, answer) => {
+        vi.stubGlobal("fetch", vi.fn(answer));
+        renderApp(<Nav />);
+        await waitFor(() => expect(label()).toBe(state));
+        await open();
+        const a = learn()!;
+        expect([a.textContent, a.getAttribute("href"), a.getAttribute("target")])
+          .toEqual(["Learn more, Troubleshooting and FAQ documentation, opens in a new tab", "https://nwidart.github.io/ai-ledger/reference/troubleshooting/", "_blank"]);
+        expect(popup()!.lastElementChild).toBe(a);
+        expect(popup()!.getAttribute("role")).toBeNull(); // a tooltip may hold no link
+        await userEvent.keyboard("{Tab}"); // Tab from the open button reaches it
+        expect(document.activeElement).toBe(a);
+      });
+
+      it.each([
+        ["a fresh ingest", () => json({ ...status, last_ingest: new Date().toISOString(), last_change: new Date().toISOString() })],
+        ["Stale", () => json(status)],
+        ["No ingest yet", () => json({ ...status, last_ingest: null, last_change: null, last_stats: null })],
+      ] as const)("shows none for %s, whose details stay a tooltip", async (_state, answer) => {
+        vi.stubGlobal("fetch", vi.fn(answer));
+        renderApp(<Nav />);
+        await waitFor(() => expect(fetch).toHaveBeenCalled());
+        await act(flush); // the answer reaches the nav
+        expect(["idle", "stale"]).toContain(fresh().dataset.kind);
+        await open();
+        expect(popup()!.textContent).toContain("Interval"); // the answer's details, not the first render's
+        expect(learn()).toBeNull();
+        expect(popup()!.getAttribute("role")).toBe("tooltip");
+      });
+
+      it("goes when the app answers again", async () => {
+        const f = vi.fn((): Promise<Response> => Promise.reject(new Error("down")));
+        vi.stubGlobal("fetch", f);
+        const { client } = renderApp(<Nav />);
+        await waitFor(() => expect(label()).toBe("Offline"));
+        f.mockImplementation(() => json({ ...status, last_ingest: new Date().toISOString(), last_change: new Date().toISOString() }));
+        await poll(client);
+        expect(fresh().dataset.kind).toBe("idle");
+        await open();
+        expect(learn()).toBeNull();
+      });
+    });
+
     it("says No ingest yet before the first ingest", async () => {
       vi.stubGlobal("fetch", vi.fn(() => json({ ...status, last_ingest: null, last_change: null, last_stats: null })));
       renderApp(<Nav />);
@@ -990,10 +1039,12 @@ describe("Nav", () => {
       const h = document.documentElement.style.getPropertyValue("--appnav-h");
       await open();
       expect(btn.getAttribute("aria-expanded")).toBe("true");
-      const links = within(list()!).getAllByRole("link");
+      const groups = within(list()!).getAllByRole("group");
+      const links = groups.flatMap(g => within(g).getAllByRole("link"));
       expect(links.map(a => a.textContent)).toEqual(["Live", "Limits", "Activity", "Cost", "Context", "Errors"]);
       expect(links.every(a => a.parentElement!.tagName === "LI" && a.parentElement!.parentElement!.tagName === "UL")).toBe(true);
-      const groups = within(list()!).getAllByRole("group");
+      // The list's last link, after the groups, is the Docs row.
+      expect(within(list()!).getAllByRole("link").map(a => a.textContent)).toEqual([...links.map(a => a.textContent), "Docs, Errors page documentation, opens in a new tab"]);
       expect(groups.map(g => [g.getAttribute("aria-label"), g.querySelector(".appnav-glabel")!.textContent, within(g).getAllByRole("link").length]))
         .toEqual([["Now", "Now", 2], ["Review", "Review", 4]]);
       expect(groups.every(g => g.querySelector(".appnav-glabel")!.getAttribute("aria-hidden") === "true")).toBe(true);
@@ -1132,6 +1183,93 @@ describe("Nav", () => {
       expect(screen.getByRole("button", { name: "Cost" })).toBe(btn);
       expect(btn.querySelector(".appnav-count")).toBeNull();
     });
+
+    // On phones the bar's Docs link leaves the bar (Nav.css), and the list holds it instead, after the groups.
+    describe("Docs row", () => {
+      const row = () => within(list()!).getByRole("link", { name: /^Docs, / });
+
+      it("ends the list, outside the groups, opening the current page's docs in a new tab, never marked current", async () => {
+        vi.stubGlobal("fetch", vi.fn(() => json(status)));
+        const at = async (url: string) => {
+          history.replaceState(null, "", url);
+          const r = renderApp(<Nav />);
+          await open();
+          const a = row(), seen = { href: a.getAttribute("href"), target: a.getAttribute("target"), rel: a.getAttribute("rel"), current: a.getAttribute("aria-current"),
+            text: a.textContent, inGroup: !!a.closest("[role=group]"), last: within(list()!).getAllByRole("link").at(-1) === a, icon: a.querySelector("svg")?.getAttribute("aria-hidden") };
+          r.unmount();
+          return seen;
+        };
+        expect(await at("/cost?project=foo")).toEqual({ href: "https://nwidart.github.io/ai-ledger/pages/cost/", target: "_blank", rel: "noreferrer", current: null,
+          text: "Docs, Cost page documentation, opens in a new tab", inGroup: false, last: true, icon: "true" });
+        expect((await at("/usage?view=judgments")).href).toBe("https://nwidart.github.io/ai-ledger/pages/insights/");
+        expect((await at("/live")).href).toBe("https://nwidart.github.io/ai-ledger/pages/live/");
+        expect((await at("/project?project=foo")).href).toBe("https://nwidart.github.io/ai-ledger/pages/project/");
+      });
+
+      it("closes the list when activated, leaving the page as it is and giving focus back to the button", async () => {
+        vi.stubGlobal("fetch", vi.fn(() => json(status)));
+        history.replaceState(null, "", "/cost?range=14");
+        renderApp(<Nav />);
+        await open();
+        // jsdom cannot open a tab: the default is dropped after React's handlers, and what the app did with it is read.
+        let prevented: boolean | undefined;
+        addEventListener("click", e => { prevented = e.defaultPrevented; e.preventDefault(); }, { once: true });
+        act(() => row().focus());
+        await userEvent.keyboard("{Enter}");
+        expect(prevented).toBe(false); // the browser opens it
+        await waitFor(() => expect(list()).toBeNull());
+        expect([location.pathname, location.search]).toEqual(["/cost", "?range=14"]);
+        await waitFor(() => expect(document.activeElement).toBe(chooser()));
+      });
+    });
+  });
+
+  describe("Docs link", () => {
+    const DOCS = "https://nwidart.github.io/ai-ledger/";
+    const docs = () => screen.getByRole("link", { name: /^Docs, / });
+
+    it("opens the current page's docs in a new tab, after the palette button, named for where it goes", async () => {
+      vi.stubGlobal("fetch", vi.fn(() => json(status)));
+      history.replaceState(null, "", "/cost?project=foo");
+      renderApp(<Nav />);
+      const link = docs();
+      expect(link.getAttribute("href")).toBe(`${DOCS}pages/cost/`);
+      expect(link.getAttribute("target")).toBe("_blank");
+      expect(link.getAttribute("rel")).toBe("noreferrer");
+      expect(link.textContent).toBe("Docs, Cost page documentation, opens in a new tab");
+      expect(link.querySelector("svg")!.getAttribute("aria-hidden")).toBe("true");
+      const palette = screen.getByRole("button", { name: /open command palette/ });
+      expect(palette.nextElementSibling).toBe(link);
+    });
+
+    it("opens the Judgments page on Activity's Judgments view, the page's own elsewhere, and the docs home off the pages", () => {
+      vi.stubGlobal("fetch", vi.fn(() => json(status)));
+      const at = (url: string) => {
+        history.replaceState(null, "", url);
+        const r = renderApp(<Nav />), href = docs().getAttribute("href");
+        r.unmount();
+        return href;
+      };
+      expect(at("/usage?view=judgments")).toBe(`${DOCS}pages/insights/`);
+      expect(at("/usage")).toBe(`${DOCS}pages/activity/`);
+      expect(at("/live")).toBe(`${DOCS}pages/live/`);
+      expect(at("/limits")).toBe(`${DOCS}pages/limits/`);
+      expect(at("/context")).toBe(`${DOCS}pages/context/`);
+      expect(at("/errors")).toBe(`${DOCS}pages/errors/`);
+      expect(at("/project?project=foo")).toBe(`${DOCS}pages/project/`);
+      expect(at("/nowhere")).toBe(DOCS);
+    });
+
+    it("follows the page: from Cost to Errors it points at the Errors page", async () => {
+      vi.stubGlobal("fetch", vi.fn(() => json(status)));
+      history.replaceState(null, "", "/cost");
+      renderApp(<Nav />);
+      expect(docs().getAttribute("href")).toBe(`${DOCS}pages/cost/`);
+      await userEvent.click(screen.getByRole("link", { name: "Errors" }));
+      expect(location.pathname).toBe("/errors");
+      expect(docs().getAttribute("href")).toBe(`${DOCS}pages/errors/`);
+      expect(docs().textContent).toBe("Docs, Errors page documentation, opens in a new tab");
+    });
   });
 
   // jsdom applies no layout, so the one-row rule is read from the stylesheet: the row never wraps (a step missing shows as
@@ -1142,9 +1280,19 @@ describe("Nav", () => {
     const of = (sel: string) => rules.filter(r => r.sel.split(",").map(s => s.trim()).includes(sel));
     expect(of(".appnav-in")[0]!.body).toMatch(/flex-wrap:\s*nowrap/);
     expect(rules.filter(r => /flex-wrap:\s*wrap/.test(r.body))).toEqual([]);
-    const narrow = css.match(/@media \(max-width: ([\d.]+)em\) \{[^@]*\.appnav-tabs \{ display: none; \}[^@]*\.appnav \.appnav-chooser \{ display: inline-flex; \}/);
+    const narrow = css.match(/@media \(max-width: ([\d.]+)em\) \{[^@]*\.appnav-tabs[^{}]*\{ display: none; \}[^@]*\.appnav \.appnav-chooser \{ display: inline-flex; \}/);
     expect(narrow).not.toBeNull();
     expect(of(".appnav .appnav-chooser")[0]!.body).toMatch(/display:\s*none/); // hidden at full width
+    // The Docs link goes to its icon at the palette button's step, by clipping its word, not removing it, so its name is the
+    // same there. At the phone step, the one that swaps in the chooser, it leaves the bar by display: none, which takes it out
+    // of the tab order and the accessibility tree (the chooser's list holds it); nothing else hides it.
+    const step = css.match(/@media \(max-width: ([\d.]+)em\) \{[^@]*\.appnav-palette \.lbl[^@]*\}\s*\}/);
+    expect(step).not.toBeNull();
+    expect(step![0]).toMatch(/\.appnav-docs \.lbl \{[^}]*position: absolute;[^}]*clip: rect\(0 0 0 0\)/);
+    expect(narrow![0]).toMatch(/[{}]\s*[^{}]*\.appnav \.appnav-docs[^{}]*\{\s*display: none;\s*\}/);
+    const hides = [...css.matchAll(/@media \(max-width: ([\d.]+)em\) \{([^@]*)\}\s*\}/g)].filter(([, , body]) => /\.appnav-docs\b[^{}]*\{[^}]*display:\s*none/.test(body!));
+    expect(hides.map(([, w]) => w)).toEqual([narrow![1]]);
+    expect(rules.filter(r => /appnav-docs/.test(r.sel) && /visibility:\s*hidden/.test(r.body))).toEqual([]);
   });
 
   it("steps the theme through light, dark and back to system", async () => {

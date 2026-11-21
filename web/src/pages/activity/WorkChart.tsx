@@ -191,7 +191,7 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, selected, 
       <div className="chart-head">
         <div><h2 id="workTitle">Work per {unit}</h2>
           <div className="hint">{M.label}{kinds.length ? " by project" : ""} per {unit}{hasRate ? ", errors per 100 tool calls below" : ""}. Select a {unit} to narrow the tabs.
-            <HowMeasured what={`work per ${unit}`}>{kinds.length ? "Projects with a color of their own are drawn apart, the rest in Other. " : ""}{week
+            <HowMeasured what={`work per ${unit}`} docs="reference/glossary#activity">{kinds.length ? "Projects with a color of their own are drawn apart, the rest in Other. " : ""}{week
               ? "Weeks start on Monday. " : ""}With the keyboard, focus the chart, use the arrow keys and press Enter to select a {unit}; Escape clears it.
               {hasRate ? " The lower track is the failed tool calls per 100 calls, against its own scale." : ""}</HowMeasured></div></div>
         <div className="head-side">

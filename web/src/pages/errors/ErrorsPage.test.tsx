@@ -131,7 +131,7 @@ describe("ErrorsPage", () => {
     const table = document.getElementById("catBody")!, lost = (c: string) => table.querySelector(`tr[data-c="${c}"] td.c-lost .l1`)!;
     const lostHead = screen.getByRole("columnheader", { name: /^Time lost/ });
     await userEvent.click(within(lostHead).getByRole("button", { name: "About Time lost" }));
-    expect(within(lostHead).getByRole("tooltip").textContent).toMatch(/^Time lost: time in retry loops, from each incident's first failure to its last/);
+    expect(lostHead.querySelector(".tt-pop")!.textContent).toMatch(/^Time lost: time in retry loops, from each incident's first failure to its last/);
     expect([...table.querySelectorAll("tr")].map(r => r.getAttribute("data-c")).slice(0, 2)).toEqual(["worktree", "git"]);
     expect(lost("worktree").textContent).toBe("1m");
     expect(lost("git").textContent).toBe("20m");
@@ -1349,6 +1349,8 @@ describe("ErrorsPage", () => {
     expect(h1.closest("header.top")).not.toBeNull();
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(within(document.getElementById("load")!).getByRole("button", { name: "Retry" })).toBeTruthy();
+    const docs = within(document.getElementById("load")!).getByRole("link", { name: "Troubleshooting, Troubleshooting and FAQ documentation, opens in a new tab" });
+    expect(docs.getAttribute("href")).toBe("https://nwidart.github.io/ai-ledger/reference/troubleshooting/");
   });
 
   it("clears the notice when a later hash names a live example", async () => {
@@ -2334,6 +2336,7 @@ describe("type table: sort and filter", () => {
     const btn = within(document.querySelector<HTMLElement>('#catBody tr[data-c="x"] .c-change')!).getByRole("button", { name: "Change: –" });
     await userEvent.click(btn);
     expect(within(btn.closest("td")!).getByRole("tooltip").textContent).toBe("Fewer than 200 tool calls in the 30 days before");
+    expect(within(btn.closest("td")!).queryByRole("link", { name: /Learn more/ })).toBeNull();
     expect(location.search).not.toContain("cat=");
   });
 
@@ -2384,7 +2387,7 @@ describe("type table: sort and filter", () => {
     await open();
     const th = head("Change").closest("th")!;
     await userEvent.click(within(th).getByRole("button", { name: "About Trend" }));
-    expect(within(th).getByRole("tooltip").textContent).toMatch(/Change sorts by the change in error rate, in points/);
+    expect(th.querySelector(".tt-pop")!.textContent).toMatch(/Change sorts by the change in error rate, in points/);
   });
 
   // jsdom has no layout, so the test reads the stylesheet's budget: a fixed table layout, and figure columns in rem that leave the type

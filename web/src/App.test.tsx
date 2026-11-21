@@ -175,8 +175,93 @@ describe("App", () => {
       const tip = await screen.findByRole("button", { name: "About automated sessions" });
       await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]).includes("/api/status"))).toBe(true));
       await userEvent.click(tip);
-      await waitFor(() => expect(screen.getByRole("tooltip").textContent).toContain(path));
+      await waitFor(() => expect(document.querySelector(".tt-pop")!.textContent).toContain(path));
       expect(screen.queryByRole("alert")).toBeNull();
+    });
+  });
+
+  it("sends no request to the docs site and adds no link to it: opening Cost, pointing at Docs, opening a Learn more toggletip", async () => {
+    const host = "nwidart.github.io";
+    const f = mockApi({ "/api/status": () => status, "/api/usage": () => usage });
+    // Every element the app adds, wherever: a preload, prefetch or preconnect <link>, a script or an image naming the host.
+    const added: Element[] = [];
+    const watch = new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) if (n instanceof Element) added.push(n, ...n.querySelectorAll("*")); });
+    watch.observe(document, { childList: true, subtree: true });
+    const named = (el: Element) => ["href", "src", "srcset", "imagesrcset"].some(a => el.getAttribute(a)?.includes(host));
+    try {
+      history.replaceState(null, "", "/cost?range=30");
+      renderRouter();
+      const main = await page("pg-cost");
+      await within(main).findByRole("heading", { level: 1 });
+      const docs = screen.getByRole("link", { name: "Docs, Cost page documentation, opens in a new tab" });
+      await userEvent.hover(docs);
+      act(() => docs.focus());
+      await userEvent.unhover(docs);
+      await userEvent.click(within(main).getByRole("button", { name: "How measured: cost" }));
+      const learn = await screen.findByRole("link", { name: /^Learn more, How cost is estimated documentation/ });
+      await userEvent.hover(learn);
+      act(() => learn.focus());
+      await new Promise(r => setTimeout(r, 20));
+      expect(f.mock.calls.length).toBeGreaterThan(0);
+      expect(f.mock.calls.map(c => String(c[0])).filter(u => u.includes(host))).toEqual([]);
+      // The only elements naming the host are the anchors themselves, which load nothing until followed.
+      expect(added.filter(named).filter(el => el.tagName !== "A")).toEqual([]);
+      expect([...document.querySelectorAll("link, script[src], img")].filter(named)).toEqual([]);
+      expect(added.some(el => el.tagName === "A" && named(el))).toBe(true); // the watch saw the links go in
+    } finally {
+      watch.disconnect();
+    }
+  });
+
+  describe("no-session note", () => {
+    const note = () => document.querySelector<HTMLElement>('section[aria-label="No session yet"]');
+    const withStatus = (s: Record<string, unknown>) => {
+      let current: Record<string, unknown> = { ...status, ...s };
+      mockApi({ "/api/status": () => current, "/api/usage": () => usage, "/api/limits": () => limits });
+      return (next: Record<string, unknown>) => { current = { ...current, ...next }; };
+    };
+    const repoll = (client: ReturnType<typeof renderRouter>["client"]) => act(() => { void client.invalidateQueries({ queryKey: ["status"] }); });
+    const finished = { last_ingest: "2026-11-21T09:00:00+00:00", counts: { raw_lines: 0, files: 0, sessions: 0, requests: 0, tool_calls: 0 } };
+
+    it("says the store holds no session once an ingest finished with none, links to Install, and the page still shows below", async () => {
+      withStatus(finished);
+      history.replaceState(null, "", "/usage?range=30");
+      renderRouter();
+      const main = await page("pg-activity");
+      await waitFor(() => expect(note()).toBeTruthy());
+      expect(note()!.textContent).toMatch(/^No session yet\. The store holds no Claude Code or Codex session\./);
+      const link = within(note()!).getByRole("link", { name: "Install and first run, Install and first run documentation, opens in a new tab" });
+      expect(link.getAttribute("href")).toBe("https://nwidart.github.io/ai-ledger/start/install/");
+      expect([link.getAttribute("target"), link.getAttribute("rel")]).toEqual(["_blank", "noreferrer"]);
+      // Above the page, not instead of it: the figures still draw.
+      expect(main.contains(note())).toBe(false);
+      expect(note()!.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(await within(main).findByRole("heading", { level: 1, name: /requests|prompts|tool calls|sessions/i })).toBeTruthy();
+      // Once for the app: the same note on every page.
+      act(() => navigate("/limits?range=30"));
+      await page("pg-limits");
+      expect(document.querySelectorAll('section[aria-label="No session yet"]')).toHaveLength(1);
+    });
+
+    it("is absent while the first ingest has not finished", async () => {
+      withStatus({ ingesting: true, last_ingest: null, counts: finished.counts });
+      history.replaceState(null, "", "/usage?range=30");
+      renderRouter();
+      await page("pg-activity");
+      await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]).includes("/api/status"))).toBe(true));
+      await new Promise(r => setTimeout(r, 20));
+      expect(note()).toBeNull();
+    });
+
+    it("goes once a later ingest stores a session", async () => {
+      const set = withStatus(finished);
+      history.replaceState(null, "", "/cost?range=30");
+      const { client } = renderRouter();
+      await page("pg-cost");
+      await waitFor(() => expect(note()).toBeTruthy());
+      set({ last_ingest: "2026-11-21T09:01:00+00:00", last_change: "2026-11-21T09:01:00+00:00", counts: { ...finished.counts, sessions: 1 } });
+      repoll(client);
+      await waitFor(() => expect(note()).toBeNull());
     });
   });
 });

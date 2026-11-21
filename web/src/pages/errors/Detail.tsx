@@ -177,7 +177,7 @@ function TypeDetail({ cat }: { cat: string }) {
     {base.length ? <p className="istat">
       <b>{fmt(base.length)}</b> error{base.length === 1 ? "" : "s"} in <b>{fmt(is.n)}</b> incident{is.n === 1 ? "" : "s"}, <b>{fmt(is.pct, 0)}%</b> did not recover.{lost ? <> <b>{dur(lost / 1000)}</b> lost in retry loops.</> : null}
       {worst && worst.errs.length > 1 ? ` Largest: ${fmt(worst.errs.length)} attempts over ${dur(incSpan(worst) / 1000)}.` : ""}
-      <HowMeasured what="incidents">An incident is one agent retrying one tool with this error, each failure within {m.gap} minutes of the last and
+      <HowMeasured what="incidents" docs="reference/glossary#errors">An incident is one agent retrying one tool with this error, each failure within {m.gap} minutes of the last and
         at most {m.maxOk} successful calls of that tool apart. {RECOVERED_NOTE}</HowMeasured></p> : null}
     <div className="fixbox"><div className="t">Potential fix</div><div>{c.fix}</div>
       {c.snippet ? <><pre className="snip" id="snip">{c.snippet}</pre><div className="row"><button type="button" id="copy" onClick={copy}>{copied === "ok" ? "Copied ✓" : "Copy instruction line"}</button>

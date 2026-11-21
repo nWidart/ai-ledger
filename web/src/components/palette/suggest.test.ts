@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import palette from "../../__fixtures__/palette";
 import sessions from "../../__fixtures__/sessions";
+import { DOCS } from "../../docs";
 import { EXACT, PREFIX } from "./match";
-import { BADGES, JUDGMENTS_PAGE, MAX_ROWS, PROJECT_PAGE, isFilter, noToolCalls, rowName, suggest, type Chip } from "./suggest";
+import { BADGES, JUDGMENTS_PAGE, MAX_ROWS, PER_KIND, PROJECT_PAGE, isFilter, noToolCalls, rowName, suggest, type Chip } from "./suggest";
 import { terms } from "./terms";
 
 const data = { palette, sessions: sessions.sessions };
@@ -33,7 +34,7 @@ describe("suggest", () => {
   });
   it("offers the Project page only when a project chip names one", () => {
     const my = [{ kind: "project", value: "foo", label: "foo" }] as const;
-    expect(suggest(term(">proj"), data, my).map(r => [r.kind, r.value, r.label])).toEqual([["page", "/project", "Project"]]);
+    expect(suggest(term(">proj"), data, my).filter(r => r.kind !== "command").map(r => [r.kind, r.value, r.label])).toEqual([["page", "/project", "Project"]]);
     expect(suggest(term(">project"), data, my)[0]).toMatchObject({ kind: "page", value: "/project", sigil: ">" });
     expect(rows(">proj").filter(r => r.kind === "page")).toEqual([]);
     expect(rows(">").some(r => r.value === "/project")).toBe(false);
@@ -77,6 +78,38 @@ describe("suggest", () => {
   it("marks the matched characters of the shown text", () => {
     expect(rows(">bas")[0]).toMatchObject({ text: "Bash", ranges: [[0, 3]] });
     expect(rows("#bash")[0]?.ranges).toEqual([[0, 4]]);
+  });
+});
+
+describe("suggest docs commands", () => {
+  const docs = (input: string) => rows(input).filter(r => r.value.startsWith("docs"));
+  it("offers Docs: this page and one command per docs page, not per heading", () => {
+    const all = suggest(term(">docs"), data).filter(r => r.kind === "command");
+    expect(all[0]).toMatchObject({ kind: "command", value: "docs", label: "Docs: this page", sigil: ">", text: "Docs: this page" });
+    expect(rowName(all[0]!)).toBe("Docs: this page, command, Open this page's documentation in a new tab");
+    const pages = Object.entries(DOCS).filter(([, e]) => !("anchor" in e));
+    for (const [, e] of pages) expect(docs(`>docs ${e.title}`).map(r => r.label)).toContain(`Docs: ${e.title}`);
+    expect(docs(">docs metric glossary").map(r => r.value)).toEqual(["docs:reference/glossary"]);
+  });
+  it("matches docs, documentation, help and the page's title", () => {
+    for (const q of [">docs", ">documentation", ">help", ">doc", "help"]) expect(docs(q)[0]?.value).toBe("docs");
+    expect(docs(">help").length).toBe(PER_KIND);
+    expect(docs(">docs windows").map(r => r.label)).toEqual(["Docs: Context windows and plan limit windows"]);
+    expect(docs(">help windows").map(r => r.label)).toEqual(["Docs: Context windows and plan limit windows"]);
+    expect(docs(">glossary").map(r => r.value)).toEqual(["docs:reference/glossary"]);
+    expect(docs(">docs windows")[0]!.ranges).toEqual([[0, 4], [14, 21]]);
+    expect(docs(">zzz")).toEqual([]);
+  });
+  it("puts a page typed alone first, its docs command next, and keeps the page's exact match unique", () => {
+    expect(rows(">cost").slice(0, 2).map(r => r.id)).toEqual(["page:/cost", "command:docs:pages/cost"]);
+    expect(rows(">cost").filter(r => r.rank === EXACT).map(r => r.id)).toEqual(["page:/cost"]);
+    expect(rows(">errors").slice(0, 2).map(r => r.id)).toEqual(["page:/errors", "command:docs:pages/errors"]);
+    expect(rows(">judgments").slice(0, 2).map(r => r.id)).toEqual([`page:${JUDGMENTS_PAGE}`, "command:docs:pages/insights"]);
+  });
+  it("matches its whole label exactly, and lists only Docs: this page for an empty term", () => {
+    expect(rows(">docs: this page").filter(r => r.rank === EXACT).map(r => r.id)).toEqual(["command:docs"]);
+    expect(docs(">").map(r => r.value)).toEqual(["docs"]);
+    expect(rows(">").filter(r => r.kind === "command").map(r => r.value)).toEqual(["refresh", "copy", "docs"]);
   });
 });
 

@@ -83,7 +83,7 @@ export function OutcomeTrend({ weeks }: { weeks: TrendWeek[] }) {
     <section className="panel sect trend" id="trend" aria-labelledby="trendTitle">
       <h2 id="trendTitle">Outcome trend</h2>
       <p className="hint">Each week's analysed sessions by outcome, as shares of that week. The figure over a bar is its sessions.
-        <HowMeasured what="the outcome trend">Weeks are by session start and begin on Monday. Every bar is 100% of its week, so a
+        <HowMeasured what="the outcome trend" docs="reference/glossary#judgments">Weeks are by session start and begin on Monday. Every bar is 100% of its week, so a
           week of {FEW_SESSIONS - 1} sessions is as tall as a week of 40: read the figure over it. A week with fewer
           than {FEW_SESSIONS} sessions is drawn at half width. On a narrow chart the figures show over every few bars; the table
           below has each week's.</HowMeasured></p>

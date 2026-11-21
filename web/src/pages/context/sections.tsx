@@ -25,7 +25,7 @@ export function Starting({ d }: { d: D }) {
     <section className="panel sect" id="starting" aria-labelledby="startTitle">
       <h2 id="startTitle">Starting context</h2>
       <div className="hint">What the model read before any work, per project: 10th to 90th percentile, median ticked.
-        <HowMeasured what="starting context">The prompt tokens of each session's first turn, from the system prompt and tool definitions to the project's instructions.
+        <HowMeasured what="starting context" docs="concepts/windows#the-context-window">The prompt tokens of each session's first turn, from the system prompt and tool definitions to the project's instructions.
           The median is the typical start; the 10th percentile approximates the fixed overhead, since the sessions with the smallest first prompt start with little else.
           The dashed line is the {short(START_LARGE_TOKENS)}-token mark the large-start tip uses.
           {" "}{num(s.sessions)} of {plural(c.sessions, "session")} in this view have a measured start; {num(c.with_window)} have a known window, which is all a share of the window can cover.</HowMeasured></div>
@@ -46,7 +46,7 @@ export function Growth({ d }: { d: D }) {
     <section className="panel sect" id="growth" aria-labelledby="growthTitle">
       <h2 id="growthTitle">Growth</h2>
       <div className="hint">The median context at each turn, over the sessions that reach it.
-        <HowMeasured what="growth">A point needs at least {CURVE_MIN_SESSIONS} sessions, so a curve stops where they run out.
+        <HowMeasured what="growth" docs="reference/glossary#context">A point needs at least {CURVE_MIN_SESSIONS} sessions, so a curve stops where they run out.
           The strip under the chart counts how many sessions each turn rests on; the switch above it shows the curve as a share of the model's window instead of tokens.</HowMeasured></div>
       {g.curve.length ? <GrowthChart curve={g.curve} projects={g.by_project_curves} share={g.share_curve} />
         : <p className="empty">No turn is shared by {CURVE_MIN_SESSIONS} or more sessions in this view, so there is no curve yet.</p>}
@@ -86,7 +86,7 @@ export function Pressure({ d }: { d: D }) {
     <section className="panel sect" id="pressure" aria-labelledby="pressureTitle">
       <h2 id="pressureTitle">Window pressure</h2>
       <div className="hint">How many sessions peaked in each band of their model's window.
-        <HowMeasured what="window pressure">Sessions are grouped by the size of their model's window. {num(c.with_window)} of {plural(c.sessions, "session")} have a known window.</HowMeasured></div>
+        <HowMeasured what="window pressure" docs="concepts/windows#the-context-window">Sessions are grouped by the size of their model's window. {num(c.with_window)} of {plural(c.sessions, "session")} have a known window.</HowMeasured></div>
       {q && <p className="lead-line quad-note" role="status">Narrowed to <b>{q.label}</b>: {plural(pts.length, "session")} on the map with {q.what}.{" "}
         <button type="button" className="linkish" onClick={() => setQuad(null)}>Show every session</button></p>}
       {fill.length ? <PressureBars key={quad ?? ""} fill={fill} points={pts} /> : <p className="empty">{q ? `No session on the map is in ${q.label}.` : "No session in this view has a known window."}</p>}
@@ -105,7 +105,7 @@ export function Fills({ d }: { d: D }) {
     <section className="panel sect" id="fills" aria-labelledby="fillsTitle">
       <h2 id="fillsTitle">What fills context</h2>
       <div className="hint">Main-thread tool result sizes, summed by tool or MCP server.
-        <HowMeasured what="what fills context">Each result's size is as the transcript stores it. Token counts are the bytes divided by 4, an estimate.
+        <HowMeasured what="what fills context" docs="reference/glossary#context">Each result's size is as the transcript stores it. Token counts are the bytes divided by 4, an estimate.
           {" "}Sizes are known for {num(c.with_bytes)} of {plural(c.calls, "completed call")}.</HowMeasured></div>
       <Contributors fills={f} />
     </section>
@@ -121,7 +121,7 @@ export function CostSection({ d }: { d: D }) {
     <section className="panel sect" id="cost" aria-labelledby="costTitle">
       <h2 id="costTitle">Cost</h2>
       <div className="hint">Estimated at API list prices, as on the Cost page.
-        <HowMeasured what="cost">An unpriced model reads as unknown (–), never as zero. The long-prompt tier prices the whole request higher once the prompt passes a model's threshold.</HowMeasured></div>
+        <HowMeasured what="cost" docs="concepts/cost-estimates">An unpriced model reads as unknown (–), never as zero. The long-prompt tier prices the whole request higher once the prompt passes a model's threshold.</HowMeasured></div>
       <h3>Cache use over time</h3>
       <CacheChart series={c.series} />
       <h3>By project</h3>

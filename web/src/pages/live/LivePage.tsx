@@ -6,6 +6,7 @@ import { ProjectName } from "../../components/ProjectDot";
 import { sessionLink, sessionSheetHref } from "../../components/sheets/session";
 import { pct, plural, usd, when } from "../../format";
 import { useSearchOf, useView } from "../../url";
+import { DocsLink } from "../../components/DocsLink";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { ApiError } from "../../useApi";
 import { NEAR_FULL, Strip } from "./Strip";
@@ -142,7 +143,7 @@ export function LivePage() {
           The app only listens on 127.0.0.1; turn this off before sharing your screen.{" "}
           <button type="button" className="linkish" onClick={() => { setWarned(true); fullText.current?.focus(); }}>Dismiss</button></div>}
       </div>
-      {error && <div className="banner" role="alert"><b>Could not load.</b> {error.message}</div>}
+      {error && <div className="banner" role="alert"><b>Could not load.</b> {error.message}{" "}<DocsLink docs="reference/troubleshooting">Troubleshooting</DocsLink></div>}
       {/* With a session in the URL the stream's own panel says it is loading; the placeholder is for the bare page. */}
       {bare && !h.session && <PageSkeleton />}
       {/* The Wall shows no stream session: one left in the URL from the Stream view does not hide the empty state. */}

@@ -17,6 +17,8 @@ import { renderPage, renderRouter } from "../../testing";
 
 const list = live as LivePayload, listText = liveListText as LivePayload, s1 = liveSession as LiveSession, s1text = liveText as LiveSession, codex = liveCodex as LiveSession;
 
+/** The text the page's failure banner ends with: its Troubleshooting link, with the link's hidden suffix. */
+const TROUBLESHOOTING = " Troubleshooting, Troubleshooting and FAQ documentation, opens in a new tab";
 const status = { ingesting: false, last_ingest: "2026-11-10T10:00:00+00:00", last_change: "2026-11-10T10:00:00+00:00", last_stats: null, error: null, counts: {}, interval: 60, project_order: [] };
 type Opts = { list?: LivePayload; session?: (q: URLSearchParams) => LiveSession | undefined; status?: () => unknown; app?: boolean };
 
@@ -198,7 +200,7 @@ describe("LivePage", () => {
     act(() => { r.client.setQueryData(queries.status.queryKey, { ...status, automated_file: list.automated_file }); });
     expect(list.automated_file.path).toMatch(/automated\.json$/);
     await userEvent.click(screen.getByRole("button", { name: "About automated sessions" }));
-    expect(within(screen.getByRole("group", { name: "Filters" })).getByRole("tooltip").textContent).toContain(list.automated_file.path);
+    expect(screen.getByRole("group", { name: "Filters" }).querySelector(".tt-pop")!.textContent).toContain(list.automated_file.path);
   });
 
   it("lists the active sessions and opens the newest when the URL names none", async () => {
@@ -1375,7 +1377,9 @@ describe("LivePage", () => {
     await stream();
     await userEvent.click(toolRow("Bash", 0));
     await userEvent.click(check("Full text"));
-    expect((await screen.findByRole("alert")).textContent).toBe("Could not load. HTTP 404");
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe("Could not load. HTTP 404" + TROUBLESHOOTING);
+    expect(within(alert).getByRole("link", { name: TROUBLESHOOTING.trim() }).getAttribute("href")).toBe("https://nwidart.github.io/ai-ledger/reference/troubleshooting/");
     expect([toolRow("Bash", 0).getAttribute("aria-expanded"), screen.queryByText(/Session not found/)]).toEqual(["true", null]);
   });
 
@@ -1503,12 +1507,13 @@ describe("LivePage", () => {
     await userEvent.click(check("Full text")); // a list and a session the page holds nothing of
     await settle();
     expect(said()).toEqual([2, true, null, undefined]);
-    expect(await answer()).toEqual([0, true, null, "Could not load. HTTP 500"]);
+    const failed = "Could not load. HTTP 500" + TROUBLESHOOTING;
+    expect(await answer()).toEqual([0, true, null, failed]);
     for (let i = 0; i < 2; i++) {
       FakeSource.last!.notify(null);
       await settle();
-      expect(said()).toEqual([2, true, null, "Could not load. HTTP 500"]); // both asked again, unanswered: nothing blinks off
-      expect(await answer()).toEqual([0, true, null, "Could not load. HTTP 500"]);
+      expect(said()).toEqual([2, true, null, failed]); // both asked again, unanswered: nothing blinks off
+      expect(await answer()).toEqual([0, true, null, failed]);
     }
   });
 

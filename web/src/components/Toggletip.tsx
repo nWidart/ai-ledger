@@ -1,5 +1,7 @@
 import { useCallback, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Popover } from "@base-ui/react/popover";
+import type { DocsKey } from "../docs";
+import { DocsLink } from "./DocsLink";
 import "./Toggletip.css";
 
 const HOVER_DELAY_MS = 150;
@@ -12,11 +14,28 @@ const HOVER_DELAY_MS = 150;
  *  it inside the viewport and out of any scrolling container's clip; inside a modal sheet it stays in the dialog.
  *  The text is inline content: children hold phrasing content (text, code, links), since the popup sits inside a hint line.
  *  term: what it explains, for the name "About {term}"; label: visible text on the button instead of the "?" (it names itself,
- *  unless name is given: a label that does not say enough on its own, as a bare time, takes a name that does). */
-export function Toggletip({ term, label, name, className, children }: { term?: string; label?: ReactNode; name?: string; className?: string; children: ReactNode }) {
+ *  unless name is given: a label that does not say enough on its own, as a bare time, takes a name that does).
+ *  docs: the concept or glossary entry that explains the figure; the text then ends with a "Learn more" link to it, which
+ *  Tab reaches from the open button. ARIA allows no interactive content in a tooltip, so a popup with a link has no role:
+ *  it is plain content next to its button (Base UI's default, an unnamed non-modal dialog, would only add a nameless
+ *  boundary). Hover into it keeps it open (Base UI's safe polygon on the trigger and hover handling on the popup). */
+export function Toggletip({ term, label, name, className, docs, children }: { term?: string; label?: ReactNode; name?: string; className?: string; docs?: DocsKey; children: ReactNode }) {
   const [open, setOpen] = useState(false), [host, setHost] = useState<HTMLElement | null>(null), btn = useRef<HTMLButtonElement>(null);
-  // Escape dismisses the popup only: a sheet's own Escape (the dialog's cancel) must not close it too.
-  const key = (e: KeyboardEvent) => { if (e.key === "Escape" && open) { e.preventDefault(); e.stopPropagation(); setOpen(false); } };
+  // Escape dismisses the popup only: a sheet's own Escape (the dialog's cancel) must not close it too. From inside the popup
+  // (its link, or the popup itself as a scroll stop) focus goes back to the button, also when hover opened it and Base UI's
+  // focus manager, off for a hover, would not return it.
+  // Tab from the open button goes into a popup with a link. Base UI routes it there through its focus guards only when its
+  // focus manager runs, which it does not for a popup hover opened: Tab would land on an invisible guard first.
+  const key = (e: KeyboardEvent) => {
+    if (e.key === "Tab" && !e.shiftKey && open && docs && e.currentTarget === btn.current) {
+      const pop = host?.querySelector<HTMLElement>(".tt-pop"), first = scrolls ? pop : pop?.querySelector<HTMLElement>("a[href]");
+      if (first) { e.preventDefault(); first.focus(); }
+      return;
+    }
+    if (e.key !== "Escape" || !open) return;
+    e.preventDefault(); e.stopPropagation(); setOpen(false);
+    if (e.currentTarget !== btn.current) btn.current?.focus();
+  };
   // A popup taller than the room beside the button scrolls (Toggletip.css), and is then the next tab stop, so the keyboard can scroll it.
   const [scrolls, setScrolls] = useState(false);
   const fit = useCallback((el: HTMLDivElement | null) => {
@@ -32,7 +51,8 @@ export function Toggletip({ term, label, name, className, children }: { term?: s
       {/* The host span holds the popup next to the button. Base UI waits while the container is null, so it mounts once the span does. */}
       {host && <Popover.Portal container={host}>
         <Popover.Positioner className="tt-pos" side="bottom" align="start" sideOffset={6} collisionPadding={8} positionMethod="fixed">
-          <Popover.Popup ref={fit} className="tt-pop" role="tooltip" initialFocus={false} tabIndex={scrolls ? 0 : undefined} onKeyDown={key}>{children}</Popover.Popup>
+          <Popover.Popup ref={fit} className="tt-pop" role={docs ? undefined : "tooltip"} initialFocus={false} tabIndex={scrolls ? 0 : undefined} onKeyDown={key}>
+            {children}{docs && <>{" "}<DocsLink docs={docs}>Learn more</DocsLink></>}</Popover.Popup>
         </Popover.Positioner>
       </Popover.Portal>}
     </Popover.Root>

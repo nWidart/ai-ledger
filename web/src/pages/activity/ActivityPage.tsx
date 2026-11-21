@@ -9,6 +9,7 @@ import { ProjectDot } from "../../components/ProjectDot";
 import type { SortBy } from "../../components/Sort";
 import { appLink, errorsHref } from "../../components/sheets/session";
 import { Vs } from "../../components/sheets/ToolSheet";
+import { DocsLink } from "../../components/DocsLink";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
 import { dayLabel, dur, num, pct, plural } from "../../format";
@@ -247,7 +248,7 @@ function Overview({ views }: { views: ReactNode }) {
         </header>
       </>}
       {error && <div className="banner" role="alert"><b>Could not load {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(d)}.` : ""}</b>{" "}
-        <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
+        <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button>{" "}<DocsLink docs="reference/troubleshooting">Troubleshooting</DocsLink></div>}
       <p className="pending">{loading && d ? `Loading ${viewName(want)}…` : ""}</p>
       {d && <>
         {has && <section className="insights sect" id="attention" aria-label="What needs attention"><InsightCard insight={attentionInsight(d, acts)} primary /></section>}

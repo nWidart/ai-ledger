@@ -4,6 +4,7 @@ import { focusLede } from "./components/focusLede";
 import { SubjectMenu } from "./components/menu/SubjectMenu";
 import { AutomatedFileWarning } from "./components/AutomatedFileWarning";
 import { Nav } from "./components/Nav";
+import { NoSessionNote } from "./components/NoSessionNote";
 import { isMac, openPalette, usePaletteOpen } from "./components/palette/store";
 import { ScopeBar } from "./components/ScopeBar";
 import { UsageSheets } from "./components/sheets/UsageSheets";
@@ -58,6 +59,7 @@ export function App() {
     {/* The page-wide filters, the same place on every page: after the nav in the tab order, before the page. */}
     <ScopeBar />
     <AutomatedFileWarning />
+    <NoSessionNote />
     {/* One context menu for every subject the pages and the sheets mark (components/menu), and one host for the project, tool
         and session sheets: every page opens them in place, and no page mounts its own. */}
     <SubjectMenu><Outlet /><UsageSheets /></SubjectMenu>

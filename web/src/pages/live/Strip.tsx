@@ -80,7 +80,7 @@ export function Strip({ s, st, now, failedOnly, setFailedOnly, full }: {
       const near = l.used_percent > NEAR_FULL * 100;
       return <span key={l.label} className={"it lim" + (near ? " warn" : "")}>
         <span className="k">{l.label}</span> <b>{num(l.used_percent)}%</b>{near && <> near</>}
-        {l.resets_at && <Toggletip term={`the ${l.label} limit`}>The {l.label} limit resets {when(l.resets_at)}. The Limits page has
+        {l.resets_at && <Toggletip term={`the ${l.label} limit`} docs="concepts/windows#the-plan-limit-window">The {l.label} limit resets {when(l.resets_at)}. The Limits page has
           every window.</Toggletip>}</span>;
     })}
     <span className="it"><span className="k" aria-hidden="true">10 min</span> <Pulse p={s.pulse} /></span>

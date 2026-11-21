@@ -8,6 +8,7 @@ import { HowMeasured } from "../../../components/HowMeasured";
 import { Ledger, LedgerRow } from "../../../components/Ledger";
 import { ProjectName } from "../../../components/ProjectDot";
 import { sessionLink, sessionSheetHref, sessName, shortId } from "../../../components/sheets/session";
+import { DocsLink } from "../../../components/DocsLink";
 import { PageSkeleton } from "../../../components/PageSkeleton";
 import { useLanding } from "../../../components/useLanding";
 import { dur, num, pct, plural, when } from "../../../format";
@@ -64,7 +65,7 @@ function Sub({ d, view }: { d: InsightsPayload; view: View }) {
   if (!c.stored_facets) return <p className="sub">The app reads <code>{c.dir ?? "~/.claude/usage-data"}</code>. Run <code>/insights</code> in Claude Code,
     then Refresh.{d.meta.sessions > 0 && " The session figures below are counted from transcripts."}</p>;
   return <p className="sub">{judgedName(view)}. Model-judged: a model's reading of each session, not a measurement.
-    <HowMeasured what="the judgments">The figures come from <code>/insights</code> facets, except Session figures and Coverage, which are counted, and each
+    <HowMeasured what="the judgments" docs="reference/glossary#judgments">The figures come from <code>/insights</code> facets, except Session figures and Coverage, which are counted, and each
       session's cost, peak context and tool errors, which are measured from its transcript. <code>/insights</code> judges Claude Code sessions only: Codex
       writes no facets, so this view has no source filter. A session counts here by its start time; Overview counts a session with a request in the range,
       so the two totals can differ slightly.</HowMeasured></p>;
@@ -138,7 +139,7 @@ function Friction({ d, weight, onWeight }: { d: InsightsPayload; weight: Weight;
     <section className="panel sect friction" id="friction" aria-labelledby="frictionTitle">
       <div className="chart-head">
         <div><h2 id="frictionTitle">Friction categories</h2>
-          <p className="hint">What got in the way, weighed by the sessions that reported it.<HowMeasured what="friction">Cost and active time are those of
+          <p className="hint">What got in the way, weighed by the sessions that reported it.<HowMeasured what="friction" docs="reference/glossary#judgments">Cost and active time are those of
             the whole sessions that reported a friction, not of the friction alone, and each session counts once in a row. A session with no transcript in
             the store adds no cost or time; one with no price adds no cost, but its active time counts. Reports are the times a friction was reported; a session can report several. {FAMILY_HINT}</HowMeasured></p></div>
         <div className="seg" role="group" aria-label="Weigh friction by">
@@ -155,7 +156,7 @@ function Goals({ d }: { d: InsightsPayload }) {
   const raw = useSearchOf(validateSearch), cells = byCount(d.goal_families[0]?.n ?? 0);
   return (
     <Drawer id="d-goals" title="Goals">
-      <p className="hint">What each session set out to do.<HowMeasured what="goals">{FAMILY_HINT}</HowMeasured></p>
+      <p className="hint">What each session set out to do.<HowMeasured what="goals" docs="reference/glossary#judgments">{FAMILY_HINT}</HowMeasured></p>
       <TopLedger rows={d.goal_families} empty="No goals recorded in this view." noun="goal families" row={f =>
         <FamilyRow key={f.family} f={f} cells={cells} raw={raw} kind={{ raw: "goal", family: "goalf" }} />} />
     </Drawer>
@@ -236,7 +237,7 @@ function Outcomes({ d }: { d: InsightsPayload }) {
   return (
     <section className="panel sect" id="outcomes" aria-labelledby="outcomesTitle">
       <h2 id="outcomesTitle">Outcomes</h2>
-      <p className="hint">Whether each session met its goal, judged by a model from the transcript.<HowMeasured what="outcomes">Shares are of
+      <p className="hint">Whether each session met its goal, judged by a model from the transcript.<HowMeasured what="outcomes" docs="reference/glossary#judgments">Shares are of
         the {plural(n, "analysed session")}.</HowMeasured></p>
       <Ledger empty="No outcomes in this view.">{d.outcomes.map(o => <LedgerRow key={o.name} name={outcomeLabel(o.name)} title={o.name}
         share={n ? o.n / n : 0} value={pct(n ? o.n / n : 0)} side={num(o.n)} {...pickProps(raw, "outcome", o.name, o.n)} />)}</Ledger>
@@ -382,7 +383,7 @@ export function Judgments({ views }: { views: ReactNode }) {
         </header>
       </>}
       {error && <div className="banner" role="alert"><b>Could not load judgments for {judgedName(want)} ({error.message}).{d ? ` Still showing ${judgedName(shown)}.` : ""}</b>{" "}
-        <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
+        <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button>{" "}<DocsLink docs="reference/troubleshooting">Troubleshooting</DocsLink></div>}
       <p className="pending">{loading && d ? `Loading judgments for ${judgedName(want)}…` : ""}</p>
       {d && <>
         <Sub d={d} view={shown} />

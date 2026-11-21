@@ -1,6 +1,6 @@
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Toggletip } from "./Toggletip";
 import { renderApp } from "../testing";
 
@@ -71,6 +71,126 @@ describe("Toggletip", () => {
     await userEvent.unhover(tt);
     await new Promise(r => setTimeout(r, 50));
     expect(tt.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("keeps the tooltip role and shows no link without a docs key", async () => {
+    renderApp(<Toggletip term="Rate">Errors per 100 calls.</Toggletip>);
+    await userEvent.click(screen.getByRole("button", { name: "About Rate" }));
+    expect(screen.getByRole("tooltip").textContent).toBe("Errors per 100 calls.");
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("ends its text with a Learn more link, reached by Tab from the open button, and drops the tooltip role", async () => {
+    renderApp(<><Toggletip term="Cost" docs="concepts/cost-estimates">Estimated from list prices.</Toggletip><button type="button">after</button></>);
+    const tt = screen.getByRole("button", { name: "About Cost" });
+    await userEvent.click(tt);
+    expect(tt.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(tt); // opening keeps focus on the button
+    const tip = popup()!;
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(tip.getAttribute("role")).toBeNull();
+    expect(tip.closest("[aria-hidden]")).toBeNull();
+    expect(tt.getAttribute("aria-controls")).toBe(tip.id);
+    const link = screen.getByRole("link", { name: "Learn more, How cost is estimated documentation, opens in a new tab" });
+    expect(tip.lastElementChild).toBe(link);
+    expect(tip.firstChild?.textContent).toBe("Estimated from list prices.");
+    expect(link.getAttribute("href")).toBe("https://nwidart.github.io/ai-ledger/concepts/cost-estimates/");
+    expect(link.getAttribute("target")).toBe("_blank");
+    await userEvent.tab();
+    expect(document.activeElement).toBe(link);
+  });
+
+  it("closes on Escape from its link and returns focus to the button", async () => {
+    renderApp(<Toggletip term="Cost" docs="concepts/cost-estimates">Estimated from list prices.</Toggletip>);
+    const tt = screen.getByRole("button", { name: "About Cost" });
+    tt.focus();
+    await userEvent.keyboard("{Enter}");
+    await userEvent.tab();
+    expect(document.activeElement).toBe(screen.getByRole("link"));
+    await userEvent.keyboard("{Escape}");
+    expect(tt.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(document.activeElement).toBe(tt);
+  });
+
+  it("closes on a second activation and on a click outside with a link", async () => {
+    renderApp(<><Toggletip term="Cost" docs="concepts/cost-estimates">Estimated.</Toggletip><p>elsewhere</p></>);
+    const tt = screen.getByRole("button", { name: "About Cost" });
+    await userEvent.click(tt);
+    await userEvent.click(tt);
+    expect(tt.getAttribute("aria-expanded")).toBe("false");
+    await userEvent.click(tt);
+    await userEvent.click(screen.getByText("elsewhere"));
+    expect(tt.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  describe("opened by hover, with a link", () => {
+    // jsdom has no layout and user-event's pointer moves carry no coordinates nor relatedTarget, which Base UI's safe
+    // polygon reads. So the button and the text get a place (the text 6px below the button, as sideOffset puts it), and
+    // the pointer's path is dispatched as a browser sends it: leave the button's bottom edge, cross the gap, enter the text.
+    const BUTTON = new DOMRect(10, 10, 16, 16), TEXT = new DOMRect(10, 32, 200, 60);
+    const place = () => {
+      vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+        return this.matches(".tt") ? BUTTON : this.closest(".tt-pos") ? TEXT : new DOMRect();
+      });
+      // A viewport with room below the button, so Base UI keeps the text on its bottom side.
+      vi.spyOn(document.documentElement, "clientWidth", "get").mockReturnValue(1024);
+      vi.spyOn(document.documentElement, "clientHeight", "get").mockReturnValue(768);
+    };
+    const openByHover = async () => {
+      renderApp(<><Toggletip term="Cost" docs="concepts/cost-estimates">Estimated from list prices.</Toggletip><p>elsewhere</p></>);
+      const tt = screen.getByRole("button", { name: "About Cost" });
+      await userEvent.hover(tt);
+      await waitFor(() => expect(tt.getAttribute("aria-expanded")).toBe("true"));
+      return tt;
+    };
+    afterEach(() => { vi.restoreAllMocks(); });
+
+    it("stays open while the pointer moves from the button onto the text, so the link can be clicked", async () => {
+      place();
+      const tt = await openByHover();
+      expect(popup()?.getAttribute("data-side")).toBe("bottom");
+      fireEvent.mouseLeave(tt, { clientX: 18, clientY: 26, relatedTarget: tt.parentElement });
+      fireEvent.mouseMove(document.body, { clientX: 18, clientY: 29 }); // in the gap
+      expect(tt.getAttribute("aria-expanded")).toBe("true");
+      const tip = popup()!;
+      fireEvent.mouseEnter(tip.parentElement!, { clientX: 18, clientY: 33, relatedTarget: document.body });
+      fireEvent.mouseMove(tip, { clientX: 18, clientY: 40 });
+      await new Promise(r => setTimeout(r, 60)); // past the safe polygon's own 40ms
+      expect(tt.getAttribute("aria-expanded")).toBe("true");
+      const link = screen.getByRole("link", { name: /^Learn more/ });
+      const clicked = vi.fn<(e: MouseEvent) => void>(e => e.preventDefault()); // jsdom does not navigate; the anchor's target is checked above
+      link.addEventListener("click", clicked);
+      await userEvent.click(link);
+      expect(clicked).toHaveBeenCalledOnce();
+    });
+
+    it("reaches its link with one Tab, and closes on Escape from it with focus back on the button, though Base UI's focus manager is off for a hover", async () => {
+      const tt = await openByHover();
+      tt.focus();
+      await userEvent.tab();
+      const link = screen.getByRole("link", { name: /^Learn more/ });
+      expect(document.activeElement).toBe(link);
+      await userEvent.keyboard("{Escape}");
+      expect(tt.getAttribute("aria-expanded")).toBe("false");
+      expect(document.activeElement).toBe(tt);
+    });
+
+    it("closes when the pointer heads off sideways in the gap instead of to the text", async () => {
+      place();
+      const off = await openByHover();
+      fireEvent.mouseLeave(off, { clientX: 18, clientY: 26, relatedTarget: off.parentElement });
+      fireEvent.mouseMove(document.body, { clientX: 400, clientY: 29 }); // beside the gap, not toward the text
+      await waitFor(() => expect(off.getAttribute("aria-expanded")).toBe("false"));
+    });
+
+    it("closes when the pointer leaves the button away from the text", async () => {
+      place();
+      const tt = await openByHover();
+      fireEvent.mouseLeave(tt, { clientX: 18, clientY: 9, relatedTarget: tt.parentElement }); // out of its top edge
+      await waitFor(() => expect(tt.getAttribute("aria-expanded")).toBe("false"));
+    });
   });
 
   it("is a tab stop after its button when it is taller than the room it has, so the keyboard can scroll it", async () => {

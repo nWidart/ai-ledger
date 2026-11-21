@@ -28,7 +28,7 @@ export function Lede({ d, before }: { d: UsagePayload; before: UsagePayload | un
     {t.requests > 0 && <p className="windows">{d.start
       ? <>{span(d.start, d.end)}{prev && <> <span className="muted">vs</span> {span(prev.start, prev.end)}</>}{thin && <> <span className="chip warn">thin history</span></>}</>
       : <>All time {span(first, d.end)}</>}
-      <HowMeasured what="cost">
+      <HowMeasured what="cost" docs="concepts/cost-estimates">
         {d.start ? <>
           <span className="tt-p">This period, {span(d.start, d.end)}: {num(t.active_days)} of {d.range} days with prompts.</span>
           {prev && <span className="tt-p">Previous period, {span(prev.start, prev.end)}: {money(periodCost(prev))}, {num(prev.active_days)} of {d.range} days with prompts.

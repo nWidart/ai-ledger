@@ -32,7 +32,7 @@ export function Grids({ d }: { d: D }) {
       <div className="hint">{one ? "The median start, what the median peak adds, and the free space, in cells of half a percent of the window."
         : total > grids.length ? `The ${num(grids.length)} projects with the most sessions, of ${plural(total, "project")} with a known window.`
           : "Per project, most sessions first: the median start, the median peak and the free space."}
-        <HowMeasured what="window grids">Each cell is half a percent of the project's most common window. The start is the median share of the window the
+        <HowMeasured what="window grids" docs="concepts/windows#the-context-window">Each cell is half a percent of the project's most common window. The start is the median share of the window the
           first turn takes; the peak is the median share at the session's fullest. Both come from the same sessions: those with a measured start, a
           known window and a peak. Projects are ranked by how many such sessions they have.</HowMeasured></div>
       {one ? <ContextGrid model={single} snapshot={d.overhead} />

@@ -25,6 +25,8 @@ const c = {
   timeout: { kind: "category", value: "timeout", label: "Command timed out" },
   copy: { kind: "command", value: "copy", label: "Copy link" },
   refresh: { kind: "command", value: "refresh", label: "Refresh" },
+  docs: { kind: "command", value: "docs", label: "Docs: this page" },
+  windows: { kind: "command", value: "docs:concepts/windows", label: "Docs: Context windows and plan limit windows" },
 } satisfies Record<string, Chip>;
 /** The chips the palette opens with on here, then the picked ones. */
 const commit = (here: string, ...picked: Chip[]) => { const h = at(here); return resolve([...prefill(h.search), ...picked], h); };
@@ -205,6 +207,35 @@ describe("resolve", () => {
     expect(r.footer).toBe("Enter: open Errors, then copy its link · myproject · 30d");
     const f = commit("/usage", c.refresh);
     expect([f.moved, f.changed, f.footer]).toEqual([false, true, "Enter: refresh data"]);
+  });
+  it("opens this page's docs without moving the view", () => {
+    const r = commit("/cost?range=30", c.docs);
+    expect([r.href, r.moved, r.changed, r.command, r.docs]).toEqual(["/cost?range=30", false, true, "docs", "https://nwidart.github.io/ai-ledger/pages/cost/"]);
+    expect(r.footer).toBe("Enter: open the Cost docs in a new tab");
+    expect(commit("/errors?range=30", c.docs).footer).toBe("Enter: open the Errors docs in a new tab");
+    expect(commit("/usage?range=30&view=judgments", c.docs).docs).toBe("https://nwidart.github.io/ai-ledger/pages/insights/");
+    expect(commit("/project?project=myproject", c.docs).docs).toBe("https://nwidart.github.io/ai-ledger/pages/project/");
+    expect(commit("/usage", c.docs).docs).toBe("https://nwidart.github.io/ai-ledger/pages/activity/");
+  });
+  it("opens a docs page by key, and names the docs home", () => {
+    const r = commit("/usage", c.windows);
+    expect([r.docs, r.footer]).toEqual(["https://nwidart.github.io/ai-ledger/concepts/windows/",
+      "Enter: open the Context windows and plan limit windows docs in a new tab"]);
+    expect(commit("/usage", { kind: "command", value: "docs:home", label: "Docs: home" }).footer).toBe("Enter: open the docs home in a new tab");
+    expect(commit("/usage", c.refresh).docs).toBeNull();
+  });
+  it("takes the command slot for a docs command, and applies the other chips", () => {
+    const r = commit("/errors?range=30", c.my, c.docs);
+    expect([r.href, r.command, r.docs]).toEqual(["/errors?project=myproject&range=30", "docs", "https://nwidart.github.io/ai-ledger/pages/errors/"]);
+    expect(r.footer).toBe("Enter: update Errors, then open the Errors docs in a new tab · myproject · 30d");
+    const later = commit("/usage", c.copy, c.docs);
+    expect([later.command, later.status[0]]).toEqual(["docs", { state: "replaced", by: "Docs: this page" }]);
+    const earlier = commit("/usage", c.docs, c.refresh);
+    expect([earlier.command, earlier.docs, earlier.status[0]]).toEqual(["refresh", null, { state: "replaced", by: "Refresh" }]);
+    // This page is the page the commit shows.
+    const moved = commit("/usage", c.cost, c.docs);
+    expect([moved.href, moved.docs, moved.footer]).toEqual(["/cost", "https://nwidart.github.io/ai-ledger/pages/cost/",
+      "Enter: open Cost, then open the Cost docs in a new tab · 30d"]);
   });
   it("describes the view the filters choose", () => {
     expect(commit("/errors?range=30", c.my, c.codex, c.auto).view).toEqual({ project: "myproject", range: 30, automated: true, source: "codex" });

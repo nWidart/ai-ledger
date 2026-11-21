@@ -6,6 +6,7 @@ import { RangeFilter, SOURCE_LABELS } from "../../components/Filters";
 import { HowMeasured } from "../../components/HowMeasured";
 import { modified } from "../../components/keys";
 import { subjectAttrs } from "../../components/menu/subject";
+import { DocsLink } from "../../components/DocsLink";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { Toggletip } from "../../components/Toggletip";
 import { useLanding } from "../../components/useLanding";
@@ -172,7 +173,7 @@ function HistoryStrip({ strip, unused, selected, onPick, refs }: { strip: Strip;
   };
   return (
     <div className="hs-row">
-      <div className="hs-name">{strip.name}<span className="hs-sum"><span>{sum.text}</span><Toggletip name={`How measured: ${strip.name} unused`}>{sum.title}</Toggletip></span></div>
+      <div className="hs-name">{strip.name}<span className="hs-sum"><span>{sum.text}</span><Toggletip name={`How measured: ${strip.name} unused`} docs="concepts/windows#the-plan-limit-window">{sum.title}</Toggletip></span></div>
       <div className="hs-bars" ref={scroller} onPointerDown={settle} onWheel={settle} onTouchStart={settle} onFocus={settle} role="group" aria-label={`${strip.name}, past windows, oldest first. Left and Right arrow keys move between them.`} onKeyDown={onKey}>
         {bars.map((h, i) => {
           const key = barKey(h), name = barName(h);
@@ -261,7 +262,7 @@ function Value({ d, range }: { d: LimitsPayload; range: number }) {
   const v = d.value, over = range ? `the last ${range} days` : "all time";
   return (
     <Drawer id="value" title="What a point buys" description={`Cost, tokens and commits per 1% of a limit, ${over}`}>
-      <div className="hint">One point is 1% of a limit, over {over}: the range set in Past windows.<HowMeasured what="what a point buys">Cost is
+      <div className="hint">One point is 1% of a limit, over {over}: the range set in Past windows.<HowMeasured what="what a point buys" docs="concepts/windows#the-plan-limit-window">Cost is
         at API list prices; a model without a price has no points.</HowMeasured></div>
       {v.limits.length ? v.limits.map(l => <div key={`${l.provider}-${l.label}`} className="val">
         <h3>{windowName(l)}: {usd(l.cost_per_point)} a point{l.plan && <span className="muted"> · {planName(l.plan)}{l.past_plan && ", an earlier plan"}</span>}</h3>
@@ -287,7 +288,7 @@ function Value({ d, range }: { d: LimitsPayload; range: number }) {
 /** How the figures are made: the forecast, the cone, the safe pace, the last 24 h line, and what estimates count. */
 function HowForecast() {
   return (
-    <HowMeasured what="forecasts">
+    <HowMeasured what="forecasts" docs="reference/glossary#limits">
       <span className="tt-p">Forecasts run halfway between your usual pace and the window's own over its last seventh (a weekly window's last day);
         the shaded cone is the likely range and covers both. The dashed straight line runs from now to 100% at the reset: the pace that
         would use the window exactly. A curve steeper than it runs hot. The cone turns amber when its high edge reaches 100% before
@@ -326,7 +327,7 @@ export function LimitsPage() {
         </div>
       </header>}
       {error && <div className="banner" role="alert"><b>Could not load limits for {limitsName(want)} ({error.message}).{d ? ` Still showing ${limitsName(shown)}.` : ""}</b>{" "}
-        <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
+        <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button>{" "}<DocsLink docs="reference/troubleshooting">Troubleshooting</DocsLink></div>}
       <p className="pending">{loading && d ? `Loading limits for ${limitsName(want)}…` : ""}</p>
       {d && <>
         <div className="sect-head sect" id="windows">
