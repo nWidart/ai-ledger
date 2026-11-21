@@ -872,6 +872,9 @@ class Source(NamedTuple):
     # beside the subagent's lines.
     spawn: tuple | None = None
     compaction: tuple = ("system", '"compact_boundary"')  # (raw_lines.type, text in the line, '' for any) of a compaction line
+    # (cur, {session: prompt id}) -> {session: the prompt's text}, for a source whose prompt lines do not name their prompt;
+    # None: titles finds the lines by the prompt id and reads them with prompt_text.
+    prompt_texts: Callable | None = None
 
 
 def compaction_filter(alias=""):
@@ -893,7 +896,8 @@ SOURCES = {"claude": Source(transcript_files, line_key, Deriver, lambda cur, pat
                             lane=lambda path: codex.ids(path)[1], spawn=("event_msg", '"SubAgentActivity"'),
                             compaction=("compacted", "")),
            "grok": Source(grok.files, grok.key, grok.GrokDeriver, grok.placement, grok.fields,
-                          prompt_text=grok.prompt_text, prompt_type="user_message_chunk", live_items=grok.live_items,
+                          prompt_text=grok.prompt_text, prompt_type="user_message_chunk", prompt_texts=grok.prompt_texts,
+                          live_items=grok.live_items,
                           close_type="session_end", type=grok.line_type)}
 
 

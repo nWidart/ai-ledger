@@ -9,11 +9,23 @@ FIRST_PROMPT_CAP = 600
 
 def first_prompts(cur, sids):
     """{session_id: full text of its first human prompt} (the earliest row in prompts), for the sessions that have one stored.
-    Each line is read by its file's source (store.SOURCES)."""
+    Each line is read by its file's source (store.SOURCES); a source with prompt_texts reads its sessions' prompts itself."""
     if not sids:
         return {}
     found = {}
-    types = sorted({src.prompt_type for src in store.SOURCES.values()})
+    readers = {name: src.prompt_texts for name, src in store.SOURCES.items() if src.prompt_texts}
+    if readers:
+        own = {}
+        for sid, pid, source in cur.execute("""SELECT p.session_id, arg_min(p.prompt_id, p.ts), s.source FROM prompts p
+                JOIN sessions s USING (session_id) WHERE list_contains(?, p.session_id) AND list_contains(?, s.source)
+                GROUP BY 1, 3""", [list(sids), list(readers)]).fetchall():
+            own.setdefault(source, {})[sid] = pid
+        for source, pids in own.items():
+            found |= readers[source](cur, pids)
+        sids = [sid for sid in sids if not any(sid in pids for pids in own.values())]
+        if not sids:
+            return found
+    types = sorted({src.prompt_type for src in store.SOURCES.values() if not src.prompt_texts})
     for sid, pid, source, line in cur.execute("""
             WITH fp AS (SELECT session_id, arg_min(prompt_id, ts) AS pid FROM prompts WHERE list_contains(?, session_id) GROUP BY 1)
             SELECT r.session_id, fp.pid, coalesce(f.source, 'claude'), r.json FROM raw_lines r JOIN fp USING (session_id)

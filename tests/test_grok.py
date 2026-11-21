@@ -4,8 +4,8 @@ import shutil
 from datetime import datetime
 
 from ai_ledger import store  # first: store imports the source modules
-from ai_ledger import grok
-from test_store import StoreCase
+from ai_ledger import grok, metrics, titles
+from test_store import StoreCase, line
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "grok")
 LABELS = ("probe", "long-turn", "compaction", "cancelled", "tools")
@@ -282,7 +282,240 @@ class SubagentTest(GrokCase):
         self.assertEqual([self.q(f"SELECT * FROM {t} ORDER BY 1") for t in ("sessions", "requests")], before)
         self.assertEqual(self.q("SELECT key, session_id, subagent FROM raw_lines ORDER BY key"), placed)
 
+    def test_child_tool_calls_belong_to_the_parent(self):
+        self.put("probe")
+        self.ingest()
+        sid = SESSION["probe"]
+        self.assertEqual(self.q("SELECT session_id, tool, input_summary FROM tool_calls WHERE subagent"),
+                         [(sid, "read_file", "/work/app/file-4.py")])
+        self.assertEqual(self.q("SELECT DISTINCT session_id FROM tool_calls"), [(sid,)])
+        # The task the parent gave its child is no prompt of the person's; the child's hooks ran, on the parent's session.
+        self.assertEqual(self.q("SELECT count(*) FROM prompts"), [(2,)])
+        self.assertEqual(self.q("SELECT count(*) FROM hooks WHERE hook = 'subagent_stop'"), [(2,)])
+        self.assertEqual(self.q("SELECT DISTINCT session_id FROM hooks"), [(sid,)])
+        self.assertEqual(self.q("SELECT count(*) FROM session_runs"), [(1,)])  # the parent's one finished turn
+
     def test_session_spawned_by_none_is_its_own(self):
         self.put("long-turn")
         self.ingest()
         self.assertIsNone(grok.parent_of(self.con.cursor(), SESSION["long-turn"]))
+
+
+def rewrite(path, change):
+    """Rewrites a copied fixture log, each line's dict passed through change (which edits it in place)."""
+    with open(path) as fh:
+        lines = [json.loads(x) for x in fh]
+    for d in lines:
+        change(d)
+    with open(path, "w") as fh:
+        fh.writelines(json.dumps(d) + "\n" for d in lines)
+
+
+class ToolTest(GrokCase):
+    COLS = "tool, mcp_server, input_summary, start_ts IS NOT NULL, end_ts IS NOT NULL, is_error, error, category, is_commit"
+
+    def calls(self, where="TRUE"):
+        return self.q(f"SELECT {self.COLS} FROM tool_calls WHERE {where} ORDER BY start_ts")
+
+    def test_failing_command_marked_completed(self):
+        self.put("probe")
+        self.ingest()
+        (tool, _, summary, _, _, err, text, cat, commit), = self.calls("input_summary = 'ls missing-dir'")
+        self.assertEqual((tool, err, commit), ("run_terminal_command", True, False))
+        self.assertTrue(text.startswith("Exit code 1\nls: cannot access"), text)
+        self.assertIsNotNone(cat)
+        self.assertIsNotNone(self.q("SELECT followup FROM tool_calls WHERE input_summary = 'ls missing-dir'")[0][0])
+
+    def test_commit(self):
+        self.put("probe")
+        self.ingest()
+        self.assertEqual(self.q("SELECT tool, is_error, is_commit, test_passed FROM tool_calls WHERE is_commit"),
+                         [("run_terminal_command", False, True, True)])
+
+    def test_call_still_running(self):
+        self.put("probe")
+        self.ingest()
+        self.assertEqual(self.calls("input_summary = 'sleep 60'"),
+                         [("run_terminal_command", None, "sleep 60", True, False, None, None, None, False)])
+
+    def test_mcp_calls(self):
+        self.put("tools")
+        self.ingest()
+        self.assertEqual([r[:3] + r[5:8] for r in self.calls("mcp_server IS NOT NULL")], [
+            ("mcp__srv_a__tool_a", "srv_a", "text 62", False, None, None),
+            ("mcp__srv_a__tool_b", "srv_a", '{"tabId": "text 76", "includeImage": true}', True, "text 91", "mcp"),
+            ("mcp__srv_b__tool_c", "srv_b", "{}", True, "text 116", "mcp")])
+
+    def test_other_failure_and_summaries(self):
+        self.put("tools")
+        self.put("cancelled")
+        self.ingest()
+        self.assertEqual([r[:3] + r[5:7] for r in self.calls("tool = 'grep'")],
+                         [("grep", None, "text 10", True, "path_not_found"), ("grep", None, "text 20", False, None)])
+        tools = dict(self.q("SELECT tool, any_value(input_summary) FROM tool_calls GROUP BY 1"))
+        self.assertTrue(tools["read_file"].startswith("/work/app/"))
+        self.assertEqual(tools["list_dir"], "/work/app")
+
+    def test_error_rules(self):
+        # A grep that finds nothing exits 1 and is no error: only a shell command's exit code says it failed.
+        grep = dict(status="completed", rawOutput=dict(type="GrepSearch", exit_code=1, match_count=0))
+        self.assertIsNone(grok.error_of("grep", grep))
+        self.assertEqual(grok.error_of("run_terminal_command", dict(status="completed", rawOutput=dict(exit_code=2, output_for_prompt="no\n"))),
+                         "Exit code 2\nno")
+        self.assertIsNone(grok.error_of("run_terminal_command", dict(status="completed", rawOutput=dict(exit_code=0))))
+        self.assertEqual(grok.error_of("mcp__s__t", dict(status="completed", rawOutput=dict(type="MCP", output={"Error": "bad"}, is_error=True))), "bad")
+        self.assertEqual(grok.error_of("read_file", dict(status="failed", rawOutput=dict(FileNotFound="/x"))), "/x")
+        self.assertEqual(grok.error_of("read_file", dict(status="failed", content=[dict(type="content", content=dict(type="text", text="gone"))])), "gone")
+
+    def test_result_size_is_its_text(self):
+        self.put("probe")
+        self.ingest()
+        text = "ls: cannot access 'missing-dir': No such file or directory\n"
+        self.assertEqual(self.q("SELECT result_bytes FROM tool_calls WHERE input_summary = 'ls missing-dir'"), [(len(text.encode()),)])
+
+    def test_result_in_a_later_ingest(self):
+        path, = self.put("tools")
+        with open(path) as fh:
+            lines = fh.readlines()
+        cut = next(i for i, x in enumerate(lines) if '"ls missing-dir"' in x and '"tool_call"' in x) + 1
+        with open(path, "w") as fh:
+            fh.writelines(lines[:cut])
+        self.ingest()
+        self.assertEqual(self.calls("input_summary = 'ls missing-dir'")[0][3:6], (True, False, None))
+        with open(path, "a") as fh:
+            fh.writelines(lines[cut:])
+        self.ingest()
+        whole = self.q("SELECT * EXCLUDE (followup) FROM tool_calls ORDER BY 1")
+        store.rebuild(self.con)
+        self.assertEqual(self.q("SELECT * EXCLUDE (followup) FROM tool_calls ORDER BY 1"), whole)
+        self.assertTrue(self.calls("input_summary = 'ls missing-dir'")[0][5])
+
+
+class PromptTest(GrokCase):
+    def prompts(self):
+        return self.q("SELECT prompt_id, session_id, interrupted FROM prompts ORDER BY ts")
+
+    def test_prompt_in_two_chunks(self):
+        self.put("long-turn")
+        self.ingest()
+        sid = SESSION["long-turn"]
+        self.assertEqual(self.prompts(), [("prompt-02000001", sid, False)])
+        first, = self.q("SELECT min(ts) FROM raw_lines WHERE type = 'user_message_chunk'")[0]
+        self.assertEqual(self.q("SELECT ts FROM prompts"), [(datetime.fromisoformat(store.ts_of(first)),)])
+        self.assertEqual(titles.first_prompts(self.con.cursor(), [sid]), {sid: "text 3\ntext 5"})
+
+    def test_cancelled_turn(self):
+        self.put("cancelled")
+        self.ingest()
+        self.assertEqual(self.prompts(), [("prompt-04000001", SESSION["cancelled"], True)])
+
+    def test_turns_of_the_probe(self):
+        self.put("probe")
+        self.ingest()
+        sid = SESSION["probe"]
+        self.assertEqual(self.prompts(), [("0a1f0001-0000-7000-8000-000000000003", sid, False),
+                                          ("0a1f0001-0000-7000-8000-000000000010", sid, False)])
+
+    def test_chunk_in_a_later_ingest_than_its_hook(self):
+        path, = self.put("long-turn")
+        with open(path) as fh:
+            lines = fh.readlines()
+        cut = next(i for i, x in enumerate(lines) if '"user_message_chunk"' in x)
+        with open(path, "w") as fh:
+            fh.writelines(lines[:cut])
+        self.ingest()
+        self.assertEqual(self.prompts(), [])
+        with open(path, "a") as fh:
+            fh.writelines(lines[cut:])
+        self.ingest()
+        self.assertEqual(self.prompts(), [("prompt-02000001", SESSION["long-turn"], False)])
+
+    def test_title_is_the_first_prompt(self):
+        self.put("tools")
+        self.ingest()
+        sid = SESSION["tools"]
+        self.assertEqual(titles.titles(self.con.cursor(), [sid]), {sid: ("text 3", "prompt")})
+        self.assertEqual(titles.first_prompt(self.con.cursor(), sid, cap=None), "text 3\ntext 5")
+
+
+class HookTest(GrokCase):
+    def test_two_hooks_on_session_start(self):
+        self.put("cancelled")
+        self.ingest()
+        sid = SESSION["cancelled"]
+        start, = self.q("SELECT ts FROM raw_lines WHERE type = 'session_start'")[0]
+        self.assertEqual(self.q("SELECT session_id, ts, source, hook, command, duration_ms, is_error FROM hooks "
+                                "WHERE hook = 'session_start' ORDER BY duration_ms"),
+                         [(sid, datetime.fromisoformat(store.ts_of(start)), "hook_execution", "session_start", "hook-1", 11, False),
+                          (sid, datetime.fromisoformat(store.ts_of(start)), "hook_execution", "session_start", "hook-2", 232, False)])
+
+    def test_one_row_per_run(self):
+        paths = self.put("probe")
+        self.ingest()
+        runs = 0
+        for p in paths:
+            with open(p) as fh:
+                runs += sum(len(grok.update(json.loads(x)).get("runs") or []) for x in fh if '"hook_execution"' in x)
+        self.assertEqual(self.q("SELECT count(*), bool_or(is_error) FROM hooks"), [(runs, False)])
+
+
+class RunTest(GrokCase):
+    def test_one_run_per_turn(self):
+        path, = self.put("tools")
+        self.ingest()
+        with open(path) as fh:
+            ends = [(grok.meta(d)["agentTimestampMs"] - grok.update(d)["elapsed_ms"], grok.update(d)["usage"]["apiDurationMs"])
+                    for d in map(json.loads, fh) if grok.update(d).get("sessionUpdate") == "turn_completed"]
+        self.assertEqual(self.q("SELECT start_ms, api_ms, tool_ms, lines_added, lines_removed FROM session_runs ORDER BY 1"),
+                         [(start, api, None, None, None) for start, api in sorted(ends)])
+        os.utime(path, (0, 0))
+        self.con.execute("UPDATE files SET read_offset = 0, lines = 0")  # read again from the start: one row per turn still
+        self.ingest()
+        self.assertEqual(self.q("SELECT count(*) FROM session_runs"), [(3,)])
+
+    def test_output_speed(self):
+        path, = self.put("long-turn")
+
+        def change(d):
+            u = grok.update(d)
+            if u.get("sessionUpdate") == "turn_completed":
+                for x in (u["usage"], *u["usage"]["modelUsage"].values()):
+                    x.update(outputTokens=100_000, reasoningTokens=0, apiDurationMs=1_000_000)
+        rewrite(path, change)
+        self.ingest()
+        runs = metrics.session(self.con.cursor(), SESSION["long-turn"])["info"]["runs"]
+        self.assertEqual(runs, dict(model_ms=1_000_000, tool_ms=None, lines_added=None, lines_removed=None, output_per_s=100.0))
+
+
+class AllSourcesRebuildTest(GrokCase):
+    """A store holding Claude Code, Codex and Grok sessions: a rebuild gives every derived table as ingest made it."""
+
+    def test_rebuild_matches_ingest(self):
+        from test_codex import LIVE, fixture
+        from test_derive import assistant, cost_state, prompt, result, tool_use
+        self.roots = dict(claude=self.root, codex=os.path.join(self.tmp, "codex"), grok=self.home)
+        for label in LABELS:
+            self.put(label)
+        for label in ("v0156_commit", "v0166_aborted"):
+            name, text = fixture(label)
+            os.makedirs(os.path.join(self.roots["codex"], LIVE), exist_ok=True)
+            with open(os.path.join(self.roots["codex"], LIVE, name), "w") as fh:
+                fh.write(text)
+        self.write("a.jsonl", prompt("u1", "2026-11-01T10:00:00Z", "p1", "go")
+                   + assistant("a1", "m1", "2026-11-01T10:00:01Z", [tool_use("t1", "Bash", command="x")])
+                   + result("r1", "2026-11-01T10:00:02Z", "t1", "Exit code 1", error=True)
+                   + assistant("a2", "m2", "2026-11-01T10:00:03Z", [dict(type="text", text="Hm.")])
+                   + line(type="attachment", uuid="h1", timestamp="2026-11-01T10:00:04Z", sessionId="s1",
+                          attachment=dict(type="hook_success", hookName="PostToolUse:Bash", command="lint", durationMs=12))
+                   + cost_state(1_793_000_000_000, 90_000, 40_000, 120, 30))
+        self.ingest()
+        before = {t: self.q(f"SELECT * FROM {t} ORDER BY ALL") for t in store.DERIVED}
+        self.assertEqual(self.q("SELECT source, count(*) FROM sessions GROUP BY 1 ORDER BY 1"),
+                         [("claude", 1), ("codex", 2), ("grok", 5)])
+        self.assertEqual(self.q("SELECT count(*) > 0 FROM requests WHERE reported_cost IS NOT NULL"), [(True,)])
+        self.assertEqual(self.q("SELECT count(*) FILTER (WHERE tool_ms IS NULL), count(*) FILTER (WHERE tool_ms IS NOT NULL) "
+                                "FROM session_runs"), [(7, 1)])
+        for t, n in (("tool_calls", 3), ("prompts", 3), ("hooks", 2)):  # Codex records no hooks
+            self.assertEqual(self.q(f"SELECT count(DISTINCT s.source) FROM {t} JOIN sessions s USING (session_id)"), [(n,)], t)
+        store.rebuild(self.con)
+        self.assertEqual({t: self.q(f"SELECT * FROM {t} ORDER BY ALL") for t in store.DERIVED}, before)

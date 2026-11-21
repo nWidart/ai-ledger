@@ -9,12 +9,14 @@ The other files of a session folder are rewritten in place or hold nothing the d
 updates.jsonl is read.
 """
 import glob
+import json
 import os
 from datetime import datetime, timezone
 from functools import lru_cache
 from urllib.parse import unquote
 
 from . import store
+from .categorize import GIT_COMMIT, SHELL_TOOLS, runs_tests, summarize_input
 
 LOG = "updates.jsonl"
 
@@ -121,9 +123,99 @@ def cost_of(u):
     return ticks / 1e10 if isinstance(ticks, (int, float)) and not isinstance(ticks, bool) else None
 
 
+def chunk_text(u):
+    """The text of a user, agent message or thought chunk update ({content: {type: text, text}}), else ""."""
+    c = u.get("content")
+    return c["text"] if isinstance(c, dict) and isinstance(c.get("text"), str) else ""
+
+
 def prompt_text(d, pid):
-    """The text of prompt pid if line d holds it. None until Grok prompts are derived."""
-    return None
+    """The text of user_message_chunk line d, or None. The line names no prompt (pid is not on it): prompt_texts picks the
+    chunks of a prompt by the user_prompt_submit hook line before them."""
+    u = update(d)
+    return (chunk_text(u).strip() or None) if u.get("sessionUpdate") == "user_message_chunk" else None
+
+
+def prompt_texts(cur, pids):
+    """{session: text} of each prompt in pids ({session: prompt id}): the user_message_chunk lines between the session's
+    first user_prompt_submit hook line with that prompt id and the next such line, in file order, one chunk a line.
+    A subagent's lines (the task its parent gave it) are not read."""
+    if not pids:
+        return {}
+    got = cur.execute("""
+        WITH want AS (SELECT unnest(?::VARCHAR[]) AS session_id, unnest(?::VARCHAR[]) AS pid),
+        hooks AS (SELECT r.session_id, r.file, r.byte_offset, json_extract_string(r.json, '$.params.update.prompt_id') AS pid
+                  FROM raw_lines r WHERE r.type = 'user_prompt_submit' AND r.parsed AND NOT r.subagent
+                  AND starts_with(r.key, 'grok:') AND r.session_id IN (SELECT session_id FROM want)),
+        first AS (SELECT h.session_id, arg_min(h.file, h.byte_offset) AS file, min(h.byte_offset) AS start
+                  FROM hooks h JOIN want USING (session_id, pid) GROUP BY 1),
+        span AS (SELECT f.session_id, f.file, f.start, (SELECT min(h.byte_offset) FROM hooks h WHERE h.file = f.file
+                 AND h.byte_offset > f.start) AS stop FROM first f)
+        SELECT s.session_id, r.json FROM span s JOIN raw_lines r ON r.file = s.file AND r.type = 'user_message_chunk'
+        AND r.parsed AND r.byte_offset > s.start AND (s.stop IS NULL OR r.byte_offset < s.stop)
+        ORDER BY s.session_id, r.byte_offset""", [list(pids), list(pids.values())]).fetchall()
+    texts = {}
+    for sid, text in got:
+        try:
+            t = prompt_text(json.loads(text), pids[sid])
+        except ValueError:
+            continue
+        if t:
+            texts.setdefault(sid, []).append(t)
+    return {sid: "\n".join(ts) for sid, ts in texts.items()}
+
+
+def content_text(u):
+    """The text of a tool_call_update's content: its items {type: content, content: {type: text, text}}, a line each."""
+    items = u.get("content") if isinstance(u.get("content"), list) else []
+    return "\n".join(x["content"]["text"] for x in items if isinstance(x, dict) and isinstance(x.get("content"), dict)
+                     and isinstance(x["content"].get("text"), str))
+
+
+def mcp_text(out):
+    """The text of an MCP rawOutput's output: {OkayOutput: text} or {Error: text}, else ""."""
+    o = out.get("output") if isinstance(out, dict) else None
+    if isinstance(o, dict):
+        o = o.get("Error", o.get("OkayOutput"))
+    return o if isinstance(o, str) else ""
+
+
+def tool_of(u):
+    """(tool name, MCP server or None, input summary) of a tool_call update. A use_tool call is the MCP tool it calls:
+    rawInput.tool_name is "<server>__<tool>"."""
+    tool = (u.get("_meta") or {}).get("x.ai/tool") if isinstance(u.get("_meta"), dict) else None
+    name = tool.get("name") if isinstance(tool, dict) and isinstance(tool.get("name"), str) else "?"
+    raw = u.get("rawInput") if isinstance(u.get("rawInput"), dict) else {}
+    if name == "use_tool" and isinstance(raw.get("tool_name"), str) and "__" in raw["tool_name"]:
+        server, tool_name = raw["tool_name"].split("__", 1)
+        name = f"mcp__{server}__{tool_name}"
+        return name, server, summarize_input(name, raw.get("tool_input"))
+    return name, None, summarize_input(name, raw)
+
+
+def exit_code(out):
+    code = out.get("exit_code") if isinstance(out, dict) else None
+    return code if isinstance(code, int) and not isinstance(code, bool) else None
+
+
+def error_of(tool, u):
+    """The error text of a final tool_call_update, or None when the call did not fail. A shell command fails when its exit
+    code is not 0, even when Grok marks it completed; its text is Claude Code's shape: Exit code N, then the output. An MCP
+    call fails when its output says is_error; its text is the output's Error. Other tools fail only when marked failed."""
+    out = u.get("rawOutput") if isinstance(u.get("rawOutput"), dict) else {}
+    code = exit_code(out)
+    if tool in SHELL_TOOLS and (u.get("status") == "failed" or code not in (None, 0)):
+        said = out.get("output_for_prompt") if isinstance(out.get("output_for_prompt"), str) else content_text(u)
+        return "\n".join(x for x in (f"Exit code {code}" if code is not None else "", said.rstrip()) if x)
+    if out.get("is_error") is True or (u.get("status") == "failed" and out.get("type") == "MCP"):
+        return mcp_text(out).strip() or content_text(u).strip()
+    if u.get("status") != "failed":
+        return None
+    for k in ("FileNotFound", "failure", "error", "stderr"):
+        v = out.get(k)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return content_text(u).strip() or json.dumps(out)[:700]
 
 
 def live_items(d):
@@ -136,30 +228,116 @@ class GrokDeriver(store.Deriver):
 
     Grok writes usage once per turn (turn_completed), and the start and context size of each model call on the lines the
     call wrote. A finished turn becomes one request per model call, the turn's usage split by the calls' context sizes:
-    the requests add up to the turn's figures, and the share of each is an estimate. A subagent's file (self.sub) makes
-    no request and no session row: its parent's turn already holds its usage."""
+    the requests add up to the turn's figures, and the share of each is an estimate. Each finished turn is also a run
+    (session_runs) with its API time and no tool time or lines: Grok reports neither.
+
+    A subagent's file (self.sub) makes no request, run or session row (its parent's turn already holds its usage) and no
+    prompt (its prompt is the task its parent gave it). Its tool calls and hooks go to the parent's session.
+
+    self.seq counts tool results, so an error's follow-up is the next agent text within five results."""
 
     def __init__(self, *args):
         super().__init__(*args)
         own, self.cwd = ids(self.path)
         self.sid = (parent_of(self.cur, own) or own) if self.sub else own
+        self.prompt = None  # the prompt id of the newest user_prompt_submit line read
+        self.prompt_known = False  # self.prompt is set by a line of this pass, or read back from raw_lines
 
     def add(self, d):
         u, m = update(d), meta(d)
         ts = iso(m.get("agentTimestampMs"))
+        when = store.ts_of(ts)
+        t = u.get("sessionUpdate")
+        if t == "tool_call" and u.get("toolCallId"):
+            self.tool_call(u, when)
+        elif t == "tool_call_update" and u.get("toolCallId") and u.get("status"):
+            self.tool_result(u, m, when)
+        elif t in ("agent_message_chunk", "agent_thought_chunk"):
+            said = chunk_text(u).strip()
+            if said:
+                self.followup(said[:500])
+        elif t == "hook_execution":
+            self.hook(u, when)
+        elif t == "user_message_chunk" and not self.sub:
+            pid = self.prompt_of(d)
+            if pid and pid not in self.prompts:
+                self.prompts[pid] = (pid, self.sid, when, False)
         if self.sub:
             return
         s = self.session(dict(sessionId=self.sid, timestamp=ts, cwd=self.cwd))
-        t = u.get("sessionUpdate")
         if t == "turn_completed" and isinstance(u.get("usage"), dict):
-            self.turn(d, u, s, store.ts_of(ts))
+            self.turn(d, u, s, when)
+            self.run(u, m)
+            if u.get("stop_reason") == "cancelled" and u.get("prompt_id"):
+                self.interrupted.add(u["prompt_id"])
         elif t == "auto_compact_started" and isinstance(u.get("context_window"), int):
             s["window"] = u["context_window"]
         elif t == "auto_compact_completed":
             s["compactions"] += 1
-            when = store.ts_of(ts)
             if when:
                 s["first_compaction"] = min(s["first_compaction"] or when, when)
+
+    def tool_call(self, u, ts):
+        tid = u["toolCallId"]
+        if tid in self.uses:
+            return
+        name, server, summary = tool_of(u)
+        shell = name in SHELL_TOOLS
+        self.uses[tid] = dict(session_id=self.sid, tool=name, mcp_server=server, skill=None, input_summary=summary,
+                              start_ts=ts, subagent=self.sub, is_commit=shell and GIT_COMMIT.search(summary) is not None,
+                              is_test=shell and runs_tests(summary))
+
+    def tool_result(self, u, m, ts):
+        """The final tool_call_update of a call: the one that states a status. The tool's name is on its tool_call line."""
+        tid = u["toolCallId"]
+        if tid in self.results:
+            return
+        tool = self.uses[tid]["tool"] if tid in self.uses else self.stored_tool(tid)
+        err = error_of(tool, u)
+        text = content_text(u) or mcp_text(u.get("rawOutput"))
+        self.seq += 1
+        self.results[tid] = dict(end_ts=ts, is_error=err is not None, error=err, prompt_id=m.get("promptId"),
+                                 session_id=self.sid, seq=self.seq, sub=self.sub, bytes=len(text.encode("utf-8")))
+        if err is not None:
+            self.pending[tid] = self.seq
+
+    def stored_tool(self, tid):
+        """The tool of a call whose tool_call line came in an earlier ingest: from tool_calls."""
+        row = self.cur.execute("SELECT tool FROM tool_calls WHERE tool_use_id = ?", [tid]).fetchone()
+        return row[0] if row else None
+
+    def hook(self, u, ts):
+        """One hooks row per run: source hook_execution, the hook event and the run's name (Grok's hook, as a command is
+        Claude Code's). A user_prompt_submit line names the prompt the chunks after it belong to."""
+        event = u.get("event_name")
+        if event == "user_prompt_submit" and u.get("prompt_id"):
+            self.prompt, self.prompt_known = u["prompt_id"], True
+        for r in u.get("runs") if isinstance(u.get("runs"), list) else []:
+            if not isinstance(r, dict):
+                continue
+            st = r.get("status") if isinstance(r.get("status"), dict) else {}
+            ms = st.get("elapsed_ms")
+            self.hooks.append((self.sid, ts, "hook_execution", event, r.get("name"),
+                               ms if store.is_int(ms) else None, st.get("status") != "success"))
+
+    def prompt_of(self, d):
+        """The prompt id of user_message_chunk line d: the newest user_prompt_submit line's before it in the file, read back
+        from raw_lines when this pass started after it."""
+        if not self.prompt_known:
+            self.prompt_known = True
+            row = self.cur.execute(
+                "SELECT json_extract_string(h.json, '$.params.update.prompt_id') FROM raw_lines c JOIN raw_lines h "
+                "ON h.file = c.file AND h.type = 'user_prompt_submit' AND h.parsed AND h.byte_offset < c.byte_offset "
+                "WHERE c.key = ? ORDER BY h.byte_offset DESC LIMIT 1", [key(d, self.path, 0)]).fetchone()
+            self.prompt = row[0] if row else None
+        return self.prompt
+
+    def run(self, u, m):
+        """The run of a finished turn: it started elapsed_ms before the line's time, and states only its API time."""
+        usage, end, took = u["usage"], m.get("agentTimestampMs"), u.get("elapsed_ms")
+        api = usage.get("apiDurationMs")
+        if store.is_int(end) and store.is_int(took) and store.is_int(api):
+            self.runs.setdefault((self.sid, end - took), [api, None, None, None])  # RUN_FIGURES order
 
     def calls(self, d, pid):
         """[(streamStartMs, context size)] of the model calls of turn pid, oldest first: the distinct streamStartMs of the
