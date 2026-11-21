@@ -149,6 +149,10 @@ Each turn of a Grok main session that starts with a user message SHALL be one pr
 - **WHEN** a turn ends with stop reason `cancelled`
 - **THEN** its prompt is interrupted
 
+#### Scenario: Two turns with one prompt id
+- **WHEN** two turns of one session carry the same prompt id and the second is cancelled
+- **THEN** the session has two prompts, each with its own text, and only the second is interrupted
+
 ### Requirement: Record Grok hooks
 Each run of a `hook_execution` line SHALL become a hook record with the hook event, the run's name, its duration and whether it failed.
 

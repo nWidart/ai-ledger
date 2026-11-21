@@ -246,11 +246,12 @@ class UsageTest(GrokCase):
         self.assertEqual(self.q("SELECT * FROM requests ORDER BY 1"), before)
 
     def test_same_rows_however_the_file_is_cut(self):
-        for label in ("long-turn", "compaction", "probe"):
+        tables = ("sessions", "requests", "prompts", "tool_calls")
+        for label in ("long-turn", "compaction", "probe", "tools"):
             with self.subTest(label=label):
                 paths = self.put(label)
                 self.ingest()
-                whole = [self.q(f"SELECT * FROM {t} ORDER BY 1") for t in ("sessions", "requests")]
+                whole = [self.q(f"SELECT * FROM {t} ORDER BY 1") for t in tables]
                 for t in ("raw_lines", "files", "sessions", "requests"):
                     self.con.execute(f"DELETE FROM {t}")
                 texts = {}
@@ -263,9 +264,11 @@ class UsageTest(GrokCase):
                         with open(p, "a") as fh:
                             fh.write(line)
                         self.ingest()
-                self.assertEqual([self.q(f"SELECT * FROM {t} ORDER BY 1") for t in ("sessions", "requests")], whole)
+                self.assertEqual([self.q(f"SELECT * FROM {t} ORDER BY 1") for t in tables], whole)
+                store.rebuild(self.con)
+                self.assertEqual([self.q(f"SELECT * FROM {t} ORDER BY 1") for t in tables], whole)
                 shutil.rmtree(self.home)
-                for t in ("raw_lines", "files", "sessions", "requests"):
+                for t in ("raw_lines", "files", *store.DERIVED):
                     self.con.execute(f"DELETE FROM {t}")
 
     def stated(self, path):
@@ -673,11 +676,16 @@ class PromptTest(GrokCase):
     def prompts(self):
         return self.q("SELECT prompt_id, session_id, interrupted FROM prompts ORDER BY ts")
 
+    def opened(self, sid):
+        """The keys of session sid's own user_prompt_submit hook lines, in file order: the stored ids of its prompts."""
+        return [r[0] for r in self.q("SELECT key FROM raw_lines WHERE type = 'user_prompt_submit' AND session_id = ? "
+                                     "AND NOT subagent ORDER BY byte_offset", sid)]
+
     def test_prompt_in_two_chunks(self):
         self.put("long-turn")
         self.ingest()
         sid = SESSION["long-turn"]
-        self.assertEqual(self.prompts(), [(f"{sid}:prompt-02000001", sid, False)])
+        self.assertEqual(self.prompts(), [(self.opened(sid)[0], sid, False)])
         first, = self.q("SELECT min(ts) FROM raw_lines WHERE type = 'user_message_chunk'")[0]
         self.assertEqual(self.q("SELECT ts FROM prompts"), [(datetime.fromisoformat(store.ts_of(first)),)])
         self.assertEqual(titles.first_prompts(self.con.cursor(), [sid]), {sid: "text 3\ntext 5"})
@@ -686,14 +694,41 @@ class PromptTest(GrokCase):
         self.put("cancelled")
         self.ingest()
         sid = SESSION["cancelled"]
-        self.assertEqual(self.prompts(), [(f"{sid}:prompt-04000001", sid, True)])
+        self.assertEqual(self.prompts(), [(self.opened(sid)[0], sid, True)])
 
     def test_turns_of_the_probe(self):
         self.put("probe")
         self.ingest()
         sid = SESSION["probe"]
-        self.assertEqual(self.prompts(), [(f"{sid}:0a1f0001-0000-7000-8000-000000000003", sid, False),
-                                          (f"{sid}:0a1f0001-0000-7000-8000-000000000010", sid, False)])
+        self.assertEqual(self.prompts(), [(k, sid, False) for k in self.opened(sid)])
+        self.assertEqual(len(self.opened(sid)), 2)
+
+    def test_turns_that_share_a_prompt_id(self):
+        # A wrapper app can give two turns of one session the same prompt id: each is a prompt of its own, with its own
+        # text, and cancelling the second marks only the second.
+        path, = self.put("tools")
+        sid = SESSION["tools"]
+        with open(path) as fh:
+            pids = [grok.update(d)["prompt_id"] for d in map(json.loads, fh) if grok.update(d).get("event_name") == "user_prompt_submit"]
+        self.assertEqual(pids[0], pids[1])
+        n = []
+
+        def change(d):
+            u = grok.update(d)
+            if u.get("sessionUpdate") == "turn_completed":
+                n.append(d)
+                if len(n) == 2:
+                    u["stop_reason"] = "cancelled"
+        rewrite(path, change)
+        self.ingest()
+        keys = self.opened(sid)
+        want = [(k, sid, i == 1) for i, k in enumerate(keys)]
+        self.assertEqual(len(want), 4)
+        self.assertEqual(self.prompts(), want)
+        cur = self.con.cursor()
+        self.assertEqual([grok.prompt_texts(cur, {sid: k})[sid] for k in keys[:2]], ["text 3\ntext 5", "text 49\ntext 51"])
+        store.rebuild(self.con)
+        self.assertEqual(self.prompts(), want)
     def test_sessions_that_share_a_prompt_id(self):
         # A wrapper app can give two sessions the same prompt id: each keeps its own prompt, text and interrupted flag.
         path, = self.put("cancelled")
@@ -712,7 +747,8 @@ class PromptTest(GrokCase):
                 u["content"]["text"] = "other " + u["content"]["text"]
         rewrite(copy, change)
         self.ingest()
-        want = [(f"{sid}:prompt-04000001", sid, True), (f"{other}:prompt-04000001", other, False)]
+        want = [(self.opened(sid)[0], sid, True), (self.opened(other)[0], other, False)]
+        self.assertNotEqual(want[0][0], want[1][0])
         self.assertEqual(self.q("SELECT prompt_id, session_id, interrupted FROM prompts ORDER BY session_id"), want)
         self.assertEqual(titles.first_prompts(self.con.cursor(), [sid, other]), {sid: "text 3\ntext 5", other: "other text 3\nother text 5"})
         store.rebuild(self.con)
@@ -731,7 +767,7 @@ class PromptTest(GrokCase):
             fh.writelines(lines[cut:])
         self.ingest()
         sid = SESSION["long-turn"]
-        self.assertEqual(self.prompts(), [(f"{sid}:prompt-02000001", sid, False)])
+        self.assertEqual(self.prompts(), [(self.opened(sid)[0], sid, False)])
 
     def test_title_is_the_first_prompt(self):
         self.put("tools")

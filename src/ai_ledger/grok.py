@@ -169,28 +169,25 @@ def prompt_text(d, pid):
     return (chunk_text(u) or None) if u.get("sessionUpdate") == "user_message_chunk" else None
 
 
-def stored_prompt(sid, pid):
-    """The prompt id stored for Grok prompt pid of session sid (prompts, interrupted, tool results): <session>:<prompt id>,
-    since prompt ids repeat across sessions (a wrapper app can supply them). None without a prompt id."""
-    return f"{sid}:{pid}" if pid else None
+def stored_prompt(opened):
+    """The prompt id stored for a Grok prompt (prompts, interrupted, tool results), from opened, the (raw_lines key,
+    prompt id) of the user_prompt_submit hook line that opens it: that line's key. Prompt ids repeat, within a session
+    and across sessions (a wrapper app can supply them); a line's key is unique. None with no such line."""
+    return opened[0] if opened else None
 
 
 def prompt_texts(cur, pids):
     """{session: text} of each prompt in pids ({session: stored prompt id}): the user_message_chunk lines between the
-    session's first user_prompt_submit hook line with that prompt id and the next such line, in file order, one chunk a
+    user_prompt_submit hook line the stored id is the key of and the file's next such line, in file order, one chunk a
     line. A subagent's lines (the task its parent gave it) are not read."""
     if not pids:
         return {}
-    pids = {sid: pid.removeprefix(f"{sid}:") for sid, pid in pids.items()}  # the prompt id as the lines state it
     got = cur.execute("""
-        WITH want AS (SELECT unnest(?::VARCHAR[]) AS session_id, unnest(?::VARCHAR[]) AS pid),
-        hooks AS (SELECT r.session_id, r.file, r.byte_offset, json_extract_string(r.json, '$.params.update.prompt_id') AS pid
-                  FROM raw_lines r WHERE r.type = 'user_prompt_submit' AND r.parsed AND NOT r.subagent
-                  AND starts_with(r.key, 'grok:') AND r.session_id IN (SELECT session_id FROM want)),
-        first AS (SELECT h.session_id, arg_min(h.file, h.byte_offset) AS file, min(h.byte_offset) AS start
-                  FROM hooks h JOIN want USING (session_id, pid) GROUP BY 1),
-        span AS (SELECT f.session_id, f.file, f.start, (SELECT min(h.byte_offset) FROM hooks h WHERE h.file = f.file
-                 AND h.byte_offset > f.start) AS stop FROM first f)
+        WITH want AS (SELECT unnest(?::VARCHAR[]) AS session_id, unnest(?::VARCHAR[]) AS hook),
+        first AS (SELECT w.session_id, h.file, h.byte_offset AS start FROM want w JOIN raw_lines h ON h.key = w.hook
+                  AND h.session_id = w.session_id AND h.type = 'user_prompt_submit' AND h.parsed AND NOT h.subagent),
+        span AS (SELECT f.session_id, f.file, f.start, (SELECT min(h.byte_offset) FROM raw_lines h WHERE h.file = f.file
+                 AND h.type = 'user_prompt_submit' AND h.byte_offset > f.start) AS stop FROM first f)
         SELECT s.session_id, r.json FROM span s JOIN raw_lines r ON r.file = s.file AND r.type = 'user_message_chunk'
         AND r.parsed AND r.byte_offset > s.start AND (s.stop IS NULL OR r.byte_offset < s.stop)
         ORDER BY s.session_id, r.byte_offset""", [list(pids), list(pids.values())]).fetchall()
@@ -320,7 +317,7 @@ class GrokDeriver(store.Deriver):
         super().__init__(*args)
         own, self.cwd = ids(self.path)
         self.sid = (parent_of(self.cur, own) or own) if self.sub else own
-        self.prompt = None  # the prompt id of the newest user_prompt_submit line read
+        self.prompt = None  # (key, prompt id) of the newest user_prompt_submit line read: the current prompt
         self.prompt_known = False  # self.prompt is set by a line of this pass, or read back from raw_lines
 
     def add(self, d, line=None):
@@ -344,7 +341,7 @@ class GrokDeriver(store.Deriver):
         elif t == "subagent_spawned":
             self.adopt(string(u.get("child_session_id")))
         elif t == "user_message_chunk" and not self.sub:
-            pid = stored_prompt(self.sid, self.prompt_of(d))
+            pid = stored_prompt(self.prompt_of())
             if pid and pid not in self.prompts:
                 self.prompts[pid] = (pid, self.sid, when, False)
         if self.sub:
@@ -353,8 +350,9 @@ class GrokDeriver(store.Deriver):
         if t == "turn_completed" and isinstance(u.get("usage"), dict):
             self.turn(d, u, s, when)
             self.run(u, m)
-            if u.get("stop_reason") == "cancelled" and string(u.get("prompt_id")):
-                self.interrupted.add(stored_prompt(self.sid, u["prompt_id"]))
+            cancelled = self.prompt_named(string(u.get("prompt_id"))) if u.get("stop_reason") == "cancelled" else None
+            if cancelled:
+                self.interrupted.add(cancelled)
         elif t == "auto_compact_started" and store.is_int(u.get("context_window")):
             s["window"] = u["context_window"]
         elif t == "auto_compact_completed":
@@ -425,7 +423,7 @@ class GrokDeriver(store.Deriver):
         err = error_of(tool, u)
         text = content_text(u) or mcp_text(u.get("rawOutput"))
         self.seq += 1
-        self.results[tid] = dict(end_ts=ts, is_error=err is not None, error=err, prompt_id=stored_prompt(self.sid, string(m.get("promptId"))),
+        self.results[tid] = dict(end_ts=ts, is_error=err is not None, error=err, prompt_id=self.prompt_named(string(m.get("promptId"))),
                                  session_id=self.sid, seq=self.seq, sub=self.sub, bytes=len(text.encode("utf-8")))
         if err is not None:
             self.pending[tid] = self.seq
@@ -441,8 +439,8 @@ class GrokDeriver(store.Deriver):
         event = string(u.get("event_name"))
         if event is None:
             return
-        if event == "user_prompt_submit" and string(u.get("prompt_id")):
-            self.prompt, self.prompt_known = u["prompt_id"], True
+        if event == "user_prompt_submit":
+            self.prompt, self.prompt_known = (self.line, string(u.get("prompt_id"))), True
         for r in u.get("runs") if isinstance(u.get("runs"), list) else []:
             if not isinstance(r, dict) or not string(r.get("name")):
                 continue
@@ -451,17 +449,23 @@ class GrokDeriver(store.Deriver):
             self.hooks.append((self.sid, ts, "hook_execution", event, r.get("name"),
                                ms if store.is_int(ms) else None, st.get("status") != "success"))
 
-    def prompt_of(self, d):
-        """The prompt id of user_message_chunk line d: the newest user_prompt_submit line's before it in the file, read back
-        from raw_lines when this pass started after it."""
+    def prompt_of(self):
+        """(key, prompt id) of the prompt the line being derived belongs to: the newest user_prompt_submit line before it
+        in the file, read back from raw_lines when this pass started after it. None before the file's first."""
         if not self.prompt_known:
             self.prompt_known = True
             row = self.cur.execute(
-                "SELECT json_extract_string(h.json, '$.params.update.prompt_id') FROM raw_lines c JOIN raw_lines h "
+                "SELECT h.key, json_extract_string(h.json, '$.params.update.prompt_id') FROM raw_lines c JOIN raw_lines h "
                 "ON h.file = c.file AND h.type = 'user_prompt_submit' AND h.parsed AND h.byte_offset < c.byte_offset "
                 "WHERE c.key = ? ORDER BY h.byte_offset DESC LIMIT 1", [self.line]).fetchone()
-            self.prompt = row[0] if row else None
+            self.prompt = (row[0], row[1]) if row else None
         return self.prompt
+
+    def prompt_named(self, pid):
+        """The stored id of the prompt a line naming prompt id pid belongs to (a turn's end, a tool result): the current
+        prompt (prompt_of), when it has that prompt id; else None."""
+        opened = self.prompt_of() if pid else None
+        return stored_prompt(opened) if opened and opened[1] == pid else None
 
     def run(self, u, m):
         """The run of a finished turn: it started elapsed_ms before the line's time, and states only its API time."""
