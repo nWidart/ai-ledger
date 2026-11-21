@@ -111,6 +111,42 @@ class TurnStateTest(GrokLiveCase):
         self.assertEqual([e["text"] for e in poll2["events"] if e["k"] == "reply"], [whole])
         self.assertNotIn("since", poll2["events"][0])
 
+    def test_recovered_reply_head_keeps_a_tool_result(self):
+        # Reply head, then a tool call, both before the catch-up's window; the rest of the reply and the tool's result
+        # inside it. Recovering the head must not hide the call from the lookup of uses before the window.
+        lines = self.until(self.lines("long-turn"), "session_end")
+        i = next(i for i, d in enumerate(lines) if kind(d) == "agent_message_chunk")
+        head, start = lines[i], grok.meta(lines[i])["agentTimestampMs"]
+        use = next(d for d in lines if kind(d) == "tool_call")
+        tid = grok.update(use)["toolCallId"]
+        done = next(d for d in lines if kind(d) == "tool_call_update" and grok.update(d).get("toolCallId") == tid
+                    and grok.update(d).get("status"))
+
+        def at(base, n, ms, **update):
+            d = copy.deepcopy(base)
+            grok.meta(d).update(eventId=grok.meta(d)["eventId"] + n, agentTimestampMs=start + ms)
+            grok.update(d).update(update)
+            return d
+        call = at(use, "6", 500, toolCallId="late-call")
+        thought = at(next(d for d in lines if kind(d) == "agent_thought_chunk"), "7", 61_000)
+        grok.meta(thought)["streamStartMs"] = grok.meta(head)["streamStartMs"]
+        tail = at(head, "8", 65_000, content=dict(type="text", text=" and more"))
+        result = at(done, "9", 66_000, toolCallId="late-call")
+        first = [d for d in lines[:i + 1] if grok.meta(d)["agentTimestampMs"] <= start] + [call, thought]
+        self.store("long-turn", first)
+        cur = self.con.cursor()
+        poll1 = live.session(cur, SESSION["long-turn"], now=self.at(result, 5), prices=PRICES, text=True)
+        self.assertEqual([e["end"] for e in poll1["events"] if e.get("id") == "late-call"], [None])
+        self.assertGreater(live.parse_ts(poll1["cursor"]) - live.OVERLAP, self.at(call))  # the call is before the window
+        self.store("long-turn", first + [tail, result])
+        poll2 = live.session(cur, SESSION["long-turn"], after=poll1["cursor"], now=self.at(result, 5), prices=PRICES, text=True)
+        merged = {e["key"]: e for e in poll1["events"]} | {e["key"]: e for e in poll2["events"]}
+        whole = grok.chunk_text(grok.update(head)) + " and more"
+        self.assertEqual([e["text"] for e in merged.values() if e["k"] == "reply"].count(whole), 1)
+        calls = [e for e in merged.values() if e.get("id") == "late-call"]
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["end"], live.iso(self.at(result)))
+
     def test_cancelled_turn_is_an_interrupt_and_your_turn(self):
         lines = self.until(self.lines("cancelled"), "session_end")
         self.store("cancelled", lines)

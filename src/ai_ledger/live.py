@@ -557,15 +557,16 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
         rows = [r[:6] for r in rows[-FIRST_LINES:]]
     copied = forked(cur, [sid])
     events, results = assemble(rows, copied)
+    window = rows[0][2] if rows else None  # where the rows start, for the lookup of earlier uses
     heads = head_rows(cur, sid, rows, events)
-    if heads:  # a reply begun before the rows: sent whole, under the key an earlier poll gave it
-        rows = heads + rows
+    if heads:  # a reply begun before the rows: sent whole, under the key an earlier poll gave it. The heads are only its
+        rows = heads + rows  # chunks, so they change that event alone; the uses before the window are still looked up.
         events, results = assemble(rows, copied)
     started = started_by(rows, events)
     started |= spawned(cur, sid, rows, events, started)
     missing = set(results) | (set(started) - {e["id"] for e in events if e["k"] == "tool"})
     if missing:  # calls that came before the rows: send them again, finished or naming the subagent they started
-        uses, _ = assemble(earlier_uses(cur, sid, rows[0][2], list(missing)), copied)
+        uses, _ = assemble(earlier_uses(cur, sid, window, list(missing)), copied)
         for ev in uses:
             if ev["k"] == "tool" and ev["id"] in missing:
                 if ev["id"] in results:
