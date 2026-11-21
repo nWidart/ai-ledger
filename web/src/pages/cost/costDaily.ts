@@ -81,7 +81,7 @@ export function costOption(m: CostModel, env: ChartEnv): EChartsOption {
   const fy = m.cost ? usd : big, ty = m.share ? (v: number) => pct(v) : m.cost ? usd0 : big;
   const series: Series[] = [stackSeries({ kinds: m.kinds, values: m.values, hatched: i => i === m.live, env })];
   if (m.showAvg) series.push(avgLine("avg-halo", m.avg, env.ink.surface, 4.5), avgLine("avg", m.avg, env.ink.text, 1.75));
-  // With the text scaled up, a plot under 300px times the scale has no room for the peak label (roomForLabels in chart.ts).
+  // With the text scaled up, a plot under 300px times the scale has no room for the peak label.
   const room = s === 1 || env.width - g.l - g.r >= 300 * s;
   const pk = m.peak;
   if (pk != null && !m.share && m.totals[pk]! > 0 && room) {

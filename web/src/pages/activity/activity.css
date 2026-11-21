@@ -81,7 +81,6 @@
    in its tooltip */
 .pg-activity .work.panel { padding-top: 14px; padding-bottom: 12px; }
 .pg-activity .work .legend { margin: 2px 0 4px; }
-.pg-activity .work .chart svg { height: 216px; }
 .pg-activity .work .head-side { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
 .pg-activity .work .tip .parts { padding-left: 14px; color: var(--text-secondary); }
 

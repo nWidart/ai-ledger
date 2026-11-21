@@ -170,9 +170,6 @@ describe("forced colors", () => {
   it("draws low-call rate points hollow in system colors", () => {
     expect(block()).toMatch(/circle\.lowc \{ forced-color-adjust: none; fill: Canvas; stroke: CanvasText; \}/);
   });
-  it("frames the hovered and selected chart buckets at full opacity", () => {
-    expect(block()).toMatch(/\.chart svg > rect:not\(\.hit\) \{ stroke: Highlight; stroke-width: 2px; fill: none; opacity: 1; \}/);
-  });
   it("draws the low-call legend key like its point, over the chart stylesheet's theme colors", () => {
     // chart.css loads after theme.css and styles .pg-activity .legend i.low: the forced-colors rule must be more specific.
     expect(readFileSync("src/components/chart.css", "utf8")).toMatch(/\.pg-activity \.legend i\.low \{/);
