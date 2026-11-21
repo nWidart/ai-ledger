@@ -1,15 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { SessionDetail, View } from "../../api";
-import { big, dur, ms, num, pct, plural, usd, when } from "../../format";
+import { big, dur, num, pct, plural, usd, when } from "../../format";
 import { queries } from "../../queries";
 import { ApiError } from "../../useApi";
 import { copyText } from "../export";
 import { resumeCommand } from "../menu/resume";
-import { DataTable } from "../DataTable";
 import { ProjectDot } from "../ProjectDot";
+import { Table, type Column } from "../table/Table";
 import { Toggletip } from "../Toggletip";
-import { appLink, errorsHref, openProjectSheet, openToolSheet, pickRow } from "./session";
+import { appLink, errorsHref, openProjectSheet } from "./session";
+import { TOOL_COLUMNS, TOOL_PICK } from "./ToolSheet";
 import { FilterButton } from "./FilterButton";
 import { SessionInsight } from "./SessionInsight";
 import { Timeline } from "./Timeline";
@@ -37,6 +38,14 @@ function CopyLine({ label, text }: { label: string; text: string }) {
 }
 
 const Stat = ({ v, l }: { v: ReactNode; l: ReactNode }) => <span><b>{v}</b> {l}</span>;
+
+const MODEL_COLUMNS: readonly Column<SessionDetail["models"][number]>[] = [
+  { id: "model", header: "Model", cellProps: () => ({ className: "name" }), cell: r => <>{(r.model ?? "").replace(/^claude-/, "")}<div className="muted small">
+    {[r.effort !== "(none)" && r.effort, r.subagent ? "subagent" : "main thread"].filter(Boolean).join(" · ")}</div></> },
+  { id: "requests", header: "Requests", align: "num", cell: r => num(r.requests) },
+  { id: "tokens", header: "Tokens", align: "num", cell: r => big(r.tokens) },
+  { id: "cost", header: "Est. cost", align: "num", cell: r => usd(r.cost) },
+];
 
 export interface SessionSheetProps {
   id: string;
@@ -107,19 +116,9 @@ export function SessionSheet({ id, s, error, retry, range, pageProject, view }: 
       <div key={l.first_id}>{l.tool} failed {l.failures}× in a row. <a href={errorsHref(i.project, range, l.first_id)} onClick={appLink}>Open in Errors</a></div>))}</>}
     {s.commits.length > 0 && <details className="sd"><summary>Commits<span className="c">{num(s.commits.length)}</span></summary>
       {s.commits.map(c => <div key={c.tool_use_id} className="muted commit"><code>{c.command}</code></div>)}</details>}
-    <div className="pair"><details className="sd"><summary>Models<span className="c">{num(s.models.length)}</span></summary><DataTable name="Models">
-      <thead><tr><th scope="col">Model</th><th scope="col" className="num">Requests</th><th scope="col" className="num">Tokens</th><th scope="col" className="num">Est. cost</th></tr></thead>
-      <tbody>{s.models.map((r, k) => <tr key={k}>
-        <th scope="row" className="name">{(r.model ?? "").replace(/^claude-/, "")}<div className="muted small">{[r.effort !== "(none)" && r.effort, r.subagent ? "subagent" : "main thread"].filter(Boolean).join(" · ")}</div></th>
-        <td className="num">{num(r.requests)}</td><td className="num">{big(r.tokens)}</td><td className="num">{usd(r.cost)}</td></tr>)}</tbody>
-    </DataTable></details>
-    <details className="sd"><summary>Tools<span className="c">{num(s.tools.length)}</span></summary><DataTable name="Tools">
-      <thead><tr><th scope="col">Tool</th><th scope="col" className="num">Calls</th><th scope="col" className="num">Failed</th><th scope="col" className="num">p50</th></tr></thead>
-      <tbody>{s.tools.length ? s.tools.map(r => <tr key={r.tool} {...pickRow(r.tool, v => openToolSheet("tool", v), { kind: "tool", value: r.tool })}>
-        <th scope="row" className="name"><button type="button" className="cellbtn">{r.tool}</button></th><td className="num">{num(r.calls)}</td>
-        <td className={"num" + ((r.failure_rate ?? 0) > .1 ? " bad" : "")}>{pct(r.failure_rate, 1)}</td><td className="num">{ms(r.p50_ms)}</td></tr>)
-        : <tr><td colSpan={4} className="empty">No tool calls.</td></tr>}</tbody>
-    </DataTable></details></div>
+    <div className="pair"><details className="sd"><summary>Models<span className="c">{num(s.models.length)}</span></summary><Table name="Models" rows={s.models} columns={MODEL_COLUMNS} rowId={(_, k) => String(k)} /></details>
+    <details className="sd"><summary>Tools<span className="c">{num(s.tools.length)}</span></summary>
+      <Table name="Tools" rows={s.tools} columns={TOOL_COLUMNS} rowId={r => r.tool} pick={TOOL_PICK} empty="No tool calls." /></details></div>
     <p><code className="muted sid">{i.session_id}</code></p>
     {i.cwd && <CopyLine label="Directory" text={i.cwd} />}
     <CopyLine label="Resume" text={resumeCommand({ source: i.source, session_id: i.session_id, cwd: i.cwd })} />
