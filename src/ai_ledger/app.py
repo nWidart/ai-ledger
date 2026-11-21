@@ -140,8 +140,10 @@ class App:
         # (see refresh_alert).
         self.limits_alert = None
         self.limits_peak = None
-        # The nav's Live badge: (the count, when it was worked out), see live_waiting.
+        # The nav's Live badge: (the count, when it was worked out), see live_waiting. Its lock lets one request thread fill it
+        # while the others wait for that count.
         self.waiting = (None, None)
+        self.waiting_lock = threading.Lock()
         # Live pages: how many are connected, and the sessions each ingest changed, numbered so each page sends a
         # notice for every change since its last one.
         self.watchers = 0
@@ -197,16 +199,26 @@ class App:
     def live_waiting(self):
         """How many active sessions wait on the user (live.waiting), for the nav's Live badge. A session's state depends on
         the time, so it is worked out when /api/status asks, and kept for WAITING_TTL seconds: any number of open pages cost
-        one read per WAITING_TTL. Never raises: a failure gives None, which the nav shows as no badge."""
+        one read per WAITING_TTL, however many ask at once: the server answers each request on its own thread, so the fill is
+        under a lock, and a thread that waited for it takes the count the first one stored. Never raises: a failure gives None,
+        which the nav shows as no badge."""
+        def fresh(at):
+            return at is not None and time.monotonic() - at < WAITING_TTL
+
         n, at = self.waiting
-        if at is None or time.monotonic() - at >= WAITING_TTL:
+        if fresh(at):
+            return n
+        with self.waiting_lock:
+            n, at = self.waiting
+            if fresh(at):
+                return n
             try:
                 n = live.waiting(self.con.cursor())
             except Exception as e:  # the type only: the message could carry stored text
                 n = None
                 print(f"live waiting failed: {type(e).__name__}", file=sys.stderr, flush=True)
             self.waiting = (n, time.monotonic())
-        return n
+            return n
 
     def loop(self):
         """Ingest everything and poll limits every INTERVAL, then refresh the limits alert; in between, ingest transcripts

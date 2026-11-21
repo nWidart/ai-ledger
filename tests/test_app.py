@@ -698,6 +698,27 @@ class LimitsAlertTest(unittest.TestCase):
             with mock.patch.object(app, "WAITING_TTL", 0):
                 self.assertEqual(self.app.status()["live_waiting"], 5)
 
+    def test_concurrent_status_requests_work_out_the_waiting_count_once(self):
+        # The server answers each request on its own thread: five pages asking at once, with nothing kept yet, cost one read.
+        callers, gate, out = 5, threading.Barrier(5), []
+
+        def slow(_cur):
+            time.sleep(0.05)  # long enough for every caller to reach the cache while the first fills it
+            return 3
+
+        def ask():
+            gate.wait()
+            out.append(self.app.live_waiting())
+
+        with mock.patch.object(live, "waiting", side_effect=slow) as waiting:
+            threads = [threading.Thread(target=ask) for _ in range(callers)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(5)
+        self.assertEqual(waiting.call_count, 1)
+        self.assertEqual(out, [3] * callers)
+
     def test_a_failed_waiting_count_is_none_and_names_the_type_only(self):
         err = io.StringIO()
         with mock.patch.object(live, "waiting", side_effect=RuntimeError("secret text")), contextlib.redirect_stderr(err):
