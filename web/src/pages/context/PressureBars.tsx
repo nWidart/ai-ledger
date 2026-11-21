@@ -1,7 +1,7 @@
 // Window pressure: per window size, one stacked bar of how many sessions peaked in each band of it; a segment lists its sessions.
 import { useState } from "react";
 import type { ContextPayload, SessionPoint } from "../../api";
-import { ChartTable } from "../../components/DataTable";
+import { ChartTable, DataTable } from "../../components/DataTable";
 import { SOURCE_LABELS } from "../../components/Filters";
 import { openSessionSheet, sessName } from "../../components/sheets/session";
 import { num, pct, plural, when } from "../../format";
@@ -74,11 +74,11 @@ export function PressureBars({ fill, points }: { fill: Fill; points: SessionPoin
         </div>;
       })}
       <ChartTable>
-        <table aria-label="Sessions by peak share of the window">
+        <DataTable name="Sessions by peak share of the window" region="scroll">
           <thead><tr><th scope="col">Window</th>{FILL_LABELS.map(l => <th key={l} scope="col" className="num">{l}</th>)}</tr></thead>
           <tbody>{fill.map(f => <tr key={f.window}><th scope="row">{windowLabel(f.window)}</th>
             {f.bins.map((n, i) => <td key={i} className="num">{num(n)} ({pct(n / (total(f) || 1))})</td>)}</tr>)}</tbody>
-        </table>
+        </DataTable>
       </ChartTable>
     </div>
   );

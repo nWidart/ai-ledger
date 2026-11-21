@@ -39,6 +39,10 @@ describe("PressureBars", () => {
     await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
     const row = within(screen.getByRole("table", { name: "Sessions by peak share of the window" })).getByRole("row", { name: /^200k/ });
     expect([...row.querySelectorAll("td")].map(c => c.textContent)).toEqual(["5 (50%)", "3 (30%)", "0 (0%)", "2 (20%)", "0 (0%)"]);
+    // It scrolls in its own named region, which the keyboard can reach, not the page.
+    const region = screen.getByRole("region", { name: "Sessions by peak share of the window" });
+    expect(region.tabIndex).toBe(0);
+    expect(region.classList.contains("scroll")).toBe(true);
   });
 
   it("names a segment with its count, share and band", () => {
