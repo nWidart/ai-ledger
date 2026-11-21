@@ -15,6 +15,13 @@
 
 - [x] 3.1 Trim 20px of Overview's vertical spacing in `activity.css`. Verified with `tools/demo/firstscreen.mjs`: the tab list ends at 839px of 900 (859 before), other pages unchanged.
 
-## 4. Docs
+## 4. Review round 1
 
-- [x] 4.1 Add the changes to `CHANGELOG.md`, and update `README.md` and the docs site where they describe the Sessions columns or the Output speed vital.
+- [x] 4.1 Keep the sorted Sessions column shown at every width and hide Model and Tok/s under 66em only (`opt1`). Verify with `ActivityPage.test.tsx` ("… a dash for one that records none") and, in a browser, no sideways scroll from 900 to 1440px.
+- [x] 4.2 Count a session's output in the vital only when it records model time (`runs_cte`). Verify with `test_metrics.py` ("test_sort_by_model_time_and_output_speed").
+- [x] 4.3 Take the large-results advice's agents from the results' sessions, and keep the generic Codex line beside other remedies. Verify with `test_context.py` ("test_large_results_advice_follows_the_results_sessions", "test_large_results_advice_for_a_claude_read_and_a_codex_tool_with_no_remedy").
+- [x] 4.4 Name Model time and output speed among the selected day's whole-session figures, and update `README.md`.
+
+## 5. Docs
+
+- [x] 5.1 Add the changes to `CHANGELOG.md`, and update `README.md` and the docs site where they describe the Sessions columns or the Output speed vital.

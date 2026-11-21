@@ -10,7 +10,7 @@ The large-results rule SHALL fire when a main-thread tool result in the view is 
 ## ADDED Requirements
 
 ### Requirement: Fit the large-results advice to the agents
-The large-results advice SHALL name a subagent only for Claude Code: not when every matching session is a Codex one, and for Claude Code alone when both agents match. When no remedy of its own fits a Codex match's tools, the advice SHALL still say to ask for a smaller part of the output.
+The large-results advice SHALL name a subagent only for Claude Code, judged by the agents of the sessions that produced the large results: not when every such session is a Codex one, and for Claude Code alone when both agents produced them. When a Codex result's tool has no remedy of its own, the advice SHALL also say to ask for a smaller part of the output, whatever the other results.
 
 #### Scenario: Codex sessions
 - **WHEN** every session matching the large-results tip is a Codex session, with a large `exec_command` result
@@ -19,3 +19,11 @@ The large-results advice SHALL name a subagent only for Claude Code: not when ev
 #### Scenario: Both agents
 - **WHEN** the matching sessions include Claude Code and Codex sessions
 - **THEN** the advice says to hand bulk reading to a subagent in Claude Code
+
+#### Scenario: A Codex result outside the matching sessions
+- **WHEN** the source is Codex and a large `exec_command` result falls in the range, but its session's requests all fall before it
+- **THEN** the advice names no subagent
+
+#### Scenario: A Claude Code Read and a Codex tool with no remedy
+- **WHEN** a large `Read` result of a Claude Code session and a large `view_image` result of a Codex session fire the tip
+- **THEN** the advice names `Read` with offset and limit, says to ask for a smaller part of the output, and names a subagent for Claude Code

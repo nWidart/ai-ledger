@@ -8,9 +8,10 @@ Activity's Output speed vital opens the Sessions tab sorted by active time, not 
 
 - **Model time and speed in Sessions.** `/api/sessions` rows carry each session's whole-session model time (`model_ms`) and output speed (`output_per_s`, output tokens per second of model time), counted as the Output speed vital counts them. They are `null` for a session that records no model time: every Codex session and older Claude Code ones. The usage payload's session rows stay as they are.
 - **Two new sorts.** `/api/sessions` accepts `sort=model_ms` and `sort=output_per_s`. Sessions with no model time come last in both directions, as rows without a value already do.
-- **Two new columns.** Sessions shows Model and Tok/s after Active, each sortable and explained in a toggletip. They hide with the other least-needed columns on narrower screens. The Session column gives up some width so the table still fits its box at 1440px.
+- **Two new columns.** Sessions shows Model and Tok/s after Active, each sortable and explained in a toggletip. They hide under 66em, after Tokens and Compactions; the sorted column always shows, at any width. The Session column gives up some width so the table still fits its box at 1440px.
 - **Output speed vital.** It opens Sessions sorted by output speed, fastest first.
-- **Large-results advice per agent.** The subagent line goes for Codex-only matches, names Claude Code when both agents match, and a Codex match with no tool-specific remedy still gets one line of advice.
+- **One rule for speed.** A session whose runs record no model time adds nothing to the Output speed vital or its trend, as it reads "–" in Sessions.
+- **Large-results advice per agent.** Judged by the sessions that produced the large results, the subagent line goes for Codex-only results and names Claude Code when both agents produced them. A Codex result with no tool-specific remedy adds one line of advice.
 - **First screen.** Overview's vertical spacing shrinks by 20px (view switch, header, work chart's top padding, vitals padding and margin), so the tab list clears the fold with room. Other pages and the Judgments view keep their spacing.
 
 ## Capabilities

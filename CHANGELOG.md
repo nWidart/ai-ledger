@@ -18,7 +18,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - Judgments' session cards show what the store measured of each session: its estimated cost, its peak context as a share of the window, and its failed tool calls.
 - Judgments' Friction categories can be weighed by the cost or the active time of the sessions that reported each friction, or by reports. Cost is the default, and each row shows the other two beside it. A session with no price adds its active time but no cost.
 - The command palette opens Activity's Judgments view with `>judgments`; `>insights` finds the same row.
-- Activity's Sessions tab has **Model** (model time) and **Tok/s** (output tokens per second of model time) columns, whole-session figures that sort like the others. Sessions that record no model time, Codex and older Claude Code ones, read "–" and sort last either way. `/api/sessions` rows add `model_ms` and `output_per_s` and accept them as `sort`.
+- Activity's Sessions tab has **Model** (model time) and **Tok/s** (output tokens per second of model time) columns, whole-session figures that sort like the others. Sessions that record no model time, Codex and older Claude Code ones, read "–" and sort last either way, and add nothing to the Output speed tile. On a narrow window the sorted column stays shown. `/api/sessions` rows add `model_ms` and `output_per_s` and accept them as `sort`.
 
 ### Changed
 
