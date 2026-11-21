@@ -46,8 +46,9 @@ export interface EChartProps {
    *  first point (a rolling range's first day): when that moves, it is another view.
    *  Without a key the option function is the view, and each new function ends the reading and the zoom. */
   view?: string;
-  /** How many points the keys read: days, weeks, sessions, requests. One per band of the option's first x axis. When a
-   *  view loses points, a reading on a point that is gone ends, and a zoom that no longer fits shows every point. */
+  /** How many points the keys read: days, weeks, sessions, requests. One per band of the option's first x axis, which
+   *  in a chart of several tracks is the frame's. When a view loses points, a reading on a point that is gone ends, and
+   *  a zoom that no longer fits shows every point. */
   points: number;
   /** The tooltip for point i. Without it, the chart has no tooltip. */
   tip?: (i: number) => ReactNode;
@@ -58,6 +59,14 @@ export interface EChartProps {
    *  the point has nothing to open, and the reading stays, so the user is not left with silence. The pointer is a hand
    *  over every point of a chart that has a handler: the wrapper cannot tell which points the handler would decline. */
   onActivate?: (i: number) => boolean | void;
+  /** A sentence the live region says once, when this changes to a new text that is not empty: what the last activation
+   *  or Escape did ("… selected"). It takes the region as a zoom sentence does. A reading replaces it, and the end of
+   *  that reading does not say it again. It is not said on mount, nor for a new view. An empty text drops a status the
+   *  region holds. */
+  status?: string;
+  /** Escape on the focused box while nothing is read. Return true when it did something: the key is then prevented.
+   *  Escape from anywhere else never calls it, and Escape with a reading open only ends the reading. */
+  onEscape?: () => boolean | void;
   /** The option draws the zoom slider (`zoomSlider()`): the box takes the zoom keys, plus and `=` to halve the points
    *  shown and minus to double them, and follows the slider. Without it the wrapper draws no slider, whatever the option
    *  holds, so none is left that it neither reads nor resets, and every point shows. While the option draws no slider,
@@ -123,8 +132,9 @@ function zoomAround(s: Shown | null, n: number, f: number, c: number): Shown | n
   const from = Math.max(0, Math.min(n - next, at));
   return { from, to: from + next - 1 };
 }
-/** What the live region holds: a reading's sentence, the zoom sentence, or the reading and then the zoom sentence. */
-interface Said { reading: string | null; zoom: string | null }
+/** What the live region holds: a status alone, a reading's sentence, the zoom sentence, or the reading and then the zoom
+ *  sentence. Whatever is said next leaves the status out, so it is never said beside another sentence, nor a second time. */
+interface Said { status?: string; reading: string | null; zoom: string | null }
 /** A key's tooltip points this far under the top of the grid, as the hand-written charts have it. */
 const KEY_DROP = 20;
 
@@ -145,7 +155,8 @@ function placeTip(box: HTMLElement, plot: HTMLElement, tip: HTMLElement | null, 
 }
 
 export function EChart({
-  label, describedBy, id, className, hidden, height, option, view, points, tip, read, onActivate, zoom, onZoom, readZoom, ref,
+  label, describedBy, id, className, hidden, height, option, view, points, tip, read, onActivate, status, onEscape, zoom, onZoom,
+  readZoom, ref,
 }: EChartProps) {
   const box = useRef<HTMLDivElement>(null), plot = useRef<HTMLDivElement>(null), tipEl = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(UNMEASURED);
@@ -154,15 +165,16 @@ export function EChart({
   const [chart, setChart] = useState<ECharts | null>(null);
   const [failed, setFailed] = useState(false);
   // The point being read, whether a key read it, and its sentence as last said. Kept apart from the live region, which a
-  // zoom sentence can take over while the reading goes on. `at` is the cursor: the index of the point, or null.
+  // zoom sentence or a status can take over while the reading goes on. `at` is the cursor: the index of the point, or null.
   const [reading, setReading] = useState<{ i: number; keyed: boolean; text: string } | null>(null);
   const at = reading && reading.i < points ? reading.i : null;
   // The points shown, as the chart last reported them: null while every point shows.
   const [zoomed, setZoomed] = useState<Shown | null>(null);
   const shown = zoom && zoomed && zoomed.to < points ? zoomed : null;
   // What the live region holds: the last thing said, as it was worded. It is set when something is said and never
-  // derived from the chart, so a redraw of the same view says nothing by itself: a reading's sentence, the zoom sentence
-  // alone, or the reading and after it the zoom sentence, when the key that read the point also moved the points shown.
+  // derived from the chart, so a redraw of the same view says nothing by itself: the caller's status, a reading's
+  // sentence, the zoom sentence alone, or the reading and after it the zoom sentence, when the key that read the point
+  // also moved the points shown.
   const [said, setSaid] = useState<Said | null>(null);
   // The view: the caller's key, or the option function when it gives none. A new view is another chart: nothing is read
   // on it yet, the old point may not exist, and it shows every point (the draw effect resets the chart's window).
@@ -170,15 +182,27 @@ export function EChart({
   // cannot be read.
   // All cleared here, in the render that sees the change, so no effect runs on the old state, and a view, a zoom or a
   // point that comes back brings nothing back.
+  // The status is compared here too, with the one last seen: the handler that sets it (`onActivate`) returns before the
+  // wrapper ends the reading, which empties the region, so the status is said by the render after both. The status at
+  // mount is the one seen, and so is the one a new view comes with: neither is said.
+  // One branch a render: each sets state, so React renders again and the next branch sees what this one left. The
+  // status comes before the branches for the same view, so what a redraw has to say (a zoom that ended, a key's reading
+  // with newer figures) replaces a status that arrives with it, as it replaces one the region already holds.
   const shows = view ?? option;
-  const [drawing, setDrawing] = useState({ view: shows, zoom });
+  const [drawing, setDrawing] = useState({ view: shows, zoom, status });
   if (drawing.view !== shows) {
-    setDrawing({ view: shows, zoom });
+    setDrawing({ view: shows, zoom, status });
     setReading(null);
     setZoomed(null);
     setSaid(null);
+  } else if (drawing.status !== status) {
+    setDrawing({ ...drawing, status });
+    // A new text takes the region alone, with a reading open or not. An empty one is nothing to say: it only drops a
+    // status the region still holds, and leaves a reading or a zoom sentence that took the region since.
+    if (status) setSaid({ status, reading: null, zoom: null });
+    else if (said?.status != null) setSaid(null);
   } else if (drawing.zoom !== zoom) {
-    setDrawing({ view: shows, zoom });
+    setDrawing({ ...drawing, zoom });
     setZoomed(null);
     if (zoomed && readZoom) setSaid({ reading: null, zoom: readZoom(null) }); // the zoom ended with no one asking: said once
   } else if (reading && reading.i >= points) {
@@ -262,7 +286,13 @@ export function EChart({
     if (modified(ev)) return; // Alt+Left is history, Ctrl+Home the page: not ours
     // Here as well as on the document: an element around the chart may stop the key before it gets there. The key goes
     // on, as it does from the hand-written charts: what is around the chart may have its own use for Escape.
-    if (ev.key === "Escape") return readAt(null);
+    // With nothing read the key is the caller's, here only: Escape elsewhere (in a sheet) must not clear a selection.
+    // The document's listener leaves a key from inside the box to this handler, so one key does one of the two.
+    if (ev.key === "Escape") {
+      if (at != null) return readAt(null);
+      if (onEscape?.() === true) ev.preventDefault();
+      return;
+    }
     if (ev.key === "Enter") { if (at != null && activate(at)) ev.preventDefault(); return; }
     const step = STEPS[ev.key];
     if (step == null || !points) return;
@@ -464,8 +494,9 @@ export function EChart({
     };
   }, []);
 
-  // What the live region says: the zoom sentence alone, the reading, or the reading and then the zoom sentence.
-  const live = [said?.reading, said?.zoom].filter(s => s != null).join(" ");
+  // What the live region says: the status alone, the zoom sentence alone, the reading, or the reading and then the zoom
+  // sentence.
+  const live = [said?.status, said?.reading, said?.zoom].filter(s => s != null).join(" ");
 
   return (
     <>
@@ -475,8 +506,8 @@ export function EChart({
         {tip && <div ref={tipEl} className="tip" role="tooltip" style={{ display: at == null ? "none" : "block" }}>{at != null && tip(at)}</div>}
         {failed && <p className="echart-failed">The chart could not be drawn. The data table below has its figures.</p>}
       </div>
-      {/* One polite region for the reading and the zoom. It holds what was last said, so a redraw of the same view
-          repeats nothing; only a key's reading whose figures the newer data changed is said again. */}
+      {/* One polite region for the status, the reading and the zoom. It holds what was last said, so a redraw of the
+          same view repeats nothing; only a key's reading whose figures the newer data changed is said again. */}
       <div className="sr" aria-live="polite">{live}</div>
     </>
   );

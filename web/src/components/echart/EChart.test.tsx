@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { createRef, StrictMode } from "react";
+import { createRef, StrictMode, useState, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { prevented } from "../../testing";
 import { setTheme } from "../../theme";
@@ -34,6 +34,12 @@ const key = (k: string, on: Element = box()) => fireEvent.keyDown(on, { key: k }
 /** The band actions the chart was sent, as "at <point>" (read back from the pixel) or "leave". */
 const bands = (chart: FakeChart) => chart.actions.filter(a => a.type === "updateAxisPointer")
   .map(a => (a.currTrigger === "leave" ? "leave" : `at ${chart.convertFromPixel({ xAxisIndex: 0 }, Number(a.x))}`));
+/** Counts the changes to the live region's text since the last call: what a screen reader would say. */
+const spoken = () => {
+  const seen = new MutationObserver(() => {});
+  seen.observe(document.querySelector(".sr[aria-live=polite]")!, { childList: true, characterData: true, subtree: true });
+  return () => seen.takeRecords().length;
+};
 
 // The probe's computed color by theme; jsdom resolves no var().
 function themedColors() {
@@ -1000,12 +1006,6 @@ describe("EChart zoom", () => {
     dataZoom: slider ? [zoomSlider(env)] : [],
   });
   const viewed = (props: Partial<EChartProps> = {}) => zoomed({ view: "30 days by project", option: fresh(), ...props });
-  /** Counts the changes to the live region's text since the last call: what a screen reader would say. */
-  const spoken = () => {
-    const seen = new MutationObserver(() => {});
-    seen.observe(document.querySelector(".sr[aria-live=polite]")!, { childList: true, characterData: true, subtree: true });
-    return () => seen.takeRecords().length;
-  };
 
   it("keeps the zoom and the reading when the same view draws newer data, and says nothing", async () => {
     const onZoom = zoomSpy();
@@ -1214,5 +1214,406 @@ describe("EChart zoom", () => {
     rerender(viewed({ onZoom })); // the slider is back, on every point
     expect(chart.shown).toEqual({ from: 0, to: 29 });
     expect(onZoom).toHaveBeenCalledTimes(2);
+  });
+
+  // The status beside the zoom: each takes the region from the other, and neither comes back.
+  const SELECTED = "Oct 13 selected; the tabs below show its figures.", CLEARED = "Selection cleared; the tabs below show the whole range.";
+
+  it("gives the region to a zoom sentence after a status, and to a status after a zoom sentence", async () => {
+    const { rerender } = render(viewed({ status: "" }));
+    const chart = await drawn();
+    rerender(viewed({ status: SELECTED }));
+    expect(readout()).toBe(SELECTED);
+    key("+");
+    expect(readout()).toBe("Showing Oct 16 to Oct 30, 15 of 30 days."); // alone: the status is not said with it
+    rerender(viewed({ status: CLEARED }));
+    expect(readout()).toBe(CLEARED);
+    expect(chart.shown).toEqual({ from: 15, to: 29 }); // a status is no view: the zoom stays
+
+    key("Home"); // the reading, then the days the key moved into view
+    expect(readout()).toBe("Oct 1: $0.00 Showing Oct 1 to Oct 15, 15 of 30 days.");
+    rerender(viewed({ status: SELECTED }));
+    expect(readout()).toBe(SELECTED); // alone, with the reading still open
+    expect(chart.band).toBe(0);
+    key("Escape");
+    expect(readout()).toBe("");
+  });
+
+  it("keeps a status through a redraw that would drop a zoom sentence, and leaves a zoom sentence when the status empties", async () => {
+    const of = (n: number) => (s: Shown | null) => (s ? `${s.to - s.from + 1} of ${n} days.` : `All ${n} days.`);
+    const { rerender } = render(viewed({ status: "", readZoom: of(30) }));
+    const chart = await drawn();
+    key("+");
+    rerender(viewed({ status: SELECTED, readZoom: of(30) }));
+    const said = spoken();
+    rerender(viewed({ status: SELECTED, option: fresh(31), points: 31, readZoom: of(31) })); // a 31st day arrives
+    expect(readout()).toBe(SELECTED); // what was last said: it is still true
+    expect(said()).toBe(0);
+    expect(chart.shown).toEqual({ from: 15, to: 29 });
+
+    key("-");
+    expect(readout()).toBe("30 of 31 days.");
+    rerender(viewed({ status: "", option: fresh(31), points: 31, readZoom: of(31) }));
+    expect(readout()).toBe("30 of 31 days."); // the region held no status: nothing to drop
+    expect(said()).toBe(1);
+  });
+
+  it("says a zoom that ended with no one asking in place of a status", async () => {
+    const { rerender } = render(viewed({ status: "" }));
+    const chart = await drawn();
+    chart.zoomTo(10, 19);
+    rerender(viewed({ status: SELECTED }));
+    expect(readout()).toBe(SELECTED);
+    rerender(viewed({ status: SELECTED, option: fresh(30, false) })); // the same view stops drawing the slider
+    expect(readout()).toBe("Showing all 30 days.");
+
+    rerender(viewed({ status: SELECTED }));
+    key("+");
+    rerender(viewed({ status: CLEARED }));
+    expect(readout()).toBe(CLEARED);
+    rerender(viewed({ status: CLEARED, zoom: false })); // the zoom is turned off
+    expect(readout()).toBe("Showing all 30 days.");
+    const said = spoken();
+    rerender(viewed({ status: CLEARED, zoom: false }));
+    expect(said()).toBe(0); // and the status does not come back after it
+  });
+
+  it("says a key's reading again in place of a status when newer figures change it, and leaves the pointer's unsaid", async () => {
+    const grown = (i: number) => `${MONTH[i]}: $${i + 1}.00`;
+    const { rerender } = render(viewed({ status: "" }));
+    const chart = await drawn();
+    key("End");
+    rerender(viewed({ status: SELECTED })); // a status while the key's reading is open
+    expect(readout()).toBe(SELECTED);
+    const said = spoken();
+    rerender(viewed({ status: SELECTED })); // the same figures: nothing
+    expect(said()).toBe(0);
+    rerender(viewed({ status: SELECTED, read: grown })); // today's figure grew: the day is said, alone
+    expect(readout()).toBe("Oct 30: $30.00");
+    expect(said()).toBe(1);
+
+    chart.fire("mousemove", chart.pointAt(28)); // the pointer's reading
+    rerender(viewed({ status: CLEARED, read: grown }));
+    expect(readout()).toBe(CLEARED);
+    expect(said()).toBe(2);
+    rerender(viewed({ status: CLEARED })); // its figures change: not a word, and the status stays
+    expect(readout()).toBe(CLEARED);
+    expect(said()).toBe(0);
+  });
+
+  it("says what a redraw has to say in place of a status that arrives in the same render, and not the status later", async () => {
+    const grown = (i: number) => `${MONTH[i]}: $${i + 1}.00`;
+    const { rerender } = render(viewed({ status: "" }));
+    await drawn();
+    key("End");
+    const said = spoken();
+    rerender(viewed({ status: SELECTED, read: grown })); // the day a key reads grew, and a status came with it
+    expect(readout()).toBe("Oct 30: $30.00");
+    expect(said()).toBe(1);
+    rerender(viewed({ status: SELECTED, read: grown })); // the status was seen then
+    expect(readout()).toBe("Oct 30: $30.00");
+    expect(said()).toBe(0);
+
+    key("+");
+    rerender(viewed({ status: CLEARED, read: grown, zoom: false })); // the zoom is turned off, and a status came with it
+    expect(readout()).toBe("Showing all 30 days.");
+    expect(said()).toBe(2);
+    rerender(viewed({ status: CLEARED, read: grown, zoom: false }));
+    expect(said()).toBe(0);
+  });
+});
+
+describe("EChart status", () => {
+  const SELECTED = "Tue selected; the tabs below show its figures.", CLEARED = "Selection cleared; the tabs below show the whole range.";
+  /** A chart that selects, as the work chart does: a pick says what it did, and Escape with nothing read clears it. */
+  function Picker(props: Partial<EChartProps>) {
+    const [picked, setPicked] = useState<number | null>(null), [status, setStatus] = useState("");
+    return show({
+      view: "picker", status,
+      onActivate: i => { setPicked(i); setStatus(`${DAYS[i]} selected.`); },
+      onEscape: () => {
+        if (picked == null) return false;
+        setPicked(null);
+        setStatus("Selection cleared.");
+        return true;
+      },
+      ...props,
+    });
+  }
+
+  it("says a status once, when it changes to a new text, and not again on a render or a redraw", async () => {
+    const { rerender } = render(show({ view: "v", status: "" }));
+    await drawn();
+    const said = spoken();
+    rerender(show({ view: "v", status: SELECTED }));
+    expect(readout()).toBe(SELECTED);
+    expect(tooltip()).toBeNull(); // a status reads no point
+    expect(said()).toBe(1);
+    rerender(show({ view: "v", status: SELECTED }));
+    rerender(show({ view: "v", status: SELECTED, option: env => option(env) })); // newer data
+    act(() => setTheme("dark"));
+    expect(readout()).toBe(SELECTED); // the region holds what was last said
+    expect(said()).toBe(0);
+    rerender(show({ view: "v", status: CLEARED }));
+    expect(readout()).toBe(CLEARED);
+    expect(said()).toBe(1);
+  });
+
+  it("holds the status and no reading after an activation that sets it in the same turn, by Enter or by a click", async () => {
+    render(<Picker />);
+    const chart = await drawn();
+    key("ArrowRight");
+    key("ArrowRight");
+    const said = spoken();
+    expect(key("Enter")).toBe(false);
+    expect(readout()).toBe("Tue selected."); // not wiped by the end of the reading
+    expect(tooltip()).toBeNull();
+    expect(chart.band).toBeNull();
+    expect(said()).toBe(1); // the reading's words became the status: the region was never empty between them
+
+    chart.fire("mousemove", chart.pointAt(2));
+    expect(readout()).toBe("Wed: $3.00");
+    chart.fire("click", chart.pointAt(2));
+    expect(readout()).toBe("Wed selected.");
+    expect(tooltip()).toBeNull();
+    expect(said()).toBe(2);
+  });
+
+  it("gives the region to a reading, and does not say the status again when that reading ends", async () => {
+    render(<Picker />);
+    const chart = await drawn();
+    key("ArrowRight");
+    key("Enter");
+    expect(readout()).toBe("Mon selected.");
+    const said = spoken();
+    key("ArrowRight"); // a key's reading
+    expect(readout()).toBe("Mon: $1.00");
+    key("Escape");
+    expect(readout()).toBe(""); // empty: the selection is not said a second time
+    expect(said()).toBe(2);
+
+    key("End");
+    fireEvent.blur(box());
+    expect(readout()).toBe("");
+    chart.fire("mousemove", chart.pointAt(1)); // the pointer's reading
+    expect(readout()).toBe("Tue: $2.00");
+    chart.fire("globalout");
+    expect(readout()).toBe("");
+  });
+
+  it("leaves a status it holds where it is when no reading ends: Escape, blur and the pointer leaving", async () => {
+    const { rerender } = render(show({ view: "v", status: "" }));
+    const chart = await drawn();
+    rerender(show({ view: "v", status: SELECTED }));
+    const said = spoken();
+    key("Escape");
+    fireEvent.blur(box());
+    chart.fire("globalout");
+    chart.fire("mousemove", [20, 110]); // over the value labels: no point
+    expect(readout()).toBe(SELECTED);
+    expect(said()).toBe(0);
+  });
+
+  it("says nothing for the same text again", async () => {
+    render(<Picker />);
+    await drawn();
+    key("ArrowRight");
+    key("Enter");
+    expect(readout()).toBe("Mon selected.");
+    key("ArrowRight"); // Mon again, and the same sentence for it
+    const said = spoken();
+    key("Enter");
+    expect(readout()).toBe(""); // the reading ended, and the status is the one already said
+    expect(said()).toBe(1);
+  });
+
+  it("says a status again after another one, or an empty one, came between", async () => {
+    const { rerender } = render(show({ view: "v", status: SELECTED }));
+    await drawn();
+    rerender(show({ view: "v", status: CLEARED }));
+    rerender(show({ view: "v", status: SELECTED }));
+    expect(readout()).toBe(SELECTED);
+    rerender(show({ view: "v", status: "" }));
+    expect(readout()).toBe("");
+    rerender(show({ view: "v", status: SELECTED }));
+    expect(readout()).toBe(SELECTED);
+  });
+
+  it("does not say a status present at mount", async () => {
+    const { rerender } = render(<StrictMode>{show({ view: "v", status: SELECTED })}</StrictMode>);
+    expect(readout()).toBe("");
+    await drawn();
+    rerender(<StrictMode>{show({ view: "v", status: SELECTED })}</StrictMode>);
+    expect(readout()).toBe(""); // a link with a selection says nothing
+    rerender(<StrictMode>{show({ view: "v", status: CLEARED })}</StrictMode>);
+    expect(readout()).toBe(CLEARED);
+  });
+
+  it("says no status for a new view, whether the view kept it or brought another", async () => {
+    const { rerender } = render(show({ view: "a", status: "" }));
+    await drawn();
+    rerender(show({ view: "a", status: SELECTED }));
+    expect(readout()).toBe(SELECTED);
+    rerender(show({ view: "b", status: SELECTED })); // the view empties the region, and its status is the one seen
+    expect(readout()).toBe("");
+    rerender(show({ view: "b", status: SELECTED }));
+    expect(readout()).toBe("");
+
+    const said = spoken();
+    rerender(show({ view: "c", status: CLEARED })); // another status with another view: seen, not said
+    rerender(show({ view: "c", status: CLEARED }));
+    expect(readout()).toBe("");
+    expect(said()).toBe(0);
+    rerender(show({ view: "c", status: SELECTED })); // the next one in that view is said
+    expect(readout()).toBe(SELECTED);
+  });
+
+  it("empties the region on an empty status only when the region held a status", async () => {
+    const { rerender } = render(show({ view: "v", status: "" }));
+    await drawn();
+    rerender(show({ view: "v", status: SELECTED }));
+    rerender(show({ view: "v", status: "" }));
+    expect(readout()).toBe(""); // the status it held is dropped
+
+    rerender(show({ view: "v", status: SELECTED }));
+    key("ArrowRight"); // a reading took the region
+    const said = spoken();
+    rerender(show({ view: "v", status: "" }));
+    expect(readout()).toBe("Mon: $1.00");
+    expect(tooltip()!.textContent).toBe("Mon tip");
+    rerender(show({ view: "v", status: CLEARED }));
+    rerender(show({ view: "v" })); // no status at all, as an empty one
+    expect(readout()).toBe("");
+    expect(tooltip()!.textContent).toBe("Mon tip"); // the reading itself goes on
+    expect(said()).toBe(2);
+  });
+
+  it("takes the region from an open reading, which stays open, and the end of that reading empties the region", async () => {
+    const { rerender } = render(show({ view: "v", status: "" }));
+    const chart = await drawn();
+    key("ArrowRight");
+    key("ArrowRight");
+    rerender(show({ view: "v", status: SELECTED }));
+    expect(readout()).toBe(SELECTED); // alone, as a zoom sentence takes the region
+    expect(tooltip()!.textContent).toBe("Tue tip");
+    expect(chart.band).toBe(1);
+    key("ArrowRight"); // the next key reads again
+    expect(readout()).toBe("Wed: $3.00");
+
+    rerender(show({ view: "v", status: CLEARED }));
+    expect(readout()).toBe(CLEARED);
+    key("Escape");
+    expect(readout()).toBe("");
+    expect(tooltip()).toBeNull();
+  });
+
+  it("keeps a status when the point of an open reading is gone", async () => {
+    const { rerender } = render(show({ view: "v", status: "" }));
+    await drawn();
+    key("End");
+    const fewer = (env: ChartEnv): EChartsOption => ({ ...option(env), xAxis: { type: "category", data: DAYS.slice(0, 2) } });
+    rerender(show({ view: "v", status: SELECTED, option: fewer, points: 2 })); // the status and the loss in one render
+    expect(readout()).toBe(SELECTED);
+    expect(tooltip()).toBeNull();
+  });
+
+  it("says a status before the runtime resolves, and when it fails", async () => {
+    const load = fakeECharts.hold();
+    const { rerender } = render(show({ view: "v", status: "" }));
+    rerender(show({ view: "v", status: SELECTED }));
+    expect(readout()).toBe(SELECTED);
+    await load.reject();
+    rerender(show({ view: "v", status: CLEARED }));
+    expect(readout()).toBe(CLEARED);
+  });
+
+  it("ends the reading with the first Escape and clears with the second, as the work chart's selection does", async () => {
+    render(<Picker />);
+    await drawn();
+    key("ArrowRight");
+    key("Enter");
+    key("ArrowRight");
+    expect(key("Escape")).toBe(true); // the reading's
+    expect(readout()).toBe("");
+    expect(key("Escape")).toBe(false); // the selection's
+    expect(readout()).toBe("Selection cleared.");
+    expect(key("Escape")).toBe(true); // nothing left to clear
+    expect(readout()).toBe("Selection cleared.");
+  });
+});
+
+describe("EChart onEscape", () => {
+  const escapes = (returns?: boolean) => vi.fn<() => boolean | void>(() => returns);
+
+  it("ends an open reading on Escape and does not call it, then calls it once for each Escape with nothing read", async () => {
+    const onEscape = escapes(true);
+    render(show({ onEscape }));
+    const chart = await drawn();
+    key("ArrowRight");
+    expect(key("Escape")).toBe(true); // the reading ends, and the key goes on unprevented as before
+    expect(readout()).toBe("");
+    expect(onEscape).not.toHaveBeenCalled();
+    key("Escape");
+    expect(onEscape).toHaveBeenCalledTimes(1);
+
+    box().focus();
+    chart.fire("mousemove", chart.pointAt(1)); // the pointer's reading, with the focus in the box
+    key("Escape");
+    expect(readout()).toBe("");
+    expect(onEscape).toHaveBeenCalledTimes(1);
+    key("Escape");
+    expect(onEscape).toHaveBeenCalledTimes(2);
+    expect(bands(chart)).toEqual(["at 0", "leave", "at 1", "leave"]);
+  });
+
+  it("prevents the key when the handler returns true, and not when it returns false or nothing", async () => {
+    const seen: boolean[] = [];
+    const around = (el: ReactNode) => <div onKeyDown={ev => { if (ev.key === "Escape") seen.push(ev.defaultPrevented); }}>{el}</div>;
+    const { rerender } = render(around(show({ onEscape: escapes(true) })));
+    await drawn();
+    expect(key("Escape")).toBe(false);
+    rerender(around(show({ onEscape: escapes(false) })));
+    expect(key("Escape")).toBe(true);
+    rerender(around(show({ onEscape: escapes() })));
+    expect(key("Escape")).toBe(true);
+    rerender(around(show()));
+    expect(key("Escape")).toBe(true);
+    expect(seen).toEqual([true, false, false, false]); // prevented or not, the key goes on to what is around the chart
+  });
+
+  it("never calls it for Escape outside the box, with a reading open or not", async () => {
+    const onEscape = escapes(true);
+    render(<>{show({ onEscape })}<button type="button">Elsewhere</button></>);
+    const chart = await drawn();
+    const other = screen.getByRole("button", { name: "Elsewhere" });
+    other.focus();
+    chart.fire("mousemove", chart.pointAt(1));
+    expect(fireEvent.keyDown(other, { key: "Escape" })).toBe(true); // ends the reading, through the document
+    expect(readout()).toBe("");
+    expect(fireEvent.keyDown(other, { key: "Escape" })).toBe(true);
+    expect(fireEvent.keyDown(document.body, { key: "Escape" })).toBe(true);
+    expect(fireEvent.keyDown(document, { key: "Escape" })).toBe(true);
+    expect(onEscape).not.toHaveBeenCalled();
+  });
+
+  it("never calls it for Escape with Alt, Ctrl, Meta or Shift, with a reading open or not", async () => {
+    const onEscape = escapes(true);
+    render(show({ onEscape }));
+    await drawn();
+    const held = () => ["altKey", "ctrlKey", "metaKey", "shiftKey"].map(mod => fireEvent.keyDown(box(), { key: "Escape", [mod]: true }));
+    expect(held()).toEqual([true, true, true, true]);
+    key("ArrowRight");
+    expect(held()).toEqual([true, true, true, true]);
+    expect(readout()).toBe("Mon: $1.00"); // not ended either
+    expect(onEscape).not.toHaveBeenCalled();
+  });
+
+  it("calls it before the runtime resolves", async () => {
+    const load = fakeECharts.hold();
+    const onEscape = escapes(true);
+    render(show({ onEscape }));
+    expect(key("Escape")).toBe(false);
+    expect(onEscape).toHaveBeenCalledTimes(1);
+    await load.resolve();
   });
 });
