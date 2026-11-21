@@ -22,13 +22,13 @@ Needs [uv](https://docs.astral.sh/uv/). Runs on macOS and Linux. Your data stays
 | --- | --- |
 | **Live** | Every active session as it runs, sorted by who needs you first. Its tab counts the sessions that wait for you. |
 | **Limits** | Each plan limit window with its forecast cone and the safe pace to its reset, what used it, and how past windows ended. Its tab shows how full the fullest window is. |
-| **Activity** | What got done per day or week, by project, and what needs your attention. It also shows the output speed per model second and how long a median session waits on the model and tools. Its **Judgments** view shows how Claude Code's `/insights` judged your sessions: the outcome mix per week, what each judged session cost, and which friction the costliest sessions had. |
+| **Activity** | What got done per day or week, by project, and what needs your attention. The work chart puts errors per 100 tool calls on a track under the bars; select a day or a week to narrow the tables. Each tile opens the place that explains it, and the tables sit in tabs: Sessions, Projects, Tools and MCP, Loops and tests. It also shows the output speed per model second, with its trend, and how long sessions wait on the model and tools. Its **Judgments** view shows how Claude Code's `/insights` judged your sessions: the outcome mix per week, what each judged session cost, and which friction the costliest sessions had. |
 | **Cost** | Estimated spend at API list prices per day, and the month's pace against your plan. One table shows each project's trend, spend, change, cost per commit and cache hit. The tokens chart can show each day's share by token kind, and the Tokens and cache drawer sets each kind's share of tokens beside its share of cost. |
 | **Context** | How full the context window gets, how fast it grows, what fills it, and what the prompt cache wastes. |
 | **Errors** | Failed tool calls by type, the time they cost, a fix to paste into `CLAUDE.md` or `AGENTS.md`, and whether each fix worked. |
 | **Project** | One project across all of the above in two columns, each block loading on its own, opened from the "Project page" link beside the project filter, its sheet, or its name in the command palette. |
 
-Each page leads with its answer and its main chart. Full tables wait in drawers at the foot of the page, closed on every load, one open at a time; method notes wait behind a **How measured** link.
+Each page leads with its answer and its main chart. Full tables wait in drawers at the foot of the page, closed on every load, one open at a time; on Activity they sit in tabs under the chart. Method notes wait behind a **How measured** link.
 
 Press **Cmd+K** to jump anywhere, for example `>errors #myproject #7d`. Right-click a project, session, tool or error type for its actions, such as copying a session's resume command. Every page works by keyboard and screen reader. Charts open a data table or read point by point with the arrow keys.
 

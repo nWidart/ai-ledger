@@ -5,8 +5,7 @@ import type { DailyWorkRow, UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
 import { color, setOrder } from "../../colors";
 import { failRate, workBuckets, workKinds, workStack, type WorkMetric } from "./work";
-import { WorkPanel } from "./WorkChart";
-import { HoursDrawer, WorkHours } from "./WorkHours";
+import { WorkPanel, type WorkPick } from "./WorkChart";
 import { renderApp } from "../../testing";
 
 const row = (day: string, o: Partial<DailyWorkRow> = {}): DailyWorkRow => ({ day, sessions: 1, prompts: 1, commits: 0, calls: 0, failed_calls: 0, ...o });
@@ -27,11 +26,15 @@ const weekly: UsagePayload = {
   work_projects: [wp("2026-09-07", "foo", { commits: 3 }), wp("2026-10-19", "foo", { commits: 5 })],
 };
 
-const panel = (d: UsagePayload, metric: WorkMetric = "commits", onDay = vi.fn()) => {
-  renderApp(<WorkPanel d={d} metric={metric} onMetric={() => {}} onDay={onDay} />);
-  return onDay;
+const panel = (d: UsagePayload, metric: WorkMetric = "commits", selected: WorkPick | null = null) => {
+  const onPick = vi.fn<(p: WorkPick) => void>(), onClear = vi.fn<() => void>();
+  renderApp(<WorkPanel d={d} metric={metric} onMetric={() => {}} selected={selected} onPick={onPick} onClear={onClear} />);
+  return { onPick, onClear };
 };
 const chart = () => screen.getByRole("group", { name: /per (day|week)/ });
+// The viewBox's tracks at the default text size: the bars from 20 to 140, the rate track from 156 to 192.
+const BARS_BOTTOM = 140, RATE_TOP = 156, RATE_BOTTOM = 192, RATE_H = RATE_BOTTOM - RATE_TOP;
+const ticks = () => [...document.querySelectorAll("#work svg .rtick")].map(t => t.textContent);
 
 beforeEach(() => {
   // The plot reads its size from the svg; jsdom lays nothing out.
@@ -95,15 +98,15 @@ describe("chart by project", () => {
     setOrder([]);
     expect(workKinds(many, rows, "commits")).toEqual([]);
     panel(many);
-    expect([...document.querySelectorAll("#work .legend .key")].map(k => k.textContent)).toEqual(["Commits", "Errors per 100 calls (right axis)"]);
+    expect([...document.querySelectorAll("#work .legend .key")].map(k => k.textContent)).toEqual(["Commits", "Errors per 100 calls (lower track)"]);
   });
 
   it("names the stacked projects in the legend", () => {
     panel(many);
-    expect([...document.querySelectorAll("#work .legend .key")].map(k => k.textContent)).toEqual(["a", "c", "e", "g", "Other (3)", "Errors per 100 calls (right axis)"]);
+    expect([...document.querySelectorAll("#work .legend .key")].map(k => k.textContent)).toEqual(["a", "c", "e", "g", "Other (3)", "Errors per 100 calls (lower track)"]);
     cleanup();
     panel({ ...many, project: "a" });
-    expect([...document.querySelectorAll("#work .legend .key")].map(k => k.textContent)).toEqual(["Commits", "Errors per 100 calls (right axis)"]);
+    expect([...document.querySelectorAll("#work .legend .key")].map(k => k.textContent)).toEqual(["Commits", "Errors per 100 calls (lower track)"]);
   });
 
   it("stacks the segments from the baseline, in one order, scaled to fit", () => {
@@ -111,7 +114,7 @@ describe("chart by project", () => {
     const rows = workBuckets(many), ks = workKinds(many, rows, "commits"), st = workStack(rows, many.work_projects, ks, "commits");
     const bars = [...document.querySelectorAll("#work .bar-seg")];
     expect(bars).toHaveLength(2);
-    const base = 240 - 26, plotTop = 22; // the plot's bottom and top edges in the viewBox
+    const base = BARS_BOTTOM, plotTop = 20; // the bar track's bottom and top edges in the viewBox
     let scale: number | undefined;
     bars.forEach((bar, i) => {
       const segs = [...bar.children].map(seg => {
@@ -188,26 +191,43 @@ describe("failure rate line", () => {
   const gap = [row("2026-11-03", { calls: 4, failed_calls: 2 }), row("2026-11-04"), row("2026-11-05", { calls: 200, failed_calls: 6 })];
   const d: UsagePayload = { ...usage, end: "2026-11-05", work: gap, work_projects: gap.map(r => ({ ...r, project: "foo" })) };
 
-  it("draws on a labelled right-hand axis with no point for a bucket without calls", () => {
+  it("draws on its own track under the bars, with no point for a bucket without calls", () => {
     panel(d);
     const svg = document.querySelector("#work svg")!;
-    expect(svg.textContent).toContain("Errors per 100 calls");
-    const line = svg.querySelector("path.rate")!.getAttribute("d")!;
+    const line = svg.querySelector(".rtrack path.rate")!.getAttribute("d")!;
     expect(line.match(/[ML]/g)).toEqual(["M", "M"]);
+    // Every point sits on the rate track, below the bars: 3 per 100 of a top of 5 is 60% up the track.
+    const ys = [...line.matchAll(/[ML][\d.]+,([\d.]+)/g)].map(m => +m[1]!);
+    ys.forEach(y => { expect(y).toBeGreaterThanOrEqual(RATE_TOP); expect(y).toBeLessThanOrEqual(RATE_BOTTOM); });
+    expect(ys[1]).toBeCloseTo(RATE_BOTTOM - 3 / 5 * RATE_H);
+    ys.forEach(y => expect(y).toBeGreaterThan(BARS_BOTTOM));
+    // The 4-call day's 50 is above the scale: it stops at the track's top.
+    expect(ys[0]).toBeCloseTo(RATE_TOP);
     // Each lone point gets a dot, since no line reaches it: filled for the busy day, hollow for the 4-call day.
     expect(svg.querySelectorAll("circle.rate")).toHaveLength(1);
     expect(svg.querySelectorAll("circle.lowc")).toHaveLength(1);
+    // No right-hand axis or its rotated title.
+    expect(svg.querySelector("text[transform]")).toBeNull();
   });
 
-  it("ticks the right-hand axis on the count axis's grid lines, with decimals for small steps", () => {
-    const ticks = () => [...document.querySelectorAll("#work svg .rtick")].map(t => t.textContent);
+  it("ticks the rate track at 0 and its top, with decimals for small rates", () => {
     panel(d);
-    // Two count steps (no commits: 0 to 1 by 0.5). The 4-call day's 50 is left out, so the top rate is the busy day's 3.
-    expect(ticks()).toEqual(["0", "2", "4"]);
+    // The 4-call day's 50 is left out, so the top is a nice value over the busy day's 3.
+    expect(ticks()).toEqual(["0", "5"]);
     cleanup();
     const low = [row("2026-11-04", { calls: 1000, failed_calls: 1 }), row("2026-11-05", { calls: 1000, failed_calls: 1 })];
     panel({ ...usage, work: low, work_projects: [] });
-    expect(ticks()).toEqual(["0.0", "0.1", "0.2"]);
+    expect(ticks()).toEqual(["0", "0.2"]);
+  });
+
+  it("reads a bucket's count and rate together, from either track", () => {
+    panel(d);
+    act(() => chart().focus());
+    fireEvent.keyDown(chart(), { key: "End" });
+    expect(document.querySelector("#work div.sr[aria-live]")!.textContent).toBe("Nov 5, 2026: 0 commits, 1 prompt, 1 session, 6 failed calls of 200, 3.0 per 100");
+    // The hover band and the hit area span both tracks.
+    const hit = document.querySelector("#work .hit")!;
+    expect([+hit.getAttribute("y")!, +hit.getAttribute("y")! + +hit.getAttribute("height")!]).toEqual([20, RATE_BOTTOM]);
   });
 
   it("marks a bar with few calls as a hollow dot that sets no axis, and says so in the tooltip, table and key", async () => {
@@ -215,10 +235,10 @@ describe("failure rate line", () => {
     panel({ ...usage, end: "2026-11-06", work: rows, work_projects: [] });
     const svg = document.querySelector("#work svg")!;
     // The scale follows the busy days (3 and 5), not the quiet day's 50; the line still runs through the hollow dot.
-    expect([...svg.querySelectorAll(".rtick")].map(t => t.textContent)).toEqual(["0", "5", "10"]); // not 0, 50, 100
+    expect(ticks()).toEqual(["0", "10"]); // not 0, 100
     expect(svg.querySelector("path.rate")!.getAttribute("d")!.match(/[ML]/g)).toEqual(["M", "L", "L"]);
     expect(svg.querySelectorAll("circle.lowc")).toHaveLength(1);
-    expect(document.querySelector("#work .legend")!.textContent).toBe("CommitsErrors per 100 calls (right axis)Under 50 calls");
+    expect(document.querySelector("#work .legend")!.textContent).toBe("CommitsErrors per 100 calls (lower track)Under 50 calls");
     act(() => chart().focus());
     fireEvent.keyDown(chart(), { key: "Home" });
     expect(within(screen.getByRole("tooltip")).getByText("too few calls for a steady rate")).toBeTruthy();
@@ -235,16 +255,15 @@ describe("failure rate line", () => {
     panel({ ...usage, work: rows, work_projects: [] });
     const svg = document.querySelector("#work svg")!;
     expect(svg.querySelectorAll("circle.lowc")).toHaveLength(0);
-    expect([...svg.querySelectorAll(".rtick")].map(t => t.textContent)).toEqual(["0", "50", "100"]);
+    expect(ticks()).toEqual(["0", "100"]);
     expect(document.querySelector("#work .legend")!.textContent).not.toContain("Under");
   });
 
-  it("draws no rate, axis or key when no bar has a tool call", () => {
+  it("draws no rate track or key when no bar has a tool call", () => {
     const idle = [row("2026-11-04", { commits: 2 }), row("2026-11-05")];
     panel({ ...usage, work: idle, work_projects: [] });
     const svg = document.querySelector("#work svg")!;
-    expect(svg.querySelectorAll(".rtick, .rate")).toHaveLength(0);
-    expect(svg.textContent).not.toContain("Errors per 100 calls");
+    expect(svg.querySelectorAll(".rtrack, .rtick, .rate")).toHaveLength(0);
     expect(document.querySelector("#work .legend")!.textContent).toBe("Commits");
     expect(chart().getAttribute("aria-label")).toMatch(/^Commits per day, 2 days/);
   });
@@ -292,18 +311,51 @@ describe("chart keys", () => {
 });
 
 describe("weekly buckets", () => {
-  it("label weeks and cannot be picked", () => {
-    const onDay = panel(weekly);
-    expect(chart().getAttribute("aria-label")).toMatch(/^Commits and errors per 100 tool calls per week, 10 weeks, commits peaking at 5 in the week of Oct 19, 2026/);
+  it("label weeks, and select one by keyboard or click", () => {
+    const { onPick } = panel(weekly);
+    expect(chart().getAttribute("aria-label")).toMatch(/^Commits per week, with errors per 100 tool calls on a track below, 10 weeks, commits peaking at 5 in the week of Oct 19, 2026/);
+    expect(chart().getAttribute("aria-label")).toMatch(/Enter to select it and Escape to clear the selection\.$/);
     expect(document.querySelector("#work svg")!.textContent).toContain("Week of Sep 7");
-    expect(document.querySelector("#work .hint")!.textContent).toMatch(/Choose a shorter range to pick a day/);
+    expect(document.querySelector("#work .hint")!.textContent).toMatch(/Select a week to narrow the tabs/);
     expect(screen.getByRole("button", { name: "How measured: work per week" })).toBeTruthy();
     act(() => chart().focus());
     fireEvent.keyDown(chart(), { key: "Home" });
     expect(within(screen.getByRole("tooltip")).getByText("Week of Sep 7, 2026")).toBeTruthy();
     fireEvent.keyDown(chart(), { key: "Enter" });
-    fireEvent.click(document.querySelector("#work .hit")!, { clientX: 60 });
-    expect(onDay).not.toHaveBeenCalled();
+    expect(onPick).toHaveBeenLastCalledWith({ day: "2026-09-07", week: true });
+    // Reading stops at a pick, and the live region says what it did.
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(document.querySelector("#work div.sr[aria-live]")!.textContent).toBe("Week of Sep 7, 2026 selected; the tabs below show its days.");
+    // The seventh bar is the week of Oct 19: 7 of 10 bars across the 732px plot from x 52.
+    fireEvent.click(document.querySelector("#work .hit")!, { clientX: 52 + 6.5 * 73.2 });
+    expect(onPick).toHaveBeenLastCalledWith({ day: "2026-10-19", week: true });
+    // An idle week selects nothing.
+    fireEvent.click(document.querySelector("#work .hit")!, { clientX: 52 + 1.5 * 73.2 });
+    expect(onPick).toHaveBeenCalledTimes(2);
+  });
+
+  it("show the selection as a chip, cleared by its button or by Escape once no bucket is read", async () => {
+    const { onClear } = panel(weekly, "commits", { day: "2026-10-19", week: true });
+    const chip = document.querySelector("#work .chart-head .daychip")!;
+    expect(chip.textContent).toBe("Week of Oct 19✕");
+    expect(document.querySelectorAll("#work svg rect.selb")).toHaveLength(1);
+    await userEvent.click(screen.getByRole("button", { name: "Clear week of Oct 19, 2026" }));
+    expect(onClear).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(chart());
+    fireEvent.keyDown(chart(), { key: "Home" });
+    fireEvent.keyDown(chart(), { key: "Escape" }); // ends the reading only
+    expect(onClear).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    fireEvent.keyDown(chart(), { key: "Escape" });
+    expect(onClear).toHaveBeenCalledTimes(2);
+  });
+
+  it("show no chip and clear nothing on Escape without a selection", () => {
+    const { onClear } = panel(weekly);
+    expect(document.querySelector("#work .daychip")).toBeNull();
+    act(() => chart().focus());
+    fireEvent.keyDown(chart(), { key: "Escape" });
+    expect(onClear).not.toHaveBeenCalled();
   });
 
   it("say when the view covers part of a week", () => {
@@ -331,77 +383,23 @@ describe("weekly buckets", () => {
   });
 
   it("days can be picked with a click", () => {
-    const onDay = panel(usage);
-    expect(chart().getAttribute("aria-label")).toMatch(/^Commits and errors per 100 tool calls per day, 2 days/);
+    const { onPick } = panel(usage);
+    expect(chart().getAttribute("aria-label")).toMatch(/^Commits per day, with errors per 100 tool calls on a track below, 2 days/);
     fireEvent.click(document.querySelector("#work .hit")!, { clientX: 100 });
-    expect(onDay).toHaveBeenCalledWith("2026-11-04");
-  });
-});
-
-describe("hours", () => {
-  const cells = [{ dow: 2, hour: 23, prompts: 30 }, { dow: 2, hour: 9, prompts: 4 }, { dow: 6, hour: 10, prompts: 12 }];
-
-  it("draws a 7x24 grid, Monday first, with the busiest cell named", () => {
-    renderApp(<WorkHours cells={cells} />);
-    const box = document.getElementById("hours")!;
-    const table = within(box).getByRole("table", { name: "Prompts by weekday and hour" });
-    const rows = table.querySelectorAll("tbody tr");
-    expect(rows).toHaveLength(7);
-    expect([...rows].map(r => r.querySelector("th")!.textContent)).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
-    rows.forEach(r => expect(r.querySelectorAll("td")).toHaveLength(24));
-    const late = rows[1]!.querySelectorAll("td")[23]!;
-    expect(late.getAttribute("title")).toBe("Tuesday 23:00: 30 prompts");
-    expect(late.textContent).toBe("30 prompts");
-    expect(rows[0]!.querySelectorAll("td")[0]!.getAttribute("title")).toBe("Monday 0:00: 0 prompts");
-    expect(box.textContent).toMatch(/Busiest hour: Tuesdays at 23:00, 30 prompts\. Busiest day: Tuesday, 34 prompts\. 46 prompts in all\./);
+    expect(onPick).toHaveBeenCalledWith({ day: "2026-11-04", week: false });
+    expect(document.querySelector("#work .hint")!.textContent).toMatch(/Select a day to narrow the tabs/);
   });
 
-  it("outlines Monday 0:00 on focus, moves from there and keeps the cell", () => {
-    renderApp(<WorkHours cells={cells} />);
-    const table = screen.getByRole("table"), readout = () => document.querySelector("#hours .readout")!.textContent;
-    const outlined = () => [...table.querySelectorAll("td.at")].map(td => td.getAttribute("title"));
-    act(() => table.focus());
-    expect(outlined()).toEqual(["Monday 0:00: 0 prompts"]);
-    expect(readout()).toBe("Monday 0:00: 0 prompts");
-    fireEvent.keyDown(table, { key: "ArrowRight" });
-    expect(readout()).toBe("Monday 1:00: 0 prompts");
-    fireEvent.keyDown(table, { key: "ArrowDown" });
-    fireEvent.keyDown(table, { key: "End" });
-    expect(readout()).toBe("Tuesday 23:00: 30 prompts");
-    act(() => table.blur());
-    expect(outlined()).toEqual([]);
-    expect(readout()).toBe("");
-    act(() => table.focus());
-    expect(readout()).toBe("Tuesday 23:00: 30 prompts");
+  it("name a selected day on its chip", () => {
+    panel(usage, "commits", { day: "2026-11-04", week: false });
+    expect(document.querySelector("#work .daychip")!.textContent).toBe("Nov 4✕");
+    expect(screen.getByRole("button", { name: "Clear Nov 4, 2026" })).toBeTruthy();
+    expect(document.querySelectorAll("#work svg rect.selb")).toHaveLength(1);
   });
 
-  it("does not read cells out on hover", () => {
-    renderApp(<WorkHours cells={cells} />);
-    fireEvent.pointerEnter(screen.getByRole("table").querySelectorAll("tbody tr")[1]!.querySelectorAll("td")[23]!);
-    expect(document.querySelector("#hours .readout")!.textContent).toBe("");
-  });
-
-  it("counts the ties for the busiest hour and day", () => {
-    renderApp(<WorkHours cells={[{ dow: 2, hour: 9, prompts: 5 }, { dow: 4, hour: 9, prompts: 5 }, { dow: 5, hour: 14, prompts: 5 }]} />);
-    expect(document.getElementById("hoursSum")!.textContent)
-      .toMatch(/^Busiest hour: Tuesdays at 9:00 and 2 others, 5 prompts each\.\s+Busiest day: Tuesday and 2 others, 5 prompts each\. 15 prompts in all\./);
-  });
-
-  it("shows the empty state without data", () => {
-    renderApp(<WorkHours cells={[]} />);
-    expect(document.querySelector("#hours table")).toBeNull();
-    expect(document.querySelector("#hours .empty")!.textContent).toBe("No prompts in this range.");
-  });
-
-  it("leaves the work panel, and waits in a closed Prompts by hour drawer", async () => {
-    panel(usage);
-    expect(document.getElementById("hours")).toBeNull();
-    cleanup();
-    renderApp(<HoursDrawer cells={cells} />);
-    const toggle = screen.getByRole("heading", { level: 2, name: "Prompts by hour" }).querySelector("button")!;
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    expect(document.getElementById("hours")).toBeNull();
-    await userEvent.click(toggle);
-    expect(screen.getByRole("table", { name: "Prompts by weekday and hour" })).toBeTruthy();
+  it("name a week a link holds on a chart by day, marking no bar", () => {
+    panel(usage, "commits", { day: "2026-11-02", week: true });
+    expect(document.querySelector("#work .daychip")!.textContent).toBe("Week of Nov 2✕");
+    expect(document.querySelector("#work svg rect.selb")).toBeNull();
   });
 });

@@ -7,7 +7,7 @@ import {
   promptUrl, sessionUrl, sessionsUrl, statusUrl, toolUrl, usageUrl,
   type ContextPayload, type Day, type DayView, type ErrorDetail, type ErrorsPayload, type InsightsPayload, type LimitHistoryRow,
   type LimitsPayload, type LimitWindowCurve, type LivePayload, type LiveSession, type PalettePayload, type SessionDetail, type SessionsPage,
-  type Status, type ToolKind, type ToolPayload, type UsagePayload, type View,
+  type Span, type Status, type ToolKind, type ToolPayload, type UsagePayload, type View,
 } from "./api";
 import type { Marks } from "./pages/errors/model";
 import { mergeSession } from "./pages/live/live";
@@ -25,15 +25,15 @@ export const queries = {
     refetchOnWindowFocus: "always",
   }),
   usage: (v: View, session = "") => queryOptions({ queryKey: ["usage", view(v), session], queryFn: get<UsagePayload>(usageUrl(v, session)) }),
-  day: (v: View, day: Day) => queryOptions({ queryKey: ["day", view(v), day], queryFn: get<DayView>(dayUrl(v, day)) }),
+  day: (v: View, day: Day, days: Span = 1) => queryOptions({ queryKey: ["day", view(v), day, days], queryFn: get<DayView>(dayUrl(v, day, days)) }),
   sessions: (v: View, opts: Parameters<typeof sessionsUrl>[1] = {}) =>
     queryOptions({ queryKey: ["sessions", view(v), opts], queryFn: get<SessionsPage>(sessionsUrl(v, opts)) }),
   // The drawer's pages, loaded by offset. Its key differs from `sessions`' at index 1, so the two caches never collide.
   // No maxPages: a user who paged far wants those rows.
-  sessionPages: (v: View, { q, near, day, sort, desc }: Omit<NonNullable<Parameters<typeof sessionsUrl>[1]>, "offset" | "limit"> = {}) =>
+  sessionPages: (v: View, { q, near, day, days, sort, desc }: Omit<NonNullable<Parameters<typeof sessionsUrl>[1]>, "offset" | "limit"> = {}) =>
     infiniteQueryOptions({
-      queryKey: ["sessions", "pages", view(v), { q, near, day, sort, desc }],
-      queryFn: ({ pageParam, signal }) => getJson<SessionsPage>(sessionsUrl(v, { q, near, day, sort, desc, offset: pageParam }), { signal }),
+      queryKey: ["sessions", "pages", view(v), { q, near, day, days, sort, desc }],
+      queryFn: ({ pageParam, signal }) => getJson<SessionsPage>(sessionsUrl(v, { q, near, day, days, sort, desc, offset: pageParam }), { signal }),
       initialPageParam: 0,
       getNextPageParam: (last, pages) => {
         const loaded = pages.reduce((n, p) => n + p.sessions.length, 0);

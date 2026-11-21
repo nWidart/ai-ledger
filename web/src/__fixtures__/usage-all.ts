@@ -272,26 +272,11 @@ export default {
    "failed_calls": 0
   }
  ],
- "work_hours": [
+ "speed_trend": [
   {
-   "dow": 3,
-   "hour": 10,
-   "prompts": 2
-  },
-  {
-   "dow": 3,
-   "hour": 12,
-   "prompts": 1
-  },
-  {
-   "dow": 4,
-   "hour": 9,
-   "prompts": 2
-  },
-  {
-   "dow": 4,
-   "hour": 12,
-   "prompts": 1
+   "day": "2026-11-04",
+   "output_per_s": 100.0,
+   "sessions": 1
   }
  ],
  "unpriced": [

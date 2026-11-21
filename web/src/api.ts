@@ -93,8 +93,9 @@ export interface UsagePayload {
   work_bucket: "day" | "week"; work: DailyWorkRow[];
   /** work split by project; a bucket's rows add up to its work row. */
   work_projects: { day: Day; project: string | null; sessions: number; prompts: number; commits: number; calls: number; failed_calls: number }[];
-  /** Prompts per local weekday (1 Monday to 7 Sunday) and hour; nonzero cells only. */
-  work_hours: { dow: number; hour: number; prompts: number }[];
+  /** Output speed per work bucket (day as work's), over the sessions that record model time, each in the bucket of its first
+   *  request in the view; buckets with none left out. */
+  speed_trend: { day: Day; output_per_s: number; sessions: number }[];
   /** The newest 50 failed test runs; id is the failed call's id on the Errors page. */
   failed_tests: { id: string; session_id: string; title: string | null; project: string | null; source: Source; command: string; ts: Ts | null }[];
   unpriced: UnpricedRow[]; models: ModelRow[]; by_project: ProjectRow[];
@@ -118,10 +119,14 @@ export interface UsagePayload {
 export interface SessionsPage { total: number; offset: number; sessions: TitledSessionRow[] }
 export type SessionSort = "first_ts" | "duration_s" | "prompts" | "tokens" | "cost" | "peak_context" | "errors" | "compactions" | "commits" | "tests_failed";
 
-/** /api/day: the usage payload's tool, hook and error-loop rows, limited to one local day of the view. */
+/** /api/day: the usage payload's project, tool, hook, error-loop and failed-test rows, limited to the view's local days from
+ *  day: one, or the week a work chart bar holds (days 7). */
 export interface DayView {
-  day: Day; tools: ToolRow[]; mcp: NamedRateRow[]; skills: NamedRateRow[]; hooks: HookRow[]; error_loops: ErrorLoop[]; error_loops_total: number;
+  day: Day; days: Span; by_project: ProjectRow[]; tools: ToolRow[]; mcp: NamedRateRow[]; skills: NamedRateRow[]; hooks: HookRow[];
+  error_loops: ErrorLoop[]; error_loops_total: number; failed_tests: UsagePayload["failed_tests"]; tests_failed: number;
 }
+/** The days a selection of the work chart covers: a day, or a week from its Monday. */
+export type Span = 1 | 7;
 
 export interface SessionInfo {
   session_id: string; project: string | null; cwd: string | null; git_branch: string | null; first_ts: Ts | null; last_ts: Ts | null;
@@ -580,9 +585,9 @@ export const viewOf = (h: { project: string; range: number; auto: boolean; sourc
   ({ project: h.project, range: h.range, automated: h.auto, source: h.source });
 const viewQs = (v: View) => ({ project: v.project, range: v.range, automated: v.automated, source: v.source });
 export const usageUrl = (v: View, session = "") => `/api/usage?${qs({ ...viewQs(v), session })}`;
-export const sessionsUrl = (v: View, o: { q?: string; near?: boolean; offset?: number; limit?: number; day?: Day; sort?: SessionSort; desc?: boolean } = {}) =>
-  `/api/sessions?${qs({ ...viewQs(v), q: o.q, near: o.near, offset: o.offset || undefined, limit: o.limit, day: o.day, sort: o.sort, desc: o.desc })}`;
-export const dayUrl = (v: View, day: Day) => `/api/day?${qs({ ...viewQs(v), day })}`;
+export const sessionsUrl = (v: View, o: { q?: string; near?: boolean; offset?: number; limit?: number; day?: Day; days?: Span; sort?: SessionSort; desc?: boolean } = {}) =>
+  `/api/sessions?${qs({ ...viewQs(v), q: o.q, near: o.near, offset: o.offset || undefined, limit: o.limit, day: o.day, days: o.day && o.days !== 1 ? o.days : undefined, sort: o.sort, desc: o.desc })}`;
+export const dayUrl = (v: View, day: Day, days: Span = 1) => `/api/day?${qs({ ...viewQs(v), day, days: days === 1 ? undefined : days })}`;
 export const sessionUrl = (id: string) => `/api/session?${qs({ id })}`;
 export const promptUrl = (session: string) => `/api/prompt?${qs({ session })}`;
 export const toolUrl = (kind: ToolKind, name: string, v: View) => `/api/tool?${qs({ kind, name, ...viewQs(v) })}`;

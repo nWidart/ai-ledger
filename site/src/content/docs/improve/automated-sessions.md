@@ -12,9 +12,9 @@ Your figures count only the sessions you ran yourself: scripted, scheduled and h
 The app already leaves out the sessions it detects as automated: a session of `observer-sessions` (claude-mem's project) or of a project in `automated.json`, a session with no prompt, and a session in a temporary folder with at most one prompt (see [Filters](/ai-ledger/everywhere/filters/#include-automated)). This playbook applies when it misses some, or when it hides one of yours:
 
 - Every page shows the banner "**Automated projects file ignored:**" under the navigation, with the file's path and the reason. This is the app's own sign: your `automated.json` does not apply, and only the built-in detection does.
-- On [Activity](/ai-ledger/pages/activity/), the **Project metrics** drawer lists a project that a script, a scheduled job or a tool works in, not you.
-- Rule of thumb: in Activity's **Sessions** drawer, sorted by **Prompts**, many sessions have 1 prompt and the same title. A script that runs `claude -p "…"` or `codex exec "…"` in a project folder makes such sessions, and the app counts them as yours.
-- Rule of thumb: Activity's **Prompts by hour** drawer shows prompts at hours when you do not work, such as every night at 3:00.
+- On [Activity](/ai-ledger/pages/activity/), the **Project metrics** table, in the **Projects** tab, lists a project that a script, a scheduled job or a tool works in, not you.
+- Rule of thumb: in Activity's **Sessions** tab, sorted by **Prompts**, many sessions have 1 prompt and the same title. A script that runs `claude -p "…"` or `codex exec "…"` in a project folder makes such sessions, and the app counts them as yours.
+- Rule of thumb: in Activity's **Sessions** tab, the start times under the titles fall at hours when you do not work, such as every night at 3:00.
 - A session you ran yourself is missing from your figures, and it ran in a temporary folder with one prompt.
 
 Errors and Limits have no **Include automated sessions** control: Errors counts automated sessions in every figure, and the plan limit windows on Limits count all use of the account. This playbook does not change them.
@@ -113,7 +113,7 @@ If a figure did not move:
 
 - [Filters](/ai-ledger/everywhere/filters/#include-automated): the rules that make a session automated.
 - [Configuration](/ai-ledger/reference/configuration/#automated-projects): the `automated.json` file.
-- [Activity](/ai-ledger/pages/activity/): the **Sessions** tile, **Project metrics** and the **Sessions** drawer.
+- [Activity](/ai-ledger/pages/activity/): the **Sessions** tile, **Project metrics** and the **Sessions** tab.
 - [Metric glossary](/ai-ledger/reference/glossary/): the automated session and the other terms.
 - [How AI Ledger works](/ai-ledger/concepts/how-it-works/): how the app reads sessions and projects.
 - [Weekly 15-minute review](/ai-ledger/improve/weekly-review/): a routine on figures without automated sessions.

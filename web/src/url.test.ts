@@ -196,6 +196,11 @@ describe("setSearch", () => {
       setSearch(p);
       expect(location.search).not.toContain("day=");
     }
+    // A selected week goes the same way.
+    router.history.replace(location.pathname + location.search + "&week=2026-11-02");
+    router.history.flush();
+    setSearch({ project: "foo" });
+    expect(location.search).not.toContain("week=");
   });
   it("keeps the day when a write leaves the parsed view as it was", () => {
     for (const [begin, patch] of [

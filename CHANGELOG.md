@@ -28,6 +28,9 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - Sessions, tools, MCP servers, skills and projects open their sheet over every page, Limits included. From Limits, the command palette and the right-click menu no longer send you to Activity, and the projects in What used this window and Commits a point, by project open the right-click menu.
 - Each page shows only the filters that change it: those of the whole page in the header beside the heading, and a section's own (Limits' range) in that section's header.
 - The docs site lists the pages in the navigation's order, and the Insights page is now Judgments, at the same address.
+- Activity's Overview is a workbench. Its tables sit in tabs under the chart: Sessions, Projects, Tools and MCP, and Loops and tests, with the tab kept in the address (`tab=`). Loops and tests shows the five newest error loops and failed test runs, with "Show all" for the rest. The seven drawers and the section index are gone; at 1440×900 the work chart and the tab list fit the first screen.
+- Activity's work chart draws errors per 100 tool calls on its own track under the bars, on the same days or weeks, in place of a line on a second axis. Week bars can be selected now, by click or Enter: a selected day or week narrows every tab to its days (Projects and Failed test runs too), shows a chip beside the metric switch, and clears with the chip or Escape on the chart. The week is kept in the address (`week=`).
+- Activity has five tiles, each a way in: Sessions opens the Sessions tab, Errors per 100 calls opens Errors, Test runs passed opens the failed test runs, Subagents opens Projects by subagent share, Output speed opens Sessions by active time. Output speed gets a trend line per chart bucket, and on a Codex-only view gives way to a note. The median session moves into the Sessions tile, and the prompts interrupted, with turns and tool calls per prompt, to a line under the heading.
 
 - Context is shorter and leads with what to act on:
   - The tips are one strip of short items under the heading, at most four before "Show N more"; an item opens its evidence, advice and sessions in place.
@@ -69,6 +72,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
   - Insights shows the model-judged tag once, in the page heading.
 
 - Text follows the browser's default font size: font sizes are relative, chart labels scale with them, and nothing is cut off at 200%. In Chrome and Edge 146+ the dashboard also follows the operating system's text scale.
+
+### Removed
+
+- Activity's Prompts by hour heatmap, and `work_hours` in `/api/usage`. To spot a script by its hours, sort the Sessions tab by prompts and read the start times.
 
 ### Fixed
 

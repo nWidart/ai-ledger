@@ -1,23 +1,23 @@
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { SessionSort, View } from "../../api";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import type { SessionSort, Span, View } from "../../api";
 import { DataTable } from "../../components/DataTable";
-import { Drawer } from "../../components/Drawer";
 import { HowMeasured } from "../../components/HowMeasured";
 import { Toggletip } from "../../components/Toggletip";
 import { SortTh, type SortBy } from "../../components/Sort";
 import { ProjectName } from "../../components/ProjectDot";
 import { openSessionSheet, pickRow, sessName, shortId } from "../../components/sheets/session";
-import { big, dayLabel, dur, num, pct, plural, usd, when } from "../../format";
+import { big, dur, num, pct, plural, usd, when } from "../../format";
 import { useDebouncedValue } from "../../components/useDebounced";
 import { queries } from "../../queries";
 
-/** What the sessions table is limited to: a search, sessions near the context limit, or one day. */
-export interface SessFilter { q: string; near: boolean; day: string }
-export const NO_FILTER: SessFilter = { q: "", near: false, day: "" };
+/** What the sessions table is limited to: a search, sessions near the context limit, and the chart's selection (day, its
+ *  first day, none for the range; days, 1 or a week's 7). */
+export interface SessFilter { q: string; near: boolean; day: string; days: Span }
+export const NO_FILTER: SessFilter = { q: "", near: false, day: "", days: 1 };
 
 const COLS = 11;
-const WHOLE = "Whole-session figure, not only the selected day";
+const WHOLE = "Whole-session figure, not only the selected days";
 // The columns: label, the server's sort key (none: not sortable), class, title; whole: a whole-session figure on a day.
 const HEAD: [string, SessionSort | null, string, string?, boolean?][] = [
   ["Session", "first_ts", ""], ["Project", null, ""], ["Active", "duration_s", "num opt", "Active time: pauses over 20 minutes left out"], ["Prompts", "prompts", "num opt"],
@@ -34,21 +34,21 @@ const ORDER: Record<SessionSort, [string, string]> = {
 };
 
 /** Every session in the view, paged on the server so search finds old ones too, and sorted there so a sort orders them all.
- *  An infinite query on the view, the filters and the sort: loads when open, from the first page when any of them changes
- *  (the rows shown stay, inert, until the new first page lands). When an ingest or Refresh brings new data, invalidation
- *  refetches the loaded pages in order, so the rows refresh in place and keep focus. sort: the page's, none for today's order. */
-export function SessionsDrawer({ view, count, filter, onFilter, sort, onSort, selected }: {
-  view: View; count: number; filter: SessFilter; onFilter: (f: SessFilter) => void; sort: SortBy<SessionSort> | null; onSort: (s: SortBy<SessionSort>) => void;
+ *  The Sessions tab's panel: an infinite query on the view, the filters and the sort, loaded while the tab shows, from the
+ *  first page when any of them changes (the rows shown stay, inert, until the new first page lands). When an ingest or
+ *  Refresh brings new data, invalidation refetches the loaded pages in order, so the rows refresh in place and keep focus.
+ *  sort: the page's, none for today's order. */
+export function SessionsPanel({ view, filter, onFilter, sort, onSort, selected }: {
+  view: View; filter: SessFilter; onFilter: (f: SessFilter) => void; sort: SortBy<SessionSort> | null; onSort: (s: SortBy<SessionSort>) => void;
   selected: string;
 }) {
-  const [open, setOpen] = useState(false);
   const body = useRef<HTMLTableSectionElement>(null), search = useRef<HTMLInputElement>(null), focusRow = useRef(-1);
   // Searching waits for a pause in typing; clearing the box searches at once.
   const debounced = useDebouncedValue(filter.q, 200), qt = (filter.q ? debounced : "").trim();
   const narrowed = !!(qt || filter.near || filter.day);
   const { data, error, isFetching, isPlaceholderData, isFetchNextPageError, fetchNextPage, refetch } = useInfiniteQuery({
-    ...queries.sessionPages(view, { q: qt, near: filter.near, day: filter.day, sort: sort?.key, desc: sort?.desc }),
-    enabled: open, placeholderData: keepPreviousData,
+    ...queries.sessionPages(view, { q: qt, near: filter.near, day: filter.day || undefined, days: filter.day ? filter.days : undefined, sort: sort?.key, desc: sort?.desc }),
+    placeholderData: keepPreviousData,
   });
   const rows = useMemo(() => data?.pages.flatMap(p => p.sessions) ?? [], [data]);
   const total = data?.pages.at(-1)?.total ?? 0;
@@ -72,17 +72,15 @@ export function SessionsDrawer({ view, count, filter, onFilter, sort, onSort, se
     : `Could not refresh the sessions (${error.message}).` : undefined;
   const loadingHint = stale && busy ? (qt ? `Searching for “${qt}”…` : "Loading sessions…") : failed ? (qt ? `Search for “${qt}” failed.` : "Sessions failed to load.") : "";
 
-  const order = sort ? ORDER[sort.key][sort.desc ? 0 : 1] : filter.near ? "nearest the limit first" : filter.day ? "by their cost on that day" : "newest first";
+  const order = sort ? ORDER[sort.key][sort.desc ? 0 : 1] : filter.near ? "nearest the limit first" : filter.day ? `by their cost on ${filter.days === 1 ? "that day" : "those days"}` : "newest first";
   const hint = moreError ?? (loadingHint || (failed ? "" : `${plural(total, "session")}${narrowed ? " match" : ""}` + (total ? `, ${order}. `
     + `${rows.length < total ? `Showing ${num(rows.length)}. ` : ""}Select a session for details.` : ".")));
   return (
-    <Drawer id="d-sessions" title="Sessions" count={num(count)} description="Duration, context, failures, compactions and commits per session" onToggle={setOpen}>
+    <div id="sessions">
       <div className="tools-row">
         <input type="search" ref={search} value={filter.q} placeholder="Search by title, session id, project or branch" aria-label="Search sessions"
           onChange={e => onFilter({ ...filter, q: e.target.value })} />
         <label className="chk"><input type="checkbox" checked={filter.near} onChange={e => onFilter({ ...filter, near: e.target.checked })} /> Near context limit only</label>
-        {filter.day && <span className="daychip"><span>Active on {dayLabel(filter.day, true)}</span>
-          <button type="button" aria-label="Show sessions on every day" title="Every day" onClick={() => { onFilter({ ...filter, day: "" }); search.current?.focus(); }}>✕</button></span>}
       </div>
       <div className="hint"><span aria-live="polite">{hint}</span>
         <HowMeasured what="the session count">A session counts here when it has a request in the range; the Judgments view counts sessions by their start time, so the two totals can differ slightly.</HowMeasured></div>
@@ -103,11 +101,11 @@ export function SessionsDrawer({ view, count, filter, onFilter, sort, onSort, se
               <td className="num">{big(s.peak_context)}{s.near_limit && <> <span className="chip warn" title={`${pct(s.context_share)} of the context window`}>{pct(s.context_share)}</span></>}</td>
               <td className={"num opt" + (s.errors ? " bad" : "")}>{num(s.errors)}</td><td className="num opt2">{num(s.compactions)}</td><td className="num opt">{num(s.commits)}</td>
               <TestsCell passed={s.tests_passed} failed={s.tests_failed} /></tr>)
-            : !busy && open ? <tr><td colSpan={COLS} className="empty">{narrowed ? "No sessions match." : "No sessions in this range."}</td></tr> : null}
+            : !busy ? <tr><td colSpan={COLS} className="empty">{narrowed ? "No sessions match." : "No sessions in this range."}</td></tr> : null}
         </tbody>
       </DataTable>
       {rows.length < total && !failed && <button type="button" className="linkish more" disabled={busy} onClick={more}>Show more sessions</button>}
-    </Drawer>
+    </div>
   );
 }
 

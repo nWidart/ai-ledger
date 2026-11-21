@@ -4,7 +4,7 @@ description: What got done per day or week, by project, and what needs your atte
 spec: [usage-dashboard]
 ---
 
-Activity answers one question: what did the agents get done in this view, and where did they struggle? It counts commits, prompts, sessions and active days, and it lists error loops, sessions near the context limit, flaky tools and failed test runs. Its heading, Needs attention and Project metrics show no cost figure; [Cost](/ai-ledger/pages/cost/) leads with cost. The Sessions drawer and the sheets show each session's estimated cost.
+Activity answers one question: what did the agents get done in this view, and where did they struggle? It counts commits, prompts, sessions and active days, and it lists error loops, sessions near the context limit, flaky tools and failed test runs. Its heading, Needs attention and Project metrics show no cost figure; [Cost](/ai-ledger/pages/cost/) leads with cost. The Sessions tab and the sheets show each session's estimated cost.
 
 The page follows the filters at its top. Every figure below describes the selected project, time range and source.
 
@@ -17,15 +17,13 @@ import vitals from "../../../assets/shots/activity-vitals.png";
 import vitalsLight from "../../../assets/shots/activity-vitals-light.png";
 import work from "../../../assets/shots/activity-work.png";
 import workLight from "../../../assets/shots/activity-work-light.png";
-import hours from "../../../assets/shots/activity-hours.png";
-import hoursLight from "../../../assets/shots/activity-hours-light.png";
 
 ## Views
 
 A switch above the heading picks the view: **Overview** or **Judgments**.
 
 - Overview is the default. Judgments is in the address as `view=judgments`, so a reload or a copied link opens the same view, and Back returns to the view before.
-- A switch keeps the project, the range, the source and Include automated. It drops the filters only the other view has: Overview's session search, near-limit filter and selected day, and the Judgments view's outcome and friction filters.
+- A switch keeps the project, the range, the source and Include automated. It drops the filters only the other view has: Overview's session search, near-limit filter, selected day or week and tab, and the Judgments view's outcome and friction filters.
 - With **Codex** as the source, Judgments cannot be picked, and the text beside the switch says why: "Codex writes no facets: /insights judges Claude Code sessions only." A link to the Judgments view with Codex as the source opens Overview.
 
 ## Filters
@@ -39,13 +37,11 @@ A switch above the heading picks the view: **Overview** or **Judgments**.
 
 The filters live in the page URL. The project filter changes only through these controls, or through a "Filter dashboard to" button in a sheet; selecting a project or session elsewhere opens a sheet and leaves the filter alone. See [Filters](/ai-ledger/everywhere/filters/) for how they behave on every page.
 
-A selected day is cleared in the same step as any change of project, range or source.
+A selected day or week is cleared in the same step as any change of project, range or source.
 
-## Section index
+## Layout
 
-The page has a section index (Overview, Attention, Work, Health) and seven drawers (Sessions, Projects, Tools, MCP & hooks, Loops, Tests, Hours). A drawer is a table folded behind its title. Every drawer is closed when the page loads, and one opens at a time: opening a drawer closes the open one. Opening one from a card or chart scrolls to it.
-
-The page reads top to bottom: the view switch, the heading, Needs attention, the work chart, then Work health and the drawers.
+The page reads top to bottom: the view switch, the heading with the prompts interrupted line, Needs attention, the work chart, Work health, then the [tabs](#tabs) that hold the tables. At 1440×900 the work chart and the tab list fit in the first screen. The page has no section index and no drawers.
 
 ## Panels
 
@@ -61,6 +57,7 @@ The page reads top to bottom: the view switch, the heading, Needs attention, the
 - With one project selected, the heading adds "on" and the project. With the All range, it adds "since" and the first day with a session, and shows no change.
 - Commits show their change against the previous period of equal length: "up from", "down from", or "unchanged".
 - With no requests in the view, the heading reads "No agent activity in the last 30 days." (or "yet" for All). With a source selected, it names the source in place of "agent".
+- A line under the heading gives the share of prompts interrupted, with its change (marked worse when it goes up), then the turns and tool calls per prompt: "11.2% of prompts interrupted, up from 10.6%; 4.8 turns and 7.3 tool calls per prompt."
 
 **Banner** "Automated projects file ignored" appears under the navigation, on every page, when the automated projects file cannot be used. It names the file and the reason. See [Filters](/ai-ledger/everywhere/filters/#include-automated).
 
@@ -74,24 +71,27 @@ The page reads top to bottom: the view switch, the heading, Needs attention, the
 
 | Line | Condition | Action |
 | --- | --- | --- |
-| N error loops: a tool failed 3+ times in a row. | At least one error loop. Marked as needing action. | See loops opens the Error loops drawer. |
-| N sessions reached 80%+ of the context window. | At least one session at 80% or more. | See it or See them opens the Sessions drawer, limited to those sessions, nearest the limit first. |
-| N tools fail over 10% of calls, worst *tool* (rate). | A flaky tool: one that failed more than 10% of at least 20 calls. | See tools opens the Tools drawer with those tools first. |
-| N failed test runs of M. | At least one failed test or build run. | See tests opens the Failed test runs drawer. |
+| N error loops: a tool failed 3+ times in a row. | At least one error loop. Marked as needing action. | See loops opens the Loops and tests tab, on Error loops. |
+| N sessions reached 80%+ of the context window. | At least one session at 80% or more. | See it or See them opens the Sessions tab, limited to those sessions, nearest the limit first. |
+| N tools fail over 10% of calls, worst *tool* (rate). | A flaky tool: one that failed more than 10% of at least 20 calls. | See tools opens the Tools and MCP tab with those tools first. |
+| N failed test runs of M. | At least one failed test or build run. | See tests opens the Loops and tests tab, on Failed test runs. |
+
+Each action scrolls to its tab and moves the focus into it.
 
 The card's title reads "N things to look at". With none of the four, it reads "Nothing needs attention".
 
 ### Work per day, or per week
 
-<ThemedImage dark={work} light={workLight} alt="Activity's Work per day chart: commits per day, stacked by project, with errors per 100 calls on the right axis." />
+<ThemedImage dark={work} light={workLight} alt="Activity's Work per day chart: commits per day, stacked by project, with errors per 100 calls on a thin track under the bars." />
 
-**Shows** one bar per day, or per week, from the first day with a session to the end of the range. Idle days show as zero.
+**Shows** two tracks on one row of days or weeks, from the first day with a session to the end of the range: the work as bars on top, errors per 100 tool calls as a line on a thin track under them. Idle days show as zero.
 
 **Figures**
 
 - The bars count Commits, Prompts or Sessions, as chosen. Commits is the default. The choice is kept in the browser.
 - With several projects, each bar stacks the projects that have a color of their own, as Cost does, and puts every other project, and sessions with no project, in Other. With one project, or with no project that has a color, the bars are plain.
-- A line shows errors per 100 tool calls against a right-hand axis. The failed count stays in the tooltip. A view with no tool calls shows no line, axis or legend entry.
+- The lower track shows errors per 100 tool calls, against its own scale on the left (0 and its top). The failed count stays in the tooltip. A view with no tool calls shows no lower track or legend entry.
+- A bar with fewer than 50 tool calls, when another has 50 or more, draws its rate as a hollow dot and does not set the scale; a rate above the scale stops at the top of the track. The legend keys the hollow dot "Under 50 calls".
 - A label names the peak bar.
 - The tooltip lists the commits, prompts and sessions of the bar, the project parts of the chosen measure, errors per 100 calls, and failed tool calls out of all tool calls.
 - When the span from the first day with a session to today is over 60 days, the chart shows one bar per week, starting Monday on the machine's clock, and the title reads "Work per week". A week bar is labeled "Week of Oct 5". The week that holds the end of the range reads "so far"; a first week cut by the start of the range reads "from" its start date. Commit and prompt totals equal the sum of the bars. A session counts once in each week it touches, so the Sessions bars can add up to more than the total.
@@ -99,38 +99,45 @@ The card's title reads "N things to look at". With none of the four, it reads "N
 **Controls**
 
 - **Commits, Prompts, Sessions** switch the measure.
-- Select a day, or focus the chart, use the arrow keys (Home and End jump to the ends) and press Enter, to select that day. The Sessions drawer opens limited to the sessions that ran on that day. Week bars cannot be selected; a hint says to choose a shorter range.
+- Select a bar to select its day or week. With the keyboard, focus the chart, use the arrow keys (Home and End jump to the ends) and press Enter. An idle bar selects nothing.
+- A chip beside the metric switch names the selection, "Nov 4" or "Week of Nov 2". Its ✕ clears it. Escape on the chart clears it too: the first Escape ends a reading with the arrow keys, the next one clears the selection. Escape in a sheet leaves it.
 - **Show data table** opens a named table under the chart: one row per day or week, the measure by project with Other, its total, and errors per 100 calls. It is closed on every page load.
 
-A selected day also narrows Tools, MCP servers, skills and hooks, and Error loops to that day, and the Sessions drawer shows each session's figures for that day. A note in each narrowed drawer says so and offers "Show the whole range". The heading, Needs attention, Work health and Project metrics keep the range's figures.
+A selected day or week narrows every tab to its days in the view: Sessions (each session's figures for those days), Project metrics, Tools, MCP servers, skills and hooks, Error loops and Failed test runs. A first week cut by the start of the range covers only its days in the range. The active tab stays. A selection drops the session search, the near-limit filter and the Sessions sort. A note at the top of the tab names the days and offers "Show the whole range". The heading, Needs attention, the chart and Work health keep the range's figures.
+
+The selection is kept in the URL, as `day=2026-11-04` or `week=2026-11-02` (the week's Monday), without a history entry. A date that is not a real calendar date reads as none.
 
 ### Work health
 
-<ThemedImage dark={vitals} light={vitalsLight} alt="Activity's Work health row: tiles for sessions, errors per 100 calls, test runs passed, prompts interrupted, subagents, median session and output speed, each with its change against the previous period." />
+<ThemedImage dark={vitals} light={vitalsLight} alt="Activity's Work health row: tiles for sessions, errors per 100 calls, test runs passed, subagents and output speed, each with its change against the previous period." />
 
-**Shows** seven tiles, under the work chart. Each tile shows its change against the previous period of equal length, as ", up from X", ", down from X" or ", unchanged". The All range shows no change.
+**Shows** five tiles, under the work chart. Each tile is a link or a button to the place that explains it. Each shows its change against the previous period of equal length, as ", up from X", ", down from X" or ", unchanged". The All range shows no change.
 
-| Tile | Figure | Note under it | Marked worse when |
-| --- | --- | --- | --- |
-| Sessions | Sessions in the view | "N active days, across M projects." Active days show their change too. An active day is a day with at least one user prompt; a session that works alone on a day with no prompt does not make it active. | Never judged. |
-| Errors per 100 calls | Failed calls per 100 tool calls | "N failed of M tool calls." | It goes up. |
-| Test runs passed | Share of test and build runs that passed, or "n/a" | "N passed, M failed of K test or build runs." | It goes down. |
-| Prompts interrupted | Share of prompts interrupted | "N of M prompts; X turns and Y tool calls per prompt." | It goes up. |
-| Subagents | Share of tokens that came from subagents | "of tokens came from subagents." | Never judged. |
-| Median session | Median active time of a session | "N sessions, X active and Y thinking in all." When a session records model time: "…; X waiting on the model and Y running tools." | Never judged. |
-| Output speed | Output tokens per second of model time, as "98 tok/s", or "n/a" | "Output tokens per second of model time, in N sessions.", "Codex transcripts record no model time." when every session in the view is a Codex session, or "No session in this view records model time." | It goes down. |
+| Tile | Figure | Note under it | Marked worse when | Opens |
+| --- | --- | --- | --- | --- |
+| Sessions | Sessions in the view | "N active days, across M projects; median session X." Active days show their change too. An active day is a day with at least one user prompt; a session that works alone on a day with no prompt does not make it active. | Never judged. | The Sessions tab. |
+| Errors per 100 calls | Failed calls per 100 tool calls | "N failed of M tool calls." | It goes up. | [Errors](/ai-ledger/pages/errors/), for the same project, range and source. |
+| Test runs passed | Share of test and build runs that passed, or "n/a" | "N passed, M failed of K test or build runs." | It goes down. | The Loops and tests tab, on Failed test runs. |
+| Subagents | Share of tokens that came from subagents | "of tokens came from subagents." | Never judged. | The Projects tab, sorted by Subagents. |
+| Output speed | Output tokens per second of model time, as "98 tok/s", or "n/a" | "X waiting on the model and Y running tools, in N sessions; Z thinking.", or "No session in this view records model time." | It goes down. | The Sessions tab, sorted by active time. |
+
+The Output speed tile draws a small line of output speed per bar of the work chart, when two bars or more hold a session that records model time. A session counts in the bar of its first request in the view. When every session in the view is a Codex session, the tile gives way to a note under the row: "Output speed: Codex transcripts record no model time."
 
 A session's active time leaves out every pause over 20 minutes. Two figures that display the same value read "unchanged".
 
 Model time and tool time come from the `cost-state` line that Claude Code writes when a session ends, in versions from about late October 2026. Codex sessions and older Claude Code sessions record none, and count in neither figure. Output speed divides the output tokens of the sessions that record model time by that model time. These are whole-session figures: they include subagent work and the session's time outside the range. Model time can exceed active time, because subagents run at the same time. On a store from an earlier version, run `ai-ledger rebuild` once, with the app stopped, to fill them for sessions already ingested; see [Upgrade and rebuild](/ai-ledger/start/upgrade/).
 
-## Drawers
+## Tabs
 
-Each drawer title carries a count. The Sessions, Project metrics and Tools tables sort by a column: select a header; the sorted header carries `aria-sort`.
+Four tabs under Work health hold the tables: **Sessions**, **Projects**, **Tools and MCP**, **Loops and tests**. Sessions is the default. The tab is kept in the URL as `tab=projects`, `tab=tools` or `tab=loops`, without a history entry; an unknown tab reads as Sessions.
+
+The tab list is one tab stop. Left and Right move between the tabs and wrap, Home and End jump to the ends, and Enter or Space opens the tab under the focus. Moving the focus alone opens nothing.
+
+The Sessions, Project metrics and Tools tables sort by a column: select a header; the sorted header carries `aria-sort`.
 
 ### Sessions
 
-**Shows** every session in the view, one row each. The drawer title counts the sessions in the view. Its How measured toggletip says a session counts here when it has a request in the range, and that the Judgments view counts sessions by their start time, so the two totals can differ slightly.
+**Shows** every session in the view, one row each. Its How measured toggletip says a session counts here when it has a request in the range, and that the Judgments view counts sessions by their start time, so the two totals can differ slightly.
 
 **Columns**
 
@@ -152,14 +159,15 @@ Each drawer title carries a count. The Sessions, Project metrics and Tools table
 
 - Search by title, session id, project or branch.
 - **Near context limit only** limits the list to sessions at 80% or more of the context window.
-- A day chip, "Active on *day*", shows when a day is selected. Its ✕ shows every day again.
-- Every column except Project sorts, over the whole matching list on the server. Without a chosen sort, the order is newest first; with the near-limit filter, nearest the limit first; with a day, by cost on that day.
+- Every column except Project sorts, over the whole matching list on the server. Without a chosen sort, the order is newest first; with the near-limit filter, nearest the limit first; with a day or week selected on the chart, by cost on those days, all of them on one page.
 - A row opens the session sheet.
 - **Show more sessions** loads the next page.
-- The day, search text and near-limit filter are kept in the URL and restored on reload. The sort is not kept. A day that is not a real calendar date reads as no day.
-- With a day selected, every figure is that day's, except Peak context and Compactions, which stay whole-session figures; a tooltip says so.
+- The search text and near-limit filter are kept in the URL and restored on reload. The sort is not kept.
+- With a day or week selected, every figure is those days', except Peak context and Compactions, which stay whole-session figures; a tooltip says so.
 
-### Project metrics
+### Projects
+
+The Projects tab holds the Project metrics table.
 
 **Shows** one row per project in the view, ordered by sessions, most first. There is no cost column.
 
@@ -169,42 +177,27 @@ With three or more projects, the Errors / 100 and Error loops cells are tinted w
 
 A row opens the project sheet. Every column header sorts, in the browser.
 
-### Tools
+### Tools and MCP
 
-**Shows** every tool called in the view, most calls first.
+**Tools** shows every tool called in the view, most calls first.
 
 **Columns** Tool, Calls, Failed (failure rate), p50 and p95 (median and 95th-percentile time from `tool_use` to `tool_result`).
 
 See tools in Needs attention puts the tools failing over 10% of at least 20 calls first, until you choose a column. A row opens the tool sheet.
 
-### MCP servers, skills and hooks
+Under Tools, three more tables: **MCP servers** (Server, Calls, Failed), **Skills** (Skill, Calls, Failed) and **Hooks** (Hook, Runs, Failed, Avg). A hook is named by its command cut to the last segment of each path, with its event under it. A row of the MCP servers or Skills table opens its sheet. Hooks have no sheet.
 
-**Shows** three tables: MCP servers (Server, Calls, Failed), Skills (Skill, Calls, Failed) and Hooks (Hook, Runs, Failed, Avg). A hook is named by its command cut to the last segment of each path, with its event under it. A row of the MCP servers or Skills table opens its sheet. Hooks have no sheet.
+### Loops and tests
 
-### Error loops
+Two lists side by side, each headed with its count, each showing its five newest rows. **Show all N** expands a list in place to every row the page carries; **Show fewer** folds it back. When the page carries fewer rows than the count, the button reads "Show the 50 newest", and the list says "Showing the 50 newest of N".
 
-**Shows** the newest error loops in the view: the same tool failing three or more times in a row within a session. When there are more than the page carries, a hint says "Showing the N newest of M".
+**Error loops** are the same tool failing three or more times in a row within a session.
 
 **Columns** When, Project, Session (opens the session sheet), Tool, Failures, and an "Open in Errors" link to the loop's first failure on [Errors](/ai-ledger/pages/errors/).
 
-### Failed test runs
-
-**Shows** the newest failed test and build runs. The drawer count is every failed run in the view. A list cut at the newest 50 says "Showing the 50 newest of N".
+**Failed test runs** are the test and build runs that failed. The count is every failed run in the view.
 
 **Columns** When, Project, Session (opens the session sheet), Command, and an "Open in Errors" link to the failure on Errors.
-
-### Prompts by hour
-
-<ThemedImage dark={hours} light={hoursLight} alt="Activity's Prompts by hour heatmap: prompts by weekday and hour, darker cells holding more prompts." />
-
-**Shows** a heatmap of prompts by weekday (Monday first) and hour, on the machine's local clock. A darker cell holds more prompts. The heatmap filters nothing, so it waits in this drawer, out of the page's flow.
-
-**Figures**
-
-- A summary line names the busiest hour and the busiest day, and counts ties ("and 2 others"), then gives the total number of prompts.
-- With no prompts in the range, the drawer reads "No prompts in this range."
-
-**Controls** The heatmap is one tab stop. The arrow keys move between cells, and Home and End jump to the first and last hour of the row. The cell under the cursor is read under the grid.
 
 ## Sheets
 

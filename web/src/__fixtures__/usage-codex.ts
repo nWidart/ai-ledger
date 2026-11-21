@@ -135,13 +135,7 @@ export default {
    "failed_calls": 1
   }
  ],
- "work_hours": [
-  {
-   "dow": 4,
-   "hour": 10,
-   "prompts": 1
-  }
- ],
+ "speed_trend": [],
  "unpriced": [],
  "models": [
   {

@@ -21,7 +21,7 @@ Compare like with like: the same project, the same range, and figures that both 
 
 1. On [Cost](/ai-ledger/pages/cost/), set the range to **30d** and **Stack by** to **Agent**. Select the **Claude Code** key in the chart's legend: it sets the source filter. In **Project spend and change**, select each project: its sheet gives its commits. Select the key again to clear it, then do the same with **Codex**. Pick a project where each agent has 5 commits or more (a rule of thumb). With fewer, one long session decides the figure.
 2. Pick that project in the project picker, and set the source to **Claude Code**. On Cost, open **Tokens and cache** and write down **Per commit** and **Per prompt**.
-3. On [Activity](/ai-ledger/pages/activity/), write down the heading's commits and prompts, and the **Work health** tiles **Test runs passed** and **Prompts interrupted**.
+3. On [Activity](/ai-ledger/pages/activity/), write down the heading's commits and prompts, the share of prompts interrupted in the line under the heading, and the **Work health** tile **Test runs passed**.
 4. On [Context](/ai-ledger/pages/context/), write down **Added per prompt** and **Sessions with a compaction** in **Growth**.
 5. Set the source to **Codex** and read the same figures again on the same pages.
 6. Open [Limits](/ai-ledger/pages/limits/) with the source at **All**. Read the heading, the status in each card's header, and the suggestion if one shows.
@@ -98,7 +98,7 @@ After 14 days of work in the project, set the range to **14d** and pick the proj
 | Windows at limit | Limits, card headers, source at **All** | No card reads **at its limit** or **runs out**. |
 | **avg N% unused** | Limits, **Past windows**, source at **All** | A smaller share for the provider you moved work to. |
 
-If **Cost / commit** did not fall, check that the kind of task you moved is what the project's commits are about: read the session titles in Activity's **Sessions** drawer for each source. If one agent has fewer than 5 commits in the range, wait one more week.
+If **Cost / commit** did not fall, check that the kind of task you moved is what the project's commits are about: read the session titles in Activity's **Sessions** tab for each source. If one agent has fewer than 5 commits in the range, wait one more week.
 
 ## Related
 

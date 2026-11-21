@@ -132,11 +132,11 @@ const SCENES = {
     await h.click(btn(page, "Prompts"));
     const chart = page.locator("#work svg").first();
     await h.click(chart, { dx: 0.82, dy: 0.7, pause: 1200 });
-    await h.scrollTo(page.locator("#d-sessions"));
-    await h.click(page.locator("#d-sessions tr.pick"), { dx: 0.2, pause: 2600 });
+    await h.scrollTo(page.locator("#workbench"), 20);
+    await h.click(page.locator("#sessions tr.pick"), { dx: 0.2, pause: 2600 });
     await page.keyboard.press("Escape"); await h.wait(600);
-    await h.click(page.locator("#d-tools .drawer-toggle"), { dx: 0.05, pause: 600 });
-    await h.click(sel(page, "#d-tools tr", "Edit"), { dx: 0.1, pause: 2600 });
+    await h.click(page.getByRole("tab", { name: "Tools and MCP" }), { pause: 600 });
+    await h.click(sel(page, "#tools tr", "Edit"), { dx: 0.1, pause: 2600 });
     await page.keyboard.press("Escape"); await h.wait(800);
   },
   async cost(h, start) {
@@ -315,7 +315,7 @@ const shoot = async (target, path, options = {}) => { await target.screenshot({ 
 // [panel name, selector, { drawer: id of the drawer to open first, max: crop height, url: another path to open first (a tab) }]
 const SHOT_PAGES = {
   activity: { url: "/usage?range=30", panels: [
-    ["attention", "#attention"], ["vitals", "#vitals"], ["work", "#work"], ["hours", "#hours", { drawer: "d-hours" }]] },
+    ["attention", "#attention"], ["vitals", "#vitals"], ["work", "#work"]] },
   cost: { url: "/cost?range=30", panels: [
     ["overview", "#overview"], ["spend", "#spend"], ["projects", "#projects"], ["highlights", "#insights"],
     ["models", ".split > section.panel"], ["tokens", "#d-tokens", { drawer: "d-tokens" }]] },
@@ -386,15 +386,15 @@ async function everywhereShots(b, scheme) {
   await page.waitForTimeout(1200);
   await shoot(page.locator("dialog.palette"), shotPath("everywhere-palette", scheme));
   await page.keyboard.press("Escape"); await page.waitForTimeout(400);
-  // The menu opens on a project row, to the right of the names: the shot holds the drawer and the menu, cropped together.
-  await openDrawer(page, "d-projects");
-  const row = page.locator("#d-projects tbody tr", { hasText: "atlas-api" }).first();
+  // The menu opens on a project row, to the right of the names: the shot holds the table and the menu, cropped together.
+  await page.getByRole("tab", { name: "Projects" }).click();
+  const row = page.locator("#projects tbody tr", { hasText: "atlas-api" }).first();
   await row.scrollIntoViewIfNeeded();
   await row.click({ button: "right", position: { x: 260, y: 12 } });
   const menu = page.locator(".menu-pop");
   await menu.waitFor(); await page.waitForTimeout(500);
   await page.mouse.move(0, 0); // the menu stays open; the pointer leaves the row so no hover tint hides the selection
-  const [r, m] = [await page.locator("#d-projects").boundingBox(), await menu.boundingBox()], pad = 16;
+  const [r, m] = [await page.locator("#projects").boundingBox(), await menu.boundingBox()], pad = 16;
   const x = Math.max(0, Math.min(r.x, m.x) - pad), y = Math.max(0, Math.min(r.y, m.y) - pad);
   await shoot(page, shotPath("everywhere-context-menu", scheme), { clip: {
     x, y, width: Math.min(1280, Math.max(r.x + r.width, m.x + m.width) + pad) - x, height: Math.min(800, Math.max(r.y + r.height, m.y + m.height) + pad) - y } });

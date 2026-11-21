@@ -586,12 +586,6 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual([(r["day"], r["project"], r["sessions"], r["prompts"]) for r in weekly["work_projects"]],
                          [("2026-09-28", "bar", 1, 1), ("2026-11-02", "foo", 2, 3), ("2026-11-02", "observer-sessions", 1, 2)])
 
-    def test_work_hours(self):
-        for u in (self.all, self.foo7, self.auto):
-            self.assertEqual(sum(r["prompts"] for r in u["work_hours"]), u["totals"]["prompts"])
-            for r in u["work_hours"]:
-                self.assertTrue(1 <= r["dow"] <= 7 and 0 <= r["hour"] <= 23 and r["prompts"] > 0, r)
-
     def test_failed_tests(self):
         got = self.foo7["failed_tests"]
         self.assertEqual(got, [dict(id="t07", session_id="s1", title=None, project="foo", source="claude", command="",
@@ -655,15 +649,26 @@ class MetricsTest(unittest.TestCase):
             metrics.session_list(c, "foo", 7, day="2026-11-04", prices=PRICES, today=TODAY)
         self.assertEqual(narrow.call_count, 2)
         # Every call of foo's 7 days falls on Nov 4.
-        self.assertEqual(d["day"], "2026-11-04")
-        for k in ("tools", "mcp", "skills", "hooks", "error_loops"):
+        self.assertEqual((d["day"], d["days"]), ("2026-11-04", 1))
+        for k in ("tools", "mcp", "skills", "hooks", "error_loops", "failed_tests"):
             self.assertEqual(d[k], self.foo7[k], k)
-        self.assertEqual(d["error_loops_total"], 1)
+        self.assertEqual((d["error_loops_total"], d["tests_failed"]), (1, self.foo7["totals"]["tests_failed"]))
+        proj = lambda rs: [(p["project"], p["sessions"], p["commits"], p["error_loops"]) for p in rs]
+        self.assertEqual(proj(d["by_project"]), [("foo", 1, 1, 1)])  # the view's other session works on Nov 5 only
         other = metrics.day_view(c, "foo", 7, "2026-11-05", today=TODAY)
-        self.assertEqual([other[k] for k in ("tools", "mcp", "skills", "hooks", "error_loops", "error_loops_total")], [[], [], [], [], [], 0])
+        self.assertEqual([other[k] for k in ("tools", "mcp", "skills", "hooks", "error_loops", "error_loops_total", "failed_tests", "tests_failed")],
+                         [[], [], [], [], [], 0, [], 0])
+        # The week from Monday Nov 2 holds every day of foo's 7-day view that has work: the view's rows.
+        week = metrics.day_view(c, "foo", 7, "2026-11-02", today=TODAY, days=7, prices=PRICES)
+        self.assertEqual(week["days"], 7)
+        for k in ("tools", "error_loops", "failed_tests"):
+            self.assertEqual(week[k], self.foo7[k], k)
+        self.assertEqual(proj(week["by_project"]), proj(self.foo7["by_project"]))
         for bad in ("", "nope"):
             with self.assertRaises(ValueError):
                 metrics.day_view(c, day=bad, today=TODAY)
+        with self.assertRaises(ValueError):
+            metrics.day_view(c, day="2026-11-02", today=TODAY, days=3)
 
     def test_automated_file(self):
         tmp = tempfile.mkdtemp()
@@ -912,7 +917,6 @@ class SourceFilterTest(unittest.TestCase):
                 self.assertEqual(u["work_bucket"], "day")
                 self.assertEqual(u["work"], [dict(day="2026-11-05", sessions=1, prompts=1, commits=0, calls=calls, failed_calls=calls)])
                 self.assertEqual(u["work_projects"], [dict(u["work"][0], project="foo")])
-                self.assertEqual(sum(r["prompts"] for r in u["work_hours"]), 1)
                 self.assertEqual([(r["id"], r["session_id"], r["source"]) for r in u["failed_tests"]], [(x, sid, source) for x in failed])
                 self.assertIsNone(u["automated_file"]["error"])
                 prev = metrics.usage(c, "", 1, prices=PRICES, today=date(2026, 11, 6), source=source)["previous"]
@@ -1001,7 +1005,9 @@ class LocalDayTest(unittest.TestCase):
         self.assertEqual(u["work_bucket"], "week")
         self.assertEqual([(r["day"], r["sessions"], r["prompts"]) for r in u["work"]], [("2026-03-02", 1, 1), ("2026-03-09", 1, 1)])
         self.assertEqual([(r["day"], r["project"]) for r in u["work_projects"]], [("2026-03-02", "foo"), ("2026-03-09", "foo")])
-        self.assertEqual(sorted((r["dow"], r["hour"], r["prompts"]) for r in u["work_hours"]), [(1, 0, 1), (7, 23, 1)])
+        # The week of Mar 2 as a span: Sunday's late session only, by its local day.
+        week = metrics.session_list(self.con.cursor(), day="2026-03-02", days=7, prices=PRICES, today=date(2026, 5, 15))
+        self.assertEqual([x["session_id"] for x in week["sessions"]], ["z1"])
 
     def test_day_view_by_local_day(self):
         for day, tool_id in (("2026-03-08", "ta"), ("2026-03-09", "tb")):
@@ -1128,6 +1134,15 @@ class SessionRunsTest(unittest.TestCase):
         self.assertEqual({x["session_id"] for x in listed}, set("abcx"))
         for x in listed:
             self.assertFalse({"model_ms", "tool_ms", "timed_output"} & x.keys(), x["session_id"])
+
+    def test_speed_trend(self):
+        trend = lambda r, source="": metrics.usage(self.con.cursor(), "foo", r, prices=PRICES, today=TODAY, source=source)["speed_trend"]
+        # Over 7 days, a and b both start on Nov 4: one bucket at the total's 98 per second.
+        self.assertEqual(trend(7), [dict(day="2026-11-04", output_per_s=98.0, sessions=2)])
+        # Over all time, a's first request in the view is on Oct 20, so its whole output and model time count there.
+        self.assertEqual([(r["day"], round(r["output_per_s"], 1), r["sessions"]) for r in trend(0)],
+                         [("2026-10-20", 83.3, 1), ("2026-11-04", 142.0, 1)])
+        self.assertEqual(trend(7, "codex"), [])
 
     def test_nothing_recorded(self):
         self.assertEqual(self.totals(source="codex"), dict(model_ms=0, tool_ms=0, timed_sessions=0, output_per_s=None))
