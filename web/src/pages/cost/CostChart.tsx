@@ -130,7 +130,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScal
         <div><h2 id="chartTitle">{cost ? `Estimated cost per day${stack === "project" ? "" : ` by ${STACK_WORD[stack].noun}`}` : share ? "Token share per day" : "Tokens per day"}</h2>
           <div className="hint">{cost ? `${STACK_HINT[stack](!!d.project)} list prices.`
             : share ? "Each bar is the day's tokens split by kind. Select a kind to hide it."
-              : "Select a kind to hide it. Cache reads usually dwarf the rest; Share compares the kinds."}{showAvg ? " The 7-day average covers complete days." : ""} Select a day, or use the arrow keys and Enter, for its sessions.{zoom ? " Plus and minus zoom." : ""}</div></div>
+              : "Select a kind to hide it. Cache reads usually dwarf the rest; Share compares kinds."}{showAvg ? " The 7-day average covers complete days." : ""} Select a day, or use arrows and Enter, for its sessions.{zoom ? " Plus and minus zoom." : ""}</div></div>
         <div className="chart-ctl">
           {cost && <>
             <span className="muted" id="stackBy">Stack by</span>
