@@ -1,10 +1,12 @@
-import type { LiveListSession, LiveState } from "../../api";
+import { useState } from "react";
+import type { LiveListSession, LiveSession, LiveState } from "../../api";
 import { SOURCE_LABELS } from "../../components/Filters";
 import { ProjectName } from "../../components/ProjectDot";
 import { num, pct, plural, usd } from "../../format";
 import { subjectAttrs } from "../../components/menu/subject";
-import { NEAR_FULL, StateTag } from "./AgentPanel";
-import { groupSessions, INFERRED_WHY, stateNow, stateText } from "./live";
+import { NEAR_FULL, StateTag, Strip } from "./Strip";
+import { Stream } from "./Stream";
+import { groupSessions, INFERRED_WHY, latestText, NO_FILTERS, stateNow, stateText, type LaneChoices } from "./live";
 
 /** What a state's hover text says, for where it is no hover: a state's detail, or why it is inferred. */
 const stateWhy = (st: LiveState, now: number) => (st.inferred ? INFERRED_WHY[st.kind] : undefined) ?? stateText(st, now).detail;
@@ -14,25 +16,53 @@ export function StateNote({ st, now }: { st: LiveState; now: number }) {
   return <><StateTag st={st} now={now} plain /><span className="sr">: {stateWhy(st, now)}</span></>;
 }
 
-/** One tile per active session, grouped as the rail is; picking one opens it in the stream. A tile names its session
- *  (data-session), as a rail entry does: LivePage keeps the keyboard focus on one that changes group. */
-export function Wall({ sessions, now, pick }: { sessions: LiveListSession[]; now: number; pick: (id: string) => void }) {
+/** A session as the page names it: its title, else its project. */
+export const nameOf = (s: Pick<LiveListSession, "title" | "project"> | undefined) => s?.title ?? s?.project ?? "session";
+
+/** One tile per active session, grouped as the rail is; selecting one pins its stream beside the tiles, or unpins it, so
+ *  the tile is a toggle. A tile names its session (data-session), as a rail entry does: LivePage keeps the keyboard focus
+ *  on one that changes group. */
+export function Wall({ sessions, now, pins, toggle }: { sessions: LiveListSession[]; now: number; pins: readonly string[]; toggle: (id: string) => void }) {
   return <section className="walls" aria-label="Active sessions">{groupSessions(sessions, now).map(g => <div key={g.id} className="group">
     <h2>{g.label} · {g.sessions.length}</h2>
     <ul className="wall" role="list" aria-label={g.label}>{g.sessions.map(s => {
-      const st = stateNow(s.state, now), share = s.context != null && s.window ? s.context / s.window : null;
-      const act = !s.latest ? "" : s.latest.kind === "prompt" ? "▸ prompt" : `${s.latest.lane ? "⤷ " : ""}${s.latest.tool} · ${s.latest.summary ?? ""}`;
+      const st = stateNow(s.state, now), share = s.context != null && s.window ? s.context / s.window : null, pinned = pins.includes(s.session_id);
       return <li key={s.session_id}>
-        <button type="button" data-session={s.session_id} {...subjectAttrs("session", s.session_id)} className={"panel tile st-" + st.kind} onClick={() => pick(s.session_id)} aria-label={`Open ${s.title ?? s.project ?? "session"}`} aria-description={stateWhy(st, now)}>
+        <button type="button" data-session={s.session_id} {...subjectAttrs("session", s.session_id)} className={"panel tile st-" + st.kind + (pinned ? " pinned" : "")}
+          onClick={() => toggle(s.session_id)} aria-pressed={pinned} aria-label={`Pin ${nameOf(s)}`} aria-description={stateWhy(st, now)}>
           <span className="top"><ProjectName project={s.project} /><StateTag st={st} now={now} plain /></span>
           {s.title && <span className="ttl" title={s.title}>{s.title}</span>}
-          <code className="act">{act}</code>
+          <code className="act">{latestText(s.latest)}</code>
           {share != null && <span className={"meter" + (share > NEAR_FULL ? " warn" : "")}><i style={{ width: `${Math.min(100, share * 100)}%` }} /></span>}
           <span className="row"><span>{share != null ? `context ${pct(share)} · ` : ""}{num(s.tools)} tools{s.errors ? <> · <span className="bad">{plural(s.errors, "error")}</span></> : null}</span>
             <span>{usd(s.cost)}</span></span>
           <span className="row muted"><code>{s.branch ?? "–"}</code><span>{SOURCE_LABELS[s.source]} · {s.model ?? "–"}</span></span>
+          {pinned && <span className="pin-mark" aria-hidden="true">Pinned</span>}
         </button>
       </li>;
     })}</ul>
   </div>)}</section>;
+}
+
+/** A stream pinned beside the tiles: its head with Open in Stream and Unpin, its strip, and its stream with its own
+ *  filters and Follow, on when pinned. The lane choices are the page's, as they are kept by lane. */
+export function Pinned({ id, name, s, error, now, text, choices, setChoices, sheet, open, unpin }: {
+  id: string; name: string; s: LiveSession | undefined; error: Error | undefined; now: number; text: boolean;
+  choices: LaneChoices; setChoices: (c: LaneChoices) => void; sheet: string; open: () => void; unpin: () => void;
+}) {
+  const [follow, setFollow] = useState(true), [filters, setFilters] = useState(NO_FILTERS);
+  return <section className="panel pin" aria-label={`Pinned: ${name}`} data-pin={id}>
+    <div className="stream-head pin-head">
+      <h2 className="stream-title" title={name}>{name}</h2>
+      <span className="spacer" />
+      <button type="button" onClick={open}>Open in Stream</button>
+      <button type="button" onClick={unpin} aria-label={`Unpin ${name}`}>Unpin</button>
+    </div>
+    {s ? <>
+      <Strip s={s} st={stateNow(s.state, now)} now={now} failedOnly={filters.errors} setFailedOnly={errors => setFilters({ ...filters, errors })} />
+      <Stream s={s} now={now} text={text} follow={follow} setFollow={setFollow} filters={filters} setFilters={setFilters}
+        choices={choices} setChoices={setChoices} sheet={sheet} />
+    </> : error ? <p className="muted loading">Could not load this session. {error.message}</p>
+      : <p className="muted loading">Loading…</p>}
+  </section>;
 }

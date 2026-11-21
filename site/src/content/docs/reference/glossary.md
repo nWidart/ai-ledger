@@ -215,16 +215,16 @@ See [Live](/ai-ledger/pages/live/). Live lists the sessions whose newest line is
 
 | Figure | Meaning | Where | Playbook |
 | --- | --- | --- | --- |
-| approval? | A shell call with no result for more than 30 seconds. Inferred. | Rail; wall; agent panel | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
-| your turn | The agent finished its turn and waits for your prompt. The label counts up. | Rail; wall; agent panel | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
+| approval? | A shell call with no result for more than 30 seconds. Inferred. | Rail; wall; status strip | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
+| your turn | The agent finished its turn and waits for your prompt. The label counts up. | Rail; wall; status strip | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
 | working | The session runs a tool or is thinking. | Rail; wall | – |
 | idle, ended | No line for 5 minutes; or a Claude Code session that you closed. | Rail; wall | – |
 | N waiting for you | The sessions in **approval?** and **your turn**. Also the count in the tab title. | Rail footer; tab title | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
-| Context window, % used | The context of the newest main-thread request over the model's window, with a mark at each compaction. The agent panel's meter takes the warning color above 80%. | Agent panel; wall tiles | [Keep context lean](/ai-ledger/improve/lean-context/) |
-| Cost, Requests, Tool calls, Errors | The selected session's figures so far. | Agent panel, **This session** | – |
-| Cache read | The share of the session's tokens read from the cache. | Agent panel, **This session** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
-| Tokens · last minute | Tokens per minute, cache reads included. | Agent panel | – |
-| Plan limits | The newest plan limit use for the session's source, with its reset time. Warning color above 80%. | Agent panel | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
+| Context window, % used | The context of the newest main-thread request over the model's window, with a mark at each compaction. The status strip's meter takes the warning color above 80%. | Status strip; rail entries; wall tiles | [Keep context lean](/ai-ledger/improve/lean-context/) |
+| Cost, Tools, Errors | The selected session's cost, tool calls and failed tool calls so far. | Status strip | – |
+| Cache read | The share of the session's prompt tokens read from the cache. | Status strip | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
+| Pulse | The last 10 minutes: the context of each main-thread request as a line, and a tick for each tool call that ended, upright for a success, ✕ for a failure. | Status strip | – |
+| Plan limits | The newest plan limit use for the session's source, with its reset time on hover. Warning color and "near" above 80%. | Status strip | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 
 ## Project
 

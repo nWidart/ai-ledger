@@ -9,7 +9,8 @@ import liveText from "../../__fixtures__/live-session-text";
 import liveCodex from "../../__fixtures__/live-session-codex";
 import { mockApi } from "../../components/sheets/testing";
 import { LivePage } from "./LivePage";
-import { groupSessions, lanesOf, likelyWaiting, mergeSession, stateNow, stateText, streamRows } from "./live";
+import { groupSessions, lanesOf, likelyWaiting, mergeSession, pulseMinutes, stateNow, stateText, streamRows } from "./live";
+import { pct, usd } from "../../format";
 import { FakeSource } from "./testing";
 import { queries } from "../../queries";
 import { renderPage, renderRouter } from "../../testing";
@@ -79,6 +80,8 @@ const laneHead = (name = /^Agent find callers of ingest/) => screen.getByRole("b
 const greps = () => screen.queryAllByRole("button", { name: /^Grep/ }).map(b => b.querySelector(".sum")!.textContent);
 /** The stream's filter bar, the tools of the rows drawn, and what the bar says is hidden. */
 const bar = () => screen.getByRole("group", { name: "Stream filters" });
+/** The status strip above the stream: the state, the context, the figures, the limits and the pulse. */
+const strip = () => screen.getByRole("group", { name: "Session status" });
 /** The connection line ("Paused", "Connection lost · reconnecting…"): the stream has a status of its own for new events. */
 const conn = () => document.querySelector<HTMLElement>("p.conn")!;
 const drawn = () => [...screen.getByLabelText("Session events").querySelectorAll(".tool .nm")].map(n => n.textContent);
@@ -287,8 +290,8 @@ describe("LivePage", () => {
     const el = await wall();
     await waitFor(() => expect(groups(el)).toEqual(["approval? · 1 w", "your turn · 1 y", "working · 2 r1 r2"]));
     expect(within(el).getAllByRole("list").map(l => l.getAttribute("aria-label"))).toEqual(["approval?", "your turn", "working"]);
-    expect(within(el).getByRole("button", { name: "Open y" }).className).toBe("panel tile st-you"); // .tile.st-you has the border
-    expect(within(el).getByRole("button", { name: "Open w" }).className).toBe("panel tile st-wait");
+    expect(within(el).getByRole("button", { name: "Pin y" }).className).toBe("panel tile st-you"); // .tile.st-you has the border
+    expect(within(el).getByRole("button", { name: "Pin w" }).className).toBe("panel tile st-wait");
   });
 
   it("counts the sessions that need the user in the tab title, and gives the title back on leaving", async () => {
@@ -564,7 +567,7 @@ describe("LivePage", () => {
     show("?session=s1", { session: () => long });
     await act(async () => { await vi.advanceTimersByTimeAsync(10); });
     expect(toolRow("Bash", 1).className).toBe("tool running");
-    const panel = screen.getByRole("complementary", { name: "Agent" });
+    const panel = strip();
     expect(within(panel).queryByText(/approval\?/)).toBeNull();
     expect(within(panel).getByText("Bash running for 1m 08s")).toBeTruthy();
   });
@@ -1076,20 +1079,79 @@ describe("LivePage", () => {
     expect(calls().length).toBe(n);
   });
 
-  it("shows the agent panel: an inferred approval wait with its reason, the context and the figures", async () => {
-    show();
+  it("shows the status strip: an inferred approval wait with its reason behind a toggletip, the context, the figures and the limits", async () => {
+    const limits = [{ label: "5h", used_percent: 86, observed_at: null, resets_at: "2026-11-10T14:00:00.000Z" }, { label: "7d", used_percent: 31, observed_at: null, resets_at: null }];
+    show("?session=s1", { session: () => ({ ...s1, limits }) });
     await stream();
-    const panel = screen.getByRole("complementary", { name: "Agent" });
+    const panel = strip();
     expect(within(panel).getByText("approval?").closest(".state")!.textContent).toBe("approval? (inferred)");
+    expect(within(panel).queryByText(/transcripts record no permission prompt/)).toBeNull(); // behind its toggletip
+    await userEvent.click(within(panel).getByRole("button", { name: "Why inferred" }));
     expect(within(panel).getByText(/transcripts record no permission prompt/)).toBeTruthy();
+    expect(within(panel).getByText(/likely waiting for your approval/)).toBeTruthy(); // the state's detail
     expect(within(panel).getByRole("meter", { name: "Context used" }).className).toBe("meter");
     expect(within(panel).getByText("Errors").nextElementSibling!.textContent).toBe("1");
+    const fig = (k: string) => within(panel).getByText(k).parentElement!.textContent;
+    expect([fig("Cost"), fig("Tools"), fig("Cache read")]).toEqual([`Cost ${usd(s1.cost)}`, `Tools ${s1.tools}`, `Cache read ${pct(s1.cache_read)}?`]); // ? is its toggletip
+    expect(within(panel).getByRole("button", { name: "About cache read" })).toBeTruthy();
+    const [h5, d7] = [fig("5h"), fig("7d")];
+    expect(h5).toMatch(/^5h 86% near, resets /); // near the limit in words, the reset for a screen reader
+    expect(within(panel).getByText("5h").parentElement!.className).toBe("it lim warn");
+    expect(d7).toBe("7d 31%");
+    expect(within(panel).getByText(s1.cwd!).closest("code")!.className).toBe("cwd");
+    expect(within(panel).getByRole("group", { name: /^Last 10 minutes: / })).toBeTruthy(); // the pulse
+    expect(screen.queryByRole("complementary")).toBeNull(); // no agent panel any more
   });
 
-  it("filters the stream to failed rows from the Errors count, in the stream head and in the agent panel", async () => {
+  it("copies the resume command from the strip, and says whether it worked", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
     show();
     await stream();
-    const panel = screen.getByRole("complementary", { name: "Agent" });
+    await userEvent.click(within(strip()).getByRole("button", { name: "Copy resume" }));
+    expect(writeText).toHaveBeenCalledWith(`cd '${s1.cwd}' && claude --resume s1`);
+    await waitFor(() => expect(within(strip()).getByText("Resume command copied to clipboard.")).toBeTruthy());
+    expect(within(strip()).getByRole("button", { name: "Copied" })).toBeTruthy();
+    writeText.mockImplementation(() => Promise.reject(new Error("denied")));
+    await userEvent.click(within(strip()).getByRole("button", { name: "Copied" }));
+    await waitFor(() => expect(within(strip()).getByText("Could not copy to clipboard.")).toBeTruthy());
+    vi.unstubAllGlobals();
+  });
+
+  it("shows the pulse of the last 10 minutes: its minutes, its ticks and a readout by keyboard", async () => {
+    const t = (min: number, s = 0) => new Date(Date.parse("2026-11-10T09:51:00.000Z") + min * 60_000 + s * 1000).toISOString();
+    const pulse = { start: t(0), end: t(10), context: [{ ts: t(-2), tokens: 40_000 }, { ts: t(4, 10), tokens: 52_000 }, { ts: t(9, 30), tokens: 62_000 }],
+      ticks: [{ ts: t(4, 20), failed: false }, { ts: t(4, 30), failed: true }, { ts: t(4, 40), failed: false }, { ts: t(9, 40), failed: false }, { ts: t(10), failed: true }] };
+    expect(pulseMinutes(pulse).map(m => [m.context, m.calls, m.failed])).toEqual([
+      [40_000, 0, 0], [40_000, 0, 0], [40_000, 0, 0], [40_000, 0, 0], [52_000, 3, 1], [52_000, 0, 0], [52_000, 0, 0], [52_000, 0, 0], [52_000, 0, 0], [62_000, 2, 1]]);
+    expect(pulseMinutes({ ...pulse, context: [] })[0]!.context).toBeNull(); // no request yet
+    show("?session=s1", { session: () => ({ ...s1, pulse }) });
+    await stream();
+    const chart = within(strip()).getByRole("group", { name: /^Last 10 minutes: / });
+    expect(chart.getAttribute("aria-label")).toMatch(/^Last 10 minutes: context 40k to 62k tokens, 5 tool calls, 2 failed\. Use the left and right arrow keys/);
+    // A success is an upright line, a failure a ✕ path: two shapes, not two colors of one.
+    expect([chart.querySelectorAll("line.ok").length, chart.querySelectorAll("path.bad").length]).toEqual([3, 2]);
+    const readout = strip().querySelector(".pulse .readout")!;
+    expect(readout.getAttribute("aria-live")).toBe("polite");
+    chart.focus();
+    await userEvent.keyboard("{Home}");
+    expect(readout.textContent).toMatch(/: context 40k, 0 calls, 0 failed$/);
+    await userEvent.keyboard("{ArrowRight}{ArrowRight}{ArrowRight}{ArrowRight}");
+    expect(readout.textContent).toMatch(/^\d\d:\d\d to \d\d:\d\d: context 52k, 3 calls, 1 failed$/);
+    await userEvent.keyboard("{End}");
+    expect(readout.textContent).toMatch(/: context 62k, 2 calls, 1 failed$/);
+    await userEvent.keyboard("{ArrowRight}"); // stays on the last minute
+    expect(readout.textContent).toMatch(/: context 62k, 2 calls, 1 failed$/);
+    await userEvent.keyboard("{Escape}");
+    expect(readout.textContent).toBe("");
+    expect(document.activeElement).toBe(chart);
+    expect(chart.querySelector("rect.cur")).toBeNull();
+  });
+
+  it("filters the stream to failed rows from the Errors count, in the stream's bar and in the status strip", async () => {
+    show();
+    await stream();
+    const panel = strip();
     const inBar = within(bar()).getByRole("button", { name: "1 error" }), inPanel = within(panel).getByRole("button", { name: "1 error" });
     const pressed = () => [inBar, inPanel].map(b => b.getAttribute("aria-pressed"));
     expect([drawn(), pressed(), hidden()]).toEqual([["Read", "Agent", "Bash", "Bash"], ["false", "false"], null]);
@@ -1135,7 +1197,7 @@ describe("LivePage", () => {
     const one = { ...laned(6, { done: true, failed: 1 }), errors: 1 };
     show("?session=s1", { session: () => ({ ...one, events: one.events.map(e => (e.k === "tool" && !e.lane ? { ...e, failed: false } : e)) }) });
     await stream();
-    const panel = screen.getByRole("complementary", { name: "Agent" }), figures = panel.textContent;
+    const panel = strip(), figures = panel.textContent;
     expect(greps()).toEqual([]);
     await userEvent.click(within(bar()).getByRole("button", { name: "1 error" }));
     expect([drawn(), greps(), hidden()]).toEqual([["Grep"], ["g1"], "12 rows hidden"]); // the filter opens the folded lane
@@ -1248,9 +1310,10 @@ describe("LivePage", () => {
 
   it("opens the session sheet over Live from the stream head, keeping the stream and its live connection", async () => {
     show("?session=s1", { app: true });
-    const head = (await screen.findByRole("group", { name: "Stream filters" })).previousElementSibling as HTMLElement;
+    await screen.findByRole("group", { name: "Stream filters" });
+    const head = (await stream()).querySelector<HTMLElement>(".stream-head")!;
     const link = within(head).getByRole("link", { name: "Session sheet" });
-    expect([head.className, link.getAttribute("href")]).toEqual(["stream-head", "/live?session=s1&sheet=s1"]); // a new tab opens the same
+    expect(link.getAttribute("href")).toBe("/live?session=s1&sheet=s1"); // a new tab opens the same
     const source = FakeSource.last!, events = screen.getByLabelText("Session events");
     await userEvent.click(link);
     expect(location.pathname + location.search).toBe("/live?session=s1&sheet=s1"); // in the app, without a reload
@@ -1356,19 +1419,19 @@ describe("LivePage", () => {
     expect(document.title).toBe("(2) Live · AI Ledger");
   });
 
-  it("shows an ended session as ended in the rail, in the agent panel and on the wall", async () => {
+  it("shows an ended session as ended in the rail, in the status strip and on the wall", async () => {
     show("?session=s5", { session: () => ({ ...s1, session_id: "s5", project: "notes", state: ended.state }) });
     const rail = await screen.findByRole("region", { name: "Active sessions" });
     const state = (await within(rail).findAllByRole("button")).find(b => b.querySelector(".pname")!.textContent === "notes")!.querySelector(".state")!;
     expect([state.className, state.textContent]).toEqual(["state st-ended", "ended"]);
     await stream();
-    const panel = screen.getByRole("complementary", { name: "Agent" });
-    expect(panel.querySelector(".now")!.className).toBe("now ended");
+    const panel = strip();
+    expect(panel.querySelector(".now")!.className).toBe("it now ended");
     expect(within(panel).getByText("session closed")).toBeTruthy();
     cleanup();
     show("?view=wall");
     const el = await wall();
-    expect(within(el).getByRole("button", { name: "Open notes" }).className).toBe("panel tile st-ended");
+    expect(within(el).getByRole("button", { name: "Pin notes" }).className).toBe("panel tile st-ended");
   });
 
   it("counts an ended session as neither working nor waiting for you", async () => {
@@ -1404,20 +1467,123 @@ describe("LivePage", () => {
     expect(await screen.findByRole("button", { name: /^exec_command/ })).toBeTruthy();
   });
 
-  it("shows every active session on the wall and opens one in the stream", async () => {
-    show("?view=wall");
+  it("shows every active session on the wall, pins one beside the tiles, and opens it in the stream", async () => {
+    const { calls } = show("?view=wall");
     const el = await wall();
     const tiles = within(el).getAllByRole("button");
     expect(tiles.length).toBe(list.sessions.length);
-    const foo = within(el).getByRole("button", { name: "Open Fast ingest pass while Live is open" });
+    const foo = within(el).getByRole("button", { name: "Pin Fast ingest pass while Live is open" });
     expect(foo.querySelector(".ttl")!.getAttribute("title")).toBe("Fast ingest pass while Live is open");
-    expect(within(el).getByRole("button", { name: "Open dotfiles" }).querySelector(".ttl")).toBeNull();
+    expect(within(el).getByRole("button", { name: "Pin dotfiles" }).querySelector(".ttl")).toBeNull();
     expect(foo.textContent).toContain("git push origin feat/live-page");
     expect(foo.textContent).toContain("1 error"); // one, singular
     expect(foo.textContent).not.toContain("1 errors");
-    await userEvent.click(within(el).getByRole("button", { name: "Open graft" }));
-    expect(location.search).toBe("?session=0a0f7777-0000-7000-8000-000000000007");
+    await settle();
+    expect(calls().filter(u => u.startsWith("/api/live/session"))).toEqual([]); // the Wall shows no stream session
+    const graft = within(el).getByRole("button", { name: "Pin graft" });
+    expect(graft.getAttribute("aria-pressed")).toBe("false");
+    await userEvent.click(graft);
+    expect(location.search).toBe("?view=wall&pin=0a0f7777-0000-7000-8000-000000000007"); // the Wall stays
+    expect(graft.getAttribute("aria-pressed")).toBe("true");
+    expect(graft.textContent).toContain("Pinned"); // in words, not only by its frame
+    const pin = await screen.findByRole("region", { name: "Pinned: graft" });
+    expect(await within(pin).findByLabelText("Session events")).toBeTruthy();
+    expect(within(pin).getByRole("group", { name: "Session status" })).toBeTruthy();
+    expect(within(pin).getByRole("group", { name: "Stream filters" })).toBeTruthy();
+    expect(document.querySelector(".pg-live > .sr[role=status]")!.textContent).toBe("Pinned graft.");
+    await userEvent.click(within(pin).getByRole("button", { name: "Open in Stream" }));
+    expect(location.search).toBe("?pin=0a0f7777-0000-7000-8000-000000000007&session=0a0f7777-0000-7000-8000-000000000007"); // the pins wait for the Wall
     expect(await stream()).toBeTruthy();
+  });
+
+  it("pins by keyboard, keeps two pins at most, replacing the oldest with an announcement, and unpins", async () => {
+    show("?view=wall");
+    const el = await wall();
+    const tile = (name: string) => within(el).getByRole("button", { name: "Pin " + name });
+    const pinned = () => screen.queryAllByRole("region", { name: /^Pinned: / }).map(r => r.getAttribute("aria-label"));
+    const note = () => document.querySelector(".pg-live > .sr[role=status]")!.textContent;
+    const url = () => decodeURIComponent(location.search); // the comma is written %2C
+    tile("notes").focus();
+    await userEvent.keyboard("{Enter}");
+    tile("jobdesk").focus();
+    await userEvent.keyboard(" ");
+    expect([url(), pinned()]).toEqual(["?view=wall&pin=s5,s2", ["Pinned: notes", "Pinned: jobdesk"]]);
+    await userEvent.click(tile("dotfiles"));
+    expect([url(), pinned()]).toEqual(["?view=wall&pin=s2,s4", ["Pinned: jobdesk", "Pinned: dotfiles"]]);
+    expect(note()).toBe("Pinned dotfiles. Unpinned notes: 2 pins at most.");
+    expect(tile("notes").getAttribute("aria-pressed")).toBe("false");
+    // Unpin from the stream's own button: the focus goes to the session's tile, which stays on the Wall.
+    await userEvent.click(within(screen.getByRole("region", { name: "Pinned: jobdesk" })).getByRole("button", { name: "Unpin jobdesk" }));
+    expect([url(), pinned(), note()]).toEqual(["?view=wall&pin=s4", ["Pinned: dotfiles"], "Unpinned jobdesk."]);
+    await waitFor(() => expect(document.activeElement).toBe(tile("jobdesk")));
+    await userEvent.click(tile("dotfiles")); // the tile toggles its pin
+    expect([url(), pinned()]).toEqual(["?view=wall", []]);
+  });
+
+  it("opens the Wall with the URL's pins, oldest first, and leaves out what is not a pin", async () => {
+    show("?view=wall&pin=s3,s1,bad%20id");
+    await wall();
+    await waitFor(() => expect(screen.getAllByRole("region", { name: /^Pinned: / }).map(r => r.getAttribute("aria-label")))
+      .toEqual(["Pinned: Rename the theme tokens across every page, the charts and the print stylesheet", "Pinned: Fast ingest pass while Live is open"]));
+    expect(decodeURIComponent(location.search)).toBe("?view=wall&pin=s3,s1,bad id"); // read as it is, written anew on the next pin
+  });
+
+  it("keeps one notice stream through pinning, unpinning, Stream and Wall and a sheet, and refetches a pinned session it names", async () => {
+    const { calls } = show("?view=wall", { app: true });
+    const el = await wall();
+    const made = FakeSource.made, source = FakeSource.last!;
+    source.open();
+    await userEvent.click(within(el).getByRole("button", { name: "Pin notes" }));
+    await userEvent.click(within(el).getByRole("button", { name: "Pin jobdesk" }));
+    const pin = await screen.findByRole("region", { name: "Pinned: notes" });
+    await within(pin).findByLabelText("Session events");
+    await settle();
+    const before = calls().length;
+    source.notify(["s5"]);
+    await settle();
+    expect(calls().slice(before).filter(u => u.startsWith("/api/live/session"))).toEqual([expect.stringMatching(/^\/api\/live\/session\?id=s5&after=/)]);
+    await userEvent.click(within(el).getByRole("button", { name: "Pin notes" })); // unpin
+    // A sheet over the Wall: the session sheet of a pinned stream, from its strip's Session sheet link in the Stream view.
+    await userEvent.click(screen.getByRole("button", { name: "Stream" }));
+    await userEvent.click(await within(await stream()).findByRole("link", { name: "Session sheet" }));
+    const dlg = await screen.findByRole("dialog");
+    await userEvent.click(within(dlg).getByRole("button", { name: "Close" }));
+    await userEvent.click(screen.getByRole("button", { name: "Wall" }));
+    await wall();
+    expect([FakeSource.made, FakeSource.last, source.closed]).toEqual([made, source, false]);
+  });
+
+  it("shows each rail entry's context, latest action and errors on a third line", async () => {
+    show();
+    await stream();
+    const r = await rail();
+    const third = (id: string) => within(r).getAllByRole("button").find(b => b.dataset.session === id)!.querySelector(".third")!;
+    const foo = third("s1");
+    expect(foo.querySelector(".act")!.textContent).toBe("Bash · git push origin feat/live-page");
+    expect(foo.querySelector(".errs")!.textContent).toBe("✕ 11 error"); // ✕ 1 shown, "1 error" for a screen reader
+    expect(foo.querySelector(".errs [aria-hidden]")!.textContent).toBe("✕ 1");
+    expect(foo.querySelector(".ctx")!.textContent).toBe("context 0%");
+    expect(third("0a0f7777-0000-7000-8000-000000000007").querySelector(".ctx")!.textContent).toBe("context 8%");
+    expect(third("s2").querySelector(".errs")).toBeNull(); // none to count
+    expect(third("s4").querySelector(".ctx")).toBeNull(); // no known window
+    expect(third("s2").querySelector(".act")!.textContent).toBe("▸ prompt");
+  });
+
+  it("opens the Full text warning over the page, so the stream keeps its place, and dismisses it in place", async () => {
+    show();
+    const region = await stream();
+    const grid = region.closest(".grid")!, before = () => [...document.querySelector(".pg-live")!.children].map(c => c.className);
+    const shape = before();
+    await userEvent.click(check("Full text"));
+    const note = screen.getByRole("note");
+    expect(note.textContent).toContain("secrets included");
+    expect(note.parentElement!.className).toBe("top"); // inside the bar, which it overlays: no block before the grid
+    expect([before(), grid.isConnected, check("Full text").closest("label")!.className]).toEqual([shape, true, "chk ft on"]);
+    await userEvent.click(within(note).getByRole("button", { name: "Dismiss" }));
+    expect([screen.queryByRole("note"), check("Full text").checked, check("Full text").closest("label")!.className]).toEqual([null, true, "chk ft on"]);
+    await userEvent.click(check("Full text"));
+    await userEvent.click(check("Full text"));
+    expect(screen.getByRole("note")).toBeTruthy(); // it opens again each time Full text is turned on
   });
 });
 

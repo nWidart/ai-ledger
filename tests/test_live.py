@@ -578,8 +578,31 @@ class SessionTest(LiveCase):
         got = self.run_session()
         self.assertEqual((got["context"], got["window"]), (55000, 1000000))
         self.assertEqual(got["compactions"], [dict(ts="2026-11-10T10:00:31.000Z", pre=150000)])
-        self.assertEqual((got["requests"], got["spark"]["per_minute"]), (2, 180 + 55020))
+        self.assertEqual(got["requests"], 2)
+        self.assertEqual(got["pulse"]["context"], [dict(ts=at(30), tokens=160), dict(ts=at(50), tokens=55000)])  # what each read, no output
         self.assertGreater(got["cache_read"], 0.9)
+        self.assertEqual(got["cwd"], S["cwd"])
+
+    def test_pulse(self):
+        sub = dict(S, isSidechain=True, agentId="a7")
+        self.write("s1.jsonl", assistant("a0", "m0", at(-700), [dict(type="text", text="hi")], input_tokens=30000, cache_read_input_tokens=0,
+                                         cache_creation_input_tokens=0, cache_creation=dict())  # before the span: the oldest ignored
+                   + assistant("a1", "m1", at(-600), [tool_use("t1", "Bash", command="ls")], input_tokens=40000, cache_read_input_tokens=0,
+                               cache_creation_input_tokens=0, cache_creation=dict())  # 11 minutes before NOW: the starting level
+                   + result("r1", at(-590), "t1", "x")  # ended before the span: no tick
+                   + assistant("a2", "m2", at(40), [tool_use("t2", "Bash", command="ls"), tool_use("t3", "Read", file_path="x")],
+                               input_tokens=2000, cache_read_input_tokens=60000, cache_creation_input_tokens=0, cache_creation=dict())
+                   + result("r2", at(42), "t2", "boom", error=True) + result("r3", at(43), "t3", "ok"))
+        self.write("s1/subagents/agent-a7.jsonl", line(type="assistant", uuid="x1", timestamp=at(45), message=dict(
+            id="sm1", model="claude-opus-5-5", content=[tool_use("st1", "Grep", pattern="x")],
+            usage=dict(input_tokens=999999, output_tokens=1)), **sub)
+            + line(type="user", uuid="x2", timestamp=at(50), message=dict(role="user", content=[
+                dict(type="tool_result", tool_use_id="st1", content="no", is_error=True)]), **sub))
+        self.ingest()
+        p = self.run_session()["pulse"]
+        self.assertEqual((p["start"], p["end"]), ("2026-11-10T09:51:00.000Z", "2026-11-10T10:01:00.000Z"))
+        self.assertEqual(p["context"], [dict(ts=at(-600), tokens=40000), dict(ts=at(40), tokens=62000)])  # no subagent request
+        self.assertEqual(p["ticks"], [dict(ts=at(42), failed=True), dict(ts=at(43), failed=False), dict(ts=at(50), failed=True)])
 
     def test_unknown_window(self):
         self.write("s1.jsonl", assistant("a1", "m1", at(30), [dict(type="text", text="hi")], model="mystery-1"))

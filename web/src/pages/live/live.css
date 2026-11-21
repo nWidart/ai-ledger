@@ -1,10 +1,16 @@
 /* Live (/live): every rule sits under .pg-live, since every page's CSS is loaded at once. */
 .pg-live { max-width: 1400px; }
-.pg-live .top { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; margin-bottom: 6px; }
+.pg-live .top { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; margin-bottom: 10px; position: relative; }
 .pg-live h1 { font-size: 1.375rem; letter-spacing: -.02em; margin: 0 6px 0 0; }
 .pg-live .top .filters { margin: 0; }
 .pg-live .spacer { flex: 1; }
-.pg-live .conn { margin: 0 0 12px; font-size: .75rem; color: var(--text-muted); }
+.pg-live .conn { margin: 0; font-size: .75rem; color: var(--text-muted); white-space: nowrap; }
+/* Full text: the toggle keeps a warning tint while on, with the same box either way, and the warning opens over the page
+   under the bar's right end, taking no room, so nothing moves when it opens or goes. */
+.pg-live .chk.ft { padding: 2px 8px; border-radius: 999px; border: 1px solid transparent; }
+.pg-live .chk.ft.on { background: var(--warning-soft); border-color: var(--warning-text); color: var(--warning-text); }
+.pg-live .ft-warn { position: absolute; top: calc(100% + 4px); right: 0; z-index: 5; margin: 0; max-width: min(34rem, 100%); box-sizing: border-box;
+  box-shadow: var(--shadow-pop); border: 1px solid var(--border); border-left: 3px solid var(--warning-text); }
 .pg-live .conn::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--good); margin-right: 6px; vertical-align: 1px; }
 .pg-live .conn.lost { color: var(--warning-text); }
 .pg-live .conn.lost::before { background: var(--warning); }
@@ -18,7 +24,7 @@
 .pg-live .ok { color: var(--good-text); }
 .pg-live .bad { color: var(--critical-text); }
 
-.pg-live .grid { display: grid; grid-template-columns: 15.625rem minmax(0, 1fr) 18.125rem; gap: 14px; align-items: start; }
+.pg-live .grid { display: grid; grid-template-columns: 15.625rem minmax(0, 1fr); gap: 14px; align-items: start; }
 .pg-live .panel { padding: 0; }
 .pg-live .panel h2 { font-size: .71875rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; color: var(--text-secondary); margin: 0 0 6px; }
 /* A state group's heading, in the rail and on the wall. */
@@ -45,10 +51,16 @@
 
 /* Rail */
 .pg-live .rail h2 { padding: 12px 14px 4px; margin: 0; }
-.pg-live .rail .group h3 { padding: 6px 14px 2px; }
+.pg-live .rail .group h3 { padding: 5px 14px 1px; }
 .pg-live .rail ul { list-style: none; margin: 0; padding: 0 6px 8px; }
-.pg-live .rail li button { width: 100%; text-align: left; border: 0; background: none; border-radius: 9px; padding: 8px 9px;
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; }
+.pg-live .rail li button { width: 100%; text-align: left; border: 0; background: none; border-radius: 9px; padding: 4px 9px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 8px; align-items: center; }
+/* The entry's third line: the context meter and its percent, the latest action, the errors with a ✕. */
+.pg-live .rail .third { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: .6875rem; line-height: 1rem; color: var(--text-muted); }
+.pg-live .rail .third .ctx { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.pg-live .rail .third .meter { width: 2.5rem; height: 4px; margin: 0; }
+.pg-live .rail .third .act { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .6875rem; color: var(--text-secondary); }
+.pg-live .rail .third .errs { flex: none; font-weight: 600; }
 .pg-live .rail li button:hover { background: var(--surface-2); }
 .pg-live .rail li button[aria-current=true] { background: var(--accent-soft); }
 .pg-live .rail .pname, .pg-live .rail .ttl { font-weight: 600; }
@@ -60,11 +72,13 @@
 .pg-live .rail .foot { margin: 0; padding: 10px 14px 12px; font-size: .75rem; color: var(--text-muted); border-top: 1px solid var(--border); }
 
 /* Stream */
-.pg-live .stream-head { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+/* The head is one line: the title takes what the chips leave, cut with an ellipsis. */
+.pg-live .stream-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--border); }
 .pg-live .stream-head .pname b { font-size: .9375rem; }
 .pg-live .stream-head a { font-size: .78125rem; }
-.pg-live .stream-head .stream-title { flex-basis: 100%; margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary);
+.pg-live .stream-head .stream-title { flex: 0 1 auto; min-width: 8rem; margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; letter-spacing: -.005em; }
+.pg-live .stream-head button { font-size: .75rem; padding: 2px 9px; }
 /* No title: the project is the heading, and looks as it does under a title. */
 .pg-live .stream-head .stream-proj { margin: 0; font: inherit; color: inherit; text-transform: none; letter-spacing: normal; }
 /* The stream's filters. A pressed Errors count, here and in the agent panel, is the filter on. */
@@ -72,7 +86,7 @@
 .pg-live .stream-filters button { font-size: .75rem; padding: 2px 9px; border-radius: 999px; }
 .pg-live .stream-filters label.chk { font-size: .78125rem; }
 .pg-live .stream-filters .hid { margin-left: auto; }
-.pg-live .stream-filters button[aria-pressed=true], .pg-live .kv .fig[aria-pressed=true] { background: var(--critical-soft); border-color: var(--critical-text); color: var(--critical-text); }
+.pg-live .stream-filters button[aria-pressed=true], .pg-live .strip .fig[aria-pressed=true] { background: var(--critical-soft); border-color: var(--critical-text); color: var(--critical-text); }
 .pg-live .stream { overflow: auto; padding: 8px 0 14px; position: relative; --tw: 4rem; --twl: 3.5rem; }
 /* A dated time ("Nov 10, 17:40:05") needs a wider column: Stream sets .dated on the stream when any event shows one, so the rows stay aligned. */
 .pg-live .stream.dated { --tw: 7rem; --twl: 6.5rem; }
@@ -118,29 +132,54 @@
 .pg-live .compact span { background: var(--surface-1); padding: 0 8px; }
 .pg-live .jump { position: sticky; bottom: 8px; display: block; margin: 8px auto 0; background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-size: .78125rem; box-shadow: var(--shadow-pop); }
 
-/* Agent panel */
-.pg-live .head .sec { padding: 12px 14px 14px; border-bottom: 1px solid var(--border); }
-.pg-live .head .sec:last-child { border-bottom: 0; }
-.pg-live .now { font-size: .8125rem; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); }
-.pg-live .now.warn { background: var(--warning-soft); }
-.pg-live .now.ended { background: none; outline: 1px dashed var(--text-muted); outline-offset: -1px; }
-.pg-live .now .why { font-size: .75rem; color: var(--text-secondary); margin-top: 4px; }
-.pg-live .big { font-size: 1.625rem; font-weight: 600; letter-spacing: -.035em; line-height: 1.1; }
-.pg-live .big .of { font-size: .875rem; font-weight: 400; color: var(--text-muted); letter-spacing: 0; }
+/* Status strip: one wrapping row of small items under the stream's head. */
+.pg-live .strip { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; padding: 6px 14px; border-bottom: 1px solid var(--border);
+  font-size: .78125rem; color: var(--text-secondary); }
+.pg-live .strip .it { display: inline-flex; align-items: center; gap: 5px; min-width: 0; white-space: nowrap; }
+.pg-live .strip .k { font-size: .6875rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
+.pg-live .strip b { color: var(--text-primary); font-weight: 600; }
+.pg-live .strip .now { padding: 1px 8px; border-radius: 999px; background: var(--surface-2); white-space: normal; }
+.pg-live .strip .now.warn { background: var(--warning-soft); }
+.pg-live .strip .now.ended { background: none; outline: 1px dashed var(--text-muted); outline-offset: -1px; }
+.pg-live .strip .now .det { font-size: .75rem; }
+.pg-live .strip .inf.tt { font-weight: 400; color: var(--text-muted); font-size: inherit; }
+.pg-live .strip .ctx .meter { width: 6rem; height: 6px; margin: 0; flex: none; }
+.pg-live .strip .fig { font-weight: 700; padding: 0 7px; border-radius: 999px; font-size: .78125rem; }
+.pg-live .strip .lim.warn, .pg-live .strip .lim.warn b { color: var(--warning-text); }
+.pg-live .strip .where { flex: 1 1 14rem; justify-content: flex-end; }
+/* The directory, cut from its start so the end of the path shows. */
+.pg-live .strip .cwd { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; font-size: .71875rem; color: var(--text-muted); }
+.pg-live .strip .copy { font-size: .75rem; padding: 2px 9px; border-radius: 999px; flex: none; }
+/* Pulse: the context's step line and the calls' ticks, a ✓ upright, a ✕ crossed. --text-primary, --text-secondary and
+   --critical-text hold at least 3:1 against the surfaces in both themes. */
+.pg-live .pulse { position: relative; display: inline-flex; align-items: center; }
+.pg-live .pulse .chart { display: block; width: 10rem; height: 1.75rem; border-radius: 4px; }
+.pg-live .pulse svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.pg-live .pulse .l { fill: none; stroke: var(--text-primary); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.pg-live .pulse .ok { stroke: var(--text-secondary); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.pg-live .pulse .bad { fill: none; stroke: var(--critical-text); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.pg-live .pulse .base { stroke: var(--border); vector-effect: non-scaling-stroke; }
+.pg-live .pulse .cur { fill: var(--track); }
+/* The readout opens under the pulse, over the page, so the strip does not move. */
+.pg-live .pulse .readout { position: absolute; top: calc(100% + 4px); left: 0; z-index: 4; white-space: nowrap; font-size: .75rem; color: var(--text-primary);
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; box-shadow: var(--shadow-pop); }
+.pg-live .pulse .readout:empty { display: none; }
 .pg-live .meter { display: block; height: 10px; border-radius: 6px; background: var(--track); overflow: hidden; position: relative; margin: 8px 0 4px; }
 .pg-live .meter > i { position: absolute; inset: 0 auto 0 0; background: var(--series-1); border-radius: 6px; }
 .pg-live .meter.warn > i { background: var(--warning); }
 .pg-live .meter .mark { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--warning-text); }
 .pg-live .row { display: flex; justify-content: space-between; gap: 8px; font-size: .78125rem; color: var(--text-secondary); }
-.pg-live .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.pg-live .kv span { display: block; font-size: .71875rem; color: var(--text-muted); }
-.pg-live .kv b, .pg-live .kv .fig { font-size: 1.0625rem; letter-spacing: -.02em; font-weight: 700; }
-.pg-live .kv .fig { display: block; padding: 0 6px; margin-left: -7px; }
-.pg-live .kv b.model { font-size: .8125rem; overflow-wrap: anywhere; }
-.pg-live .spark { width: 100%; height: 44px; display: block; margin-top: 6px; }
-.pg-live .spark .l { fill: none; stroke: var(--series-1); stroke-width: 1.6; }
-.pg-live .spark .a { fill: var(--series-1-soft); }
-.pg-live .limit + .limit { margin-top: 8px; }
+/* Forced colors: a meter's fill and the pulse's marks would take the page's colors and vanish; give them system ones. */
+@media (forced-colors: active) {
+  .pg-live .meter { forced-color-adjust: none; background: Canvas; outline: 1px solid CanvasText; }
+  .pg-live .meter > i, .pg-live .meter.warn > i { background: Highlight; }
+  .pg-live .meter .mark { background: CanvasText; }
+  .pg-live .pulse svg { forced-color-adjust: none; }
+  .pg-live .pulse .l, .pg-live .pulse .ok, .pg-live .pulse .base { stroke: CanvasText; }
+  .pg-live .pulse .bad { stroke: Highlight; }
+  .pg-live .pulse .cur { fill: Canvas; stroke: Highlight; }
+  .pg-live .chk.ft.on { forced-color-adjust: auto; border-color: Highlight; }
+}
 
 /* Wall */
 .pg-live .walls .group + .group { margin-top: 16px; }
@@ -157,32 +196,57 @@
 .pg-live .tile .act { font-size: .75rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.125rem; }
 .pg-live .tile .meter { height: 6px; margin: 2px 0; }
 .pg-live .tile .row { font-size: .75rem; }
+/* A pinned tile says so in words, not only by its frame. */
+.pg-live .tile.pinned { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pg-live .tile .pin-mark { align-self: flex-start; font-size: .6875rem; font-weight: 600; color: var(--accent-ink); }
 
-/* From tablet width up the stream page fits the viewport: the rail, the stream and the agent panel scroll inside themselves,
-   so the document does not (--appnav-h is the nav's height, set by Nav). Below that, the page scrolls as any other. */
+/* Wall pins: the tiles in one column, then one column per pinned stream. Below 1100px the streams go under the tiles. */
+.pg-live .wallgrid.pinned { display: grid; grid-template-columns: 17rem; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
+.pg-live .wallgrid.pinned .wall { grid-template-columns: minmax(0, 1fr); }
+.pg-live .pin { display: flex; flex-direction: column; min-width: 0; }
+.pg-live .pin-head { flex-wrap: nowrap; }
+.pg-live .pin-head .stream-title { flex: 0 1 auto; min-width: 0; }
+.pg-live .pin-head button { flex: none; white-space: nowrap; }
+.pg-live .pin > .stream { height: 60dvh; }
+
+/* From tablet width up the stream page fits the viewport: the rail and the stream scroll inside themselves, so the document
+   does not (--appnav-h is the nav's height, set by Nav). Below that, the page scrolls as any other. */
 @media (min-width: 45.0625em) {
   .pg-live:has(> .grid) { display: flex; flex-direction: column; box-sizing: border-box; height: calc(100dvh - var(--appnav-h, 56px)); padding-bottom: 16px; }
   .pg-live > .grid { flex: 1; min-height: 420px; align-items: stretch; }
-  .pg-live .rail, .pg-live .head { overflow: auto; min-height: 0; }
+  .pg-live .rail { overflow: auto; min-height: 0; }
   .pg-live .main { display: flex; flex-direction: column; min-height: 0; }
   .pg-live .main > .stream { flex: 1; min-height: 0; }
+}
+/* The Wall with pins fits the viewport as the stream page does, where the pins stand beside the tiles. */
+@media (min-width: 68.8125em) {
+  .pg-live:has(> .wallgrid.pinned) { display: flex; flex-direction: column; box-sizing: border-box; height: calc(100dvh - var(--appnav-h, 56px)); padding-bottom: 16px; }
+  .pg-live > .wallgrid.pinned { flex: 1; min-height: 420px; align-items: stretch; }
+  .pg-live .wallgrid.pinned .walls { overflow: auto; min-height: 0; padding: 2px; }
+  .pg-live .pin { min-height: 0; }
+  .pg-live .pin > .stream { flex: 1; min-height: 0; height: auto; }
 }
 
 @media (max-width: 68.75em) {
   .pg-live .grid { grid-template-columns: 13.75rem minmax(0, 1fr); }
-  .pg-live .grid { grid-template-rows: minmax(0, 1fr) auto; }
-  .pg-live .head { grid-column: 1 / -1; max-height: 26dvh; display: grid; grid-template-columns: repeat(auto-fit, minmax(13.75rem, 1fr)); }
-  .pg-live .head .sec { border-bottom: 0; border-right: 1px solid var(--border); }
+  .pg-live .wallgrid.pinned { grid-auto-flow: row; grid-template-columns: minmax(0, 1fr); }
+  .pg-live .wallgrid.pinned .wall { grid-template-columns: repeat(auto-fill, minmax(16.25rem, 1fr)); }
 }
+/* A phone: the rail is one row of entries that scrolls sideways inside itself, its group headings kept for screen readers,
+   so the stream starts on the first screen and the page never scrolls sideways. */
 @media (max-width: 45em) {
   .pg-live .grid { grid-template-columns: minmax(0, 1fr); }
-  .pg-live .rail ul { display: flex; overflow-x: auto; gap: 4px; }
-  .pg-live .rail li button { min-width: 11.875rem; }
+  .pg-live .rail { display: flex; gap: 4px; overflow-x: auto; overscroll-behavior-x: contain; padding: 4px; min-width: 0; position: relative; }
+  .pg-live .rail > h2, .pg-live .rail .group h3 { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .pg-live .rail .group, .pg-live .rail ul { display: contents; }
+  .pg-live .rail li { flex: none; width: 12rem; }
   .pg-live .rail .foot { display: none; }
   .pg-live .stream { height: 60dvh; }
   .pg-live .stream { --tw: 3rem; }
   .pg-live .stream.dated { --tw: 6.5rem; }
   .pg-live .ev { gap: 6px; }
   .pg-live .tool { grid-template-columns: 4rem minmax(0, 1fr) auto 1rem; gap: 6px; }
-  .pg-live .head .sec { border-right: 0; border-bottom: 1px solid var(--border); }
+  .pg-live .strip .where { justify-content: flex-start; }
+  .pg-live .strip { gap: 3px 12px; padding: 5px 12px; }
+  .pg-live .strip .cwd, .pg-live .strip .k[aria-hidden] { display: none; }
 }

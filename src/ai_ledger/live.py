@@ -25,7 +25,7 @@ TEXT_CAP = 4096  # characters of one tool result sent with text
 INPUT_CAP = 300  # characters of a tool input or description sent without text, as Codex's live summaries
 PROMPT_TOOLS = {"Agent", "Task", "spawn_agent"}  # their input is a prompt: without text, their description stands in
 ERROR_CAP = 700  # as tool_calls.error
-SPARK_STEP = 5  # seconds per point of the tokens chart, over the last minute
+PULSE = timedelta(minutes=10)  # the span of a session's pulse: context growth and tool calls
 QUIET_TOOLS = {"Read", "Grep", "Glob"}  # tools that only read: the page can hide their calls
 # Shell commands that only read, search or print. Codex names no Read or Grep tool: its exec_command reads and searches
 # through these. A command with no flag that writes or runs a program reads whatever its words. One with such a flag
@@ -456,7 +456,7 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
     prices = metrics.load_prices() if prices is None else prices
     if after and parse_ts(after) is None:
         raise ValueError(f"bad cursor: {after}")
-    info = metrics.rows(cur, "SELECT session_id, project, source, git_branch, last_ts FROM sessions WHERE session_id = ?", [sid])
+    info = metrics.rows(cur, "SELECT session_id, project, cwd, source, git_branch, last_ts FROM sessions WHERE session_id = ?", [sid])
     if not info:
         return None
     s = info[0]
@@ -492,12 +492,12 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
     last = aware(s["last_ts"])
     cursor = max((r[2] for r in rows if r[2]), default=after or None)
     f = figures(cur, [sid], prices)[sid]
-    return dict(session_id=sid, **title_of(titles.titles(cur, [sid], prompts=text), sid), project=s["project"], source=s["source"], branch=s["git_branch"], last_ts=iso(last),
+    return dict(session_id=sid, **title_of(titles.titles(cur, [sid], prompts=text), sid), project=s["project"], source=s["source"], branch=s["git_branch"], cwd=s["cwd"], last_ts=iso(last),
                 now=iso(now), cursor=cursor, truncated=more,
                 state=state(assemble(recent(cur, [sid]).get(sid, []), copied)[0], now, s["source"], last, sid in closed(cur, [sid])),
                 events=[public(e, text) for e in events], lanes=lanes(cur, sid, prices),
                 window=window_of(f["model"], events, prices), compactions=compactions(cur, sid),
-                spark=spark(cur, sid, now), limits=plan_limits(cur, s["source"], now), **f)
+                pulse=pulse(cur, sid, now), limits=plan_limits(cur, s["source"], now), **f)
 
 
 def earlier_uses(cur, sid, before, ids):
@@ -625,16 +625,20 @@ def compactions(cur, sid):
     return out
 
 
-def spark(cur, sid, now):
-    """Tokens over the last minute, in SPARK_STEP-second buckets, oldest first, and their sum."""
-    n = 60 // SPARK_STEP
-    start = (now - timedelta(seconds=60)).astimezone(timezone.utc).replace(tzinfo=None)
-    points = [0] * n
-    for ts, tokens in cur.execute("""SELECT ts, input + output + cache_read + cache_5m + cache_1h FROM requests
-            WHERE session_id = ? AND ts > ?""", [sid, start]).fetchall():
-        i = int((ts - start).total_seconds() // SPARK_STEP)
-        points[min(max(i, 0), n - 1)] += tokens or 0
-    return dict(points=points, per_minute=sum(points), step=SPARK_STEP)
+def pulse(cur, sid, now):
+    """The session over the last PULSE, oldest first: the context of each main-thread request (what it read: input and
+    cache), with the last one before the span as its starting level, and each tool call that ended, subagents' included,
+    with whether it failed. Tokens per minute would count every cache reread as work; the context only grows with it."""
+    start = (now - PULSE).astimezone(timezone.utc).replace(tzinfo=None)
+    context = cur.execute("""SELECT ts, tokens FROM (
+            SELECT ts, input + cache_read + cache_5m + cache_1h AS tokens, ts > ? AS inside,
+              row_number() OVER (PARTITION BY ts > ? ORDER BY ts DESC) AS back
+            FROM requests WHERE session_id = ? AND NOT subagent AND ts IS NOT NULL)
+        WHERE inside OR back = 1 ORDER BY ts""", [start, start, sid]).fetchall()
+    ticks = cur.execute("""SELECT end_ts, coalesce(is_error, false) FROM tool_calls
+        WHERE session_id = ? AND end_ts > ? ORDER BY end_ts""", [sid, start]).fetchall()
+    return dict(start=iso(aware(start)), end=iso(now), context=[dict(ts=iso(aware(ts)), tokens=n or 0) for ts, n in context],
+                ticks=[dict(ts=iso(aware(ts)), failed=bool(bad)) for ts, bad in ticks])
 
 
 def plan_limits(cur, source, now):

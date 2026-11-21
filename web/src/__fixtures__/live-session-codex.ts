@@ -8,6 +8,7 @@ export default {
  "project": "graft",
  "source": "codex",
  "branch": null,
+ "cwd": "/nowhere/graft",
  "last_ts": "2026-11-10T10:00:27.000Z",
  "now": "2026-11-10T10:01:00.000Z",
  "cursor": "2026-11-10T10:00:27.000Z",
@@ -58,23 +59,16 @@ export default {
  "lanes": {},
  "window": 272000,
  "compactions": [],
- "spark": {
-  "points": [
-   0,
-   0,
-   0,
-   0,
-   0,
-   22300,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0
+ "pulse": {
+  "start": "2026-11-10T09:51:00.000Z",
+  "end": "2026-11-10T10:01:00.000Z",
+  "context": [
+   {
+    "ts": "2026-11-10T10:00:27.000Z",
+    "tokens": 22000
+   }
   ],
-  "per_minute": 22300,
-  "step": 5
+  "ticks": []
  },
  "limits": [],
  "cost": null,
