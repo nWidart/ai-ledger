@@ -79,9 +79,13 @@ describe("rateModel", () => {
     // 1 of 500: 0.2% plus 10% in steps of 0.1; one failed call, plus 5%, in steps of at least 1.
     const r = model(rare);
     expect(r.rate.step).toBe(.1);
-    expect(r.rate.max).toBeCloseTo(.3);
+    expect(r.rate.max).toBe(.3); // exact: a max a hair over its last step makes ECharts draw a fifth line on the top one
     expect(ticks(r, 1).slice(0, 2)).toEqual(["0.0%", "0.1%"]); // every label of a scale in tenths has its decimal, 0 too
     expect(r.count).toEqual({ max: 2, step: 1 });
+    // 3 of 2,500: 0.12% plus 10% in steps of 0.05, in hundredths so no two labels read the same.
+    const h = model(payload([["2026-11-05", 2500, { x: 3 }]])), all = (m: RateModel) => [0, 1, 2, 3].map(n => yAxes(m)[1]!.axisLabel.formatter(n * m.rate.step));
+    expect(h.rate).toEqual({ max: .15, step: .05, digits: 2 });
+    expect(all(h)).toEqual(["0.00%", "0.05%", "0.10%", "0.15%"]);
   });
 
   it("draws a rate over the scale at its top, no point without calls, and a hollow dot on the quiet bucket", () => {

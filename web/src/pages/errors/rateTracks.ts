@@ -78,7 +78,9 @@ export function rateModel(m: Model, v: View, f: Filtered, vt: ViewTypes, fixes: 
   const low = lowVolume(pts.map(p => p.c));
   // Buckets with few calls (when others have more) are left out of the scale: one quiet day's 3 of 12 can't flatten the rest.
   const r0 = Math.max(.1, ...rates.map((r, i) => (low[i] ? 0 : r || 0))) * 1.1, rStep = niceStep(r0 / 3);
-  const rate = { max: Math.ceil(r0 / rStep) * rStep, step: rStep, digits: rStep < 1 ? 1 : 0 };
+  // The max rounded off its float error: a max a hair over its last step (0.30000000000000004) makes ECharts 6 add a tick on
+  // the top one, a doubled grid line. Labels in hundredths for steps of 0.05, so no two read the same.
+  const rate = { max: +(Math.ceil(r0 / rStep) * rStep).toFixed(10), step: rStep, digits: rStep < .1 ? 2 : rStep < 1 ? 1 : 0 };
   // Counts are whole: whole steps.
   const e0 = Math.max(1, ...pts.map(p => p.e)) * 1.05, eStep = Math.max(1, niceStep(e0 / 3));
   const other = pts.some(p => p.other), layer = cat && (vt.layers.includes(cat) ? cat : OTHER);
