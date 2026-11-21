@@ -58,7 +58,7 @@ export function stackSeries({ kinds, values, hatched, env, width = barWidth, id 
   const colors = kinds.map(k => env.color(k.c));
   // Today's hatch: surface-colored stripes over each segment, so every series color shows through in either theme.
   const decal = { symbol: "rect", color: env.ink.surface, dashArrayX: [1, 0], dashArrayY: [3, 3], rotation: Math.PI / 4 };
-  const renderItem: CustomSeriesRenderItem = (_params, api: CustomSeriesRenderItemAPI) => {
+  const renderItem: CustomSeriesRenderItem = (params, api: CustomSeriesRenderItemAPI) => {
     const i = Number(api.value(0)), total = Number(api.value(1));
     const [cx, y0] = api.coord([i, 0]) as [number, number], [, top] = api.coord([i, total]) as [number, number];
     const band = (api.size!([1, 0]) as number[])[0]!, w = width(band);
@@ -71,8 +71,11 @@ export function stackSeries({ kinds, values, hatched, env, width = barWidth, id 
       // `style.decal` takes a decal object here; ECharts turns it into the pattern zrender's type names.
       for (const s of rects) children.push({ type: "rect", name: `${kinds[s.j]!.k}-hatch`, shape: shape(s), style: { fill: "none", opacity: .6, decal } as never });
     }
-    // With motion on, the bar grows from its baseline on its first draw, a little later per day.
-    const grow = env.motion ? { originX: cx, originY: y0, enterFrom: { scaleY: 0 }, enterAnimation: { delay: 6 * Math.min(i, 60) } } : {};
+    // With motion on, the bar grows from its baseline when a drawing first shows it, a little later per day. Not when an
+    // action shows it: a zoom out makes the bars the zoom left out again, and they would all grow a second time. The
+    // wrapper animates the chart's first drawing only, so a bar that newer data adds does not grow either.
+    const grow = env.motion && params.actionType == null
+      ? { originX: cx, originY: y0, enterFrom: { scaleY: 0 }, enterAnimation: { delay: 6 * Math.min(i, 60) } } : {};
     return { type: "group", children, ...grow };
   };
   return {

@@ -64,14 +64,15 @@ describe("stackRects", () => {
 });
 
 // A stubbed renderItem API over a category axis: 40px bands from x 0, the value axis 0 to 1 over the plot above.
-function draw(series: ReturnType<typeof stackSeries>, i: number) {
+// `action`: the action that made ECharts render, such as "dataZoom"; none for a drawing (setOption).
+function draw(series: ReturnType<typeof stackSeries>, i: number, action?: string) {
   const row = (series.data as number[][])[i]!;
   const api = {
     value: (dim: number) => row[dim]!,
     coord: ([x, v]: number[]) => [(x! + .5) * 40, Y0 - v! * (Y0 - TOP)],
     size: ([dx, dy]: number[]) => [dx! * 40, dy! * (Y0 - TOP)],
   } as unknown as CustomSeriesRenderItemAPI;
-  const params = { dataIndex: i, dataIndexInside: i } as CustomSeriesRenderItemParams;
+  const params = { dataIndex: i, dataIndexInside: i, actionType: action ?? null } as unknown as CustomSeriesRenderItemParams;
   return series.renderItem!(params, api) as unknown as Group | null;
 }
 interface Shape { type: string; name?: string; shape: StackRect & { r: number | number[] }; style: Record<string, unknown> }
@@ -166,5 +167,17 @@ describe("stackSeries", () => {
     expect(draw(s, 70)!.enterAnimation!.delay).toBe(360);
     const still = draw(stackSeries({ kinds, values: days, hatched: () => false, env: env() }), 3)!;
     expect(still.enterFrom).toBeUndefined();
+  });
+
+  it("does not grow a bar that an action brings back: a zoom out, a resize", () => {
+    // ECharts makes a bar the zoom left out again when the zoom shows it, and would play its enter animation.
+    const s = stackSeries({ kinds, values: [[1, 1, 1], [1, 1, 1]], hatched: () => false, env: env({ motion: true }) });
+    expect(draw(s, 1)!.enterFrom).toEqual({ scaleY: 0 });
+    for (const action of ["dataZoom", "resize"]) {
+      const g = draw(s, 1, action)!;
+      expect(g.enterFrom).toBeUndefined();
+      expect(g.enterAnimation).toBeUndefined();
+      expect(g.children).toHaveLength(3); // drawn whole, at once
+    }
   });
 });

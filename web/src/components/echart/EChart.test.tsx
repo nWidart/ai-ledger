@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createRef, StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { prevented } from "../../testing";
@@ -188,6 +188,25 @@ describe("EChart", () => {
   it("leaves animation to the option when motion is allowed", async () => {
     render(show({ option: env => ({ ...option(env), animation: true }) }));
     expect((await drawn()).last).toMatchObject({ animation: true });
+  });
+
+  it("animates the first draw only: newer data, a theme and a new view are drawn at once", async () => {
+    const moving = (env: ChartEnv): EChartsOption => ({ ...option(env), animation: true });
+    const { rerender, unmount } = render(show({ option: moving, view: "a" }));
+    const chart = await drawn();
+    expect(chart.last).toMatchObject({ animation: true });
+    rerender(show({ option: env => moving(env), view: "a" })); // newer data: a bar that appears must not grow
+    expect(chart.last).toMatchObject({ animation: false });
+    act(() => setTheme("dark"));
+    expect(chart.last).toMatchObject({ animation: false });
+    rerender(show({ option: moving, view: "b" }));
+    expect(chart.last).toMatchObject({ animation: false });
+    expect(chart.options.map(o => o.option.animation)).toEqual([true, false, false, false]);
+
+    unmount();
+    render(show({ option: moving })); // another chart: its own first draw
+    await waitFor(() => expect(fakeECharts.charts).toHaveLength(2));
+    expect((await drawn()).options.map(o => o.option.animation)).toEqual([true]);
   });
 
   it("shows the failure text and keeps the group when the runtime fails to load", async () => {

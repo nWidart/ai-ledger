@@ -392,13 +392,16 @@ export function EChart({
   // The chart is given the caller's option with what the wrapper keeps for itself, so no option builder can forget it:
   // reduced motion, and the band. Only the wrapper's actions draw the band: left to its own triggers, ECharts also draws
   // one on a click, over a point nothing reads (a click on a point the chart declines, with the pointer at rest).
+  // Motion is for the chart's first drawing alone: its marks grow once. Every later one is drawn at once, so a bar that
+  // newer data adds, or a new view brings, does not grow while the others stand.
   // A new view shows every point: its slider merges into the old one by id and would keep the old window, so the window
   // is reset.
-  const drew = useRef(shows);
+  const drew = useRef(shows), drawn = useRef<ECharts | null>(null);
   useEffect(() => {
     if (!chart) return;
-    const made = option(env);
-    chart.setOption({ ...made, ...(env.motion ? {} : { animation: false }), axisPointer: { ...made.axisPointer, triggerOn: "none" } }, { replaceMerge: REPLACE });
+    const made = option(env), first = drawn.current !== chart;
+    drawn.current = chart;
+    chart.setOption({ ...made, ...(env.motion && first ? {} : { animation: false }), axisPointer: { ...made.axisPointer, triggerOn: "none" } }, { replaceMerge: REPLACE });
     if (drew.current === shows) return keep(chart);
     drew.current = shows;
     unzoom(chart);
