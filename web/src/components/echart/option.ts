@@ -199,7 +199,8 @@ export function tracksOption(env: OptionEnv, { layout, labels, format, y }: {
 /** The selected point's mark: a one-item custom series on the frame, drawn over the grid lines and under the marks (z 1). It
  *  frames the point's whole band over the frame's height, inset by half its line, so it reads apart from the reading band,
  *  which has no frame: tinted in a 1.5px accent frame in the theme, unfilled in a 2px frame in forced colors, where the
- *  accent is Highlight. A point outside the zoom window is filtered out and draws nothing. So does an index outside the
+ *  accent is Highlight. In a band narrower than two such lines (a hundred weeks in a phone's width) the line is half the
+ *  band, so the frame never leaves its band. A point outside the zoom window is filtered out and draws nothing. So does an index outside the
  *  axis: ECharts places it by extrapolation, in a margin or off the box, and does not clip a custom series. */
 export const selectionMark = (env: OptionEnv, { index }: { index: number }): CustomSeriesOption => ({
   type: "custom",
@@ -213,7 +214,8 @@ export const selectionMark = (env: OptionEnv, { index }: { index: number }): Cus
     const frame = params.coordSys as unknown as { x: number; y: number; width: number; height: number };
     const [cx] = api.coord([api.value(0), 0]) as [number, number];
     if (!(cx >= frame.x && cx <= frame.x + frame.width)) return null;
-    const band = (api.size!([1, 0]) as number[])[0]!, line = env.forced ? 2 : 1.5;
+    // At most half the band: a wider line would make the inset rectangle's width negative and spill into the bands beside.
+    const band = (api.size!([1, 0]) as number[])[0]!, line = Math.min(env.forced ? 2 : 1.5, band / 2);
     return {
       type: "rect",
       emphasisDisabled: true, // no highlight state, as the stack has none

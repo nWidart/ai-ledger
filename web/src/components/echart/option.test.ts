@@ -317,10 +317,10 @@ describe("tracksOption", () => {
 });
 
 describe("selectionMark", () => {
-  // Drawn through renderItem over a stubbed frame: from y 20, 172px tall, with 40px bands from x 52.
-  const draw = (e: OptionEnv, index: number) => {
+  // Drawn through renderItem over a stubbed frame: from y 20, 172px tall, with bands `band` px wide (40 by default) from x 52.
+  const draw = (e: OptionEnv, index: number, band = 40) => {
     const s = selectionMark(e, { index }), row = (s.data as number[][])[0]!;
-    const api = { value: (dim: number) => row[dim], coord: ([x]: number[]) => [52 + (x! + .5) * 40, 0], size: ([dx]: number[]) => [dx! * 40, 0] };
+    const api = { value: (dim: number) => row[dim], coord: ([x]: number[]) => [52 + (x! + .5) * band, 0], size: ([dx]: number[]) => [dx! * band, 0] };
     const params = { coordSys: { type: "cartesian2d", x: 52, y: 20, width: 532, height: 172 } };
     return s.renderItem!(params as unknown as CustomSeriesRenderItemParams, api as unknown as CustomSeriesRenderItemAPI) as
       { type: string; shape: Record<string, number>; style: Record<string, unknown> };
@@ -345,6 +345,19 @@ describe("selectionMark", () => {
     const r = draw(env({ forced: true }), 0); // band 0 runs from x 52 to 92
     expect(r.shape).toEqual({ x: 53, y: 21, width: 38, height: 170 });
     expect(r.style).toEqual({ fill: "none", stroke: "ink-accent", lineWidth: 2 });
+  });
+
+  it("keeps its frame inside a band narrower than two lines: the line is at most half the band", () => {
+    // 98 weeks in a 246px box at 200% text: bands of 1.12px. Band 3 runs from x 55.36 to 56.48.
+    for (const forced of [false, true]) {
+      const r = draw(env({ forced }), 3, 1.12), w = r.style.lineWidth as number, { x, y, width, height } = r.shape as { x: number; y: number; width: number; height: number };
+      expect(w).toBeCloseTo(.56);
+      expect(width).toBeGreaterThan(0);
+      expect(x - w / 2).toBeCloseTo(55.36);
+      expect(x + width + w / 2).toBeCloseTo(56.48);
+      expect(y - w / 2).toBeCloseTo(20);
+      expect(y + height + w / 2).toBeCloseTo(192);
+    }
   });
 
   it("draws nothing for an index outside the axis, which ECharts would place in a margin or off the box", () => {
