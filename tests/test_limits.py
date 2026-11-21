@@ -735,8 +735,18 @@ class PayloadTest(AnalysisCase):
         out = self.payload(self.NOW, source="codex")
         self.assertEqual({w["provider"] for w in out["windows"]}, {"codex"})
         self.assertEqual([f["provider"] for f in out["freshness"]], ["codex"])
+        self.assertTrue(out["plan_limits"])
+        self.assertTrue(self.payload(self.NOW)["plan_limits"])
         with self.assertRaises(ValueError):
             self.payload(self.NOW, source="gemini")
+
+    def test_grok_reports_no_plan_limits(self):
+        self.spend("grok", "grok-4.7-build", (self.NOW - timedelta(hours=1), 2.0))
+        out = self.payload(self.NOW, source="grok")
+        self.assertFalse(out["plan_limits"])
+        self.assertEqual((out["windows"], out["binding"], out["suggestion"], out["history"], out["unused"], out["freshness"]),
+                         ([], None, None, [], [], []))
+        self.assertEqual(out["value"], dict(limits=[], projects=[]))
 
     def test_freshness_flags_failing_polls(self):
         out = self.payload(self.NOW + timedelta(minutes=30), polls=dict(claude=dict(failures=3, last_ok="2026-11-06T12:00:00+00:00",
