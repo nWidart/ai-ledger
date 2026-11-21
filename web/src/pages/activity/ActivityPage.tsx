@@ -174,7 +174,8 @@ function Overview({ views }: { views: ReactNode }) {
   // Page-only state: flaky tools first resets when the view changes; the sorts stay.
   const sel = selectionOf(search), sess = sessOf(search, sel), tab: WorkTab = search.tab ?? "sessions";
   const [flaky, setFlaky] = useState(false), [toolSort, setToolSort] = useState<SortBy<ToolKey> | null>(null);
-  const [sessSort, setSessSort] = useState<SortBy<SessionSort> | null>(null), [projSort, setProjSort] = useState<SortBy<ProjectKey>>(PROJECT_SORT);
+  // The Sessions sort: its keys, first key first; empty is the list's own order.
+  const [sessSort, setSessSort] = useState<readonly SortBy<SessionSort>[]>([]), [projSort, setProjSort] = useState<SortBy<ProjectKey>>(PROJECT_SORT);
   const [metric, setMetricState] = useState<WorkMetric>(loadMetric);
   const setMetric = (m: WorkMetric) => { setMetricState(m); try { localStorage.setItem(METRIC_KEY, m); } catch { /* storage off */ } };
   const lastView = useRef(viewKey);
@@ -213,7 +214,7 @@ function Overview({ views }: { views: ReactNode }) {
   // The attention actions and the vitals show the table in the order they promise.
   const acts = {
     loops: () => go("loops", "loops-h"),
-    near: () => { setSessSort(null); go("sessions", undefined, { q: null, near: true }); },
+    near: () => { setSessSort([]); go("sessions", undefined, { q: null, near: true }); },
     flaky: () => { setFlaky(true); setToolSort(null); go("tools"); },
     tests: () => go("loops", "tests-h"),
   };
@@ -221,13 +222,13 @@ function Overview({ views }: { views: ReactNode }) {
     sessions: () => go("sessions"),
     tests: () => go("loops", "tests-h"),
     subagents: () => { setProjSort({ key: "subagent_share", desc: true }); go("projects"); },
-    speed: () => { setSessSort({ key: "output_per_s", desc: true }); go("sessions"); },
+    speed: () => { setSessSort([{ key: "output_per_s", desc: true }]); go("sessions"); },
   };
   // A pick lists the bucket's sessions as such: the search, the near-limit filter and the sort go. Only the current view's
   // chart takes one.
   const pick = (p: WorkPick) => {
     setSearch({ q: null, near: null, ...(p.week ? { week: p.day, day: null } : { day: p.day, week: null }) }, { push: false });
-    setSessSort(null);
+    setSessSort([]);
   };
   const clear = () => setSearch({ day: null, week: null }, { push: false });
   // The panel's own clear removes its button: the focus goes to the chart, as the chip's does.

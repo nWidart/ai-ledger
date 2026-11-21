@@ -38,6 +38,15 @@ Live's 10-minute pulse has no data table. Read it with the arrow keys, one minut
 
 A sortable column header holds a button. The first press sorts by that column, most first (A to Z first for text columns). A second press reverses the direction. An arrow in the header shows the direction, and the header exposes `aria-sort`. Only the sorted header carries it. Rows with no value for the column come last in either direction.
 
+Activity's Sessions table also sorts by up to three columns. Every other table sorts by one.
+
+- Tick **Sort by several columns** beside the search, then press a header to add its column as the last key, most first. Press it again to reverse it, and a third time to remove it.
+- Hold Shift as you press a header to do the same with the box unticked.
+- At three columns, a new column replaces the third, so the first two keys stay.
+- Without the box or Shift, a press sorts by that column alone, as in every table.
+
+Each sorted header shows its arrow and its rank, such as "↓1" and "↓2". Only the first column's header carries `aria-sort`; the others say their rank and direction in their button's name, such as "Prompts, sort 2 of 2, descending". The hint above the table says the whole order, such as "costliest first, then most prompts first".
+
 A column whose meaning needs a note has a toggletip beside its header. The toggletip shows its text on hover, and on activation from the keyboard.
 
 Errors' type table also has a "Filter types…" field that lists the types whose label or id contains the text, and announces "N of M types".
@@ -57,7 +66,7 @@ A box is ticked when its column shows in the window now. On a narrow window the 
 
 The button reads "Columns, 2 hidden" while you hide two columns.
 
-The sorted column always shows, even a column you hid; your choice applies again when the sort moves to another column. Unticking the sorted column hides it and takes it out of the sort, so the list returns to its own order.
+Every sorted column shows, even a column you hid. Your visibility choice applies again when a column leaves the sort. Unticking a sorted column hides it and removes its sort key. The table returns to its default order when the last key is removed.
 
 The browser keeps the choice for every view and after a reload. The URL does not hold it: a shared link opens at the reader's own columns. When the browser blocks site storage, the choice lasts until you reload the page.
 

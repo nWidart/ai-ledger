@@ -122,7 +122,7 @@
 /* Error loops and Failed test runs: the session is the row's header and aligns as the data cell it was. */
 .pg-activity :is(#loops, #tests) tbody th[scope=row] { text-align: start; }
 /* The sessions table fits its box without scrolling sideways: the session column gives up room to the model time and
-   speed, then the least needed columns go first (opt2, then opt1, then opt). The sorted column always shows. */
+   speed, then the least needed columns go first (opt2, then opt1, then opt). Sorted columns always show. */
 .pg-activity #sessions :is(td, th).sess { max-width: 16rem; }
 .pg-activity #sessions :is(td, th).sess .small { overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 78.75em) {
@@ -146,7 +146,7 @@
   .pg-activity #sessions :is(td, th).when { white-space: normal; }
   .pg-activity #sessions :is(td, th).when .small { overflow-wrap: anywhere; }
 }
-/* The sorted column, and a column the user keeps (the Columns list), show at any width; the region scrolls sideways when they do not fit. */
+/* Every sorted column, and a column the user keeps (the Columns list), show at any width; the region scrolls sideways when they do not fit. */
 .pg-activity #sessions :is(td, th):is(.sorted, .keep) { display: table-cell; }
 /* The Columns list: a popover of checkboxes under its button, scrolling when the window is short. */
 .pg-activity #sessions .cols-pos { z-index: var(--z-popover); }
