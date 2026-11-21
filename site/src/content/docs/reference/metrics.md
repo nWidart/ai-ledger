@@ -16,7 +16,7 @@ scrape_configs:
     scrape_interval: 30s
     static_configs:
       - targets: ["127.0.0.1:8765"]
-        labels: {instance: laptop}
+        labels: {instance: server}
 ```
 
 If Prometheus runs in a container, give it host networking so that `127.0.0.1` is the machine's.
@@ -35,7 +35,7 @@ Every `_total` family is the total over the whole store at scrape time, not a co
 - **`ai-ledger rebuild` can lower a counter** when a parser fix drops rows. Prometheus reads a lower value as a counter reset, and `rate()` stays right.
 - **A new label set starts at its total.** A project's first sample is its baseline.
 - **A request shows up late.** Prometheus stamps values at scrape time, so a request appears up to one ingest interval (60 seconds) plus one scrape interval after it happened.
-- **Scrapes are cheap.** The counters are worked out again only after an ingest or a limit poll stored something, or after `workloads.json`, `prices.json` or `automated.json` changed. A scrape in between reuses them. A scrape never takes the store lock.
+- **Counters are cached.** The counters are worked out again only after an ingest or a limit poll stored something, or after `workloads.json`, `prices.json` or `automated.json` changed. A scrape in between reuses them. A scrape never takes the store lock. The active-sessions gauge is the exception: each scrape reads the newest lines of every active session, as the Live page does, which takes about 1.6 seconds on a store of 3,900 sessions with several running, and nothing when none is.
 - **A failed scrape answers 500** with the error's type only. The next scrape tries again.
 
 The app loads no history into Prometheus beforehand. There is no OpenTelemetry export, no push and no remote write.

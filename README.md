@@ -92,10 +92,10 @@ scrape_configs:
     scrape_interval: 30s
     static_configs:
       - targets: ["127.0.0.1:8765"]
-        labels: {instance: laptop}
+        labels: {instance: server}
 ```
 
-Counters are totals over the whole store, so they survive a restart. The first scrape shows the whole history as one step; `rate()` and `increase()` are right from the second scrape on. A scrape between two ingests costs nothing: the counters are worked out again only after an ingest stored something.
+Counters are totals over the whole store, so they survive a restart. The first scrape shows the whole history as one step; `rate()` and `increase()` are right from the second scrape on. The counters are worked out again only after an ingest stored something; the active-sessions gauge reads each active session's newest lines at every scrape, as the Live page does.
 
 **A second machine.** Run one AI Ledger per machine and let one Prometheus scrape them all. The app keeps listening on `127.0.0.1`; publish only its `/metrics` path to your tailnet with `tailscale serve`:
 
