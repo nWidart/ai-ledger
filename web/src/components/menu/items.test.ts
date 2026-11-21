@@ -34,9 +34,6 @@ describe("project menu", () => {
   it("opens the sheet on the current page", () => {
     expect(href(items(jobdesk, "/usage?range=7&tool=Bash"), "project-sheet")).toBe("/usage?range=7&inspect=jobdesk");
   });
-  it("opens the sheet over Limits too: every page hosts the sheets", () => {
-    expect(href(items(jobdesk, "/limits?range=7"), "project-sheet")).toBe("/limits?range=7&inspect=jobdesk");
-  });
   it("opens the sheet over Activity's Judgments view, and over Live with the followed session kept", () => {
     expect(href(items(jobdesk, "/usage?range=7&view=judgments&session=s1"), "project-sheet")).toBe("/usage?range=7&view=judgments&inspect=jobdesk");
     expect(href(items(jobdesk, "/live?session=s1&sheet=s2"), "project-sheet")).toBe("/live?inspect=jobdesk&session=s1");

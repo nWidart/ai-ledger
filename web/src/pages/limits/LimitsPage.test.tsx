@@ -410,6 +410,33 @@ describe("LimitsPage", () => {
     expect(heading.isConnected).toBe(true); // Limits stays under the sheet
   });
 
+  // A project row is the project for the context menu here as on every page; the folded "smaller projects" row is none.
+  it.each([
+    ["What used this window", () => within(details(windowName(claude)).getByRole("heading", { name: "What used this window" }).closest<HTMLElement>(".lim-used")!)
+      .getByRole("link", { name: /^foo in Cost/ })],
+    ["Commits a point, by project", () => within(screen.getByRole("table", { name: "Commits a point, by project" })).getAllByRole("rowheader", { name: "foo" })[0]!],
+  ])("opens a project's menu from %s, and its sheet over Limits", async (_where, target) => {
+    mockApi({ "/api/limits": () => fixture });
+    history.replaceState(null, "", "/limits?range=30");
+    openDrawers();
+    renderRouter();
+    const heading = await lede();
+    fireEvent.contextMenu(target(), { clientX: 20, clientY: 30 });
+    await userEvent.click(within(screen.getByRole("menu", { name: "foo actions" })).getByRole("menuitem", { name: "Open project sheet" }));
+    expect(location.pathname + location.search).toBe("/limits?range=30&inspect=foo");
+    expect(heading.isConnected).toBe(true);
+  });
+
+  it("marks no project on the folded smaller-projects row", async () => {
+    show(fixture);
+    await lede();
+    const rows = within(screen.getByRole("table", { name: "Commits a point, by project" })).getAllByRole("row").slice(1);
+    for (const r of rows) {
+      const name = r.querySelector("th")!.textContent!;
+      expect(r.getAttribute("data-subject")).toBe(/smaller project/.test(name) ? null : `project:${name}`);
+    }
+  });
+
   it("opens a session sheet in place: the URL names it, Limits stays under it, and Close returns to Limits", async () => {
     const f = mockApi({ "/api/limits": () => fixture, "/api/session": () => session });
     history.replaceState(null, "", "/limits?range=30&source=codex");
