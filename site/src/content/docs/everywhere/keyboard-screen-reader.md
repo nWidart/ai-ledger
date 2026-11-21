@@ -61,6 +61,8 @@ Charts and tab lists act on these keys only when you hold no Alt, Ctrl, Meta or 
 
 Every data table has an accessible name, and every header cell declares its scope. A table wider than its wrapper sits in a named region that takes keyboard focus; the arrow keys scroll it. See [Data tables](/ai-ledger/everywhere/data-tables/).
 
+Activity's Sessions table sorts by up to three columns. Tick **Sort by several columns**, then press Enter or Space on each header to add it; focus stays on the header. Only the first column's header carries `aria-sort`. Each other sorted header's button ends its name with its rank and direction, such as "Prompts, sort 2 of 2, descending", and the first one's with its rank, such as "Est. cost, sort 1 of 2". The hint above the table says the new order as a polite status.
+
 ## Display
 
 - Forced-colors (Windows high contrast) modes are supported. Pressed buttons, the selected tab and sort header, the current page, the selected chart bucket, focus rings and chart bars stay distinguishable using system colors.

@@ -30,10 +30,11 @@ export const queries = {
     queryOptions({ queryKey: ["sessions", view(v), opts], queryFn: get<SessionsPage>(sessionsUrl(v, opts)) }),
   // The drawer's pages, loaded by offset. Its key differs from `sessions`' at index 1, so the two caches never collide.
   // No maxPages: a user who paged far wants those rows.
-  sessionPages: (v: View, { q, near, day, days, sort, desc }: Omit<NonNullable<Parameters<typeof sessionsUrl>[1]>, "offset" | "limit"> = {}) =>
+  // sort: the keys, first key first; none (or an empty list) is the list's own order.
+  sessionPages: (v: View, { q, near, day, days, sort }: Omit<NonNullable<Parameters<typeof sessionsUrl>[1]>, "offset" | "limit"> = {}) =>
     infiniteQueryOptions({
-      queryKey: ["sessions", "pages", view(v), { q, near, day, days, sort, desc }],
-      queryFn: ({ pageParam, signal }) => getJson<SessionsPage>(sessionsUrl(v, { q, near, day, days, sort, desc, offset: pageParam }), { signal }),
+      queryKey: ["sessions", "pages", view(v), { q, near, day, days, sort }],
+      queryFn: ({ pageParam, signal }) => getJson<SessionsPage>(sessionsUrl(v, { q, near, day, days, sort, offset: pageParam }), { signal }),
       initialPageParam: 0,
       getNextPageParam: (last, pages) => {
         const loaded = pages.reduce((n, p) => n + p.sessions.length, 0);

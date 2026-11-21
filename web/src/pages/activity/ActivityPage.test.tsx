@@ -1531,3 +1531,134 @@ describe("Sessions columns", () => {
     await waitFor(() => expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toContain("newest first"));
   });
 });
+
+describe("Sessions sort by several columns", () => {
+  beforeEach(() => { resetColumnChoice(); });
+  afterEach(() => { vi.unstubAllGlobals(); resetColumnChoice(); });
+
+  const panel = () => within(document.getElementById("sessions")!);
+  const head = (key: string) => document.querySelector<HTMLElement>(`#sessions thead th[data-sort="${key}"]`)!;
+  /** A header's sort button, whatever its name says of the sort. */
+  const sortButton = (key: string) => head(key).querySelector("button")!;
+  const several = () => panel().getByRole<HTMLInputElement>("checkbox", { name: "Sort by several columns" });
+  const hint = () => document.querySelector("#sessions .hint [aria-live]")!.textContent;
+  const lastSessionsUrl = () => fetched().map(String).filter(u => u.startsWith("/api/sessions")).at(-1);
+  /** The sorted headers, by key, in table order, and their marks. */
+  const marks = () => [...document.querySelectorAll<HTMLElement>("#sessions thead th.sorted")].map(th => [th.dataset.sort, th.querySelector(".sortmark")!.textContent]);
+  /** Whether every row's cell of a column carries the class. */
+  const cellsCarry = (key: string, cls: string) => {
+    const at = [...document.querySelectorAll<HTMLElement>("#sessions thead th")].indexOf(head(key));
+    return [...document.querySelectorAll("#sessions tbody tr")].every(r => r.children[at]!.classList.contains(cls));
+  };
+  const visit = async () => {
+    serve(usage);
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    await waitFor(() => expect(document.querySelectorAll("#sessions tbody tr")).toHaveLength(sessions.sessions.length));
+  };
+
+  it("adds a header to the sort with the box ticked, keeps focus on it, marks each key and says the whole order", async () => {
+    await visit();
+    expect(several().checked).toBe(false);
+    await userEvent.click(panel().getByRole("button", { name: "Est. cost" }));
+    await waitFor(() => expect(lastSessionsUrl()).toBe("/api/sessions?range=30&sort=cost&desc=1"));
+    await userEvent.click(several());
+    const prompts = panel().getByRole("button", { name: "Prompts" });
+    act(() => prompts.focus());
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() => expect(lastSessionsUrl()).toBe("/api/sessions?range=30&sort=-cost%2C-prompts"));
+    expect(document.activeElement).toBe(prompts);
+    expect(marks()).toEqual([["prompts", "↓2"], ["cost", "↓1"]]);
+    expect([...document.querySelectorAll<HTMLElement>("#sessions th[aria-sort]")].map(th => [th.dataset.sort, th.getAttribute("aria-sort")])).toEqual([["cost", "descending"]]);
+    expect(panel().getByRole("button", { name: "Prompts, sort 2 of 2, descending" })).toBe(prompts);
+    expect(panel().getByRole("button", { name: "Est. cost, sort 1 of 2" })).toBe(sortButton("cost"));
+    await waitFor(() => expect(hint()).toContain(`${sessions.total} sessions, costliest first, then most prompts first.`));
+    expect(cellsCarry("cost", "sorted") && cellsCarry("prompts", "sorted")).toBe(true);
+    expect(location.search).toBe("?range=30");
+  });
+
+  it("adds on a Shift-click with the box unticked, removes on a third press, replaces the third key, and sorts by one column without either", async () => {
+    const user = userEvent.setup();
+    await visit();
+    await user.click(sortButton("cost"));
+    await user.keyboard("{Shift>}");
+    await user.click(sortButton("errors"));
+    await user.keyboard("{/Shift}");
+    expect(several().checked).toBe(false);
+    await waitFor(() => expect(lastSessionsUrl()).toBe("/api/sessions?range=30&sort=-cost%2C-errors"));
+    await waitFor(() => expect(hint()).toContain("costliest first, then most failed calls first."));
+    // With the box ticked: a press adds, a second reverses, a third removes, leaving the earlier keys.
+    await user.click(several());
+    await user.click(sortButton("prompts"));
+    await waitFor(() => expect(lastSessionsUrl()).toBe("/api/sessions?range=30&sort=-cost%2C-errors%2C-prompts"));
+    await user.click(sortButton("prompts"));
+    await waitFor(() => expect(lastSessionsUrl()).toBe("/api/sessions?range=30&sort=-cost%2C-errors%2Cprompts"));
+    expect(marks()).toEqual([["prompts", "↑3"], ["cost", "↓1"], ["errors", "↓2"]]);
+    await user.click(sortButton("prompts"));
+    await waitFor(() => expect(hint()).toContain("costliest first, then most failed calls first."));
+    expect(marks()).toEqual([["cost", "↓1"], ["errors", "↓2"]]);
+    // At three keys a new one replaces the third; Session sorts as any column.
+    await user.click(sortButton("tokens"));
+    await user.click(sortButton("first_ts"));
+    await waitFor(() => expect(lastSessionsUrl()).toBe("/api/sessions?range=30&sort=-cost%2C-errors%2C-first_ts"));
+    expect(marks()).toEqual([["first_ts", "↓3"], ["cost", "↓1"], ["errors", "↓2"]]);
+    expect(cellsCarry("first_ts", "sorted")).toBe(true);
+    await waitFor(() => expect(hint()).toContain("costliest first, then most failed calls first, then newest first."));
+    // Box unticked, no Shift: the column alone.
+    await user.click(several());
+    await user.click(sortButton("tokens"));
+    await waitFor(() => expect(lastSessionsUrl()).toBe("/api/sessions?range=30&sort=tokens&desc=1"));
+    expect(marks()).toEqual([["tokens", "↓"]]);
+    await waitFor(() => expect(hint()).toContain(`${sessions.total} sessions, most tokens first.`));
+  });
+
+  it("clears every key for the near-limit action and a chart day, and the Output speed vital sorts by output speed alone", async () => {
+    const user = userEvent.setup();
+    const twoKeys = async () => {
+      await user.click(several());
+      await user.click(sortButton("errors"));
+      await user.click(sortButton("cost"));
+      await user.click(several());
+      await waitFor(() => expect(marks()).toEqual([["cost", "↓2"], ["errors", "↓1"]]));
+    };
+    await visit();
+    await twoKeys();
+    await user.click(attention().getByRole("button", { name: "See it" }));
+    await waitFor(() => expect(lastSessionsUrl()).toBe("/api/sessions?range=30&near=1"));
+    expect(marks()).toEqual([]);
+    expect(document.querySelector("#sessions th[aria-sort]")).toBeNull();
+    await waitFor(() => expect(hint()).toContain("nearest the limit first"));
+    await twoKeys();
+    const chart = screen.getByRole("group", { name: /^Commits/ });
+    act(() => chart.focus());
+    fireEvent.keyDown(chart, { key: "End" });
+    fireEvent.keyDown(chart, { key: "ArrowLeft" });
+    fireEvent.keyDown(chart, { key: "Enter" });
+    await waitFor(() => expect(lastSessionsUrl()).toBe("/api/sessions?range=30&day=2026-11-04"));
+    expect(marks()).toEqual([]);
+    await twoKeys();
+    await user.click(vital("Output speed").closest("button")!);
+    await waitFor(() => expect(lastSessionsUrl()).toBe("/api/sessions?range=30&sort=output_per_s&desc=1"));
+    expect(marks()).toEqual([["output_per_s", "↓"]]);
+  });
+
+  it("keeps every sorted column shown, and unticking a later key's column takes that key alone out of the sort", async () => {
+    // A phone: the width hides Tokens and Compactions (opt2) and Commits (opt).
+    vi.stubGlobal("matchMedia", (q: string) => ({ media: q, matches: true, addEventListener() {}, removeEventListener() {} }));
+    const user = userEvent.setup();
+    await visit();
+    await user.click(several());
+    for (const key of ["tokens", "compactions", "commits"]) await user.click(sortButton(key));
+    await waitFor(() => expect(lastSessionsUrl()).toBe("/api/sessions?range=30&sort=-tokens%2C-compactions%2C-commits"));
+    for (const key of ["tokens", "compactions", "commits"]) expect(cellsCarry(key, "sorted")).toBe(true);
+    await user.click(panel().getByRole("button", { name: /^Columns/ }));
+    const list = within(screen.getByRole("dialog", { name: "Columns" }));
+    for (const name of ["Tokens", "Compactions", "Commits"]) expect(list.getByRole<HTMLInputElement>("checkbox", { name }).checked).toBe(true);
+    await user.click(list.getByRole("checkbox", { name: "Compactions" }));
+    expect(document.querySelector('#sessions thead th[data-sort="compactions"]')).toBeNull();
+    expect(marks()).toEqual([["tokens", "↓1"], ["commits", "↓2"]]);
+    await waitFor(() => expect(lastSessionsUrl()).toBe("/api/sessions?range=30&sort=-tokens%2C-commits"));
+    await waitFor(() => expect(hint()).toContain("most tokens first, then most commits first."));
+  });
+});

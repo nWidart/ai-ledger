@@ -123,6 +123,8 @@ export interface ListedSessionRow extends TitledSessionRow { model_ms: number | 
 export interface SessionsPage { total: number; offset: number; sessions: ListedSessionRow[] }
 export type SessionSort = "first_ts" | "duration_s" | "prompts" | "tokens" | "cost" | "peak_context" | "errors" | "compactions" | "commits" | "tests_failed"
   | "model_ms" | "output_per_s";
+/** One key of a /api/sessions sort and its direction. */
+export interface SessionSortKey { key: SessionSort; desc: boolean }
 
 /** /api/day: the usage payload's project, tool, hook, error-loop and failed-test rows, limited to the view's local days from
  *  day: one, or the week a work chart bar holds (days 7), clipped to the view's range: start and end are the days counted. */
@@ -602,8 +604,11 @@ export const viewOf = (h: { project: string; range: number; auto: boolean; sourc
   ({ project: h.project, range: h.range, automated: h.auto, source: h.source });
 const viewQs = (v: View) => ({ project: v.project, range: v.range, automated: v.automated, source: v.source });
 export const usageUrl = (v: View, session = "") => `/api/usage?${qs({ ...viewQs(v), session })}`;
-export const sessionsUrl = (v: View, o: { q?: string; near?: boolean; offset?: number; limit?: number; day?: Day; days?: Span; sort?: SessionSort; desc?: boolean } = {}) =>
-  `/api/sessions?${qs({ ...viewQs(v), q: o.q, near: o.near, offset: o.offset || undefined, limit: o.limit, day: o.day, days: o.day && o.days !== 1 ? o.days : undefined, sort: o.sort, desc: o.desc })}`;
+/** sort: the keys, first key first; one key goes as sort=<key>&desc=1, as before, several as one list (sort=-cost,prompts). */
+const sortQs = (sort: readonly SessionSortKey[] = []) => sort.length === 1 ? { sort: sort[0]!.key, desc: sort[0]!.desc }
+  : { sort: sort.map(s => (s.desc ? "-" : "") + s.key).join(",") };
+export const sessionsUrl = (v: View, o: { q?: string; near?: boolean; offset?: number; limit?: number; day?: Day; days?: Span; sort?: readonly SessionSortKey[] } = {}) =>
+  `/api/sessions?${qs({ ...viewQs(v), q: o.q, near: o.near, offset: o.offset || undefined, limit: o.limit, day: o.day, days: o.day && o.days !== 1 ? o.days : undefined, ...sortQs(o.sort) })}`;
 export const dayUrl = (v: View, day: Day, days: Span = 1) => `/api/day?${qs({ ...viewQs(v), day, days: days === 1 ? undefined : days })}`;
 export const sessionUrl = (id: string) => `/api/session?${qs({ id })}`;
 export const promptUrl = (session: string) => `/api/prompt?${qs({ session })}`;
