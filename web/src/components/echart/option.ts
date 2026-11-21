@@ -4,7 +4,7 @@ import type { CustomSeriesOption, EChartsOption, SliderDataZoomComponentOption, 
 
 /** The part of the chart environment these helpers read: a structural stand-in for `ChartEnv` in `tokens.ts`, which satisfies it. */
 export interface OptionEnv {
-  ink: { text: string; muted: string; grid: string; surface: string; border: string; cursor: string; accent: string };
+  ink: { text: string; muted: string; grid: string; surface: string; border: string; cursor: string; accent: string; tint: string };
   textScale: number;
   motion: boolean;
 }
@@ -82,7 +82,14 @@ export const pointLabel = (env: OptionEnv, { index, value, text }: { index: numb
 /** The fewest points the zoom shows: the slider's handles and the plus key both stop there. */
 export const MIN_SHOWN = 7;
 
+/** A slider handle: a bar with round corners, 8 by 20, drawn at the slider's height. */
+const HANDLE = "path://M2,0h4a2,2,0,0,1,2,2v16a2,2,0,0,1-2,2h-4a2,2,0,0,1-2-2v-16a2,2,0,0,1,2-2Z";
+/** The trend drawn in the slider: faint, so it does not read as a second chart. */
+const TREND = (env: OptionEnv) => ({ lineStyle: { color: env.ink.muted, width: .75, opacity: .5 }, areaStyle: { color: env.ink.grid, opacity: .35 } });
+
 /** The zoom slider under the grid: 20px high, no detail text, no brush, at least MIN_SHOWN points wide, in the ink colors.
+ *  The days shown are tinted with the accent between two solid accent handles, in a muted frame, so the slider shows it can
+ *  be dragged and where its window is.
  *  Its fixed id lets a redraw merge into it, so the days shown survive a theme change (the wrapper replaces dataZoom, so
  *  an option without the slider removes it); with no id the redraw would make a new slider and show every point again. */
 export const zoomSlider = (env: OptionEnv): SliderDataZoomComponentOption => ({
@@ -94,11 +101,14 @@ export const zoomSlider = (env: OptionEnv): SliderDataZoomComponentOption => ({
   brushSelect: false,
   minValueSpan: MIN_SHOWN - 1,
   backgroundColor: "transparent",
-  borderColor: env.ink.border,
-  fillerColor: env.ink.cursor,
-  dataBackground: { lineStyle: { color: env.ink.muted }, areaStyle: { color: env.ink.grid } },
-  selectedDataBackground: { lineStyle: { color: env.ink.accent }, areaStyle: { color: env.ink.cursor } },
-  handleStyle: { color: env.ink.surface, borderColor: env.ink.border },
+  borderColor: env.ink.muted,
+  borderRadius: 3,
+  fillerColor: env.ink.tint,
+  dataBackground: TREND(env),
+  selectedDataBackground: TREND(env),
+  handleIcon: HANDLE,
+  handleSize: "100%",
+  handleStyle: { color: env.ink.accent, borderColor: env.ink.accent },
   moveHandleStyle: { color: env.ink.muted },
-  emphasis: { handleStyle: { borderColor: env.ink.accent }, moveHandleStyle: { color: env.ink.accent } },
+  emphasis: { handleStyle: { borderColor: env.ink.text }, moveHandleStyle: { color: env.ink.accent } },
 });

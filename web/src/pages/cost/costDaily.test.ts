@@ -13,7 +13,7 @@ import { costModel, costOption, type CostMetric, type CostModel } from "./costDa
 import type { Stack, TokenScale } from "./cost";
 
 const ink = { text: "ink-text", secondary: "ink-secondary", muted: "ink-muted", grid: "ink-grid", surface: "ink-surface",
-  border: "ink-border", cursor: "ink-cursor", accent: "ink-accent" };
+  border: "ink-border", cursor: "ink-cursor", accent: "ink-accent", tint: "ink-tint" };
 const env = (over: Partial<ChartEnv> = {}): ChartEnv => ({ color: s => s, ink, forced: false, textScale: 1, motion: false, width: 800, height: 240, ...over });
 
 const model = (d: UsagePayload, metric: CostMetric = "cost", { hidden = [] as string[], stack = "project" as Stack, scale = "volume" as TokenScale } = {}) =>

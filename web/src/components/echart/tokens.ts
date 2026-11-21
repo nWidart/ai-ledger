@@ -22,19 +22,22 @@ export interface ChartEnv {
   width: number;
   height: number;
 }
-export interface Ink { text: string; secondary: string; muted: string; grid: string; surface: string; border: string; cursor: string; accent: string }
+/** `cursor` is the translucent band over the point read; `tint` the translucent accent of a selected range, such as the
+ *  zoom slider's window. */
+export interface Ink { text: string; secondary: string; muted: string; grid: string; surface: string; border: string; cursor: string; accent: string; tint: string }
 
-/** The roles in the theme. The cursor is the text color at CURSOR.theme. */
+/** The roles in the theme. The cursor is the text color at CURSOR.theme, the tint the accent at TINT.theme. */
 export const THEME_INK: Readonly<Ink> = {
   text: "var(--text-primary)", secondary: "var(--text-secondary)", muted: "var(--text-muted)", grid: "var(--grid)",
-  surface: "var(--surface-1)", border: "var(--border)", cursor: "var(--text-primary)", accent: "var(--accent)",
+  surface: "var(--surface-1)", border: "var(--border)", cursor: "var(--text-primary)", accent: "var(--accent)", tint: "var(--accent)",
 };
-/** The roles under forced colors. The cursor is the highlight at CURSOR.forced. */
+/** The roles under forced colors. The cursor is the highlight at CURSOR.forced, the tint at TINT.forced. */
 export const FORCED_INK: Readonly<Ink> = {
   text: "CanvasText", secondary: "CanvasText", muted: "CanvasText", grid: "GrayText",
-  surface: "Canvas", border: "CanvasText", cursor: "Highlight", accent: "Highlight",
+  surface: "Canvas", border: "CanvasText", cursor: "Highlight", accent: "Highlight", tint: "Highlight",
 };
 const CURSOR = { theme: 0.06, forced: 0.4 };
+const TINT = { theme: 0.16, forced: 0.25 };
 
 const QUERIES = ["(prefers-color-scheme: dark)", "(forced-colors: active)", "(prefers-reduced-motion: reduce)"] as const;
 const FORCED = QUERIES[1];
@@ -109,6 +112,7 @@ export function useChartEnv(width: number, height: number): ChartEnv {
     const roles = forced ? FORCED_INK : THEME_INK;
     const ink = Object.fromEntries(Object.entries(roles).map(([k, css]) => [k, resolveColor(css)])) as unknown as Ink;
     ink.cursor = withAlpha(ink.cursor, forced ? CURSOR.forced : CURSOR.theme);
+    ink.tint = withAlpha(ink.tint, forced ? TINT.forced : TINT.theme);
     return { color: resolveColor, ink, forced, textScale: textScale(), motion: motion(), width, height };
     // now and theme are the change signals; the values are read fresh inside.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -3,7 +3,8 @@
 // any demo server already running are left alone), serves it on a free port of 127.0.0.1, opens /cost?range=30 in Chromium
 // and stops the server when it ends, also on a failure. Each check prints a line; it exits 1 naming what fails:
 // - a bar is drawn in the computed --proj-N color of its legend key, in light and after the theme toggle sets dark; with the
-//   theme on System, an emulated OS dark flip changes the drawn colors with no reload;
+//   theme on System, an emulated OS dark flip changes the drawn colors with no reload; in light and dark the zoom slider's
+//   two handles stand out from the panel, 3:1 at least;
 // - under emulated forced colors the axis text is the resolved CanvasText, the band is the Highlight and the bars keep an edge;
 // - at a 32px root font size no axis label leaves the box or overlaps another;
 // - in the tokens Share view a kind under 1% of a day is drawn at least 1px tall;
@@ -93,6 +94,17 @@ function helpers() {
     band: () => {
       const g = grid(), e = g && top().find(e => solid(e) && e.hasAttribute("fill-opacity") && rect(e).h >= (g.b - g.t) * .8 && rect(e).w < (g.r - g.l) / 2);
       return e ? { fill: tri(fill(e)), opacity: Number(e.getAttribute("fill-opacity")), ...rect(e) } : null;
+    },
+    /** The zoom slider's two handles, under the grid: solid paths narrower than 12px, left first. */
+    handles: () => {
+      const g = grid();
+      return g ? top().filter(e => solid(e) && !e.hasAttribute("fill-opacity") && rect(e).t > g.b + 1 && rect(e).w < 12).map(e => ({ fill: tri(fill(e)), ...rect(e) })).sort((a, c) => a.l - c.l) : [];
+    },
+    /** The WCAG contrast ratio of two "r,g,b" colors. */
+    contrast: (a, c) => {
+      const lum = t => t.split(",").map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }).reduce((s, v, i) => s + v * [.2126, .7152, .0722][i], 0);
+      const [x, y] = [lum(a), lum(c)].sort((p, q) => q - p);
+      return (x + .05) / (y + .05);
     },
     texts: () => top().filter(e => e.tagName === "text").map(e => ({ text: e.textContent, fill: tri(fill(e)), size: parseFloat(getComputedStyle(e).fontSize), ...rect(e) })),
     tip: () => {
@@ -189,6 +201,15 @@ try {
     for (let i = 0; i < 3 && (await page.locator("#navTheme").getAttribute("aria-label")) !== `Theme: ${want}`; i++) await page.locator("#navTheme").click();
   };
   const away = page => page.mouse.move(2, H - 2);
+  /** The slider's two handles stand out from the panel behind them: 3:1 at least, as a control's boundary must. */
+  const handleLine = async (page, scheme) => {
+    const h = await ev(page, () => {
+      const panel = window.chartfit.tri(getComputedStyle(document.querySelector("#spend")).backgroundColor);
+      return { panel, handles: window.chartfit.handles().map(x => ({ fill: x.fill, ratio: window.chartfit.contrast(x.fill, panel) })) };
+    });
+    line(`${scheme}: the slider's two handles stand out from the panel, 3:1 at least`, h.handles.length === 2 && h.handles.every(x => x.ratio >= 3),
+      `${h.handles.map(x => `rgb(${x.fill}) ${x.ratio.toFixed(2)}:1`).join(", ") || "no handles"} on rgb(${h.panel})`);
+  };
 
   // Colors: light, the toggle's dark, then System with the OS scheme flipped.
   {
@@ -197,6 +218,7 @@ try {
     await theme(page, "light");
     const light = await until(() => drawnKeys(page), k => k.ok);
     line("light: each legend key's color is drawn", light.ok, keyLine(light));
+    await handleLine(page, "light");
     await shot(page, "light");
     // The first key's color tells the schemes apart: every --proj-N token differs between them.
     const like = want => k => k.ok && k.keys[0].color === want.keys[0].color;
@@ -204,6 +226,7 @@ try {
     const dark = await until(() => drawnKeys(page), k => k.ok && k.keys[0].color !== light.keys[0].color);
     const dataTheme = await ev(page, () => document.documentElement.dataset.theme);
     line(`dark (data-theme="${dataTheme}"): each legend key's color is drawn, and differs from light`, dataTheme === "dark" && dark.ok && dark.keys[0].color !== light.keys[0].color, keyLine(dark));
+    await handleLine(page, "dark");
     await shot(page, "dark");
     await theme(page, "system");
     const sysLight = await until(() => drawnKeys(page), like(light));
@@ -347,11 +370,8 @@ try {
     await away(page);
     const before = { heading: await page.locator("#chartTitle").textContent(), lede: await page.locator("#lede").textContent(), url: page.url(), requests: requests.length };
     const handle = await ev(page, () => {
-      const g = window.chartfit.grid(), top = [...document.querySelector("#spend .echart-plot svg > g").children];
-      const hs = top.filter(e => e.tagName === "path" && e.getAttribute("fill") !== "none" && !e.hasAttribute("fill-opacity") && e.getBoundingClientRect().top > g.b + 1)
-        .map(e => e.getBoundingClientRect()).sort((a, b) => a.left - b.left);
-      const r = hs.at(-1);
-      return r && { x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2, slider: hs[0] ? r.right - hs[0].left : 0 };
+      const hs = window.chartfit.handles(), r = hs.at(-1);
+      return hs.length === 2 ? { x: (r.l + r.r) / 2, y: (r.t + r.b) / 2, slider: r.r - hs[0].l } : null;
     });
     if (!line("the zoom slider has handles under the plot", !!handle)) throw new Error("no slider handle to drag");
     await ev(page, () => { window.__said = []; });

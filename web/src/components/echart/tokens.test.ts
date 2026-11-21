@@ -169,7 +169,7 @@ describe("useChartEnv", () => {
     expect(result.current).toMatchObject({ width: 320, height: 200 });
   });
 
-  it("uses the theme roles, with the cursor at 6% of the text color", () => {
+  it("uses the theme roles, with the cursor at 6% of the text color and the tint at 16% of the accent", () => {
     fakeMedia();
     fakeComputed({
       "var(--text-primary)": "rgb(11, 11, 11)", "var(--text-secondary)": "rgb(82, 81, 78)", "var(--text-muted)": "rgb(102, 101, 95)",
@@ -181,6 +181,7 @@ describe("useChartEnv", () => {
     expect(result.current.ink).toEqual({
       text: "rgb(11, 11, 11)", secondary: "rgb(82, 81, 78)", muted: "rgb(102, 101, 95)", grid: "rgb(232, 230, 225)",
       surface: "rgb(252, 252, 251)", border: "rgb(226, 224, 218)", cursor: "rgba(11, 11, 11, 0.06)", accent: "rgb(180, 80, 42)",
+      tint: "rgba(180, 80, 42, 0.16)",
     });
   });
 
@@ -211,6 +212,7 @@ describe("useChartEnv", () => {
     expect(result.current.ink).toEqual({
       text: "rgb(255, 255, 255)", secondary: "rgb(255, 255, 255)", muted: "rgb(255, 255, 255)", grid: "rgb(128, 128, 128)",
       surface: "rgb(0, 0, 0)", border: "rgb(255, 255, 255)", cursor: "rgba(26, 235, 255, 0.4)", accent: "rgb(26, 235, 255)",
+      tint: "rgba(26, 235, 255, 0.25)",
     });
     act(() => media.set("(forced-colors: active)", false));
     expect(result.current.forced).toBe(false);

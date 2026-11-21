@@ -5,7 +5,7 @@ import { dayAxis, peakLabelAt } from "../chart";
 import { baseOption, categoryAxis, pointLabel, valueAxis, zoomSlider, type OptionEnv } from "./option";
 
 const ink = { text: "ink-text", secondary: "ink-secondary", muted: "ink-muted", grid: "ink-grid", surface: "ink-surface",
-  border: "ink-border", cursor: "ink-cursor", accent: "ink-accent" };
+  border: "ink-border", cursor: "ink-cursor", accent: "ink-accent", tint: "ink-tint" };
 const env = (over: Partial<OptionEnv> = {}): OptionEnv => ({ ink, textScale: 1, motion: true, ...over });
 const step = (r: number) => Math.max(1, Math.ceil(r));
 
@@ -112,9 +112,18 @@ describe("zoomSlider", () => {
     expect(zoomSlider(env()).id).toBe("zoom");
   });
 
+  it("tints the days shown and fills both handles with the accent, in a muted frame, over a muted trend", () => {
+    const z = zoomSlider(env());
+    expect(z).toMatchObject({ borderColor: "ink-muted", fillerColor: "ink-tint", handleStyle: { color: "ink-accent", borderColor: "ink-accent" } });
+    for (const trend of [z.dataBackground, z.selectedDataBackground]) {
+      expect(trend).toMatchObject({ lineStyle: { color: "ink-muted" }, areaStyle: { color: "ink-grid" } });
+      expect(trend!.lineStyle!.opacity).toBeLessThan(1);
+    }
+    expect(z.handleIcon).toMatch(/^path:\/\//);
+  });
+
   it("takes its colors from the ink roles", () => {
     const z = zoomSlider(env());
-    expect(z).toMatchObject({ borderColor: "ink-border", fillerColor: "ink-cursor", handleStyle: { color: "ink-surface", borderColor: "ink-border" } });
     const colors = JSON.stringify(z).match(/"(#|rgb)[^"]*"/g);
     expect(colors).toBeNull(); // no color but the ink roles
   });
