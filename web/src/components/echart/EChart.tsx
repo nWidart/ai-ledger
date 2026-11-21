@@ -57,8 +57,14 @@ export interface EChartProps {
   read: (i: number) => string;
   /** Enter on the point being read, or a click on a point. The reading ends with it, unless the handler returns false:
    *  the point has nothing to open, and the reading stays, so the user is not left with silence. The pointer is a hand
-   *  over every point of a chart that has a handler: the wrapper cannot tell which points the handler would decline. */
+   *  over every point of a chart that has a handler: the wrapper cannot tell which points the handler would decline.
+   *  A chart may also return false to keep the reading open, so that the same key acts on the same point again. */
   onActivate?: (i: number) => boolean | void;
+  /** Keys the box takes beyond the arrows, Home, End, Enter, Escape and the zoom keys.
+   *  `space`: an unmodified Space activates the point being read, as Enter does. In a chart that has `onActivate` the key
+   *  is always prevented, with a point read or not, so the page never scrolls under a chart that takes it. Shift+Space
+   *  and any other modified Space are the browser's. Without `onActivate`, or without `keys.space`, Space is the browser's. */
+  keys?: { space?: boolean };
   /** A sentence the live region says once, when this changes to a new text that is not empty: what the last activation
    *  or Escape did ("… selected"). It takes the region as a zoom sentence does. A reading replaces it, and the end of
    *  that reading does not say it again. It is not said on mount, nor for a new view. An empty text drops a status the
@@ -156,8 +162,8 @@ function placeTip(box: HTMLElement, plot: HTMLElement, tip: HTMLElement | null, 
 }
 
 export function EChart({
-  label, describedBy, id, className, hidden, height, option, view, points, tip, read, onActivate, status, onEscape, zoom, onZoom,
-  readZoom, ref,
+  label, describedBy, id, className, hidden, height, option, view, points, tip, read, onActivate, keys, status, onEscape, zoom,
+  onZoom, readZoom, ref,
 }: EChartProps) {
   const box = useRef<HTMLDivElement>(null), plot = useRef<HTMLDivElement>(null), tipEl = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(UNMEASURED);
@@ -299,6 +305,12 @@ export function EChart({
       return;
     }
     if (ev.key === "Enter") { if (at != null && activate(at)) ev.preventDefault(); return; }
+    // Space, in a chart that asked for it: prevented even with nothing read, so the page never scrolls under the chart.
+    if (ev.key === " " && keys?.space && onActivate) {
+      ev.preventDefault();
+      if (at != null) activate(at);
+      return;
+    }
     const step = STEPS[ev.key];
     if (step == null || !points) return;
     ev.preventDefault();
