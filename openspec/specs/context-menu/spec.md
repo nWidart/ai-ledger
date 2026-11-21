@@ -33,7 +33,11 @@ The browser's own menu SHALL show for a right-click outside a subject, for a rig
 - **THEN** the browser's menu shows and no app menu opens
 
 ### Requirement: Cover the places that show subjects
-The menu SHALL open on every row, card and name that stands for a subject: the rows of the dashboard tables and drawers, the rows of the project, session and tool sheets, the sessions of the Live rail and wall, the error type rows of Errors, every link that opens a session sheet in place (Errors' examples, Insights' session cards, Live's stream), and project names shown with their dot.
+The menu SHALL open on every row, card and name that stands for a subject: the rows of the dashboard tables and drawers, the rows of the project, session and tool sheets, the sessions of the Live rail and wall, the error type rows of Errors, the project rows of Limits (What used this window, Commits a point by project), every link that opens a session sheet in place (Errors' examples, the session cards of Activity's Judgments view, Live's stream), and project names shown with their dot.
+
+#### Scenario: A project on Limits
+- **WHEN** the user right-clicks project `foo` under What used this window, or in Commits a point, by project
+- **THEN** the menu of `foo` opens; the folded smaller-projects row opens none
 
 #### Scenario: Live wall tile
 - **WHEN** the user right-clicks a session tile on the Live wall
@@ -55,7 +59,7 @@ A project name inside another subject's row or card SHALL open that subject's me
 - **THEN** the browser's menu shows
 
 ### Requirement: Offer a project's actions
-A project's menu SHALL offer: Open project page, Open project sheet, Filter dashboard to the project, Show on Cost, Show on Errors, Show on Context, Show on Live, and Copy project name. Open project page SHALL be left out on that project's page. Open project sheet SHALL be left out where the page cannot host the sheet.
+A project's menu SHALL offer: Open project page, Open project sheet, Filter dashboard to the project, Show on Cost, Show on Errors, Show on Context, Show on Live, and Copy project name. Open project page SHALL be left out on that project's page. Open project sheet SHALL be offered on every page: the app's shell hosts the sheet.
 
 #### Scenario: Open the project page
 - **WHEN** the user picks Open project page in the menu of project `jobdesk` on Cost with range 7d
@@ -68,6 +72,10 @@ A project's menu SHALL offer: Open project page, Open project sheet, Filter dash
 #### Scenario: Already on the project's page
 - **WHEN** the user opens the menu of project `jobdesk` on the Project page for `jobdesk`
 - **THEN** the menu has no Open project page item
+
+#### Scenario: Project sheet on Limits
+- **WHEN** the user right-clicks project `jobdesk` under What used this window on Limits and picks Open project sheet
+- **THEN** the project sheet opens over Limits
 
 ### Requirement: Toggle the project filter from the menu
 When the page is not filtered to the project, the filter item SHALL read "Filter dashboard to <project>" and set the project filter. When the page already shows only that project, the item SHALL read "Show all projects" and clear the filter, as the project sheet's filter button does.
@@ -88,8 +96,8 @@ A session's menu SHALL offer: Open session, Open project page, Copy resume comma
 - **THEN** the session sheet opens over Live at `/live?session=s1&sheet=abc`, and the stream keeps following `s1`
 
 #### Scenario: Open a session from Limits
-- **WHEN** the user picks Open session in a session's menu on Limits
-- **THEN** the session sheet opens on Activity, as the palette's session destination does from a page that hosts no sheet
+- **WHEN** an inspector is open over Limits, and the user picks Open session in the menu of a session row inside it (Limits lists no sessions of its own)
+- **THEN** the session sheet opens over Limits, as the palette's session destination does on every page
 
 #### Scenario: Session without a working directory
 - **WHEN** the user opens the menu of a session the store holds no working directory for

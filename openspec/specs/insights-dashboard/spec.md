@@ -6,30 +6,34 @@ Activity's Judgments view (`/usage?view=judgments`, once the Insights page): sho
 ## Requirements
 
 ### Requirement: Filter by project, range, source and automated sessions
-The Insights page SHALL offer the shared project, time range, source and automated-session filters. Every figure and list on the page SHALL count only facets of sessions in the view. A session belongs to a range by its start time. The filters SHALL be kept in the page URL and carried across pages.
+The Judgments view SHALL offer the shared project, time range and automated-session filters, in the header beside the heading, and no source filter: every figure is of Claude Code sessions, and the view SHALL ask the app for every source whatever the URL's source. Every figure and list SHALL count only facets of sessions in the view. A session belongs to a range by its start time. The filters SHALL be kept in the page URL and carried across pages.
 
 #### Scenario: One project
-- **WHEN** the user opens `/insights?project=ai-ledger&range=30`
+- **WHEN** the user opens `/usage?project=ai-ledger&range=30&view=judgments`
 - **THEN** every figure counts only facets of `ai-ledger` sessions that started in the last 30 days
 
 #### Scenario: Switch from Activity
-- **WHEN** the user views project `foo` for the last 14 days on Activity and clicks Insights
-- **THEN** Insights opens filtered to `foo` and the last 14 days
+- **WHEN** the user views project `foo` for the last 14 days on Activity's Overview and picks Judgments
+- **THEN** the Judgments view opens filtered to `foo` and the last 14 days
 
 #### Scenario: Automated sessions left out
 - **WHEN** the automated control is off and `observer-sessions` has facets
 - **THEN** those facets count nowhere on the page
 
+#### Scenario: A source in the URL
+- **WHEN** the user opens the view with `source=claude` in the URL
+- **THEN** the view shows no source filter, its figures are the same as with no source, and `source=claude` stays in the URL
+
 ### Requirement: Label facet figures as model-judged
-The page header SHALL carry the model-judged tag once, beside the page name and outside the lede heading, and the sub line SHALL say that the figures come from `/insights` facets, a model's reading of each session, except Session figures and Coverage, which are counted. The panels and drawers SHALL NOT repeat the tag. The lede SHALL be the page's one level-one heading.
+The view SHALL carry the model-judged tag once, beside Activity's view switch and outside the lede heading, and the sub line SHALL say that the figures come from `/insights` facets, a model's reading of each session, except Session figures and Coverage, which are counted, and each session's cost, peak context and tool errors, which are measured. The panels and drawers SHALL NOT repeat the tag. The lede SHALL be the page's one level-one heading.
 
 #### Scenario: Outcome section
 - **WHEN** the outcome section is shown
 - **THEN** it says that the outcomes are judged by a model from the transcript
 
 #### Scenario: One tag
-- **WHEN** the user opens Insights for a view with analysed sessions
-- **THEN** the model-judged tag shows once, beside the page name, the lede is the one level-one heading, and no panel heading carries the tag
+- **WHEN** the user opens the Judgments view for a view with analysed sessions
+- **THEN** the model-judged tag shows once, beside the view switch, the lede is the one level-one heading, and no panel heading carries the tag
 
 ### Requirement: Show outcome rates
 The page SHALL show the share and count of analysed sessions in the view for each outcome: fully achieved, mostly achieved, partially achieved, not achieved, and unclear. An outcome value it does not recognize SHALL be shown under its raw name, not dropped.
@@ -54,10 +58,10 @@ The page SHALL show the user satisfaction signals summed over the view's facets,
 - **THEN** the page lists essential 26, very helpful 111 and moderately helpful 11, in that order
 
 ### Requirement: Show friction categories
-The page SHALL list friction families by total count over the view's facets, with the number of sessions that reported any of their labels, most frequent first. A family of one label SHALL show that label as written.
+The page SHALL list friction families with the number of sessions that reported any of their labels, heaviest first under the chosen weight: the cost or the active time of those sessions, or the total count over the view's facets. A family of one label SHALL show that label as written.
 
 #### Scenario: Friction ranking
-- **WHEN** 9 sessions report `wrong_approach` 14 times and 4 sessions report `buggy_code` 5 times, and no other label shares a family with them
+- **WHEN** 9 sessions report `wrong_approach` 14 times and 4 sessions report `buggy_code` 5 times, no other label shares a family with them, and the user weighs by Reports
 - **THEN** `wrong_approach` is listed first with 14 in 9 sessions, then `buggy_code` with 5 in 4 sessions
 
 #### Scenario: No friction
@@ -91,11 +95,11 @@ The page SHALL list the view's analysed sessions as cards: title, outcome, goals
 - **THEN** its card shows no expander
 
 ### Requirement: Link analysed sessions to their sheets
-Each session in the store SHALL link to its session sheet, which opens over Insights. The page's project, range, source, automated filter and its own filters SHALL stay as they were under the sheet and after it closes.
+Each session in the store SHALL link to its session sheet, which opens over the Judgments view. The view's project, range, source, automated filter and its own filters SHALL stay as they were under the sheet and after it closes. The link's address SHALL name the view, so a new tab opens the same.
 
 #### Scenario: Open a session
 - **WHEN** the user views project `foo` for the last 7 days and clicks a session in the list
-- **THEN** that session's sheet opens over Insights, and the page still shows project `foo` for the last 7 days
+- **THEN** that session's sheet opens over the Judgments view, and the view still shows project `foo` for the last 7 days
 
 #### Scenario: Session missing from the store
 - **WHEN** a facet's session has no transcript in the store
@@ -128,15 +132,15 @@ Automated sessions SHALL NOT count in the coverage, whatever the automated filte
 - **THEN** the coverage still counts 400 Claude Code sessions
 
 ### Requirement: Treat Codex sessions as not analysed
-Codex sessions SHALL never count in a facet figure. With source All, the coverage line SHALL count Codex sessions apart from Claude Code sessions as not analysed by `/insights`. With source Codex, the page SHALL say that `/insights` analyses only Claude Code sessions, and show no figures.
+Codex sessions SHALL never count in a facet figure, and the view SHALL show no line that counts them. Activity SHALL NOT show the Judgments view for a Codex-only view: it shows Overview, with the reason on its view switch. The sub line's How measured toggletip SHALL say that `/insights` judges Claude Code sessions only, so the view has no source filter.
 
 #### Scenario: Source All
 - **WHEN** the view holds 400 Claude Code and 60 Codex sessions
-- **THEN** the coverage line counts the 400 Claude Code sessions and separately says 60 Codex sessions are not analysed by `/insights`
+- **THEN** the coverage line counts the 400 Claude Code sessions, and no line names the Codex sessions
 
 #### Scenario: Source Codex
-- **WHEN** the user picks Codex on Insights
-- **THEN** the page says `/insights` analyses only Claude Code sessions and shows no outcome, friction or session figures
+- **WHEN** the URL names `source=codex` and `view=judgments`
+- **THEN** Activity shows Overview, and no page says that `/insights` analyses only Claude Code sessions in place of figures
 
 ### Requirement: Read only the local store
 The Insights page SHALL read its data from the store through the app, and SHALL NOT call a model, run `claude`, or read the usage-data directory itself.
@@ -146,14 +150,14 @@ The Insights page SHALL read its data from the store through the app, and SHALL 
 - **THEN** the page shows the same figures as before
 
 ### Requirement: Say how sessions are counted
-The Insights page SHALL say, behind the sub line's How measured toggletip, that it counts a session by its start time, and that Activity counts a session with a request in the range, so the two totals can differ slightly.
+The Judgments view SHALL say, behind the sub line's How measured toggletip, that it counts a session by its start time, and that Overview counts a session with a request in the range, so the two totals can differ slightly.
 
 #### Scenario: Subtitle names the counting rule
-- **WHEN** the user opens Insights with a view that has facets and activates the sub line's How measured toggletip
-- **THEN** the toggletip says a session counts by its start time and that Activity counts a session with a request in the range
+- **WHEN** the user opens the Judgments view with a view that has facets and activates the sub line's How measured toggletip
+- **THEN** the toggletip says a session counts by its start time and that Overview counts a session with a request in the range
 
-### Requirement: Order the page
-When the view has analysed sessions, the Insights page SHALL show, in this order: the coverage note, the lede and its sub line, the vitals, one row holding Outcomes and Friction categories, the Trend panel when it is shown, Satisfaction and helpfulness, the analysed sessions, then the drawers: Goals, Session types, Session figures, Coverage and How this works. Each drawer SHALL be closed by default.
+### Requirement: Order the Judgments view
+When the view has analysed sessions, the Judgments view SHALL show, in this order: Activity's view switch, the lede with the filters beside it, its sub line, the coverage note, the section index, the vitals, one row holding Outcomes and Friction categories, the Trend panel when it is shown, Satisfaction and helpfulness, the analysed sessions, then the drawers: Goals, Session types, Session figures, Coverage and How this works. Each drawer SHALL be closed by default.
 
 #### Scenario: Order with figures
 - **WHEN** the view holds analysed sessions across 2 or more weeks
@@ -163,20 +167,24 @@ When the view has analysed sessions, the Insights page SHALL show, in this order
 - **WHEN** the view holds analysed sessions from one week only
 - **THEN** the Trend panel is left out and the other sections keep their order
 
-### Requirement: Index the page's sections
-The Insights page SHALL show a section index after the sub line when the view has analysed sessions: Overview, Outcomes, Friction, Satisfaction and Sessions, then the drawers. Without analysed sessions, it SHALL show one only for How this works. Choosing a drawer SHALL open it and scroll to it. It SHALL NOT be shown for source Codex or an empty store.
+### Requirement: Index the Judgments view's sections
+With analysed sessions, the Judgments view SHALL show a section index after the coverage note: Summary, Outcomes, Friction, Trend when shown, Satisfaction, Sessions, then the drawers. With none, it SHALL list Summary and the drawers it has: Session figures for session-meta rows in the view, How this works for facets in the store. An empty store, with no facet and no session-meta row, SHALL show no index. Choosing a drawer SHALL open it and scroll to it. No entry SHALL be named Overview.
 
 #### Scenario: Jump to a drawer
 - **WHEN** the user chooses Goals in the section index
 - **THEN** the Goals drawer opens and scrolls into view
 
 #### Scenario: No figures
-- **WHEN** the source is Codex
+- **WHEN** the store holds no facet and no session-meta row
 - **THEN** no section index is shown
 
 #### Scenario: No analysed sessions
-- **WHEN** the store has facets but the view has no analysed session
-- **THEN** the index lists Overview and How this works only
+- **WHEN** the store has facets, and the view has no facet and no session-meta row
+- **THEN** the index lists Summary and How this works only
+
+#### Scenario: Session figures but no judgments
+- **WHEN** the store has facets, and the filtered view has session-meta rows but no facet
+- **THEN** the index lists Summary, Session figures and How this works
 
 ### Requirement: Sort analysed sessions
 The page SHALL let the user order the listed sessions by Newest (the default), Oldest or Outcome. Outcome SHALL put the worst first: not achieved, partially achieved, unclear or unknown, mostly achieved, fully achieved, and sessions with the same outcome newest first. The choice SHALL last for the page visit, also across a view with no list, and SHALL NOT be kept in the page URL. The list's description SHALL say the order in words.
@@ -190,7 +198,7 @@ The page SHALL let the user order the listed sessions by Newest (the default), O
 - **THEN** sessions that did not achieve their goal come first, fully achieved ones last, and two sessions with one outcome keep newest first
 
 #### Scenario: Another source and back
-- **WHEN** the user picks Oldest, switches the source to Codex and back to Claude Code
+- **WHEN** the user picks Oldest, the list goes away for a view with no analysed session (the view has no source filter, so by a project filter), and the user clears that filter
 - **THEN** the list is still ordered oldest first
 
 ### Requirement: Filter analysed sessions by outcome
@@ -201,11 +209,11 @@ The page SHALL let the user narrow the listed sessions to one outcome with a sel
 - **THEN** the URL gains `outcome=partially_achieved` and only sessions with that outcome are listed, the list saying "N of M sessions"
 
 #### Scenario: From the URL
-- **WHEN** the user opens `/insights?outcome=not_achieved&friction=1`
+- **WHEN** the user opens `/usage?view=judgments&outcome=not_achieved&friction=1`
 - **THEN** the outcome select shows "Not achieved", the friction box is checked, and only sessions with both are listed
 
 #### Scenario: Outcome nobody has
-- **WHEN** the user opens `/insights?outcome=gone`
+- **WHEN** the user opens `/usage?view=judgments&outcome=gone`
 - **THEN** the list says no session in this view matches the filters, the select still names that outcome, and the page shows no error
 
 ### Requirement: Show coverage by project
@@ -239,7 +247,7 @@ The page SHALL show, in the Coverage drawer, the `/insights` runs that wrote a f
 - **THEN** the drawer does not list that run
 
 ### Requirement: Explain how /insights works
-The page SHALL offer a closed "How this works" drawer whenever the store has facets and the source is not Codex, even when the view has no analysed session. It SHALL say what `/insights` is, that the app only reads its files and never calls a model, the directory read, and how to get more coverage.
+The view SHALL offer a closed "How this works" drawer whenever the store has facets, even when the view has no analysed session. It SHALL say what `/insights` is, that the app only reads its files and never calls a model, the directory read, and how to get more coverage.
 
 #### Scenario: Drawer text
 - **WHEN** the user opens the drawer
@@ -247,6 +255,10 @@ The page SHALL offer a closed "How this works" drawer whenever the store has fac
 
 #### Scenario: Codex source
 - **WHEN** the source is Codex
+- **THEN** Activity shows Overview, so the drawer is not shown
+
+#### Scenario: No facet in the store
+- **WHEN** the store holds no facet
 - **THEN** the drawer is not shown
 
 ### Requirement: Say how much one run analyses
@@ -261,18 +273,34 @@ The drawer SHALL give the time of the newest facet and the sizes of the newest 2
 - **THEN** the drawer says the one run so far wrote 12 sessions
 
 ### Requirement: Show the outcome trend per week
-The page SHALL show a panel under the outcome and friction row. It lists each week, by the analysed session's start, with the share fully or mostly achieved and "A of N" as text. Weeks without a session are left out; at most the newest 26 weeks are shown.
+The page SHALL show a panel under the outcome and friction row with one bar per week, by session start. Each bar SHALL fill the plot (100% of its week), stacked best outcome first: fully, mostly, partially, not achieved, no clear outcome. Every part with a session SHALL show at least 1px. The week's sessions SHALL show over its bar, over every few bars when they would overlap. A legend SHALL name the parts. Weeks without a session are left out; at most the newest 26 show.
+
+#### Scenario: One session in 150
+- **WHEN** a week holds 150 analysed sessions, one of them not achieved
+- **THEN** its not-achieved part shows at least 1px tall
+
+#### Scenario: 26 weeks on a phone
+- **WHEN** the trend has 26 weeks on a phone 320px wide
+- **THEN** the counts over the bars do not overlap: they show over every few bars, and the table holds each week's
 
 #### Scenario: Weekly share
 - **WHEN** a week holds 5 analysed sessions, 4 of them fully or mostly achieved
-- **THEN** its row reads 80% with "4 of 5"
+- **THEN** the two lowest parts of its bar fill 80% of it, with 5 over the bar
+
+#### Scenario: Weekly mix
+- **WHEN** a week holds 12 analysed sessions: 7 fully, 2 mostly, 2 partially and 1 not achieved
+- **THEN** its bar is as tall as every other, split 58%, 17%, 17% and 8% from the bottom, with 12 over it
+
+#### Scenario: No clear outcome
+- **WHEN** a week holds a session whose outcome is unclear, or one `/insights` added later
+- **THEN** it counts in the week's sessions and in the bar's last part
 
 #### Scenario: Sessions without a start time
 - **WHEN** an analysed session has no start time
 - **THEN** it counts in no week
 
 ### Requirement: Hide a trend of fewer than two weeks
-The trend panel SHALL be shown only when the view's analysed sessions span 2 or more weeks. Its hint SHALL say that weeks are by session start and that a week with few sessions swings.
+The trend panel SHALL be shown only when the view's analysed sessions span 2 or more weeks. Its hint SHALL say that the bars are shares of each week and that the figure over a bar is its sessions; its How measured toggletip SHALL say that weeks are by session start and begin on Monday.
 
 #### Scenario: One week
 - **WHEN** all analysed sessions of the view started in one week
@@ -296,16 +324,20 @@ On a session card, each goal chip, each friction chip and the outcome badge SHAL
 - **WHEN** the user selects the "fix bug" chip on a card
 - **THEN** the URL gains `goal=fix_bug` and the list keeps only sessions with that goal
 
-### Requirement: Keep the drill-down filters in the page URL
-The drill-down filters SHALL be kept in the page URL as `outcome=`, `help=`, `goal=` and `fr=`, one raw category name each, and `goalf=` and `frf=`, one family key each. Setting one SHALL add a history entry, so Back undoes it. All active filters, `friction=1` included, SHALL combine with AND and SHALL change the "N of M sessions" count. They SHALL survive a change of project, range, source or automated sessions and SHALL NOT be cleared by one.
+### Requirement: Keep the drill-down filters in the URL
+The drill-down filters SHALL be kept in the URL as `outcome=`, `help=`, `goal=` and `fr=`, one raw category name each, and `goalf=` and `frf=`, one family key each. Setting one SHALL add a history entry, so Back undoes it. All active filters, `friction=1` included, SHALL combine with AND and SHALL change the "N of M sessions" count. They SHALL survive a change of project, range or automated sessions. A switch to Overview SHALL drop them.
 
 #### Scenario: Combined filters
-- **WHEN** the user opens `/insights?fr=buggy_code&goal=fix_bug`
+- **WHEN** the user opens `/usage?view=judgments&fr=buggy_code&goal=fix_bug`
 - **THEN** only sessions with both are listed, and a project, range or source in the URL is left as it is by changing a filter
 
 #### Scenario: Value nobody has
-- **WHEN** the user opens `/insights?goal=gone`
+- **WHEN** the user opens `/usage?view=judgments&goal=gone`
 - **THEN** the list says no session in this view matches the filters, and the page shows no error
+
+#### Scenario: Back to Overview
+- **WHEN** the user on `/usage?range=7&view=judgments&outcome=not_achieved` picks Overview
+- **THEN** the URL is `/usage?range=7`
 
 ### Requirement: Show the active filters as removable chips
 Above the session list, each active filter SHALL show as a chip that names its kind and value (for example "Friction: buggy code") and removes that filter when selected, with an accessible name such as "Remove filter Friction: buggy code". With two or more active filters the list SHALL also offer "Clear filters", which removes them all.
@@ -362,11 +394,11 @@ The drawer SHALL list every language the view's session-meta rows name, most cou
 - **THEN** the ledger shows 12 and a control to show all 15
 
 ### Requirement: Show session figures only when counted
-The drawer SHALL appear, and be listed in the section index, only when the source is not Codex and the view has a session-meta row. It SHALL appear in a view with no analysed session. With source Codex the figures SHALL be empty.
+The drawer SHALL appear, and be listed in the section index, only when the view has a session-meta row. It SHALL appear in a view with no analysed session. For source Codex the app SHALL send empty figures.
 
 #### Scenario: Codex
-- **WHEN** the source filter is Codex
-- **THEN** the drawer is not shown and the figures count no sessions
+- **WHEN** the app is asked for the judgments of source Codex
+- **THEN** the figures count no sessions
 
 #### Scenario: No analysed session
 - **WHEN** the view has session-meta rows and no facet
@@ -407,7 +439,7 @@ The payload SHALL group the goal labels and the friction labels of the view into
 - **THEN** it is a family of one label named `learn rust`
 
 ### Requirement: Count a family from its labels
-A family's count SHALL be the sum of its labels' counts. Its sessions SHALL be the distinct sessions of the view that carry any of its labels, never the sum of its labels' sessions. Labels SHALL be ordered most counted first, then by name; families by count, then sessions, then key. The raw goal and friction lists SHALL stay in the payload.
+A family's count SHALL be the sum of its labels' counts. Its sessions SHALL be the distinct sessions of the view with any of its labels, never the sum of its labels' sessions; a friction family's cost and active time SHALL be summed over those sessions. The payload SHALL order labels by count, then name, and families by count, then sessions, then key; on screen the Friction rows follow the selected weight. The raw goal and friction lists SHALL stay in the payload.
 
 #### Scenario: One session, two labels of a family
 - **WHEN** one session reports `create_pull_request` 2 times and `open_pr` once, and no other session does
@@ -444,7 +476,7 @@ Selecting the row of a family of two or more labels SHALL narrow the session lis
 - **THEN** the URL gains `fr=broken_build`, not `frf=`
 
 #### Scenario: Family nobody has
-- **WHEN** the user opens `/insights?goalf=gone`
+- **WHEN** the user opens `/usage?view=judgments&goalf=gone`
 - **THEN** the list says no session in this view matches the filters, and the page shows no error
 
 ### Requirement: Say that labels are grouped
@@ -467,3 +499,84 @@ The Insights vitals SHALL show the sessions fully or mostly achieved, partially 
 #### Scenario: Vitals
 - **WHEN** the lede says 117 of 150 analysed sessions fully achieved their goal
 - **THEN** no vital shows 150 sessions analysed
+
+### Requirement: Show the judgments as a view of Activity
+The `/insights` judgments SHALL be the Judgments view of the Activity page, at `/usage?view=judgments`, not a page of their own: no navigation entry, and Activity's browser title. In the requirements of this capability, "the page" and "Insights" mean that view.
+
+#### Scenario: Open the view
+- **WHEN** the user opens `/usage?view=judgments`
+- **THEN** Activity shows the judgments, the Activity tab is the current one, and the navigation has no Insights entry
+
+### Requirement: Read the outcome trend one week at a time
+The outcome trend SHALL be read by pointer or keyboard. Its chart SHALL be a focusable group whose name says what it shows, the weeks and the share fully or mostly achieved. Left and Right SHALL move between weeks, Home and End SHALL go to the first and the last, and Escape SHALL dismiss the readout; a key with Alt, Ctrl, Meta or Shift is left to the browser. The readout SHALL give the week, its sessions, and each outcome's count and share, in a tooltip and in a polite live region.
+
+#### Scenario: Read a week
+- **WHEN** the user focuses the chart and presses Right on a week of 12 sessions: 7 fully, 2 mostly, 2 partially, 1 not achieved
+- **THEN** the readout says the week, "12 analysed sessions", and 7 fully achieved (58%), 2 mostly achieved (17%), 2 partially achieved (17%), 1 not achieved (8%)
+
+#### Scenario: Escape
+- **WHEN** the readout shows and the user presses Escape
+- **THEN** the readout goes and focus stays on the chart
+
+#### Scenario: Modified keys
+- **WHEN** the chart has focus and the user presses Alt+Left or Ctrl+Home
+- **THEN** the chart does not handle the key, so the browser goes back in history or to the page top
+
+### Requirement: Mark a week with few sessions
+A week with fewer than 5 analysed sessions SHALL be drawn at half width in its full colors, so each part keeps 3:1 against the surface. The legend SHALL name that mark when a week has it, and the week's readout and table row SHALL say it has few sessions. The trend's How measured toggletip SHALL say that every bar is 100% of its week, so the figure over a bar says how many sessions it stands on.
+
+#### Scenario: A week of three sessions
+- **WHEN** a week holds 3 analysed sessions
+- **THEN** its bar is half as wide as the others and not faded, its readout says one session moves the bar a lot, and its table row marks it as few
+
+#### Scenario: No such week
+- **WHEN** every week holds 5 analysed sessions or more
+- **THEN** every bar is full width and the legend names no such mark
+
+### Requirement: Offer the outcome trend as a table
+The trend panel SHALL offer its data as a table behind "Show data table", closed on every load: one row per week with its analysed sessions and, for each outcome, the count and the share of that week.
+
+#### Scenario: Open the table
+- **WHEN** the user selects "Show data table" under the trend
+- **THEN** a table named "Analysed sessions by outcome per week" lists each week with its sessions and the count and share of each outcome
+
+### Requirement: Show what the store measured on a session card
+A session card SHALL show one line of figures measured from the session's stored transcript, over the whole session: its estimated cost, its peak context as a share of the model's window, and its failed tool calls. A figure the store does not know SHALL be left out, and a session with no transcript SHALL show no such line. A peak at 80% or more and a failed call SHALL be marked. The line SHALL be apart from the model's summary and SHALL NOT be tagged model-judged.
+
+#### Scenario: A stored session
+- **WHEN** a session cost $4.20, peaked at 62% of its window and had 1 failed tool call
+- **THEN** its card shows "$4.20 · peak context 62% · 1 tool error"
+
+#### Scenario: No transcript
+- **WHEN** a facet's session has no transcript in the store
+- **THEN** its card shows no such line
+
+#### Scenario: No price
+- **WHEN** no request of a session is priced
+- **THEN** the line leaves the cost out and keeps the other figures
+
+### Requirement: Weigh friction by cost and active time
+Each friction family and label SHALL carry the estimated cost and active time of the sessions that reported it, each session counted once and whole, whatever the range. A session with no transcript SHALL add nothing; one with no price SHALL add its active time but no cost. The user SHALL weigh the Friction rows by Cost (the default), Active time or Reports, not kept in the URL: the pick SHALL order the rows and set each bar and value, with the other two weights and the sessions beside it.
+
+#### Scenario: Cost first
+- **WHEN** `wrong_approach` was reported twice by a session that cost $42, and `tooling` 9 times by four sessions that cost $6.50 together
+- **THEN** with Cost, `wrong approach` is listed first with $42 and "1.5h · 2 reports · 1 session" beside it, then `tooling` with $6.50
+
+#### Scenario: An unpriced session
+- **WHEN** a session with no priced request and 20 active minutes reports `buggy_code`
+- **THEN** it adds no cost to `buggy code` and adds its 20 minutes to the family's active time
+
+#### Scenario: By reports
+- **WHEN** the user picks Reports
+- **THEN** `tooling` is listed first with 9, and each row still shows its cost, active time and sessions
+
+#### Scenario: One session, two labels of a family
+- **WHEN** one session reports two labels of one family
+- **THEN** the family counts that session's cost and active time once
+
+### Requirement: Say what a friction weight is
+The Friction section's hint SHALL say the rows are weighed by the sessions that reported them. Behind its How measured toggletip it SHALL say that cost and active time are those of the whole sessions, not of the friction alone, that each session counts once in a row, that a session with no transcript adds nothing, and that one with no price adds no cost but its active time.
+
+#### Scenario: Toggletip
+- **WHEN** the user activates the Friction section's How measured toggletip
+- **THEN** it says cost and active time are those of the whole sessions that reported a friction, not of the friction alone
