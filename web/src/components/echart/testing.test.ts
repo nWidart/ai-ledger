@@ -151,6 +151,57 @@ describe("the fake ECharts runtime", () => {
       .toThrow("id duplicates: stack");
   });
 
+  // A chart of several tracks: a frame grid (0) over one grid per track, each grid with its own x and y axis.
+  const tracks = (n = 3, points = 10, x: (i: number) => Record<string, unknown> = () => ({})) => ({
+    grid: Array.from({ length: n }, (_, i) => ({ id: `g${i}`, top: 10 + i * 60, height: 50 })),
+    xAxis: Array.from({ length: n }, (_, i) => ({ type: "category", data: Array.from({ length: points }, (_, p) => `d${p}`), gridIndex: i, ...x(i) })),
+    yAxis: Array.from({ length: n }, (_, i) => ({ type: "value", gridIndex: i, max: 100 })),
+  });
+  const list = (v: unknown) => v as Record<string, unknown>[];
+  const zoomed = async (option: Record<string, unknown>) => (await chartOf(10, option)).zoomAxes;
+
+  // The rules below are those of ECharts 6.1 (a slider's zoom on each axis, and the bands drawn, in jsdom with the SVG renderer).
+  it("names the x axes the first slider drives, by ECharts' rule", async () => {
+    expect(await zoomed({})).toEqual([]); // no slider
+    expect(await zoomed({ dataZoom: [{ type: "slider" }] })).toEqual([0]);
+    expect(await zoomed({ dataZoom: [{ type: "slider", xAxisIndex: 0 }] })).toEqual([0]);
+    expect(await zoomed({ ...tracks(), dataZoom: [{ type: "slider", xAxisIndex: [0, 1, 2] }] })).toEqual([0, 1, 2]);
+    expect(await zoomed({ ...tracks(), dataZoom: [{ type: "slider", xAxisIndex: "all" }] })).toEqual([0, 1, 2]);
+    // With none named, the first x axis and every other one in its grid, such as a second axis on the grid's top.
+    expect(await zoomed({ ...tracks(2, 10, () => ({ gridIndex: 0 })), grid: [{}], yAxis: [{}], dataZoom: [{ type: "slider" }] })).toEqual([0, 1]);
+  });
+
+  it("throws for a slider that leaves an x axis out, where ECharts would zoom the others alone", async () => {
+    await expect(chartOf(10, { ...tracks(), dataZoom: [{ type: "slider" }] })).rejects.toThrow("does not drive x axis 1, 2");
+    await expect(chartOf(10, { ...tracks(), dataZoom: [{ type: "slider", xAxisIndex: 1 }] })).rejects.toThrow("does not drive x axis 0, 2");
+    await expect(chartOf(10, { dataZoom: [{ type: "slider", yAxisIndex: 0 }] })).rejects.toThrow("does not drive x axis 0");
+    // The merged option counts: a slider added to a chart that already has its tracks.
+    const chart = await chartOf(10, tracks());
+    expect(() => chart.setOption({ dataZoom: [{ type: "slider" }] })).toThrow("does not drive x axis 1, 2");
+    expect(chart.option.dataZoom).toBeUndefined(); // the refused option is not kept
+    expect(() => chart.setOption({ dataZoom: [{ type: "slider", xAxisIndex: "all" }] })).not.toThrow();
+    expect(chart.zoomAxes).toEqual([0, 1, 2]);
+  });
+
+  it("throws for an axis pointer on an x axis after the first, where ECharts draws a second band over its grid", async () => {
+    await expect(chartOf(10, tracks(3, 10, i => (i === 1 ? { axisPointer: { show: true } } : {})))).rejects.toThrow("x axis 1 shows an axis pointer");
+    const chart = await chartOf(10, tracks(3, 10, i => ({ axisPointer: { show: i === 0 } })));
+    expect(() => chart.setOption({ xAxis: [{}, {}, { axisPointer: { show: true } }] })).toThrow("x axis 2 shows an axis pointer");
+    expect(list(chart.option.xAxis).map(a => a.axisPointer)).toEqual([{ show: true }, { show: false }, { show: false }]);
+  });
+
+  it("merges an option of three grids and answers from the first, which is the frame", async () => {
+    const chart = await chartOf(10, { ...tracks(3, 12), dataZoom: [{ type: "slider", id: "zoom", xAxisIndex: "all" }] });
+    expect([list(chart.option.grid).length, list(chart.option.xAxis).length, list(chart.option.yAxis).length]).toEqual([3, 3, 3]);
+    expect(chart.points).toBe(12);
+    chart.dispatchAction({ type: "dataZoom", startValue: 2, endValue: 5 });
+    expect(chart.convertToPixel({ xAxisIndex: 0 }, 2)).toBe(90); // four bands of 100px
+    expect(() => chart.convertToPixel({ xAxisIndex: 1 }, 2)).toThrow("one grid");
+    // A redraw that drops a track keeps the frame's points and the zoom window.
+    chart.setOption({ ...tracks(2, 12), dataZoom: [{ type: "slider", id: "zoom", xAxisIndex: "all" }] }, { replaceMerge: ["grid", "xAxis", "yAxis"] });
+    expect([list(chart.option.grid).length, chart.points, chart.shown]).toEqual([2, 12, { from: 2, to: 5 }]);
+  });
+
   it("fires zrender events to the handlers on getZr()", async () => {
     const chart = await chartOf();
     const seen: { type: string; offsetX: number; offsetY: number }[] = [];
