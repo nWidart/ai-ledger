@@ -65,7 +65,7 @@ The menu is a `menu` of `menuitem`s, named after its subject (for example "jobde
 | Copy session ID | Copies the id. |
 | Copy working directory | Copies the session's directory. Left out when the store has none. |
 
-The resume command is `claude --resume <id>` for a Claude Code session `codex resume <id>` for a Codex session and `grok --resume <id>` for a Grok session. When the store has the session's working directory, the command starts with `cd '<directory>' && `, with the directory quoted for a POSIX shell.
+The resume command is `claude --resume <id>` for a Claude Code session, `codex resume <id>` for a Codex session and `grok --resume <id>` for a Grok session. When the store has the session's working directory, the command starts with `cd '<directory>' && `, with the directory quoted for a POSIX shell.
 
 An item that needs details the row does not carry (the source, project or working directory) shows as unavailable with the reason "Loading…", and becomes available when the details arrive, with the menu still open. When the details cannot be loaded, those items stay unavailable with "Not available". Open session and Copy session ID still work.
 

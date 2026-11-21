@@ -140,7 +140,7 @@ The panel says "Nothing open with a known fix" and "Nothing is rising in this ra
 9. **The list**, in three modes:
    - **Incidents**: 20 at a time, most weight first. A row shows its attempts ("3× attempts"), project, tool, **subagent** when it is one, the outcome, the time span, the successful calls in between, and an attempt strip. Opened, it lists the failures in order and one closing line.
 
-     The **attempt strip** draws each failure as ✕ at its time, then ✓ when the next call succeeded. The strip grows with the time the failures span, so a tight loop is a short strip of crowded marks, and failures minutes apart are a long strip of separate ones. The ✓ always sits a short step after the last failure; the strip does not show how long the recovery took. A screen reader reads the strip as text, such as "3 failed attempts over 4s, 2s apart on average, then the next call succeeded 2s later".
+     The **attempt strip** draws each failure as a ✕ at its time, then a ✓ when the next call succeeded. The strip grows with the time the failures span, so a tight loop is a short strip of crowded marks, and failures minutes apart are a long strip of separate ones. The ✓ always sits a short step after the last failure; the strip does not show how long the recovery took. A screen reader reads the strip as text, such as "3 failed attempts over 4s, 2s apart on average, then the next call succeeded 2s later".
    - **Every error, newest first**: 30 at a time.
    - **By message**: one row per normalized message, with count, message, share of the type's errors, project count, top two tools with "+N", and newest time; opened, its examples newest first, 30 at a time, with **Show more examples**. A **Copy** button copies the normalized message. The page normalizes a message to its first non-empty line, with paths, ids, dates and numbers replaced by `<path>`, `<id>` and `<n>`.
 
@@ -164,8 +164,8 @@ An example shows its time, project, tool, **subagent** when it is one, session, 
 
 ## Sheets
 
-- The **tool inspector** opens from a tool name on an example, for the page's view.
-- The **session sheet** opens from a session link on an example, over the page: the open type and the examples stay as they are, and Close or Back returns to them. The URL names the session, so `/errors?range=7&session=abc&cat=x` opens type `x` with that session's sheet. Middle-click opens it in a new tab. See [Activity](/ai-ledger/pages/activity/#session-sheet).
+- The [tool, MCP server and skill sheet](/ai-ledger/everywhere/sheets/#tool-mcp-server-and-skill-sheet) opens from a tool name on an example, for the page's view.
+- The [session sheet](/ai-ledger/everywhere/sheets/#session-sheet) opens from a session link on an example, over the page: the open type and the examples stay as they are, and Close or Back returns to them. The URL names the session, so `/errors?range=7&session=abc&cat=x` opens type `x` with that session's sheet. Middle-click opens it in a new tab.
 
 ## Error type rules
 

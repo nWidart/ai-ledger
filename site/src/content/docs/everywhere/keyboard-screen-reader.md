@@ -20,7 +20,7 @@ Every page works from the keyboard and with a screen reader. This page lists the
 | Left, Right, Home, End | A focused tab on Activity's workbench or on Context | Move to the previous, next, first or last tab, wrapping. Context selects it at once; on Activity, Enter or Space selects it. |
 | Tab | A focused tab | Move to the selected tab's panel. |
 
-Charts with this keyboard reading: the Activity work chart and hours grid, the outcome trend of Activity's Judgments view, the Cost chart, the Errors chart, the Context charts and the Limits chart. A tooltip that a chart opens closes with Esc without changing the selected point.
+Charts with this keyboard reading: the Activity work chart, the outcome trend of Activity's Judgments view, the Cost chart, the Errors chart, the Context charts, the Limits chart and Live's 10-minute pulse. A tooltip that a chart opens closes with Esc without changing the selected point.
 
 Charts and tab lists act on these keys only when you hold no Alt, Ctrl, Meta or Shift, so the browser's own shortcuts still work while they have focus: Alt+Left goes back, Ctrl+Home goes to the top of the page. The session sheet's timeline is the one exception for Shift: Shift+Left and Shift+Right move ten requests.
 

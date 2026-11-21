@@ -35,7 +35,7 @@ A first ingest reads every transcript and takes about 5 minutes for a month of h
 | `--port <number>` | `8765` | The port to serve on, at `127.0.0.1`. | `serve` |
 | `--no-open` | off | Serve without opening the browser. | `serve` |
 | `--projects <path>` | `~/.claude/projects` | The Claude Code transcript root. | `serve`, `ingest` |
-| `--codex <path>` | `~/.codex` | The Codex home. The app reads `sessions/**/rollout-*.jsonl` and `archived_sessions/*.jsonl.zst` under it. | `serve`, `ingest` |
+| `--codex <path>` | `~/.codex` | The Codex home. The app reads `session_index.jsonl`, `sessions/**/rollout-*.jsonl`, `sessions/**/rollout-*.jsonl.zst`, `archived_sessions/rollout-*.jsonl` and `archived_sessions/rollout-*.jsonl.zst` under it. | `serve`, `ingest` |
 | `--grok <path>` | `~/.grok` | The Grok home. The app reads `sessions/*/*/updates.jsonl` under it. | `serve`, `ingest` |
 | `--usage-data <path>` | `~/.claude/usage-data` | The directory of Claude Code's `/insights` usage data. | `serve`, `ingest` |
 | `--db <file>` | The store in the [data folder](/ai-ledger/reference/storage/) | The database file. The configuration files are read from its folder. | all |

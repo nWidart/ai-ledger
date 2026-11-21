@@ -1,6 +1,6 @@
 ---
 title: Separate automated sessions from yours
-description: Keep scripted and scheduled sessions out of your figures with Include automated and automated projects.
+description: Keep scripted and scheduled sessions out of your figures with Include automated sessions and automated projects.
 ---
 
 ## Goal
@@ -13,7 +13,7 @@ The app already leaves out the sessions it detects as automated: a session of `o
 
 - Every page shows the banner "**Automated projects file ignored:**" under the navigation, with the file's path and the reason. This is the app's own sign: your `automated.json` does not apply, and only the built-in detection does.
 - On [Activity](/ai-ledger/pages/activity/), the **Project metrics** table, in the **Projects** tab, lists a project that a script, a scheduled job or a tool works in, not you.
-- Rule of thumb: in Activity's **Sessions** tab, sorted by **Prompts**, many sessions have 1 prompt and the same title. A script that runs `claude -p "…"` or `codex exec "…"` in a project folder makes such sessions, and the app counts them as yours.
+- Rule of thumb: in Activity's **Sessions** tab, sorted by **Prompts**, many sessions have 1 prompt and the same title. A script that runs `claude -p "…"`, `codex exec "…"` or the Grok CLI in a project folder makes such sessions, and the app counts them as yours. The rules are the same for every agent: the app tells a scripted session by its project, its prompts and its folder, not by the command that started it.
 - Rule of thumb: in Activity's **Sessions** tab, the start times under the titles fall at hours when you do not work, such as every night at 3:00.
 - A session you ran yourself is missing from your figures, and it ran in a temporary folder with one prompt.
 
@@ -24,7 +24,7 @@ Errors and Limits have no **Include automated sessions** control: Errors counts 
 Use [Activity](/ai-ledger/pages/activity/) with the range at **30d**, the project at **All projects** and the source at **All**.
 
 1. Read the session count in the **Sessions** tile, such as "41" (an example). Turn on **Include automated sessions** and read it again. The difference is the sessions the app already detects. Turn the control off again.
-2. Open **Project metrics**. For each project you do not work in by hand, write down its name and its **Sessions** count.
+2. Open the **Projects** tab (**Project metrics**). For each project you do not work in by hand, write down its name and its **Sessions** count.
 3. Open **Sessions** and select the **Prompts** header to sort by it. Find the sessions with 1 prompt. Read their **Session** column (the title) and **Project** column. A title that repeats across many sessions is a script's prompt.
 4. Select one such session to open its sheet. Read the **Directory** line: the folder the script ran in.
 5. If a session of yours is missing, turn on **Include automated sessions** and pick the project `(temp)` in the project picker. A session there with one prompt is automated by the built-in rule.
@@ -68,7 +68,7 @@ The app gives each session the project of its folder, and it cannot tell a scrip
    cd ~/code/myapp-bot && claude -p "Triage the new issues"
    ```
 
-   For Codex, run `codex exec "…"` from the same folder. The folder, the prompt and the project name `myapp-bot` are examples.
+   For Codex, run `codex exec "…"` from the same folder; for Grok, start the Grok CLI from the same folder. The folder, the prompt and the project name `myapp-bot` are examples.
 3. Add the new project name to `automated.json`, as in [List the project in automated.json](#list-the-project-in-automatedjson).
 
 If the job does not need the repository, run it from a new temporary folder instead, such as `cd "$(mktemp -d)"`. The app counts a session in a temporary folder with at most one prompt as automated, with no file to edit.
@@ -116,4 +116,5 @@ If a figure did not move:
 - [Activity](/ai-ledger/pages/activity/): the **Sessions** tile, **Project metrics** and the **Sessions** tab.
 - [Metric glossary](/ai-ledger/reference/glossary/): the automated session and the other terms.
 - [How AI Ledger works](/ai-ledger/concepts/how-it-works/): how the app reads sessions and projects.
+- [Supported agents](/ai-ledger/concepts/supported-agents/): what Claude Code, Codex and Grok record.
 - [Weekly 15-minute review](/ai-ledger/improve/weekly-review/): a routine on figures without automated sessions.

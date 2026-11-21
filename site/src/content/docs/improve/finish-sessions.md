@@ -117,7 +117,7 @@ After 14 days of work, run `/insights` in Claude Code, select **Refresh**, and r
 | The weeks that start after your change | **Outcome trend** | A larger fully and mostly achieved part than in the weeks before it. The view counts a session by its start time, so these weeks hold only sessions you started after the change. |
 | The family you worked on | **Friction categories**, by **Reports**, at **14d** | No longer first, or reported fewer times than half of your note at **30d**. The half is a rule of thumb: 14 days are about half of 30. |
 | **Fully or mostly achieved** | **Outcomes at a glance**, at **14d** | A higher share than your note. |
-| **Not achieved** and **Dissatisfied** | **Outcomes at a glance**, at **14d** | A lower share of **Sessions analysed** than in your note. |
+| **Not achieved** and **Dissatisfied** | **Outcomes at a glance**, at **14d** | A lower share of the analysed sessions (the count in the view's heading and coverage note) than in your note. |
 
 If a figure did not move:
 
@@ -129,7 +129,7 @@ If a figure did not move:
 ## Related
 
 - [Judgments](/ai-ledger/pages/insights/): every panel used here, the families, the weights and the filters.
-- [Activity](/ai-ledger/pages/activity/#session-sheet): the session sheet and its **/insights judgment**.
+- [Sheets](/ai-ledger/everywhere/sheets/#session-sheet): the session sheet and its **/insights judgment**.
 - [Project](/ai-ledger/pages/project/): the **Session judgments** block for one project.
 - [Metric glossary](/ai-ledger/reference/glossary/#judgments): what each judgment means.
 - [Kill repeated tool failures](/ai-ledger/improve/tool-failures/): for **tooling** and **slow**.

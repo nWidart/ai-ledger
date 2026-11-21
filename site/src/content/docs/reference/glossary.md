@@ -21,7 +21,7 @@ Four words mark where a figure comes from:
 | Session | One Claude Code, Codex or Grok conversation, with its subagents. A session is in a view when it has a request in the range; Activity's Judgments view counts it by its start time instead. |
 | Source | The agent that wrote the session: Claude Code, Codex or Grok. |
 | Project | The repository or folder a session ran in. |
-| Automated session | A session of a known automated project, a session with no user prompt, or a session in a temporary folder with at most one prompt. Left out unless **Include automated** is on; Errors has no such control and always counts them. See [Filters](/ai-ledger/everywhere/filters/#include-automated). |
+| Automated session | A session of a known automated project, a session with no user prompt, or a session in a temporary folder with at most one prompt. Left out unless **Include automated sessions** is on; Errors has no such control and always counts them. See [Filters](/ai-ledger/everywhere/filters/#include-automated). |
 | Main thread | The session's own requests and tool calls, as opposed to its subagents'. |
 | Subagent | An agent that the session started for part of the work. Its requests count in tokens and cost, never as turns. A Grok subagent's tool calls show on its parent session; its tokens are part of the parent's turn and count once. |
 | Request | One model response in a transcript, counted once. For Grok, one model call: Grok reports usage per turn, and the app splits it over the turn's calls by their context size, so a call's share is an estimate. |
@@ -68,7 +68,7 @@ See [Activity](/ai-ledger/pages/activity/).
 | Prompts interrupted | The share and count of prompts that were interrupted. In Claude Code, a tool call you reject counts as an interruption. Marked worse when it goes up. | The line under the heading | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
 | Subagents | The share of tokens that came from subagents. | **Work health**; **Project metrics** | – |
 | Median session | The median active time of a session. The tile's note also gives the active time in all and, when recorded, the thinking time. | The **Sessions** tile | – |
-| Output speed | Output tokens per second of model time, over the sessions that record model time. Claude Code and Grok only, whole-session, subagents included. Its note adds the time waiting on the model and running tools, and a small line its trend. Marked worse when it goes down. | **Work health**; session sheet | – |
+| Output speed | Output tokens per second of model time, over the sessions that record model time. Claude Code and Grok only, whole-session, subagents included. Its note adds the time waiting on the model and running tools, and a small line its trend. Marked worse when it goes down. | **Work health**; **Sessions** tab (**Model** and **Tok/s** columns); session sheet | – |
 | Work per day, or per week | Commits, prompts or sessions per day, with errors per 100 calls on a track under the bars. One bar per week when the view spans more than 60 days. Select a bar to narrow the tabs to its days. | **Work per day** | [Weekly review](/ai-ledger/improve/weekly-review/) |
 | Peak context | The largest request of a session, with its share of the window when that is 80% or more. | **Sessions** tab | [Keep context lean](/ai-ledger/improve/lean-context/) |
 | Failed, Compactions, Commits, Tests | Per session: failed tool calls, compactions, commits, and test runs passed of run. | **Sessions** tab | [Retro on one project](/ai-ledger/improve/project-retro/) |
@@ -79,7 +79,7 @@ See [Activity](/ai-ledger/pages/activity/).
 
 ## Cost
 
-See [Cost](/ai-ledger/pages/cost/). Every cost is an estimate at API list prices.
+See [Cost](/ai-ledger/pages/cost/). Every cost is an estimate at API list prices. Grok requests use the cost Grok reported instead.
 
 | Figure | Meaning | Where | Playbook |
 | --- | --- | --- | --- |
@@ -94,12 +94,12 @@ See [Cost](/ai-ledger/pages/cost/). Every cost is an estimate at API list prices
 | Cache hit | Cache read tokens over all prompt tokens. | **Tokens and cache**; **Project spend and change** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 | 1h writes | The share of cache write tokens that use the 1-hour lifetime. | **Tokens and cache**; the project table's export | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 | Subagent cost | The share of estimated cost that came from subagents. | **Tokens and cache**; the project table's export | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
-| Cost per day | Estimated cost per day, stacked by project, model or agent, with a 7-day average when the view has 14 days or more. | **Estimated cost per day** | [Compare Claude Code and Codex](/ai-ledger/improve/compare-sources/) |
-| Tokens per day | Tokens per day by kind: Input, Output, Thinking, Cache read, Cache write 5m, Cache write 1h. | **Tokens per day** | – |
+| Cost per day | Estimated cost per day, stacked by project, model or agent, with a 7-day average when the view has 14 days or more. | **Estimated cost per day** | [Compare Claude Code, Codex and Grok](/ai-ledger/improve/compare-sources/) |
+| Tokens per day | Tokens per day by kind: Input, Output, Thinking, Cache read, Cache write 5m, Cache write 1h. The **Scale** switch shows **Volume** or **Share**; **Share** titles the chart **Token share per day**. | **Tokens per day** | – |
 | Share of spend | A project's share of the view's cost. | **Project spend and change** | [Retro on one project](/ai-ledger/improve/project-retro/) |
 | Model and effort share | The share of cost of each model and effort level; fast-mode requests form their own rows. | **Models and effort** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 | Per prompt | Estimated cost and tokens per prompt. | **Tokens and cache**; the project table's export | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
-| Cost by token kind | Cost and tokens of Input, Output + thinking, Cache read, Cache write 5m and Cache write 1h. | **Tokens and cache** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
+| Cost by token kind | A two-sided chart of each token kind's share of tokens against its share of cost: Input, Output + thinking, Cache read, Cache write 5m and Cache write 1h. The cost side leaves out Grok's reported cost. | **Tokens and cache** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 | Est. cost (session) | A session's estimated cost; with a day selected, its cost on that day. | **Most expensive sessions** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 
 ## Context
@@ -114,7 +114,7 @@ See [Context](/ai-ledger/pages/context/). Every figure comes from the transcript
 | Median start by week | The weekly median of starting context, by week of session start, with its 25th to 75th percentile band. A hollow dot rests on fewer than 3 sessions. | **Starting context** | [Keep context lean](/ai-ledger/improve/lean-context/) |
 | Growth curve | The median context at each turn, up to turn 100, over the sessions that reach it. A point needs 5 sessions. | **Growth** | [Keep context lean](/ai-ledger/improve/lean-context/) |
 | Added per prompt | The median, over sessions, of the tokens a session adds per prompt. A fall, as after a compaction, adds nothing. | **Growth** | [Keep context lean](/ai-ledger/improve/lean-context/) |
-| Sessions with a compaction | Sessions with a recorded first compaction. | **Growth** | [Keep context lean](/ai-ledger/improve/lean-context/) |
+| Sessions compacted | The count of sessions with a recorded first compaction. | **Growth** | [Keep context lean](/ai-ledger/improve/lean-context/) |
 | Before the first compaction; Turns to first compaction | The median number of turns before a session's first compaction. | **Growth**; **Growth by project** | [Keep context lean](/ai-ledger/improve/lean-context/) |
 | Active time before it | The median active minutes before the first compaction. | **Growth**; **Growth by project** | [Keep context lean](/ai-ledger/improve/lean-context/) |
 | Peak | The most prompt tokens a session reached, as a share of its window. | **Window pressure** | [Keep context lean](/ai-ledger/improve/lean-context/) |
@@ -130,14 +130,14 @@ See [Context](/ai-ledger/pages/context/). Every figure comes from the transcript
 
 ### Context tips
 
-Each tip fires from a fixed rule. A tip carries **▲ Watch**, or **● Act** where the table says so.
+Each tip fires from a fixed rule. A tip carries **`▲` Warning**, or **`●` Critical** where the table says so.
 
 | Tip | Fires when | Playbook |
 | --- | --- | --- |
 | Sessions start with a large context | A project's median starting context is 30,000 tokens or more. | [Keep context lean](/ai-ledger/improve/lean-context/) |
-| Sessions compact repeatedly | A session compacted 3 times or more. **● Act** from 6. | [Keep context lean](/ai-ledger/improve/lean-context/) |
-| Sessions reach the limit of the window | A session peaked at 80% or more of its window. Always **● Act**. | [Keep context lean](/ai-ledger/improve/lean-context/) |
-| Tool results fill the context | A main-thread tool result is 100,000 bytes or more. **● Act** from 400,000 bytes. | [Keep context lean](/ai-ledger/improve/lean-context/) |
+| Sessions compact repeatedly | A session compacted 3 times or more. **`●` Critical** from 6. | [Keep context lean](/ai-ledger/improve/lean-context/) |
+| Sessions reach the limit of the window | A session peaked at 80% or more of its window. Always **`●` Critical**. | [Keep context lean](/ai-ledger/improve/lean-context/) |
+| Tool results fill the context | A main-thread tool result is 100,000 bytes or more. **`●` Critical** from 400,000 bytes. | [Keep context lean](/ai-ledger/improve/lean-context/) |
 | The prompt cache breaks within sessions | A session has 2 cache breaks or more. | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 | Requests are priced on the long-prompt tier | The long-prompt-tier cost is at least $1 and at least 10% of the view's estimated cost. | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 
@@ -172,13 +172,13 @@ See [Limits](/ai-ledger/pages/limits/). Open windows cover the whole account and
 | Percent used | The share of a window's allowance used now, **measured** or **estimated**. | Heading; card headers | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 | Headroom | The percent left and the time to the window's reset. | Card footers | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 | at its limit, runs out | The window is at 100%, or is forecast to reach 100% before its reset. | Heading; card headers | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
-| Limits alert (dot) | An open window is at its limit, is forecast to run out, or is at 90% or more. | The **Limits** tab, on every page | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
+| Limits tab pill | The percent of the fullest open window (`≈` for estimates). It turns amber or red with a ring when a window is at its limit, forecast to run out, or at 90% or more. | The **Limits** tab, on every page | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 | Forecast cone | Where the percent used goes by the reset, from your activity by hour of day. The cone covers your usual pace and the window's own recent pace, and turns amber when its high edge reaches 100% before the reset. | Window cards | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 | Reaches 100% at | The forecast time the window reaches 100%, before its reset. | Heading; window cards | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 | Last 24 h pace | The forecast if your use of the last 24 hours continued to the reset. | Window cards | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 | Usual pace; safe pace | Your average rate for the provider, and the rate that ends at exactly 100% at the reset (the safe-pace line on the chart, "would use it all" in Details). | Card footers; Details | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 | ahead of pace, behind pace | The forecast reaches 100% before the reset, or about N% would go unused. | Window cards | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
-| Send work to | The provider with the most headroom at the current pace, when two providers or more have a forecast. | Under the heading | [Compare Claude Code and Codex](/ai-ledger/improve/compare-sources/) |
+| Send work to | The provider with the most headroom at the current pace, when two providers or more have a forecast. | Under the heading | [Compare Claude Code, Codex and Grok](/ai-ledger/improve/compare-sources/) |
 | Counted use | The local agent use that the app prices from transcripts. Use elsewhere, such as claude.ai, shows only at the next measured reading. | **What used this window** | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 | What used this window | The top three projects and models of a window by estimated cost, with their share and points. | Window cards | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 | Calibrated window | A window with a known estimated cost per point, worked out from past readings. A window calibrates once it has moved 5 points while its use was counted. | Window cards; **What a point buys** | – |
@@ -217,13 +217,13 @@ See [Live](/ai-ledger/pages/live/). Live lists the sessions whose newest line is
 | approval? | A shell call with no result for more than 30 seconds. Inferred. | Rail; wall; status strip | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
 | your turn | The agent finished its turn and waits for your prompt. The label counts up. | Rail; wall; status strip | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
 | working | The session runs a tool or is thinking. | Rail; wall | – |
-| idle, ended | No line for 5 minutes; or a Claude Code session that you closed. | Rail; wall | – |
-| N waiting for you | The sessions in **approval?** and **your turn**. Also the count in the tab title. | Rail footer; tab title | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
+| idle, ended | No line for 5 minutes; a Claude Code session that you closed, or a Grok session after Grok exits. | Rail; wall | – |
+| N waiting for you | The sessions in **approval?** and **your turn**. Also the count in the tab title and the badge on the **Live** tab in the navigation, on every page. | Rail footer; tab title; **Live** tab | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
 | Context window, % used | The context of the newest main-thread request over the model's window, with a mark at each compaction. The status strip's meter takes the warning color above 80%. | Status strip; rail entries; wall tiles | [Keep context lean](/ai-ledger/improve/lean-context/) |
 | Cost, Tools, Errors | The selected session's cost, tool calls and failed tool calls so far. | Status strip | – |
 | Cache read | The share of the session's prompt tokens read from the cache. | Status strip | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 | Pulse | The last 10 minutes: the context of each main-thread request as a line, and a tick for each tool call that ended, upright for a success, ✕ for a failure. | Status strip | – |
-| Plan limits | The newest plan limit use for the session's source, with its reset time on hover. Warning color and "near" above 80%. | Status strip | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
+| Plan limits | The newest plan limit use for the session's source, with its reset time behind a toggletip. Warning color and "near" above 80%. | Status strip | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 
 ## Project
 
@@ -248,6 +248,6 @@ Three playbooks start from a control, not from one figure.
 
 | Control | Playbook |
 | --- | --- |
-| The **Source** filter | [Compare Claude Code and Codex](/ai-ledger/improve/compare-sources/) |
-| **Include automated** | [Separate automated sessions from yours](/ai-ledger/improve/automated-sessions/) |
+| The **Source** filter | [Compare Claude Code, Codex and Grok](/ai-ledger/improve/compare-sources/) |
+| **Include automated sessions** | [Separate automated sessions from yours](/ai-ledger/improve/automated-sessions/) |
 | Live's **Full text** toggle, and the project filter | [Share your screen safely](/ai-ledger/improve/share-screen/) |

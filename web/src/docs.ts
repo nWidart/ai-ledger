@@ -39,10 +39,12 @@ export const DOCS = {
   "everywhere/filters": { path: "everywhere/filters/", title: "Filters" },
   "everywhere/command-palette": { path: "everywhere/command-palette/", title: "Command palette" },
   "everywhere/context-menu": { path: "everywhere/context-menu/", title: "Context menu" },
-  "everywhere/data-tables": { path: "everywhere/data-tables/", title: "Data tables" },
+  "everywhere/sheets": { path: "everywhere/sheets/", title: "Sheets" },
+  "everywhere/data-tables":{ path: "everywhere/data-tables/", title: "Data tables" },
   "everywhere/keyboard-screen-reader": { path: "everywhere/keyboard-screen-reader/", title: "Keyboard and screen reader" },
 
   "concepts/how-it-works": { path: "concepts/how-it-works/", title: "How AI Ledger works" },
+  "concepts/supported-agents": { path: "concepts/supported-agents/", title: "Supported agents" },
   "concepts/cost-estimates": { path: "concepts/cost-estimates/", title: "How cost is estimated" },
   "concepts/windows": { path: "concepts/windows/", title: "Context windows and plan limit windows" },
   "concepts/privacy-security": { path: "concepts/privacy-security/", title: "Privacy and security model" },
@@ -55,7 +57,7 @@ export const DOCS = {
   "improve/finish-sessions": { path: "improve/finish-sessions/", title: "Get sessions to finish" },
   "improve/babysit-less": { path: "improve/babysit-less/", title: "Babysit agents less" },
   "improve/automated-sessions": { path: "improve/automated-sessions/", title: "Separate automated sessions from yours" },
-  "improve/compare-sources": { path: "improve/compare-sources/", title: "Compare Claude Code and Codex" },
+  "improve/compare-sources": { path: "improve/compare-sources/", title: "Compare Claude Code, Codex and Grok" },
   "improve/project-retro": { path: "improve/project-retro/", title: "Retro on one project" },
   "improve/share-screen": { path: "improve/share-screen/", title: "Share your screen safely" },
 

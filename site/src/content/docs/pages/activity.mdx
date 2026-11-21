@@ -127,7 +127,7 @@ The Output speed tile draws a small line of output speed per bar of the work cha
 
 A session's active time leaves out every pause over 20 minutes. Two figures that display the same value read "unchanged".
 
-Model time and tool time come from the `cost-state` line that Claude Code writes when a session ends, in versions from about late October 2026. A Grok session's model time is the API time each of its turns reports; Grok reports no tool time, so it counts in model time only. Codex sessions and older Claude Code sessions record none, and count in neither figure. Output speed divides the output tokens of the sessions that record model time by that model time. These are whole-session figures: they include subagent work and the session's time outside the range. Model time can exceed active time, because subagents run at the same time. On a store from an earlier version, run `ai-ledger rebuild` once, with the app stopped, to fill them for sessions already ingested; see [Upgrade and rebuild](/ai-ledger/start/upgrade/).
+Model time and tool time come from the `cost-state` line that Claude Code writes when a session ends, in versions from about late October 2026. A Grok session's model time is the API time each of its turns reports; Grok reports no tool time, so it counts in model time only. Codex sessions and older Claude Code sessions record none, and count in neither figure; see [Supported agents](/ai-ledger/concepts/supported-agents/) for what each agent records. Output speed divides the output tokens of the sessions that record model time by that model time. These are whole-session figures: they include subagent work and the session's time outside the range. Model time can exceed active time, because subagents run at the same time. On a store from an earlier version, run `ai-ledger rebuild` once, with the app stopped, to fill them for sessions already ingested; see [Upgrade and rebuild](/ai-ledger/start/upgrade/).
 
 ## Tabs
 
@@ -152,7 +152,7 @@ The Sessions, Project metrics and Tools tables sort by a column: select a header
 | Tok/s | Output speed: output tokens per second of model time, over the whole session, or "–" when the session records no model time. |
 | Prompts | User prompts. |
 | Tokens | Tokens of the session. |
-| Est. cost | Estimated cost at API list prices. |
+| Est. cost | Estimated cost at API list prices (Grok's reported cost for Grok). |
 | Peak context | Largest request. A chip shows the share of the context window when it is 80% or more. |
 | Failed | Failed tool calls. |
 | Compactions | Context compactions. |
@@ -205,30 +205,11 @@ Two lists side by side, each headed with its count, each showing its five newest
 
 ## Sheets
 
-A sheet opens beside the page and does not change the filters. Its state is in the URL, so Back, reload and shared links agree with it. The same sheets open over every page, from a row, a link, the [command palette](/ai-ledger/everywhere/command-palette/) or a [context menu](/ai-ledger/everywhere/context-menu/); they are described here once.
+A sheet opens beside the page and does not change the filters. Its state is in the URL, so Back, reload and shared links agree with it. The same sheets open over every page, from a row, a link, the [command palette](/ai-ledger/everywhere/command-palette/) or a [context menu](/ai-ledger/everywhere/context-menu/). [Sheets](/ai-ledger/everywhere/sheets/) describes each once:
 
-### Session sheet
-
-Shows the whole session, whatever the range filter says.
-
-- A line names the project (it opens the project sheet), the git branch, and the first and last time.
-- **Filter dashboard to *project*** or **Show all projects**.
-- **Source**: the first prompt as recorded. A long prompt is cut; **Show the whole prompt** loads all of it.
-- A line of figures: estimated cost (a "+" marks a subtotal when some model has no price; "Unknown" when none has), tokens, prompts and interrupted prompts, peak context with its share of the window, compactions, commits, active time. When the session records them, the line adds model time, tool time, output speed, and lines added and removed, as `+120 / −30`; a tooltip says they come from Claude Code and include subagents. A Grok session records model time and output speed only: it has no tool time and no lines added or removed. See [Work health](#work-health).
-- **/insights judgment**, tagged model-judged, when the session has an `/insights` analysis: outcome, a "dissatisfied" marker when satisfaction includes it, helpfulness and session type, goal and friction categories, a brief summary and the friction detail, and **Open in Judgments**, which opens the Judgments view with the page's filters. Only Claude Code sessions are analysed; a Codex or Grok session never shows it. See [Judgments](/ai-ledger/pages/insights/).
-- **Timeline** of the session.
-- **Error loops** in the session, each with "Open in Errors".
-- **Commits**, **Models** (requests, tokens, estimated cost) and **Tools** (calls, failed, p50), each folded.
-- The session id, the working directory when the store has it, and the command that resumes the session, each with **Copy**. The resume command is `claude --resume <id>`, `codex resume <id>` or `grok --resume <id>`, after `cd '<directory>' && ` when the directory is known. A copy says "Copied", or "Copy failed".
-- **Wide** widens the sheet. The choice is kept in the browser.
-
-### Project sheet
-
-Shows the project over the page's range and source: **Filter dashboard to *project***, **Open project page**, **Open its errors**; eight figures (estimated cost, sessions, tokens, cache hit, tokens from subagents, cost per commit, errors per 100 calls, error loops); the change against the previous period; Models and effort; and the most expensive sessions. See [Project](/ai-ledger/pages/project/).
-
-### Tool, MCP server and skill sheet
-
-Shows one tool, MCP server or skill over the page's view: calls with their change against the previous period, failure rate, p50 and p95 latency, share from subagents, calls per day, where it ran (source, main thread or subagents, projects), the tools or input patterns behind it, failures by type with a fix, what happened after a failure (incidents, recovered, failed again, gave up), error loops, and recent calls. A skill's count is the calls that invoked the skill, not the calls made while it ran.
+- [Session sheet](/ai-ledger/everywhere/sheets/#session-sheet): the whole session, whatever the range filter says.
+- [Project sheet](/ai-ledger/everywhere/sheets/#project-sheet): a project over the page's range and source. See also [Project](/ai-ledger/pages/project/).
+- [Tool, MCP server and skill sheet](/ai-ledger/everywhere/sheets/#tool-mcp-server-and-skill-sheet): one tool, MCP server or skill over the page's view.
 
 ## Playbooks that start here
 
@@ -238,5 +219,5 @@ Shows one tool, MCP server or skill over the page's view: calls with their chang
 - [Babysit agents less](/ai-ledger/improve/babysit-less/): prompts interrupted and the work that needs attention.
 - [Get sessions to finish](/ai-ledger/improve/finish-sessions/): the `/insights` judgment in the session sheet.
 - [Retro on one project](/ai-ledger/improve/project-retro/): Project metrics and the project sheet.
-- [Compare Claude Code and Codex](/ai-ledger/improve/compare-sources/): the Source filter.
+- [Compare Claude Code, Codex and Grok](/ai-ledger/improve/compare-sources/): the Source filter.
 - [Separate automated sessions from yours](/ai-ledger/improve/automated-sessions/): the Include automated sessions toggle.

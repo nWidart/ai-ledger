@@ -53,9 +53,9 @@ The navigation bar now shows the time of the ingest, such as **8:00 PM**. Hover 
 
 Look at the heading of the Activity page. It sums up the last 30 days, for example:
 
-> 214 commits from 1,032 prompts in 96 sessions across 12 projects, 18 active days
+> 214 commits from 1,032 prompts
 
-That is what our coding agents got done this month. Below it, the **Needs attention** card lists what to look at first, such as error loops or sessions that filled their context window.
+That is what our coding agents got done this month. The **Sessions** tile under the work chart counts the sessions and the active days. Below the heading, the **Needs attention** card lists what to look at first, such as error loops or sessions that filled their context window.
 
 ## Stop the app and install the command
 

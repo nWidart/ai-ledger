@@ -53,7 +53,7 @@ ai-ledger rebuild
 - **Cause:** a model in your transcripts has no price in the packaged table or in `prices.json`. The notice names each model with its token count. Its tokens are counted; its cost is left out of totals.
 - **Fix:** add the model to [`prices.json`](/ai-ledger/reference/configuration/#prices), or upgrade for a newer packaged table with `uv tool upgrade ai-ledger`. Reload the page; no `rebuild` is needed.
 
-### Cost shows "Prices file ignored", or Activity shows "Automated projects file ignored"
+### Cost shows "Prices file ignored", or any page shows "Automated projects file ignored" under the navigation
 
 - **Cause:** the file cannot be used. The banner gives the file's path and the reason, such as a JSON error or a price that is not a number. The app ignores the whole file.
 - **Fix:** correct the file. See [Configuration](/ai-ledger/reference/configuration/). Reload the page; the app reads the file on every page load.
@@ -61,7 +61,7 @@ ai-ledger rebuild
 ### A session or project is missing from a page
 
 - **Cause:** pages leave out automated sessions. A session is automated when it belongs to `observer-sessions` or a project in `automated.json`, has no user prompt, or ran in a temporary folder with at most one prompt.
-- **Fix:** turn on **Include automated** (see [Filters](/ai-ledger/everywhere/filters/#include-automated)). Errors never leaves them out.
+- **Fix:** turn on **Include automated sessions** (see [Filters](/ai-ledger/everywhere/filters/#include-automated)). Errors never leaves them out.
 
 ### Data is behind what the agent just did
 
@@ -82,7 +82,7 @@ ai-ledger rebuild
 
 ### Does AI Ledger send my transcripts anywhere?
 
-No. The server listens on `127.0.0.1` only. On macOS, the Limits page sends your Claude Code OAuth token from the Keychain to Anthropic's usage endpoint every 5 minutes; the token goes nowhere else and is never stored or logged. On Linux, Limits estimates from transcripts. If the Grok CLI is signed in with grok.com, the app also sends that login's access token, read from `~/.grok/auth.json`, to xAI's billing endpoint every 5 minutes; the token goes nowhere else and is never stored or logged. Your browser loads a font from Google Fonts; no transcript data goes with the request. A link to these docs opens them in a new tab only when you follow it. See [Privacy and security model](/ai-ledger/concepts/privacy-security/).
+No. The server listens on `127.0.0.1` only. On macOS, the Limits page sends your Claude Code OAuth token from the Keychain to Anthropic's usage endpoint every 5 minutes; the token goes nowhere else and is never stored or logged. On Linux, Limits reads Codex's limits from Codex transcripts and shows no Claude Code windows (unless copied from a macOS store). If the Grok CLI is signed in with grok.com, the app also sends that login's access token, read from `~/.grok/auth.json`, to xAI's billing endpoint every 5 minutes (on macOS and Linux); the token goes nowhere else and is never stored or logged. Your browser loads a font from Google Fonts; no transcript data goes with the request. A link to these docs opens them in a new tab only when you follow it. See [Privacy and security model](/ai-ledger/concepts/privacy-security/).
 
 ### Why does the first start take minutes?
 
@@ -94,7 +94,7 @@ No. The store keeps every line it has read, and never deletes or alters one beca
 
 ### Which agents does it read?
 
-Claude Code (`~/.claude/projects`), Codex (`~/.codex`) and Grok (`~/.grok`). All three map onto the same pages. Activity's Judgments view covers Claude Code sessions only, because it shows Claude Code's `/insights`.
+Claude Code (`~/.claude/projects`), Codex (`~/.codex`) and Grok (`~/.grok`). All three map onto the same pages. Activity's Judgments view covers Claude Code sessions only, because it shows Claude Code's `/insights`. For what each agent records, see [Supported agents](/ai-ledger/concepts/supported-agents/).
 
 ### Where are the store and the configuration files?
 

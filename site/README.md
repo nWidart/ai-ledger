@@ -10,7 +10,7 @@ Needs Node 26, the version CI uses.
 cd site
 npm ci
 npm run dev       # http://localhost:4321/ai-ledger/
-npm run check     # what CI runs: sync, playbook check, astro check, build with link check
+npm run check     # what CI runs: sync, playbook check, drift check, astro check, build with link check
 npm run preview   # serves the last build from dist/, search included
 ```
 
@@ -20,6 +20,8 @@ Every script runs `npm run sync` first. It writes two things from the repo, both
 
 - a link to a page or heading anchor of the site that does not exist;
 - a playbook that does not follow the template below;
+- a mirrored theme token in `src/styles/custom.css` that drifts from `web/src/theme.css`;
+- a screenshot in `src/assets/shots/` missing its dark or light pair, or out of step with `src/assets/shots/README.md`;
 - a type error in a component or the configuration.
 
 ## Where things go
@@ -34,6 +36,7 @@ Every script runs `npm run sync` first. It writes two things from the repo, both
 | `src/styles/custom.css` | The theme: the app's tokens mapped onto Starlight's, and a few element styles. See "Theme" below. |
 | `scripts/sync.mjs` | Copies the changelog, the GIFs and the videos in (see above). |
 | `scripts/check-playbooks.mjs` | The playbook template check. |
+| `scripts/check-drift.mjs` | The theme-token and screenshots-README drift check. |
 
 A new page is not in the sidebar until you add it to `sidebar` in `astro.config.mjs`.
 
@@ -124,7 +127,7 @@ A playbook is a how-to guide: the reader has a goal and knows the app. Write eac
   - a command, in a code block;
   - a habit with a trigger: "When the meter turns to the warning color, run `/compact`."
 - No "consider", "try to" or "be mindful of". When you cannot name what to paste, set, run or do, the playbook is not ready.
-- Give the Claude Code and the Codex variant where they differ. Name a real-world case that changes the step (a file shared in git, a tool the agent lacks).
+- Give the Claude Code, Codex and Grok variants where they differ. Name a real-world case that changes the step (a file shared in git, a tool the agent lacks).
 
 **Verify**
 
@@ -205,4 +208,4 @@ The site looks like the app. `src/styles/custom.css` copies the app's color toke
 
 ## Deploy
 
-`.github/workflows/docs.yml` runs `npm run check` on every pull request that touches `site/`, `docs/*.gif`, `CHANGELOG.md` or the workflow, and deploys `dist/` to GitHub Pages from `main`. Pull requests never deploy.
+`.github/workflows/docs.yml` runs `npm run check` on every pull request that touches `site/`, `docs/*.gif`, `docs/*.mp4`, `CHANGELOG.md` or the workflow, and deploys `dist/` to GitHub Pages from `main`. Pull requests never deploy.

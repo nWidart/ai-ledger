@@ -1,5 +1,5 @@
 ---
-title: Compare Claude Code and Codex
+title: Compare Claude Code, Codex and Grok
 description: Compare your agents, Grok included, on the same figures with the source filter.
 ---
 
@@ -22,7 +22,7 @@ Compare like with like: the same project, the same range, and figures that the a
 1. On [Cost](/ai-ledger/pages/cost/), set the range to **30d** and **Stack by** to **Agent**. Select the **Claude Code** key in the chart's legend: it sets the source filter. In **Project spend and change**, select each project: its sheet gives its commits. Select the key again to clear it, then do the same with **Codex** and **Grok**. Pick a project where each agent has 5 commits or more (a rule of thumb). With fewer, one long session decides the figure.
 2. Pick that project in the project picker, and set the source to **Claude Code**. On Cost, open **Tokens and cache** and write down **Per commit** and **Per prompt**.
 3. On [Activity](/ai-ledger/pages/activity/), write down the heading's commits and prompts, the share of prompts interrupted in the line under the heading, and the **Work health** tile **Test runs passed**.
-4. On [Context](/ai-ledger/pages/context/), write down **Added per prompt** and **Sessions with a compaction** in **Growth**.
+4. On [Context](/ai-ledger/pages/context/), open the **Growth and bloat** tab and write down **Added per prompt** and **Sessions compacted** in **Growth**.
 5. Set the source to **Codex**, then to **Grok**, and read the same figures again on the same pages.
 6. Open [Limits](/ai-ledger/pages/limits/) with the source at **All**. Read the heading, the status in each card's header, and the suggestion if one shows. Limits has a Grok card when the Grok CLI is signed in with grok.com.
 
@@ -32,7 +32,7 @@ Compare only these figures. The others differ by what each agent records:
 | --- | --- | --- | --- |
 | **Cost / commit**, **Cost / prompt** | Yes, at API list prices | Claude Code's and Codex's are estimates at list prices, not what your plans charge. | Grok's cost is what Grok reported, not an estimate. |
 | Commits, prompts, **Prompts interrupted**, **Test runs passed** | Yes | The agents record prompts, interruptions and shell calls the same way. | A cancelled turn marks its prompt interrupted. |
-| **Added per prompt**, **Sessions with a compaction** | Yes, as a rough guide | Each agent decides when to compact, and the models' windows differ. | Grok records its compactions and the context of each model call. |
+| **Added per prompt**, **Sessions compacted** | Yes, as a rough guide | Each agent decides when to compact, and the models' windows differ. | Grok records its compactions and the context of each model call. |
 | Totals per session, day, project and model | Yes | Each agent's tokens count once. | Grok reports usage once per turn. Totals are exact; how a turn splits over its model calls is an estimate. |
 | **Errors per 100 calls**, tool calls per prompt | No | The agents call different tools for the same work, so a call is not the same unit. | A shell command that exits non-zero is an error even when Grok marks it completed. |
 | Starting context | No | Each agent has its own system prompt and tools, and reads its own instruction file. | Grok has its own system prompt and tools too. |
@@ -47,7 +47,7 @@ Then read what you wrote down:
 | What you see | Cause | Fix |
 | --- | --- | --- |
 | One agent's **Cost / commit** is 1.5 times another's or more (a rule of thumb) in the same project. | This kind of work costs less with the other agent. | [Send each kind of task to one agent](#send-each-kind-of-task-to-one-agent) |
-| One agent has a lower **Test runs passed** in the same project, by 10 points or more (a rule of thumb). | That agent's instruction file lacks rules that the other one has, such as how to run the tests. | [Give Claude Code and Codex the same instructions](#give-claude-code-and-codex-the-same-instructions) |
+| One agent has a lower **Test runs passed** in the same project, by 10 points or more (a rule of thumb). | That agent's instruction file lacks rules that the other one has, such as how to run the tests. | [Give every agent the same instructions](#give-every-agent-the-same-instructions) |
 | Limits shows "Send work to …", or one provider's window **runs out** while the other has headroom. | One plan runs out first. | [Move work before a limit runs out](#move-work-before-a-limit-runs-out) |
 
 ## Act
@@ -68,23 +68,27 @@ Then read what you wrote down:
 
 If you work on a team, the rule is yours: other people's plans and prices differ.
 
-### Give Claude Code and Codex the same instructions
+### Give every agent the same instructions
 
-Claude Code reads `CLAUDE.md`, and Codex reads `AGENTS.md`. When the two files differ, one agent misses rules that the other follows. Keep the rules in `AGENTS.md`, and make `CLAUDE.md` import it. Put this line in the project's `CLAUDE.md`:
+Claude Code reads `CLAUDE.md`, and Codex reads `AGENTS.md`. When the files differ, one agent misses rules that another follows. Keep the shared rules in one file, `AGENTS.md`, and point every other agent at it:
 
-```md
-@AGENTS.md
-```
+1. Put this line in the project's `CLAUDE.md`, so that Claude Code imports `AGENTS.md`:
 
-Move the rules that only one agent needs below that line in `CLAUDE.md`, or into a section of `AGENTS.md` that names the agent.
+   ```md
+   @AGENTS.md
+   ```
 
-Then open [Errors](/ai-ledger/pages/errors/) with the project filter and the source set to the agent with the worse figure. Paste the fix of each type under **Open fixes** into `AGENTS.md`. Both agents then read it. See [Kill repeated tool failures](/ai-ledger/improve/tool-failures/).
+2. For Grok, check which instruction file your Grok CLI reads. If it is not `AGENTS.md`, copy the shared rules into that file, or point it at `AGENTS.md` the way the Grok CLI allows. AI Ledger does not read instruction files, so it cannot tell you which one Grok loaded.
+3. Move the rules that only one agent needs below the import line in `CLAUDE.md`, or into a section of `AGENTS.md` that names the agent. Claude Code tool names, such as `Read`, `Grep` or `run_in_background`, belong in that Claude Code part only.
+
+Then open [Errors](/ai-ledger/pages/errors/) with the project filter and the source set to the agent with the worse figure. Paste the fix of each type under **Open fixes** into `AGENTS.md`. Every agent that reads it then gets the rule. See [Kill repeated tool failures](/ai-ledger/improve/tool-failures/).
 
 ### Move work before a limit runs out
 
 When the Limits heading names a window that runs out before its reset, start your next task in the agent that the suggestion "Send work to …" names. Without a suggestion, read the card headers and pick the provider whose windows read neither **at its limit** nor **runs out**.
 
-Do not move work to a provider whose limit already shows **at limit**. Limits never suggests it.
+Do not move work to a provider whose limit already shows **at its limit**. Limits never suggests it.
+
 ## Verify
 
 Before you act, keep the figures you wrote down in Diagnose, with the date. Also note **Cost / commit** of the project with the source at **All**, at **14d**. The app has no custom date range, so you need these to compare with.
@@ -102,6 +106,7 @@ If **Cost / commit** did not fall, check that the kind of task you moved is what
 
 ## Related
 
+- [Supported agents](/ai-ledger/concepts/supported-agents/): what Claude Code, Codex and Grok each record.
 - [Filters](/ai-ledger/everywhere/filters/): the **Source** filter and how it carries from page to page.
 - [Cost](/ai-ledger/pages/cost/): **Stack by** **Agent**, **Project spend and change** and **Tokens and cache**.
 - [Limits](/ai-ledger/pages/limits/): the suggestion and the windows of each provider.

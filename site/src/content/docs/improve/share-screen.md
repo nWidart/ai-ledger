@@ -15,7 +15,8 @@ Act at once when one of these holds:
 
 - [Live](/ai-ledger/pages/live/) shows the warning "**Full text on.** Prompts, replies and tool output show as written, secrets included.", or its **Full text** toggle is tinted, checked. This is the app's own warning. Dismissing the warning leaves the tint.
 - The project picker, or the **Search** button in the navigation, which shows the project's name while a project filter is set, names a project you cannot show, such as a client's.
-- A sheet is open beside the page: the URL holds `session=`, `inspect=`, `tool=`, `mcp=` or `skill=` (on any page but Live).
+- A sheet is open beside the page: the URL holds `session=` (on any page but Live), `sheet=` (the session sheet on Live), `inspect=`, `tool=`, `mcp=` or `skill=`.
+- Live's Wall has pinned streams: the URL holds `pin=`. Each pinned stream shows its session's status strip, directory included, and its tool rows.
 - [Errors](/ai-ledger/pages/errors/) has a type open with its list or examples in view.
 
 Rule of thumb: if you are not sure a panel is safe to show, it is not. Each session can hold any secret that the agent read or printed.
@@ -35,15 +36,15 @@ The table lists what each page can show with **Full text** off. Each row is abou
 | Page | What can show | Why it matters | Fix |
 | --- | --- | --- | --- |
 | Every page | Project names in the picker list, the [command palette](/ai-ledger/everywhere/command-palette/), tables, chart keys and the **Search** button; the URL | A project name can name a client or private work. | [Narrow every page to one project](#narrow-every-page-to-one-project) |
-| Cost, Activity, and the filters of Activity, Context, Project and Live | The path of the app's data folder: Cost's **Unpriced models** and **Prices file ignored** banners, Activity's **Automated projects file ignored** banner, and the "Add more projects in …" line of the **Include automated sessions** help | The path holds your user name, such as `/Users/<name>/Library/Application Support/ai-ledger/`. The **Unpriced models** banner shows, unfolded, whenever a model has no price, such as a new model. | [Hide paths to your data folder](#hide-paths-to-your-data-folder) |
+| Every page, Cost, and the filters of Activity, Context, Project and Live | The path of the app's data folder: the **Automated projects file ignored** banner under the navigation, on every page; Cost's **Unpriced models** and **Prices file ignored** banners; and the "Add more projects in …" line of the **Include automated sessions** help | The path holds your user name, such as `/Users/<name>/Library/Application Support/ai-ledger/`. The **Unpriced models** banner shows, unfolded, whenever a model has no price, such as a new model. | [Hide paths to your data folder](#hide-paths-to-your-data-folder) |
 | Activity (both views), Cost, Context, Project | Session titles. When the agent wrote no title, the title is made from the session's first prompt. | A first prompt can quote a secret, a person or a client. | [Narrow every page to one project](#narrow-every-page-to-one-project) |
-| Activity | **Failed test runs**: the **Command** column. The Tool, MCP server and skill sheets: the input patterns and the recent calls. | A command can hold a token or a path. | [Close sheets and keep drawers folded](#close-sheets-and-keep-drawers-folded) |
+| Activity | **Failed test runs**, in the **Loops and tests** tab: the **Command** column. The Tool, MCP server and skill sheets: the input patterns and the recent calls. | A command can hold a token or a path. | [Close sheets and keep drawers folded](#close-sheets-and-keep-drawers-folded) |
 | Any page, session sheet | **Source** (the first prompt, folded), **Commits** (the commit commands, folded), the **Directory** and the **Resume** command (not folded), and the model's summary when the session has an `/insights` judgment | The directory and the resume command show your home folder path, which holds your user name. | [Close sheets and keep drawers folded](#close-sheets-and-keep-drawers-folded) |
 | Cost | **Most expensive sessions** and **Project spend and change**; the plan gauge, which names your plan and its price | Session titles and project names. The CSV and copy buttons put the same names on the clipboard. | [Narrow every page to one project](#narrow-every-page-to-one-project) |
 | Context | **Largest tool results**: the **Input** column, a summary of the file, command or query of each result | A file path or a command can be private. | [Close sheets and keep drawers folded](#close-sheets-and-keep-drawers-folded) |
 | Project | **Largest overhead items**: MCP servers, memory files and skills by name, with each memory file's path on hover | Paths and server names. | [Close sheets and keep drawers folded](#close-sheets-and-keep-drawers-folded) |
 | Errors | Each example: the tool input, the error text and the tool's result. Incidents and **By message** rows. | An error example can quote a secret from a command or its output. No toggle hides it. | [Keep Errors at the type table](#keep-errors-at-the-type-table) |
-| Limits | **What used this window**: the top three projects of each window | It ignores the project filter, so it can name other projects. | [Narrow every page to one project](#narrow-every-page-to-one-project) |
+| Limits | Each open window card's footer: **Top**, the top project's name and share, always shown. **What used this window**, in **Details**: the top three projects of each window | Both ignore the project filter, so they can name other projects, even with **Details** closed. | [Narrow every page to one project](#narrow-every-page-to-one-project) |
 | Activity, Judgments view | Session cards: the model's brief summary, and the **Friction detail** (folded) | The model's words can repeat what you asked. | [Close sheets and keep drawers folded](#close-sheets-and-keep-drawers-folded) |
 | Live, **Full text** off | Tool inputs up to 300 characters, so a short command shows whole; the error text of a failed call; subagent descriptions; git branches; titles that the agent or `/rename` wrote; the session's working directory in the status strip, always visible, and the **Copy resume** command on hover | A short command can hold a token. The directory shows your home folder path, which holds your user name. | [Turn off Full text on Live](#turn-off-full-text-on-live) |
 | Live, **Full text** on | Prompts, replies and tool results as written, and titles made from first prompts | Everything, secrets included. | [Turn off Full text on Live](#turn-off-full-text-on-live) |
@@ -72,18 +73,20 @@ Replace `<name>` with the project's name as the picker shows it. `/usage` is Act
 - Leave **Include automated sessions** off.
 - Do not show Cost if your plan's name and price are private: the plan gauge names them.
 - Do not open the project picker or the command palette while you share: both list your other projects.
-- Do not show Limits with the **What used this window** drawer open: it names the top projects of each window, whatever the filter.
+- Do not show Limits unless every project it can name is safe to show. Each open window card's footer names its **Top** project and share even with **Details** closed, and **What used this window** in **Details** names the top three, whatever the filter.
 - If no project is safe to show, do not share the app. Use the screenshots on this site instead.
 
 ### Close sheets and keep drawers folded
 
-1. Close every sheet with its **✕**, or press Escape. Check that the URL has no `session=`, `inspect=`, `tool=`, `mcp=` or `skill=`. On Live, `session=` names the session in the stream, not a sheet.
-2. Keep these folded: Activity's **Failed test runs**, Context's **Largest tool results**, the Project page's **Largest overhead items**, and the **Friction detail** of a card in the Judgments view.
-3. If you must open a session sheet, keep **Source** and **Commits** folded, and scroll so that **Directory** and **Resume** stay off screen.
+1. Close every sheet with its **✕**, or press Escape. Check that the URL has no `session=`, `sheet=`, `inspect=`, `tool=`, `mcp=` or `skill=`. On Live, `session=` names the session in the stream, not a sheet, and `sheet=` names the open session sheet.
+2. On Live's Wall, unpin every stream you cannot show: check that the URL has no `pin=`.
+3. On Activity, stay on the **Sessions** tab and do not open **Loops and tests**: it holds **Failed test runs**.
+4. Keep these folded: Context's **Largest tool results**, the Project page's **Largest overhead items**, and the **Friction detail** of a card in the Judgments view.
+5. If you must open a session sheet, keep **Source** and **Commits** folded, and scroll so that **Directory** and **Resume** stay off screen.
 
 ### Hide paths to your data folder
 
-1. Open Cost and Activity before you share. If a banner names `prices.json` or `automated.json` with a path, fix the file or price the model as [Configuration](/ai-ledger/reference/configuration/) says, then reload: the banner goes away.
+1. Before you share, open Cost, and look under the navigation of any page: the **Automated projects file ignored** banner shows there on every page. If a banner names `prices.json` or `automated.json` with a path, fix the file or price the model as [Configuration](/ai-ledger/reference/configuration/) says, then reload: the banner goes away.
 2. If you cannot clear an **Unpriced models** banner, do not show Cost.
 3. Do not open the help of **Include automated sessions** on screen, and keep the pointer off its **?** button: the help opens on hover, and it shows the path of `automated.json`.
 
@@ -105,10 +108,11 @@ Before each share, check these on the tab you will share. Each must hold; there 
 | --- | --- | --- |
 | The **Full text** toggle | Live, in the bar | Not checked, no tint, no warning. Prompts and replies read as word counts. |
 | The project filter | The URL and the **Search** button | The one project you chose. |
-| Open sheets | The URL, on every page but Live, where `session=` names the session in the stream | No `session=`, `inspect=`, `tool=`, `mcp=` or `skill=`. |
+| Open sheets | The URL | No `inspect=`, `tool=`, `mcp=` or `skill=`; no `session=` on every page but Live, where it names the session in the stream; no `sheet=` on Live. |
+| Pinned streams | The URL of Live | No `pin=`. |
 | Errors | The URL of Errors | No `cat=` and no `ex=`: no type and no example open. |
-| **What used this window** | Limits | Folded, or Limits not shown. |
-| Data folder path | Cost and Activity banners | No banner names `prices.json` or `automated.json`, or the page is not shown. |
+| Window cards | Limits | Every **Top** project in the card footers is safe to show, and **Details** is closed; or Limits not shown. |
+| Data folder path | The banner under the navigation, and Cost's banners | No banner names `prices.json` or `automated.json`, or the page is not shown. |
 | The shared area | Your sharing tool | One tab, not a screen. |
 
 If a secret was on screen, treat it as leaked: revoke it and make a new one with its provider. The store keeps every transcript line, so the secret stays in it; see [Privacy and security](/ai-ledger/concepts/privacy-security/).
@@ -119,5 +123,5 @@ If a secret was on screen, treat it as leaked: revoke it and make a new one with
 - [Live](/ai-ledger/pages/live/): **Full text** and what it shows when off.
 - [Errors](/ai-ledger/pages/errors/): the examples of an error type.
 - [Filters](/ai-ledger/everywhere/filters/): the project filter and the URL keys.
-- [Activity](/ai-ledger/pages/activity/): the session sheet.
+- [Sheets](/ai-ledger/everywhere/sheets/#session-sheet): the session sheet and what it shows.
 - [Metric glossary](/ai-ledger/reference/glossary/): the terms used here.

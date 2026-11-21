@@ -52,7 +52,7 @@
   --sl-color-green: #0ca30c;
   --sl-color-green-high: light-dark(#006300, #4cc94c);
   --sl-color-green-low: color-mix(in srgb, var(--sl-color-green) 12%, var(--ai-surface-1));
-  --sl-color-orange: light-dark(#c98500, #d99a1e);
+  --sl-color-orange: light-dark(#c68300, #d99a1e);
   --sl-color-orange-high: light-dark(#8a5a00, #e0b04a);
   --sl-color-orange-low: color-mix(in srgb, var(--sl-color-orange) 12%, var(--ai-surface-1));
   --sl-color-red: light-dark(#d03b3b, #e66767);

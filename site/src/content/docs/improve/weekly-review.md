@@ -12,7 +12,7 @@ Once a week, in 15 minutes, find the one figure of the last 7 days that most nee
 Run the review every week. It is overdue when one of these holds:
 
 - [Activity](/ai-ledger/pages/activity/), **Needs attention**, shows the same line as last week, such as "N error loops: a tool failed 3+ times in a row."
-- The **Limits** tab carries a dot that you did not expect. The app shows the dot when a plan limit window is at its limit, is forecast to run out, or is at 90% or more.
+- The **Limits** tab's percent pill turns amber or red, with a ring, and you did not expect it. The app does so when a plan limit window is at its limit, is forecast to run out, or is at 90% or more; otherwise the pill is a quiet percent.
 - [Cost](/ai-ledger/pages/cost/), at its default range of 30d, opens on a multiple, such as "3.1× the previous 30 days" (an example), and you cannot say why.
 
 Skip the week when Activity's heading reads "No agent activity in the last 7 days."
@@ -73,11 +73,11 @@ Read **Tips**. The stop is off when a tip shows instead of "Nothing stands out i
 | **Sessions start with a large context**, **Sessions compact repeatedly**, **Sessions reach the limit of the window**, **Tool results fill the context** | [Keep context lean](/ai-ledger/improve/lean-context/) |
 | **The prompt cache breaks within sessions**, **Requests are priced on the long-prompt tier** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 
-A tip marked **● Act** counts before one marked **▲ Watch**.
+A tip marked **● Critical** counts before one marked **▲ Warning**. Context's tips use these two marks, where Cost's **What stands out** and Activity's **Needs attention** use **● Act** and **▲ Watch**.
 
 ### 4. Errors (3 minutes)
 
-Errors has no **Include automated** control: its figures count automated sessions too.
+Errors has no **Include automated sessions** control: its figures count automated sessions too.
 
 Read the **Change** vital: the error rate of the 7 days against the 7 days before. It shows "–" when either period has fewer than 200 tool calls. In that case set the range to **30d** for this stop: **Change** then compares the 30 days with the 30 days before. Set the range back to **7d** when you leave.
 
@@ -89,7 +89,7 @@ Then read **Where to start**, beside the type table. The stop is off when:
 
 For any of these, open [Kill repeated tool failures](/ai-ledger/improve/tool-failures/).
 
-If you marked a fix in an earlier week, open that type and read **Before and after the fix**. **Rate lower** means the fix worked. **Rate higher** or **Rate unchanged** means it did not: write the type down.
+If you marked a fix in an earlier week, read **Applied fixes** at the foot of **Where to start**. It lists every fix you marked, with the error rate before and since, and a verdict, so you need not open each type. **Rate lower** means the fix worked. **Rate higher** or **Rate unchanged** means it did not: write the type down. For the detail, open the type and read **Before and after the fix**.
 
 ### 5. Limits (2 minutes)
 
@@ -99,7 +99,7 @@ Read the heading. The stop is off when it does not start with "No limit runs out
 
 Then read two more lines:
 
-- A suggestion such as "Send work to Codex: about 70% of its weekly limit would go unused" (an example) names the provider with the most headroom. To act on it, open [Compare Claude Code and Codex](/ai-ledger/improve/compare-sources/).
+- A suggestion such as "Send work to Codex: about 70% of its weekly limit would go unused" (an example) names the provider with the most headroom. To act on it, open [Compare Claude Code, Codex and Grok](/ai-ledger/improve/compare-sources/).
 - **Past windows** gives, under each limit's name, the average share still unused when its windows reset ("avg 60% unused"). Rule of thumb: when a weekly limit reads 50% unused or more in every review of a month, your plan is larger than your use. Open [Spend less for the same output](/ai-ledger/improve/spend-less/) for the plan fit.
 
 ### 6. Judgments (2 minutes)
@@ -124,7 +124,7 @@ Live has no range: it shows the sessions that wrote a line in the last 10 minute
 
 Read the rail's groups and its footer, which adds "N waiting for you" when a session needs you. The stop is off when a session sits under **approval?** or **your turn** and you did not know: the label of **your turn** counts up how long it has waited. Open [Babysit agents less](/ai-ledger/improve/babysit-less/).
 
-If the **Context window** meter of a session is in the warning color, which it takes above 80%, note it for [Keep context lean](/ai-ledger/improve/lean-context/).
+If the context meter in a session's status strip is in the warning color, which it takes above 80%, note it for [Keep context lean](/ai-ledger/improve/lean-context/).
 
 With no active session, the page reads "No session is active in this view." and the stop is done.
 
@@ -135,7 +135,7 @@ With no active session, the page reads "No session is active in this view." and 
 Do not work on every stop that is off. Pick one, in this order (a rule of thumb):
 
 1. A Limits heading that names a window at its limit or reaching 100% before its reset. It stops your work this week.
-2. A card marked **● Act**: **Needs attention** on Activity, which carries the mark when it has an error-loop line, a card under **What stands out** on Cost, or a tip on Context.
+2. A card marked **● Act** (**Needs attention** on Activity, which carries the mark when it has an error-loop line, or a card under **What stands out** on Cost), or a tip on Context marked **● Critical**.
 3. A fix that did not work: **Rate higher** or **Rate unchanged** on Errors.
 4. Any other stop that is off, the one that was also off last week first.
 
@@ -151,7 +151,7 @@ Not every page shows last week's figure next to this week's, so keep your own. P
 - Cost: $_ · against the previous 7 days: _ · cards marked Watch or Act: _
 - Context: tips showing: _
 - Errors: error rate: _% · change: _ · open fixes: _ · fix verdicts: _
-- Limits: heading: _ · chips at limit or runs out: _
+- Limits: heading: _ · windows at limit or running out: _
 - Judgments (30d): analysed: _ of _ · not achieved: _ · dissatisfied: _ · top friction: _
 - Live: waiting for you: _
 - Stops that are off: _
@@ -170,7 +170,7 @@ After 4 reviews (28 days), compare your first note with your last:
 | --- | --- | --- |
 | "N things to look at" | Activity, **Needs attention**, at **7d** | A smaller N, or "Nothing needs attention". |
 | **Errors per 100 calls** | Activity, **Work health**, with the range set to **30d** for this row | The tile reads "down from": at 30d the app compares the last 30 days, the span of your 4 reviews, with the 30 days before. |
-| Tips showing | Context, **Tips**, at **7d** | Fewer tips, and none marked **● Act**. |
+| Tips showing | Context, **Tips**, at **7d** | Fewer tips, and none marked **● Critical**. |
 | **Playbook picked** | Your notes | Each playbook you picked has reached the result in its own **Verify** section. |
 
 The review itself should fit in 15 minutes by the third week. If it does not, read only the "off" test at each stop and open nothing else.

@@ -10,7 +10,7 @@
     "dev": "npm run sync && astro dev",
     "build": "npm run sync && astro build",
     "preview": "npm run sync && astro preview",
-    "check": "npm run sync && node scripts/check-playbooks.mjs && astro check && astro build"
+    "check": "npm run sync && node scripts/check-playbooks.mjs && node scripts/check-drift.mjs && astro check && astro build"
   },
   "dependencies": {
     "@astrojs/starlight": "0.43.1",
