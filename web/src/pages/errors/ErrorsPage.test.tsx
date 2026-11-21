@@ -665,6 +665,9 @@ describe("ErrorsPage", () => {
       expect(thrown).toEqual([]);
       expect(location.search).toBe(hash); // nothing selected
       expect(chart.getAttribute("aria-label")).not.toContain("Selected:");
+      // Space never scrolls the page under the box, as under the chart; Shift+Space stays the browser's.
+      expect(fireEvent.keyDown(chart, { key: " " })).toBe(false);
+      expect(fireEvent.keyDown(chart, { key: " ", shiftKey: true })).toBe(true);
     });
 
     // The table memoizes its rows per view: a mute swaps the model (and the filtered errors), and the rows must follow.

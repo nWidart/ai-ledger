@@ -4,6 +4,7 @@ import { ChartTable } from "../../components/DataTable";
 import { EChart, type Shown } from "../../components/echart/EChart";
 import type { ChartEnv } from "../../components/echart/tokens";
 import { useZoomReset } from "../../components/echart/zoomReset";
+import { modified } from "../../components/keys";
 import { Table, type Column } from "../../components/table/Table";
 import { num as fmt } from "../../format";
 import { useErrors } from "./context";
@@ -92,7 +93,9 @@ export const RateChart = memo(function RateChart() {
       {/* One stable element around the chart and the message that replaces it: the page's observer watches it, since the
           two boxes are different elements and an observer on one would go stale when they swap. */}
       <div id="chartView">
-        {rm.bare ? <div id="chart" className="echart" tabIndex={0} role="group" aria-label={label} aria-describedby="chartHint">
+        {/* Space never scrolls the page under the message either, as under the chart (keys.space); a modified Space is the browser's. */}
+        {rm.bare ? <div id="chart" className="echart" tabIndex={0} role="group" aria-label={label} aria-describedby="chartHint"
+          onKeyDown={e => { if (e.key === " " && !modified(e)) e.preventDefault(); }}>
           <div className="empty">{empty ? "No tool calls in this range." : `No failed tool calls in this range, out of ${fmt(sumCalls(v, f.calls))}.`}</div></div>
           : <EChart ref={box} id="chart" label={label} describedBy="chartHint" height={rateLayout(rm, scale).height} option={option} view={rm.view}
             points={pts.length} tip={tip} read={read} keys={{ space: true }} onActivate={activate} status={status.of === drawnAt ? status.text : ""}
