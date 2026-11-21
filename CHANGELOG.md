@@ -80,6 +80,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 - Text follows the browser's default font size: font sizes are relative, chart labels scale with them, and nothing is cut off at 200%. In Chrome and Edge 146+ the dashboard also follows the operating system's text scale.
 - Activity's Output speed tile opens the Sessions tab sorted by Tok/s, fastest first, instead of by active time. Activity's Overview is 20px shorter above the tabs, so the tab list clears the first screen at 1440 x 900 with room.
+- Cost's daily chart follows a theme change, and an operating-system light or dark change under System, without a reload. Escape closes its tooltip wherever the focus is, including when the pointer opened it and the focus is elsewhere. In forced colors the day you are reading is a band in the highlight color instead of a thin frame. On a first visit the chart is drawn a moment after the page, in a box that already has its height, and its bars grow once, when it first draws, not each time new data lands.
 
 ### Removed
 
