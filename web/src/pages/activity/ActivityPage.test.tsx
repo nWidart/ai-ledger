@@ -1,7 +1,8 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DayView, Previous, ProjectRow, UsagePayload } from "../../api";
+import { COLUMNS_KEY, resetColumnChoice } from "./sessionColumns";
 import usage from "../../__fixtures__/usage";
 import usageAll from "../../__fixtures__/usage-all";
 import usageCodex from "../../__fixtures__/usage-codex";
@@ -1345,5 +1346,188 @@ describe("ActivityPage", () => {
     expect(pal.contains(document.activeElement)).toBe(true);
     await userEvent.keyboard("{Escape}");
     expect([sheet.open, pal.open, location.search]).toEqual([true, false, "?range=30&tool=Bash"]);
+  });
+});
+
+describe("Sessions columns", () => {
+  beforeEach(() => { resetColumnChoice(); });
+  afterEach(() => { vi.unstubAllGlobals(); resetColumnChoice(); });
+
+  const panel = () => within(document.getElementById("sessions")!);
+  /** The Sessions headers on screen, by sort key; Project, which does not sort, as "project". */
+  const heads = () => [...document.querySelectorAll<HTMLElement>("#sessions thead th")].map(th => th.dataset.sort ?? th.textContent!.replace(/\?$/, "").toLowerCase());
+  const head = (key: string) => document.querySelector<HTMLElement>(`#sessions thead th[data-sort="${key}"]`);
+  const columnsButton = () => panel().getByRole("button", { name: /^Columns/ });
+  const list = () => screen.getByRole("dialog", { name: "Columns" });
+  const box = (name: string) => within(list()).getByRole<HTMLInputElement>("checkbox", { name });
+  const stored = () => { const v = localStorage.getItem(COLUMNS_KEY); return v == null ? null : JSON.parse(v) as unknown; };
+  const lastSessionsUrl = () => fetched().map(String).filter(u => u.startsWith("/api/sessions")).at(-1);
+  /** A window this many CSS pixels wide, at the default 16px text size: matchMedia answers its max-width queries. */
+  const width = (px: number) => vi.stubGlobal("matchMedia", (q: string) => {
+    const max = /max-width: ([\d.]+)em/.exec(q);
+    return { media: q, matches: !!max && px <= Number(max[1]) * 16, addEventListener() {}, removeEventListener() {} };
+  });
+  /** The page, as a visit opens it, with its sessions listed. */
+  const visit = async () => {
+    serve(usage);
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    await waitFor(() => expect(document.querySelectorAll("#sessions tbody tr")).toHaveLength(sessions.sessions.length));
+  };
+
+  it("lists every column but Session in a dialog the keyboard opens, changes and closes", async () => {
+    await visit();
+    const btn = columnsButton();
+    expect(btn.getAttribute("aria-expanded")).toBe("false");
+    act(() => btn.focus());
+    await userEvent.keyboard("{Enter}");
+    expect(btn.getAttribute("aria-expanded")).toBe("true");
+    await waitFor(() => expect(list().contains(document.activeElement)).toBe(true));
+    const boxes = within(list()).getAllByRole<HTMLInputElement>("checkbox");
+    expect(boxes.map(c => c.closest("label")!.textContent!.trim())).toEqual(["Project", "Active", "Model", "Tok/s", "Prompts", "Tokens", "Est. cost",
+      "Peak context", "Failed", "Compactions", "Commits", "Tests"]);
+    expect(boxes.every(c => c.checked)).toBe(true);
+    for (let i = 0; i < boxes.length && document.activeElement !== box("Tokens"); i++) await userEvent.tab();
+    expect(document.activeElement).toBe(box("Tokens"));
+    await userEvent.keyboard(" ");
+    expect(box("Tokens").checked).toBe(false);
+    expect(heads()).not.toContain("tokens");
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Columns" })).toBeNull());
+    expect(document.activeElement).toBe(btn);
+    expect(btn.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("closes the list on a click outside it, leaving focus on a control the click lands on", async () => {
+    await visit();
+    await userEvent.click(columnsButton());
+    await waitFor(() => expect(list().contains(document.activeElement)).toBe(true));
+    const field = panel().getByRole("searchbox", { name: "Search sessions" });
+    await userEvent.click(field);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Columns" })).toBeNull());
+    expect(document.activeElement).toBe(field);
+    expect(columnsButton().getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("closes the list on a click on nothing focusable, and returns focus to the Columns button", async () => {
+    // Base UI returns focus after an outside press only where focus() reads its preventScroll option, as desktop browsers do;
+    // jsdom ignores the option, so the test reads it as a browser would.
+    const focus = HTMLElement.prototype.focus;
+    vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(function (this: HTMLElement, o?: FocusOptions) { void o?.preventScroll; focus.call(this, o); });
+    await visit();
+    await userEvent.click(columnsButton());
+    await waitFor(() => expect(list().contains(document.activeElement)).toBe(true));
+    // Plain text with no focusable ancestor: the work chart's hint.
+    const text = document.querySelector<HTMLElement>("#work .hint")!;
+    expect(text.closest("[tabindex], a, button, input")).toBeNull();
+    await userEvent.click(text);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Columns" })).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(columnsButton()));
+  });
+
+  it("hides an unticked column at every width, keeps the choice for the next visit, and Reset brings the columns back", async () => {
+    await visit();
+    await userEvent.click(columnsButton());
+    await userEvent.click(box("Compactions"));
+    expect(heads()).not.toContain("compactions");
+    expect(heads()).toHaveLength(12);
+    expect(document.querySelector("#sessions tbody tr")!.children).toHaveLength(12);
+    await userEvent.click(box("Commits"));
+    expect(stored()).toEqual({ compactions: false, commits: false });
+    expect(columnsButton().textContent).toBe("Columns, 2 hidden");
+    expect(location.search).toBe("?range=30");
+    // The next visit reads the stored choice.
+    cleanup();
+    resetColumnChoice();
+    await visit();
+    expect(heads()).not.toContain("compactions");
+    expect(heads()).not.toContain("commits");
+    await userEvent.click(columnsButton());
+    const reset = within(list()).getByRole("button", { name: "Reset columns" });
+    await userEvent.click(reset);
+    expect(stored()).toBeNull();
+    expect(heads()).toHaveLength(13);
+    expect(columnsButton().textContent).toBe("Columns");
+    expect(document.activeElement).toBe(reset);
+    expect(box("Compactions").checked).toBe(true);
+  });
+
+  it("leaves a column to the width until the user ticks it, then keeps it at every width", async () => {
+    width(390);
+    await visit();
+    await userEvent.click(columnsButton());
+    expect(box("Tokens").checked).toBe(false);
+    expect(box("Est. cost").checked).toBe(true);
+    await userEvent.click(box("Tokens"));
+    expect(box("Tokens").checked).toBe(true);
+    expect(stored()).toEqual({ tokens: true });
+    const at = heads().indexOf("tokens");
+    expect(head("tokens")!.classList.contains("keep")).toBe(true);
+    expect([...document.querySelectorAll("#sessions tbody tr")].every(r => r.children[at]!.classList.contains("keep"))).toBe(true);
+    // A column the user has not touched still hides by its width.
+    expect(head("compactions")!.classList.contains("keep")).toBe(false);
+    expect(box("Compactions").checked).toBe(false);
+  });
+
+  it("returns a column hidden, then shown, on a wide window to the width rule", async () => {
+    await visit();
+    await userEvent.click(columnsButton());
+    await userEvent.click(box("Active"));
+    expect(stored()).toEqual({ duration_s: false });
+    await userEvent.click(box("Active"));
+    expect(stored()).toBeNull();
+    expect(head("duration_s")!.classList.contains("keep")).toBe(false);
+  });
+
+  it("ignores a stored choice it cannot read, and a column the table does not have", async () => {
+    localStorage.setItem(COLUMNS_KEY, "{oops");
+    await visit();
+    expect(heads()).toHaveLength(13);
+    cleanup();
+    resetColumnChoice();
+    localStorage.setItem(COLUMNS_KEY, JSON.stringify({ gone: false, compactions: false }));
+    await visit();
+    expect(heads()).not.toContain("compactions");
+    expect(heads()).toHaveLength(12);
+    expect(columnsButton().textContent).toBe("Columns, 1 hidden");
+  });
+
+  it("keeps a choice for the page view when the browser blocks storage", async () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("blocked"); });
+    await visit();
+    await userEvent.click(columnsButton());
+    await userEvent.click(box("Compactions"));
+    expect(heads()).not.toContain("compactions");
+    expect(box("Compactions").checked).toBe(false);
+  });
+
+  it("shows a hidden column while it is sorted, and hiding the sorted column takes it out of the sort", async () => {
+    localStorage.setItem(COLUMNS_KEY, JSON.stringify({ output_per_s: false }));
+    // A sorted list comes back in another order, so the rows say which list the table shows.
+    mockApi({ "/api/usage": () => usage, "/api/sessions": q => q.get("sort") ? { ...sessions, sessions: sessions.sessions.toReversed() } : sessions });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    const first = () => document.querySelector("#sessions tbody tr")?.getAttribute("data-v");
+    await waitFor(() => expect(first()).toBe(sessions.sessions[0]!.session_id));
+    expect(heads()).not.toContain("output_per_s");
+    await userEvent.click(vital("Output speed").closest("button")!);
+    await waitFor(() => expect(head("output_per_s")?.getAttribute("aria-sort")).toBe("descending"));
+    expect(head("output_per_s")!.classList.contains("sorted")).toBe(true);
+    // The sort moves: the choice applies again.
+    await userEvent.click(panel().getByRole("button", { name: "Tokens" }));
+    await waitFor(() => expect(lastSessionsUrl()).toBe("/api/sessions?range=30&sort=tokens&desc=1"));
+    expect(heads()).not.toContain("output_per_s");
+    // Unticking the sorted column hides it and leaves the sort.
+    await userEvent.click(columnsButton());
+    expect(box("Tokens").checked).toBe(true);
+    await userEvent.click(box("Tokens"));
+    expect(heads()).not.toContain("tokens");
+    expect(document.querySelector("#sessions th[aria-sort]")).toBeNull();
+    // The list in its own order: the first page asked with no sort (held in the query cache since the visit).
+    await waitFor(() => expect(first()).toBe(sessions.sessions[0]!.session_id));
+    expect(fetched()).toContain("/api/sessions?range=30");
+    await waitFor(() => expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toContain("newest first"));
   });
 });

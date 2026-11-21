@@ -146,7 +146,14 @@
   .pg-activity #sessions :is(td, th).when { white-space: normal; }
   .pg-activity #sessions :is(td, th).when .small { overflow-wrap: anywhere; }
 }
-.pg-activity #sessions :is(td, th).sorted { display: table-cell; }
+/* The sorted column, and a column the user keeps (the Columns list), show at any width; the region scrolls sideways when they do not fit. */
+.pg-activity #sessions :is(td, th):is(.sorted, .keep) { display: table-cell; }
+/* The Columns list: a popover of checkboxes under its button, scrolling when the window is short. */
+.pg-activity #sessions .cols-pos { z-index: var(--z-popover); }
+.pg-activity #sessions .cols-pop { box-sizing: border-box; display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3);
+  min-width: min(12rem, calc(100vw - 16px)); max-width: calc(100vw - 16px); max-height: var(--available-height, none); overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--space-5) var(--space-6); background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); }
+.pg-activity #sessions .cols-pop .linkish { margin-top: var(--space-2); }
 .pg-activity #projects th:first-child, .pg-activity #projects td:first-child { position: sticky; left: 0; background: var(--bg); z-index: var(--z-raised); box-shadow: 1px 0 0 var(--border); }
 .pg-activity #projects th:first-child { z-index: var(--z-raised-2); }
 .pg-activity #projects tr.sel :is(td, th):first-child { background: color-mix(in srgb, var(--accent) 11%, var(--bg)); }

@@ -10,6 +10,8 @@ import { Table, type CellValue, type Column, type RowPick } from "../../componen
 import { big, dur, num, pct, plural, usd, when } from "../../format";
 import { useDebouncedValue } from "../../components/useDebounced";
 import { queries } from "../../queries";
+import { ColumnChooser } from "./ColumnChooser";
+import { choosable, setColumnChoice, useColumnChoice, useWidthHides, type ChoosableId, type ColumnChoice } from "./sessionColumns";
 
 /** What the sessions table is limited to: a search, sessions near the context limit, and the chart's selection (day, its
  *  first day, none for the range; days, 1 or a week's 7). */
@@ -31,18 +33,19 @@ type Key = SessionSort | "project";
 const SESS_CELL = { className: "when sess" }, NAME_CELL = { className: "name" };
 const PICK: RowPick<ListedSessionRow> = { value: s => s.session_id, open: openSessionSheet, subject: s => ({ kind: "session", value: s.session_id }) };
 
-/** The table's columns. sorted: the sort's key, whose cells add "sorted", which keeps them shown at any width. day: a day is selected,
- *  so the whole-session figures say so. */
-function sessionColumns(sorted: SessionSort | undefined, day: boolean): Column<ListedSessionRow, Key>[] {
+/** The table's columns, all of them. sorted: the sort's key, whose cells add "sorted"; kept: the columns the user keeps, whose cells
+ *  add "keep"; either class shows a column at any width. day: a day is selected, so the whole-session figures say so. */
+function sessionColumns(sorted: SessionSort | undefined, kept: ColumnChoice, day: boolean): Column<ListedSessionRow, Key>[] {
+  const className = (id: ChoosableId) => [sorted === id && "sorted", kept[id] && "keep"].filter(Boolean).join(" ") || undefined;
   // A sortable figure: hide, its narrow-width priority; whole, a whole-session figure on a day.
-  const stat = (id: SessionSort, header: string, hide: 0 | 1 | 2 | undefined, cell: (s: ListedSessionRow) => ReactNode, value: (s: ListedSessionRow) => CellValue,
+  const stat = (id: Exclude<SessionSort, "first_ts">, header: string, hide: 0 | 1 | 2 | undefined, cell: (s: ListedSessionRow) => ReactNode, value: (s: ListedSessionRow) => CellValue,
     { tip, whole, cellProps }: { tip?: string; whole?: boolean; cellProps?: Column<ListedSessionRow>["cellProps"] } = {}): Column<ListedSessionRow, Key> =>
-    ({ id, header, sort: "desc", value, cell, align: "num", hide, className: sorted === id ? "sorted" : undefined, tip: whole && day ? WHOLE : tip, cellProps });
+    ({ id, header, sort: "desc", value, cell, align: "num", hide, className: className(id), tip: whole && day ? WHOLE : tip, cellProps });
   return [
     { id: "first_ts", header: "Session", sort: "desc", value: s => s.first_ts, cellProps: () => SESS_CELL,
       th: h => <SortTh k="first_ts" sort={h.sort} onSort={s => h.onSort?.(s)} className={sorted === "first_ts" ? " sorted" : undefined}>Session</SortTh>,
       cell: s => <SessionCell s={s} sub={<>{when(s.first_ts)}{s.git_branch ? ` · ${s.git_branch}` : ""}{s.title ? ` · ${shortId(s.session_id)}` : ""}</>} /> },
-    { id: "project", header: "Project", cellProps: () => NAME_CELL, cell: s => <ProjectName project={s.project} /> },
+    { id: "project", header: "Project", className: className("project"), cellProps: () => NAME_CELL, cell: s => <ProjectName project={s.project} /> },
     stat("duration_s", "Active", 0, s => dur(s.duration_s), s => s.duration_s, { tip: "Active time: pauses over 20 minutes left out" }),
     stat("model_ms", "Model", 1, s => s.model_ms == null ? "–" : dur(s.model_ms / 1000), s => s.model_ms,
       { tip: "Model time: waiting on the model, over the whole session; Codex records none", whole: true }),
@@ -68,9 +71,11 @@ function sessionColumns(sorted: SessionSort | undefined, day: boolean): Column<L
  *  The Sessions tab's panel: an infinite query on the view, the filters and the sort, loaded while the tab shows, from the
  *  first page when any of them changes (the rows shown stay, inert, until the new first page lands). When an ingest or
  *  Refresh brings new data, invalidation refetches the loaded pages in order, so the rows refresh in place and keep focus.
- *  sort: the page's, none for today's order. */
+ *  sort: the page's, none for today's order; hiding the sorted column clears it.
+ *  The columns: the user's choice (sessionColumns.ts) over the width rule. A hidden column leaves the array given to Table, a kept
+ *  one carries "keep"; the sorted column always shows. */
 export function SessionsPanel({ view, filter, onFilter, sort, onSort, selected }: {
-  view: View; filter: SessFilter; onFilter: (f: SessFilter) => void; sort: SortBy<SessionSort> | null; onSort: (s: SortBy<SessionSort>) => void;
+  view: View; filter: SessFilter; onFilter: (f: SessFilter) => void; sort: SortBy<SessionSort> | null; onSort: (s: SortBy<SessionSort> | null) => void;
   selected: string;
 }) {
   const body = useRef<HTMLTableSectionElement>(null), search = useRef<HTMLInputElement>(null), focusRow = useRef(-1);
@@ -103,8 +108,20 @@ export function SessionsPanel({ view, filter, onFilter, sort, onSort, selected }
     : `Could not refresh the sessions (${error.message}).` : undefined;
   const loadingHint = stale && busy ? (qt ? `Searching for “${qt}”…` : "Loading sessions…") : failed ? (qt ? `Search for “${qt}” failed.` : "Sessions failed to load.") : "";
 
-  const sorted = sort?.key, day = !!filter.day;
-  const columns = useMemo(() => sessionColumns(sorted, day), [sorted, day]);
+  const sorted = sort?.key, day = !!filter.day, choice = useColumnChoice(), hides = useWidthHides();
+  const all = useMemo(() => sessionColumns(sorted, choice, day), [sorted, choice, day]);
+  const columns = useMemo(() => all.filter(c => c.id === sorted || !choosable(c.id) || choice[c.id] !== false), [all, sorted, choice]);
+  // A box is ticked when its column shows now: sorted, kept, or left to a width that does not hide it.
+  const widthHides = (c: Column<ListedSessionRow, Key>) => c.hide != null && hides(c.hide);
+  const items = all.flatMap(c => choosable(c.id) ? [{ id: c.id, label: String(c.header), shown: c.id === sorted || (choice[c.id] ?? !widthHides(c)) }] : []);
+  // Unticking hides the column and takes it out of the sort. Ticking keeps it when the width hides it now, else leaves it to the width.
+  const choose = (id: ChoosableId, shown: boolean) => {
+    const { [id]: _, ...rest } = choice;
+    if (!shown) {
+      setColumnChoice({ ...rest, [id]: false });
+      if (id === sorted) onSort(null);
+    } else setColumnChoice(widthHides(all.find(c => c.id === id)!) ? { ...rest, [id]: true } : rest);
+  };
   const order = sort ? ORDER[sort.key][sort.desc ? 0 : 1] : filter.near ? "nearest the limit first" : filter.day ? `by their cost on ${filter.days === 1 ? "that day" : "those days"}` : "newest first";
   const hint = moreError ?? (loadingHint || (failed ? "" : `${plural(total, "session")}${narrowed ? " match" : ""}` + (total ? `, ${order}. `
     + `${rows.length < total ? `Showing ${num(rows.length)}. ` : ""}Select a session for details.` : ".")));
@@ -114,6 +131,7 @@ export function SessionsPanel({ view, filter, onFilter, sort, onSort, selected }
         <input type="search" ref={search} value={filter.q} placeholder="Search by title, session id, project or branch" aria-label="Search sessions"
           onChange={e => onFilter({ ...filter, q: e.target.value })} />
         <label className="chk"><input type="checkbox" checked={filter.near} onChange={e => onFilter({ ...filter, near: e.target.checked })} /> Near context limit only</label>
+        <ColumnChooser items={items} hidden={Object.values(choice).filter(v => v === false).length} onChange={choose} onReset={() => setColumnChoice({})} />
       </div>
       <div className="hint"><span aria-live="polite">{hint}</span>
         <HowMeasured what="the session count">A session counts here when it has a request in the range; the Judgments view counts sessions by their start time, so the two totals can differ slightly.</HowMeasured></div>
