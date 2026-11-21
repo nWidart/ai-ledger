@@ -31,7 +31,7 @@ const FIRST = [
   ["Cost's daily cost chart", "/cost?range=30", "#spend .echart", COST_BAR],
   ["Errors' rate chart", "/errors?range=30", ".chart-card", ".chart-card .bars rect"],
   ["Limits' first open window chart", "/limits?range=30", ".lim-grid .lim-chart", ".lim-grid .lim-chart :is(.meas, .meas-one)"],
-  ["the Judgments view's Outcomes ledger", "/usage?view=judgments&range=30", "#outcomes", "#outcomes .ledger .bar"],
+  ["the Judgments view's Outcomes ledger", "/usage?view=judgments&range=30", "#outcomes", "#outcomes .mixbar i"],
   ["Live's first stream event", "/live?session=s1", ".pg-live .stream .ev", null],
 ];
 const FIX = new URL("../../web/src/__fixtures__/", import.meta.url).pathname;
