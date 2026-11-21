@@ -91,20 +91,45 @@ def line_type(d):
     return string(u.get("event_name")) or t if t == "hook_execution" else t
 
 
-def parent_of(cur, session):
-    """The session that spawned Grok session `session`, or None: the session of the stored subagent_spawned line that names
-    it as its child. The child's own folder does not name its parent. Read from raw_lines, so a rebuild finds it too."""
-    row = cur.execute("SELECT session_id FROM raw_lines WHERE type = 'subagent_spawned' AND parsed AND starts_with(key, 'grok:') "
-                      "AND json_extract_string(json, '$.params.update.child_session_id') = ? LIMIT 1", [session]).fetchone()
-    return row[0] if row and row[0] != session else None
+def spawners(cur, child, home):
+    """[(session, file)] of the stored subagent_spawned lines that name session child, in the Grok files of Grok home
+    home, oldest first. Only a Grok file of the child's own home can name its parent: a line can name any id."""
+    rows = cur.execute("SELECT r.session_id, r.file FROM raw_lines r JOIN files f ON f.path = r.file AND f.source = 'grok' "
+                       "WHERE r.type = 'subagent_spawned' AND r.parsed "
+                       "AND json_extract_string(r.json, '$.params.update.child_session_id') = ? ORDER BY r.file, r.byte_offset",
+                       [child]).fetchall()
+    return [(s, f) for s, f in rows if grok_home(f) == home]
+
+
+def lineage(cur, start, home):
+    """The sessions of start and every session of Grok home home that spawned one of them, as the stored
+    subagent_spawned lines tell: a spawn line's session and its file's own session."""
+    seen, todo = set(start), list(start)
+    while todo:
+        for s, f in spawners(cur, todo.pop(), home):
+            for a in (s, ids(f)[0]):
+                if a not in seen:
+                    seen.add(a)
+                    todo.append(a)
+    return seen
+
+
+def parent_of(cur, path):
+    """The session that spawned the Grok session whose log is path, or None: the session of a stored subagent_spawned
+    line of the same Grok home that names it as its child, unless the child is among that line's own spawners (no
+    cycle). The child's own folder does not name its parent. Read from raw_lines, so a rebuild finds it too."""
+    child, home = ids(path)[0], grok_home(path)
+    for s, f in spawners(cur, child, home):
+        if child not in lineage(cur, {s, ids(f)[0]}, home):
+            return s
+    return None
 
 
 def placement(cur, path, lines):
     """(session of the file's lines, subagent), as store.Source.placement: a spawned session's lines belong to its parent's
     session as subagent work. Ingest reads the parent's file first (files sorts, and a child's UUIDv7 follows its parent's)."""
-    own = ids(path)[0]
-    parent = parent_of(cur, own) if cur is not None else None
-    return parent or own, parent is not None
+    parent = parent_of(cur, path) if cur is not None else None
+    return parent or ids(path)[0], parent is not None
 
 
 CALL_TYPES = ("agent_thought_chunk", "agent_message_chunk", "tool_call", "tool_call_update")  # lines written during a model call
@@ -333,7 +358,7 @@ class GrokDeriver(store.Deriver):
     def __init__(self, *args):
         super().__init__(*args)
         own, self.cwd = ids(self.path)
-        self.sid = (parent_of(self.cur, own) or own) if self.sub else own
+        self.sid = (parent_of(self.cur, self.path) or own) if self.sub else own
         self.prompt = None  # (key, prompt id) of the newest user_prompt_submit line read: the current prompt
         self.prompt_known = False  # self.prompt is set by a line of this pass, or read back from raw_lines
 
@@ -408,18 +433,8 @@ class GrokDeriver(store.Deriver):
 
     def ancestors(self):
         """This file's session, the session its lines belong to, and every Grok session that spawned one of them, as the
-        stored subagent_spawned lines tell."""
-        seen, todo = {ids(self.path)[0], self.sid}, [ids(self.path)[0], self.sid]
-        while todo:
-            for sid, f in self.cur.execute(
-                    "SELECT r.session_id, r.file FROM raw_lines r JOIN files f ON f.path = r.file AND f.source = 'grok' "
-                    "WHERE r.type = 'subagent_spawned' AND r.parsed "
-                    "AND json_extract_string(r.json, '$.params.update.child_session_id') = ?", [todo.pop()]).fetchall():
-                for a in (sid, ids(f)[0]):
-                    if a not in seen:
-                        seen.add(a)
-                        todo.append(a)
-        return seen
+        stored subagent_spawned lines of this file's Grok home tell."""
+        return lineage(self.cur, {ids(self.path)[0], self.sid}, grok_home(self.path))
 
     def tool_call(self, u, ts):
         tid = u["toolCallId"]

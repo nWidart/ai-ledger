@@ -579,6 +579,40 @@ class SubagentTest(GrokCase):
         self.assertEqual(self.q("SELECT count(*) FROM raw_lines WHERE type = 'subagent_spawned'"), [(2,)])
         self.assertEqual({t: self.q(f"SELECT * FROM {t} WHERE session_id IN (?, ?) ORDER BY ALL", *others) for t in tables}, before)
 
+    def test_spawn_line_in_another_grok_home_changes_nothing(self):
+        # Two Grok homes in one store: a spawn line in home A naming a session of home B leaves B a session of its own.
+        sid = SESSION["long-turn"]
+        tables = ("sessions", "requests", "tool_calls", "hooks", "prompts", "session_runs")
+        for first in ("b", "a"):
+            with self.subTest(first=first):
+                for t in ("raw_lines", "files", *store.DERIVED):
+                    self.con.execute(f"DELETE FROM {t}")
+                home_a, home_b = os.path.join(self.tmp, f"a-{first}"), os.path.join(self.tmp, f"b-{first}")
+                shutil.copytree(os.path.join(FIXTURES, "probe"), home_a)
+                shutil.copytree(os.path.join(FIXTURES, "long-turn"), home_b)
+                parent, child = grok.files(home_a)
+                os.remove(child)
+                rewrite(parent, lambda d: grok.update(d).get("sessionUpdate") == "subagent_spawned"
+                        and grok.update(d).update(child_session_id=sid))
+                alone = os.path.join(self.tmp, f"alone-{first}")
+                shutil.copytree(home_b, alone)
+                store.ingest(self.con, dict(grok=alone))
+                want = {t: self.q(f"SELECT * EXCLUDE (followup) FROM {t} WHERE session_id = ? ORDER BY ALL" if t == "tool_calls" else
+                                  f"SELECT * FROM {t} WHERE session_id = ? ORDER BY ALL", sid) for t in tables}
+                for t in ("raw_lines", "files", *store.DERIVED):
+                    self.con.execute(f"DELETE FROM {t}")
+                for home in ((home_b, home_a) if first == "b" else (home_a, home_b)):
+                    store.ingest(self.con, dict(grok=home))
+                got = lambda: {t: self.q(f"SELECT * EXCLUDE (followup) FROM {t} WHERE session_id = ? ORDER BY ALL" if t == "tool_calls" else
+                                         f"SELECT * FROM {t} WHERE session_id = ? ORDER BY ALL", sid) for t in tables}
+                fix = lambda rows: {t: [tuple(x.replace(alone, home_b) if isinstance(x, str) else x for x in r) for r in rs]
+                                    for t, rs in rows.items()}
+                self.assertEqual(got(), fix(want))
+                self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines WHERE starts_with(file, ?)", home_b),
+                                 [(sid, False)])
+                store.rebuild(self.con)
+                self.assertEqual(got(), fix(want))
+
     def test_spawn_line_naming_its_own_spawner_changes_nothing(self):
         # A child that names its parent as its own child: no cycle, the parent stays a session of its own.
         parent, child = self.put("probe")
@@ -595,9 +629,9 @@ class SubagentTest(GrokCase):
         self.assertEqual(self.q("SELECT count(*) FROM requests"), [(3,)])
 
     def test_session_spawned_by_none_is_its_own(self):
-        self.put("long-turn")
+        path, = self.put("long-turn")
         self.ingest()
-        self.assertIsNone(grok.parent_of(self.con.cursor(), SESSION["long-turn"]))
+        self.assertIsNone(grok.parent_of(self.con.cursor(), path))
 
 
 def rewrite(path, change):
