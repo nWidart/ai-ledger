@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Follow running Claude Code and Codex sessions within seconds of their transcript lines being written: which sessions are active, what each is doing, and the events of one session as they arrive, with transcript text sent only on request.
+Follow running Claude Code, Codex and Grok sessions within seconds of their transcript lines being written: which sessions are active, what each is doing, and the events of one session as they arrive, with transcript text sent only on request.
 
 ## Requirements
 
@@ -30,7 +30,7 @@ The app SHALL give each active session one state, checked in this order:
 - *ended*: the transcript shows the session closed, and no timed line of the main thread follows the close.
 - *idle*: no line for 5 minutes.
 - *running a tool*: a tool call has no result. The state names the tool and when it started.
-- *thinking*: the newest main-thread line is a human prompt or a tool result, or, for Codex, the newest main-thread turn has started and not completed.
+- *thinking*: the newest main-thread line is a human prompt or a tool result, or, for Codex and Grok, the newest main-thread turn has started and not completed.
 - *your turn*: otherwise.
 
 #### Scenario: Tool running
@@ -57,6 +57,18 @@ The app SHALL give each active session one state, checked in this order:
 - **WHEN** a Codex session's main-thread turn has started and not completed, and a subagent thread's turn completes, with no pending tool call
 - **THEN** the state stays thinking
 
+#### Scenario: Grok turn in progress
+- **WHEN** a Grok session's newest main-thread turn has a `user_message_chunk` prompt line and no `turn_completed` line yet, and no pending tool call
+- **THEN** the state is thinking
+
+#### Scenario: Grok turn cancelled
+- **WHEN** a Grok session's newest main-thread turn ends with a `turn_completed` line whose stop reason is `cancelled`
+- **THEN** the turn counts as interrupted, and the state is your turn
+
+#### Scenario: Cancelled turn with a call still open
+- **WHEN** a Grok or Codex turn is cancelled while one of its tool calls has no result, and an earlier poll showed that call running
+- **THEN** the state is your turn, and the next poll sends the call ended at the interruption, failed as interrupted
+
 ### Requirement: Give each state its start time
 Each state SHALL carry the time it began.
 
@@ -72,7 +84,7 @@ The app SHALL report *ended* only when the transcript gives evidence of the clos
 - **THEN** the state is your turn, and idle after 5 minutes
 
 ### Requirement: Flag a likely approval wait
-When a shell tool call (Claude Code `Bash`, Codex `exec` or `exec_command`) has had no result for more than 30 seconds, the app SHALL report the state as *likely waiting for approval*, with how long the call has been pending. A newer pending call, in the main thread or a subagent, SHALL NOT hide it; with several such calls, the oldest SHALL be reported.
+When a shell tool call (Claude Code `Bash`, Codex `exec` or `exec_command`, Grok `run_terminal_command`) has had no result for more than 30 seconds, the app SHALL report the state as *likely waiting for approval*, with how long the call has been pending. A newer pending call, in the main thread or a subagent, SHALL NOT hide it; with several such calls, the oldest SHALL be reported.
 
 #### Scenario: Slow shell call
 - **WHEN** a `Bash` call started 45 seconds ago and has no result
@@ -85,6 +97,10 @@ When a shell tool call (Claude Code `Bash`, Codex `exec` or `exec_command`) has 
 #### Scenario: Slow non-shell call
 - **WHEN** a `WebFetch` call started 45 seconds ago and has no result
 - **THEN** the state is running a tool
+
+#### Scenario: Slow Grok shell call
+- **WHEN** a Grok `run_terminal_command` call started 45 seconds ago and has no result
+- **THEN** the state is likely waiting for approval, naming `run_terminal_command`, pending 45 seconds
 
 ### Requirement: Leave long calls out of the approval wait
 A shell call that carries an explicit timeout above 120 seconds is a long call and SHALL NOT count: it reads as *running a tool* however long it has been pending. Each tool event and each running-a-tool state SHALL say whether its call is a long call, so the page applies the same rule as the app.
@@ -113,7 +129,7 @@ A background call (`run_in_background`) SHALL NOT be a long call: it returns wit
 - **THEN** the state is likely waiting for approval, and the call is not marked as a long call
 
 ### Requirement: Mark inferred states
-Every payload that carries a state SHALL say whether it is inferred. *likely waiting for approval* is always inferred: no transcript records a permission prompt. *thinking* is inferred for Claude Code, which records no request in flight, and wherever a subagent's work gives it. It is not inferred for Codex's own turns, which it records. *running a tool*, *your turn*, *idle* and *ended* are not inferred.
+Every payload that carries a state SHALL say whether it is inferred. *likely waiting for approval* is always inferred: no transcript records a permission prompt. *thinking* is inferred for Claude Code, which records no request in flight, and wherever a subagent's work gives it. It is not inferred for the own turns of Codex and Grok, which they record. *running a tool*, *your turn*, *idle* and *ended* are not inferred.
 
 #### Scenario: Thinking is inferred
 - **WHEN** a session's state is thinking
@@ -121,6 +137,10 @@ Every payload that carries a state SHALL say whether it is inferred. *likely wai
 
 #### Scenario: Codex turn in progress
 - **WHEN** a Codex session's newest main-thread turn has started, has not completed, and has no pending tool call
+- **THEN** the state is thinking and is not marked as inferred
+
+#### Scenario: Grok turn in progress
+- **WHEN** a Grok session's newest main-thread turn has started, has not completed, and has no pending tool call
 - **THEN** the state is thinking and is not marked as inferred
 
 #### Scenario: Thinking from a subagent
@@ -170,7 +190,7 @@ Each tool call SHALL carry its tool, input summary, the description the agent ga
 - **THEN** only the first event is marked as a long call
 
 ### Requirement: Group subagent work
-Each event of a subagent SHALL name that subagent, so the page can group them with the subagent's start time, end time when it has ended, and number of tool calls. The tool call that started a subagent SHALL name it: for Claude Code from the call's result when the subagent ends, and while it runs from `agent-<id>.meta.json`; for Codex from the `SubAgentActivity` start item in the parent's transcript.
+Each event of a subagent SHALL name that subagent, so the page can group them with the subagent's start time, end time when it has ended, and number of tool calls. The tool call that started a subagent SHALL name it: for Claude Code from the call's result when the subagent ends, and while it runs from `agent-<id>.meta.json`; for Codex from the `SubAgentActivity` start item in the parent's transcript; for Grok from the `spawn_subagent` call's result.
 
 #### Scenario: Subagent with three tool calls
 - **WHEN** a Claude Code session starts an Explore subagent that makes three tool calls
@@ -191,6 +211,10 @@ Each event of a subagent SHALL name that subagent, so the page can group them wi
 #### Scenario: Codex CLI without a start item
 - **WHEN** a subagent of a Codex CLI that writes no `SubAgentActivity` start item runs
 - **THEN** its lane is named by no call, and the page tells it done by its last turn mark
+
+#### Scenario: Grok subagent
+- **WHEN** a Grok session's `spawn_subagent` call starts a child session that makes two tool calls
+- **THEN** the parent session's events hold the two calls marked as that subagent's, the call names it, and the active list holds no entry for the child
 
 ### Requirement: Give each subagent's cost and model
 The session payload SHALL give, for each subagent that has made a request, the cost of its priced requests and the model of its newest one. A request SHALL count once, for the subagent whose transcript holds it.
@@ -227,7 +251,7 @@ By default, prompts and replies SHALL be returned as word counts and tool result
 - **THEN** prompts and replies come as written and each tool result is cut to 4 KB
 
 ### Requirement: Cut tool inputs by default
-A tool call's input SHALL be cut to 300 characters by default, and a subagent call (Claude Code `Agent`, Codex `spawn_agent`) SHALL carry its description instead of its prompt. A description SHALL be cut to 300 characters as an input is: a subagent call's, and the one the agent gave a shell call.
+A tool call's input SHALL be cut to 300 characters by default, and a subagent call (Claude Code `Agent`, Codex `spawn_agent`, Grok `spawn_subagent`) SHALL carry its description instead of its prompt. A description SHALL be cut to 300 characters as an input is: a subagent call's, and the one the agent gave a shell call.
 
 #### Scenario: Long tool input
 - **WHEN** the page asks for events without asking for text, and a `Bash` call has an input of 800 characters
@@ -274,6 +298,13 @@ For one session, the app SHALL report:
 - **WHEN** a Codex session on a model with no price states a 272,000-token window at a turn's start, more than a minute before a catch-up's cursor
 - **THEN** the catch-up, the first load and the active list all report the 272,000-token window
 
+### Requirement: Report Grok's figures when a turn ends
+Grok writes its usage once per turn, so a Grok session's token figures, cost and context SHALL change when a turn ends, not during it.
+
+#### Scenario: Grok figures at a turn's end
+- **WHEN** a Grok session's turn is in progress after a turn that ended at 60,000 tokens of context, and the turn then writes its `turn_completed` line with its usage
+- **THEN** the app reports 60,000 tokens while the turn runs, and the new turn's context and cost once it has ended
+
 ### Requirement: Notify open pages of changes
 While a Live page is connected, the app SHALL push a notice after each ingest that stored new lines, naming the sessions that gained lines. It SHALL send a keep-alive at least every 15 seconds. A notice SHALL never carry transcript content.
 
@@ -309,7 +340,7 @@ Each active-session entry and each session payload SHALL carry the session's tit
 - **THEN** the next list after the change notice carries the new title
 
 ### Requirement: Report a closed session as ended
-The app SHALL take as evidence of a close the `cost-state` line Claude Code writes as it exits, when it comes after the last timed line of the session's main transcript file. A subagent's lines SHALL NOT reopen a closed session, nor a line with no time. Codex writes no close line: a Codex session SHALL never be *ended*. An *ended* state SHALL carry the time of the newest timed line, as the close line has none.
+The untimed `cost-state` line Claude Code writes as it exits SHALL close a session when it follows the last timed line of the session's main transcript file. The timed `session_end` hook line Grok writes as it exits SHALL close a session when no line of the main file has a newer time. A subagent's lines SHALL NOT reopen a closed session, nor a line with no time. Codex writes no close line: a Codex session SHALL never be *ended*. An *ended* state SHALL carry the time of the newest timed line.
 
 #### Scenario: Closed session
 - **WHEN** a Claude Code session's main transcript ends with a `cost-state` line
@@ -327,12 +358,16 @@ The app SHALL take as evidence of a close the `cost-state` line Claude Code writ
 - **WHEN** a Codex session's last turn has completed and its rollout is not written to again
 - **THEN** the state is your turn, then idle after 5 minutes, and never ended
 
+#### Scenario: Grok session closed
+- **WHEN** a Grok session's main transcript ends with a `session_end` hook line
+- **THEN** the state is ended, with the time of the session's newest timed line
+
 #### Scenario: Resumed session before its first timed line
 - **WHEN** a resumed Claude Code session has written only lines with no time, such as `mode` or `tools-used`, after its `cost-state` line
 - **THEN** the state is ended until its first timed line, a known limit: Claude Code writes such lines at exit as well, so none marks a resume
 
 ### Requirement: Mark tool calls that only read
-The app SHALL mark a tool call as read-only when its tool is `Read`, `Grep` or `Glob`, or when it is a shell call (Claude Code `Bash`, Codex `exec_command`) whose every command, named without a path, is `grep`, `cat`, `ls`, `head`, `tail`, `wc`, `nl`, `cd`, `pwd` or `echo`, or is `rg`, `sort` or `find` with only flags the app lists as reading, or is `sed -n` with a script that only prints lines by number.
+The app SHALL mark a tool call as read-only when its tool is `Read`, `Grep` or `Glob`, or Grok's `read_file`, `grep` or `list_dir`, or when it is a shell call (Claude Code `Bash`, Codex `exec_command`, Grok `run_terminal_command` by its `command`) whose every command, named without a path, is `grep`, `cat`, `ls`, `head`, `tail`, `wc`, `nl`, `cd`, `pwd` or `echo`, or is `rg`, `sort` or `find` with only flags the app lists as reading, or is `sed -n` with a script that only prints lines by number.
 
 #### Scenario: Read-only call
 - **WHEN** a session makes a `Grep` call and a `Bash` call that runs `git commit`
@@ -341,6 +376,14 @@ The app SHALL mark a tool call as read-only when its tool is `Read`, `Grep` or `
 #### Scenario: Codex read-only call
 - **WHEN** a Codex `exec_command` runs `rg TODO src` and another runs `rg TODO src && rm notes.md`
 - **THEN** the first is marked as read-only and the second is not
+
+#### Scenario: Grok read-only call
+- **WHEN** a Grok `run_terminal_command` call's `command` is `rg TODO src` and another's is `rg TODO src && rm notes.md`
+- **THEN** the first is marked as read-only and the second is not
+
+#### Scenario: Grok read tool
+- **WHEN** a Grok session makes a `read_file` call and a `search_replace` call
+- **THEN** the `read_file` event is marked as read-only and the `search_replace` event is not
 
 #### Scenario: Read-only shell call of several commands
 - **WHEN** a `Bash` call runs `cd web && rg -n 'a|b' src | head -5`
@@ -378,7 +421,7 @@ A shell call that is one `bash`, `sh` or `zsh` command with `-c` or `-lc` and on
 - **THEN** its event is not marked as read-only
 
 ### Requirement: Mark no shell call that cannot be read for certain
-The app SHALL mark a shell call as read-only only when it reads its whole line for certain. It SHALL read words, quotes, `;`, `&&`, `||`, `|`, a newline, and a redirection to `/dev/null`, descriptor 1 or 2. It SHALL NOT mark a line with more: a lone `&`, another redirection, a heredoc, parentheses, a `\`, a backtick, a `$`, an unpaired quote, or an unquoted `*`, `?`, `[`, `{`, `^` or `#` on `rg`, `sort`, `find` or `sed`; nor Codex's `exec`, nor a call cut short or with no `cmd`.
+The app SHALL mark a shell call as read-only only when it reads its whole line for certain. It SHALL read words, quotes, `;`, `&&`, `||`, `|`, a newline, and a redirection to `/dev/null`, descriptor 1 or 2. It SHALL NOT mark a line with more: a lone `&`, another redirection, a heredoc, parentheses, a `\`, a backtick, a `$`, an unpaired quote, or an unquoted `*`, `?`, `[`, `{`, `^` or `#` on `rg`, `sort`, `find` or `sed`; nor Codex's `exec`, nor a call cut short or with no command line.
 
 #### Scenario: Redirection into a file
 - **WHEN** `Bash` calls run `cat a > b`, `ls >> log` and `cat a 2>err.log`
@@ -417,7 +460,7 @@ The app SHALL mark a shell call as read-only only when it reads its whole line f
 - **THEN** its event is not marked as read-only
 
 ### Requirement: Keep a session working while a subagent works
-When the main thread reads *your turn* and a subagent's newest line is newer than the main thread's and shows it at work, the state SHALL be *thinking*, inferred, since that line. A Codex subagent is at work when its newest turn mark is a turn start; a Claude Code one when its newest event is a finished tool call. A subagent's pending call still reads *running a tool*.
+When the main thread reads *your turn* and a subagent's newest line is newer than the main thread's and shows it at work, the state SHALL be *thinking*, inferred, since that line. A Codex or Grok subagent is at work when its newest turn mark is a turn start; a Claude Code one when its newest event is a finished tool call. A subagent's pending call still reads *running a tool*.
 
 #### Scenario: Codex subagent mid-turn
 - **WHEN** the main thread's last turn completed at 10:00:09 and a subagent started a turn at 10:00:12 that has not completed
@@ -436,7 +479,7 @@ When the main thread reads *your turn* and a subagent's newest line is newer tha
 - **THEN** the state is your turn
 
 ### Requirement: Keep the main thread in the state window
-The newest lines read for a session's state SHALL be taken apart for the main thread and for its subagents, so subagent traffic never pushes main-thread lines out. For Codex, the newest turn mark of the main thread and of each subagent file SHALL be read whatever its age.
+The newest lines read for a session's state SHALL be taken apart for the main thread and for its subagents, so subagent traffic never pushes main-thread lines out. For Codex and Grok, the newest turn mark of the main thread and of each subagent file SHALL be read whatever its age.
 
 #### Scenario: Busy subagent
 - **WHEN** a subagent wrote more than 200 lines after the main thread's last line

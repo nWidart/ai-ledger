@@ -132,7 +132,7 @@ Automated sessions SHALL NOT count in the coverage, whatever the automated filte
 - **THEN** the coverage still counts 400 Claude Code sessions
 
 ### Requirement: Treat Codex sessions as not analysed
-Codex sessions SHALL never count in a facet figure, and the view SHALL show no line that counts them. Activity SHALL NOT show the Judgments view for a Codex-only view: it shows Overview, with the reason on its view switch. The sub line's How measured toggletip SHALL say that `/insights` judges Claude Code sessions only, so the view has no source filter.
+Codex and Grok sessions, and the sessions of any source other than Claude Code, SHALL never count in a facet figure, and the view SHALL show no line that counts them. Activity SHALL NOT show the Judgments view for a view of a source other than Claude Code alone: it shows Overview, with the reason on its view switch. The sub line's How measured toggletip SHALL say that `/insights` judges Claude Code sessions only, so the view has no source filter.
 
 #### Scenario: Source All
 - **WHEN** the view holds 400 Claude Code and 60 Codex sessions
@@ -141,6 +141,10 @@ Codex sessions SHALL never count in a facet figure, and the view SHALL show no l
 #### Scenario: Source Codex
 - **WHEN** the URL names `source=codex` and `view=judgments`
 - **THEN** Activity shows Overview, and no page says that `/insights` analyses only Claude Code sessions in place of figures
+
+#### Scenario: Source Grok
+- **WHEN** the URL names `source=grok` and `view=judgments`
+- **THEN** Activity shows Overview for Grok, and no line of the Judgments view counts Grok sessions
 
 ### Requirement: Read only the local store
 The Insights page SHALL read its data from the store through the app, and SHALL NOT call a model, run `claude`, or read the usage-data directory itself.
@@ -375,10 +379,14 @@ The drawer SHALL list every language the view's session-meta rows name, most cou
 - **THEN** the ledger shows 12 and a control to show all 15
 
 ### Requirement: Show session figures only when counted
-The drawer SHALL appear only when the view has a session-meta row. It SHALL appear in a view with no analysed session. For source Codex the app SHALL send empty figures.
+The drawer SHALL appear only when the view has a session-meta row. It SHALL appear in a view with no analysed session. For a source other than Claude Code, such as Codex or Grok, the app SHALL send empty figures.
 
 #### Scenario: Codex
 - **WHEN** the app is asked for the judgments of source Codex
+- **THEN** the figures count no sessions
+
+#### Scenario: Grok
+- **WHEN** the app is asked for the judgments of source Grok
 - **THEN** the figures count no sessions
 
 #### Scenario: No analysed session

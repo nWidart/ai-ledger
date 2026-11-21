@@ -1,7 +1,7 @@
 # context-dashboard Specification
 
 ## Purpose
-The Context page: how much of the model's context window each project's sessions start with, how fast it grows, what fills it, what that costs, and what to do about it, for Claude Code and Codex sessions alike.
+The Context page: how much of the model's context window each project's sessions start with, how fast it grows, what fills it, what that costs, and what to do about it, for Claude Code, Codex and Grok sessions alike.
 
 ## Requirements
 
@@ -54,11 +54,15 @@ The page SHALL draw each project's 10th to 90th percentile range with its median
 - **THEN** the trend leaves a gap at 9 November and does not draw the two weeks as neighbours
 
 ### Requirement: Resolve a session's context window
-A session's context window SHALL be the window its source stated (a Codex turn's `model_context_window`), else the `context` the price table gives the session's peak model, else unknown. Window shares SHALL be computed only for sessions with a known window, and the page SHALL say how many sessions in the view have one.
+A session's context window SHALL be the window its source stated (a Codex turn's `model_context_window`, or the window a Grok compaction notice states), else the `context` the price table gives the session's peak model, else unknown. Window shares SHALL be computed only for sessions with a known window, and the page SHALL say how many sessions in the view have one.
 
 #### Scenario: Codex session
 - **WHEN** a Codex session's turns stated a window of 258,400 and the price table has no window for its model
 - **THEN** its window is 258,400
+
+#### Scenario: Grok session
+- **WHEN** a Grok session's compaction notice states a window of 256,000, and another Grok session has no compaction and its model has `context` 2,000,000 in the price table
+- **THEN** the first session's window is 256,000 and the second's is 2,000,000
 
 #### Scenario: Claude Code session
 - **WHEN** a Claude Code session's peak model has `context` 1,000,000 in the price table
@@ -236,7 +240,7 @@ A cache break SHALL be a main-thread request, not the session's first turn, with
 - **THEN** the drawer lists the 25 with the most uncached tokens and says it shows 25 of 40
 
 ### Requirement: Cache lifetime of a break
-A cache break's `expired` cause SHALL use the cache lifetime of its session's source: 1 hour when the previous request wrote to the 1-hour cache, else 30 minutes for a Codex session, else 5 minutes.
+A cache break's `expired` cause SHALL use the cache lifetime of its session's source: 1 hour when the previous request wrote to the 1-hour cache, else 30 minutes for a Codex session, else 5 minutes. Grok's logs state no cache lifetime, so a break of a Grok session SHALL never be `expired`: its cause SHALL be `model_switch` when its model differs from the previous main-thread request's, else `other`.
 
 #### Scenario: Codex pause within its cache lifetime
 - **WHEN** two consecutive turns of a Codex session on the same model are 10 minutes apart and the second has 60,000 prompt tokens with 1,000 cache reads
@@ -245,6 +249,10 @@ A cache break's `expired` cause SHALL use the cache lifetime of its session's so
 #### Scenario: Codex cache expired
 - **WHEN** two consecutive turns of a Codex session on the same model are 40 minutes apart and the second has 60,000 prompt tokens with 1,000 cache reads
 - **THEN** the second turn is a cache break with cause `expired`
+
+#### Scenario: Grok pause
+- **WHEN** two consecutive turns of a Grok session on the same model are 2 hours apart and the second has 60,000 prompt tokens with 1,000 cache reads
+- **THEN** the second turn is a cache break with cause `other`, not `expired`
 
 ### Requirement: Give data-driven tips
 The page SHALL show tips from a fixed set of rules, each with a severity, a title, its evidence, its advice and the sessions that match it. The rules and their thresholds SHALL be fixed in the app. A tip SHALL be shown only when its rule fires, and the page SHALL say when none fires. Tips SHALL show under the lede as one strip of short items, at most four before "Show N more", so the tabs and the first plotted mark of Starting context are on the first screen at 1440 × 900, expanded or not.
@@ -277,7 +285,7 @@ Tips SHALL be ordered by severity, critical before warning, and within a severit
 - **THEN** the near-limit tip is listed first
 
 ### Requirement: Tip about a large starting context
-The large-start rule SHALL fire when a project in the view has a median starting context of at least 30,000 tokens. Its evidence SHALL name the 5 projects with the largest medians, their medians and window shares, and count the others. Its advice SHALL say to trim the instruction files and review the configured MCP servers, naming where each agent of the matching sessions configures them.
+The large-start rule SHALL fire when a project in the view has a median starting context of at least 30,000 tokens. Its evidence SHALL name the 5 projects with the largest medians, their medians and window shares, and count the others. Its advice SHALL say to trim the instruction files and review the configured MCP servers, naming where each agent of the matching sessions configures them; for Grok sessions it SHALL name no agent-specific file or command.
 
 #### Scenario: Rule fires
 - **WHEN** project `foo` sessions start at a median of 42,000 tokens
@@ -291,6 +299,10 @@ The large-start rule SHALL fire when a project in the view has a median starting
 - **WHEN** every matching session is a Codex session
 - **THEN** the advice names `AGENTS.md` and `codex mcp list`, and not `CLAUDE.md` or `claude mcp list`
 
+#### Scenario: Grok sessions
+- **WHEN** every matching session is a Grok session
+- **THEN** the advice says to trim the instruction files and review the configured MCP servers, and names none of `CLAUDE.md`, `AGENTS.md`, `claude mcp list` or `codex mcp list`
+
 ### Requirement: Name only the MCP servers the transcripts record
 The large-start tip SHALL list the MCP servers called in the named projects in the view, with their call counts, fewest first, and SHALL say that servers configured but never called leave no trace in transcripts, so the list shows only the ones that were called.
 
@@ -299,7 +311,7 @@ The large-start tip SHALL list the MCP servers called in the named projects in t
 - **THEN** the tip lists `figma` (2) before `github` (40) and says that only MCP servers that were called can be listed
 
 ### Requirement: Tip about frequent compactions
-The frequent-compactions rule SHALL fire when a session in the view compacted 3 or more times, as a warning, or critical at 6 or more. Its evidence SHALL give the number of such sessions and the median turns and active minutes before the first compaction. Its advice SHALL say to start a new session between tasks and to compact before the context fills, with the commands of the matching sessions' agents.
+The frequent-compactions rule SHALL fire when a session in the view compacted 3 or more times, as a warning, or critical at 6 or more. Its evidence SHALL give the number of such sessions and the median turns and active minutes before the first compaction. Its advice SHALL say to start a new session between tasks and to compact before the context fills, with the commands of the matching sessions' agents; for Grok sessions it SHALL name no agent-specific command.
 
 #### Scenario: Three compactions
 - **WHEN** one session in the view compacted 3 times and no session more
@@ -317,8 +329,12 @@ The frequent-compactions rule SHALL fire when a session in the view compacted 3 
 - **WHEN** the matching sessions include Claude Code and Codex sessions
 - **THEN** the advice names `/clear` for Claude Code and `/new` for Codex
 
+#### Scenario: Grok sessions
+- **WHEN** every matching session is a Grok session
+- **THEN** the advice says to start a new session between tasks and to compact before the context fills, and names neither `/clear` nor `/new`
+
 ### Requirement: Tip about sessions near the limit
-The near-limit rule SHALL fire, as critical, when a session in the view peaked at 80% or more of its window. The window is the session's stated one (Codex), else the price table's for its model; Activity uses only the price table's window for the peak model. Its evidence SHALL give the count of such sessions and the highest share, and its advice SHALL say to start the next task in a new session.
+The near-limit rule SHALL fire, as critical, when a session in the view peaked at 80% or more of its window. The window is the session's stated one (Codex, or Grok after a compaction notice), else the price table's for its model; Activity uses only the price table's window for the peak model. Its evidence SHALL give the count of such sessions and the highest share, and its advice SHALL say to start the next task in a new session.
 
 #### Scenario: Session at 85%
 - **WHEN** a session peaked at 85% of a 200,000 window
@@ -564,10 +580,14 @@ On the cache chart's bars and breaks strip, a part above zero SHALL be drawn at 
 - **THEN** its stack fills the 48px strip exactly, and each cause shows at least 2px tall
 
 ### Requirement: Fit the large-results advice to the agents
-The large-results advice SHALL name a subagent only for Claude Code, judged by the agents of the sessions that produced the large results: not when every such session is a Codex one, and for Claude Code alone when both agents produced them. When a Codex result's tool has no remedy of its own, the advice SHALL also say to ask for a smaller part of the output, whatever the other results.
+The large-results advice SHALL name a subagent only for Claude Code, judged by the agents of the sessions that produced the large results: not when every such session is a Codex or Grok one, and for Claude Code alone when Claude Code and another agent produced them. When a Codex or Grok result's tool has no remedy of its own, the advice SHALL also say to ask for a smaller part of the output, whatever the other results. A Grok `run_terminal_command` result SHALL take the shell remedy.
 
 #### Scenario: Codex sessions
 - **WHEN** every large result in the view comes from a Codex session, with a large `exec_command` result
+- **THEN** the advice names `head`, `tail` or `grep` and no subagent
+
+#### Scenario: Grok sessions
+- **WHEN** every large result in the view comes from a Grok session, with a large `run_terminal_command` result
 - **THEN** the advice names `head`, `tail` or `grep` and no subagent
 
 #### Scenario: Both agents
