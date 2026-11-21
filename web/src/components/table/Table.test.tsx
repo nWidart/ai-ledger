@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { DataTable } from "../DataTable";
 import { SortTh, type SortBy } from "../Sort";
 import { renderApp } from "../../testing";
-import { Table, type Column, type TableProps } from "./Table";
+import { Table, type Column, type RowAttrs, type TableProps } from "./Table";
 
 interface R { n: string; v: number | null }
 type K = "n" | "v";
@@ -78,6 +78,13 @@ describe("Table markup", () => {
     renderApp(<Table name="T" rows={[]} columns={cols} rowId={r => r.n} sort={{ key: "v", desc: true }} onSort={() => {}} />);
     const h = screen.getAllByRole("columnheader")[1]!;
     expect([h.className, h.textContent]).toEqual(["num", "vtwo"]);
+  });
+
+  it("draws a colgroup before the head when a column has a col class, and none otherwise", () => {
+    const { rerender } = renderApp(<Table name="T" rows={ROWS} columns={[{ ...COLS[0]!, col: "c-name" }, COLS[1]!]} rowId={r => r.n} />);
+    expect(document.querySelector("table")!.firstElementChild!.outerHTML).toBe('<colgroup><col class="c-name"><col></colgroup>');
+    rerender(<Table name="T" rows={ROWS} columns={COLS} rowId={r => r.n} />);
+    expect(document.querySelector("colgroup")).toBeNull();
   });
 
   it("shows the empty state in one full-width row, and nothing when given none", () => {
@@ -185,6 +192,34 @@ describe("Table sorting", () => {
     expect(th("Value").getAttribute("aria-sort")).toBe("descending");
   });
 
+  it("sorts by a column's extra keys, each by its own value, rows with no value last", () => {
+    interface P { n: string; a: number; b: number | null }
+    const rows: P[] = [{ n: "p", a: 1, b: 3 }, { n: "q", a: 3, b: null }, { n: "r", a: 2, b: 1 }];
+    const cols: Column<P, "n" | "a" | "b">[] = [{ id: "n", header: "Name", value: r => r.n },
+      { id: "a", header: "A", sort: "desc", value: r => r.a, sorts: { b: r => r.b }, th: h => <th scope="col" className={h.className}>A and B</th> }];
+    const { rerender } = renderApp(<Table name="T" rows={rows} columns={cols} rowId={r => r.n} sort={{ key: "a", desc: true }} onSort={() => {}} />);
+    expect(names()).toEqual(["q", "r", "p"]);
+    rerender(<Table name="T" rows={rows} columns={cols} rowId={r => r.n} sort={{ key: "b", desc: false }} onSort={() => {}} />);
+    expect(names()).toEqual(["r", "p", "q"]);
+    rerender(<Table name="T" rows={rows} columns={cols} rowId={r => r.n} sort={{ key: "b", desc: true }} onSort={() => {}} />);
+    expect(names()).toEqual(["p", "r", "q"]);
+    expect(screen.getAllByRole("columnheader")).toHaveLength(2); // an extra key draws no column
+  });
+
+  it("sorts by an extra key that is also a display-only column's id, in either column order", () => {
+    interface P { n: string; a: number; score: number }
+    const rows: P[] = [{ n: "p", a: 1, score: 2 }, { n: "q", a: 2, score: 3 }, { n: "r", a: 3, score: 1 }];
+    const a: Column<P, "n" | "a" | "score"> = { id: "a", header: "A", sort: "desc", value: r => r.a, sorts: { score: r => r.score },
+      th: h => <th scope="col" className={h.className}>A and score</th> };
+    const shown: Column<P, "n" | "a" | "score"> = { id: "score", header: "Score", align: "num", cell: r => r.score };
+    const name: Column<P, "n" | "a" | "score"> = { id: "n", header: "Name", value: r => r.n };
+    for (const cols of [[name, a, shown], [name, shown, a]]) {
+      const { unmount } = renderApp(<Table name="T" rows={rows} columns={cols} rowId={r => r.n} sort={{ key: "score", desc: true }} onSort={() => {}} />);
+      expect(names()).toEqual(["q", "p", "r"]);
+      unmount();
+    }
+  });
+
   it("draws plain headers for columns that do not sort, and sorts nothing by them", () => {
     const cols: Column<R, K>[] = [{ id: "n", header: "Name", value: r => r.n }, COLS[1]!];
     renderApp(<Table name="T" rows={ROWS} columns={cols} rowId={r => r.n} sort={{ key: "n", desc: false }} onSort={() => {}} />);
@@ -216,6 +251,28 @@ describe("Table rows", () => {
   it("marks the current row without a pick", () => {
     renderApp(<Table name="T" rows={ROWS} columns={COLS} rowId={r => r.n} current="c" />);
     expect(screen.getByRole("rowheader", { name: "c" }).closest("tr")!.className).toBe("sel");
+  });
+
+  it("sets a row's own attributes, its class after pick and sel, and lets a pick's own win", async () => {
+    const own = vi.fn<() => void>(), open = vi.fn<(v: string, el: HTMLElement, r: R) => void>();
+    renderApp(<Table name="T" rows={ROWS} columns={COLS} rowId={r => r.n} current="a" rowProps={r => ({ "data-c": r.n, className: r.v ? undefined : "none", onClick: own })}
+      pick={{ value: r => r.n === "b" ? "p-b" : null, open }} />);
+    const tr = (n: string) => screen.getByRole("rowheader", { name: n }).closest("tr")!;
+    expect([tr("a").dataset.c, tr("a").className, tr("x").className, tr("c").hasAttribute("class")]).toEqual(["a", "sel", "none", false]);
+    expect([tr("b").dataset.c, tr("b").className, tr("b").dataset.v]).toEqual(["b", "pick", "p-b"]);
+    await userEvent.click(tr("c").querySelector("td")!);
+    expect(own).toHaveBeenCalledTimes(1);
+    await userEvent.click(tr("b").querySelector("td")!);
+    expect([own.mock.calls.length, open.mock.calls.length]).toEqual([1, 1]);
+  });
+
+  it("keeps its own row keys: a key from rowProps never replaces the row's id", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      renderApp(<Table name="T" rows={ROWS} columns={COLS} rowId={r => r.n} rowProps={() => ({ key: "same" }) as RowAttrs} />);
+      expect(names()).toEqual(["b", "x", "a", "c"]);
+      expect(error.mock.calls.filter(c => /same key/.test(String(c[0])))).toEqual([]);
+    } finally { error.mockRestore(); }
   });
 
   it("re-sorts when a column's value changes on the same rows and sort", () => {

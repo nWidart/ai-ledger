@@ -1,10 +1,10 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Source } from "../../api";
-import { DataTable } from "../../components/DataTable";
 import { agentName } from "../../components/Filters";
 import { HowMeasured } from "../../components/HowMeasured";
 import { subjectAttrs } from "../../components/menu/subject";
 import { ProjectName } from "../../components/ProjectDot";
+import { Table, type Column, type RowAttrs } from "../../components/table/Table";
 import { useColors } from "../../colors";
 import { dur, num as fmt, plural } from "../../format";
 import { tableFocus, useErrors } from "./context";
@@ -60,27 +60,30 @@ function WhereToStart() {
  *  project, source and subagent filters). A type with errors in the view opens from its row. Absent with no fix recorded. */
 function Scorecard() {
   const { m, v, vt, fixes, pick } = useErrors();
-  const rows = Object.entries(fixes).sort((a, b) => (a[1] < b[1] ? 1 : a[1] > b[1] ? -1 : a[0] < b[0] ? -1 : 1));
+  const rows = Object.entries(fixes).sort((a, b) => (a[1] < b[1] ? 1 : a[1] > b[1] ? -1 : a[0] < b[0] ? -1 : 1)).map(([c, day]): Score => {
+    const { sides: [b4, af], verdict } = beforeAfter(m, v, c, day);
+    return { c, name: m.cats[c]?.label ?? c, when: yearLabel(m, day), open: vt.counts[c] ? () => pick(c, true) : null, before: b4.r, since: af.r, verdict };
+  });
   if (!rows.length) return null;
-  const pct = (r: number | null) => (r == null ? "–" : fmt(r, 2) + "%");
   return <section className="score" id="scorecard" aria-labelledby="scoreTitle">
     <h3 className="subh" id="scoreTitle">Applied fixes</h3>
     <p className="why tight">Error rate before each fix and since, all time. A verdict waits for enough calls since the fix.</p>
-    <DataTable name="Applied fixes" region="sscroll">
-      <thead><tr><th scope="col">Type</th><th scope="col" className="num">Before</th><th scope="col" className="num">Since</th><th scope="col">Verdict</th></tr></thead>
-      <tbody>{rows.map(([c, day]) => {
-        const { sides: [b4, af], verdict } = beforeAfter(m, v, c, day), name = m.cats[c]?.label ?? c;
-        // A subject for the context menu only with errors in the view: its "Open on Errors" would open nothing otherwise.
-        return <tr key={c} data-c={c} {...subjectAttrs("category", vt.counts[c] ? c : null)}>
-          <th scope="row">{vt.counts[c] ? <button type="button" className="linkbtn" data-c={c} onClick={() => pick(c, true)}>{name}</button> : name}
-            <span className="muted xs"> · {yearLabel(m, day)}</span></th>
-          <td className="num">{pct(b4.r)}</td><td className="num">{pct(af.r)}</td>
-          <td><span className={"out " + verdict[1]}>{verdict[0]}</span></td>
-        </tr>;
-      })}</tbody>
-    </DataTable>
+    <Table name="Applied fixes" region="sscroll" rows={rows} columns={SCORE} rowId={r => r.c} rowProps={scoreRow} />
   </section>;
 }
+
+/** A recorded fix on the scorecard. open: opens the type, when it has errors in the view. */
+interface Score { c: string; name: string; when: string; open: (() => void) | null; before: number | null; since: number | null; verdict: readonly [string, string] }
+const pct = (r: number | null) => (r == null ? "–" : fmt(r, 2) + "%");
+const SCORE: Column<Score>[] = [
+  { id: "type", header: "Type", cell: r => <>{r.open ? <button type="button" className="linkbtn" data-c={r.c} onClick={r.open}>{r.name}</button> : r.name}
+    <span className="muted xs"> · {r.when}</span></> },
+  { id: "before", header: "Before", align: "num", cell: r => pct(r.before) },
+  { id: "since", header: "Since", align: "num", cell: r => pct(r.since) },
+  { id: "verdict", header: "Verdict", cell: r => <span className={"out " + r.verdict[1]}>{r.verdict[0]}</span> },
+];
+// A subject for the context menu only with errors in the view: its "Open on Errors" would open nothing otherwise.
+const scoreRow = (r: Score): RowAttrs => ({ "data-c": r.c, ...subjectAttrs("category", r.open ? r.c : null) });
 
 function TypeDetail({ cat }: { cat: string }) {
   const x = useErrors(), { m, v, f, fixes, mode, q } = x, c = m.cats[cat]!, fixDay = fixes[cat], busy = x.saving.has(cat);
