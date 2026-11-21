@@ -77,6 +77,8 @@ When the calls cannot be told (no line of the turn has a `streamStartMs`) or the
 
 An incremental chunk can hold a `turn_completed` whose call lines came in an earlier chunk. So the deriver always reads a turn's calls from `raw_lines`, which already holds the chunk being derived. It counts only the lines between the file's previous `turn_completed` and this one. That makes the rows the same however the file was cut into ingests (a line written late lands after the turn's end and counts nowhere), and a prompt id used by two turns counts no call twice.
 
+Each request also keeps the context size its call stated, in `requests.context_tokens` (NULL for a fallback row and for Claude Code and Codex). Pages read that as the request's context (`metrics.context_of`: the stated size, else input plus cache), while the token columns stay the split usage. A request's share of the turn's input is no context size: the parent's turn includes its subagents' calls.
+
 The peak context is the largest context size a call states. The `tokens_used` of a compaction notice is not used: it would set a peak in a chunk that does not know the model yet.
 
 Alternatives:
@@ -136,6 +138,6 @@ Web and Python code that means "this source has no judgments" or "no `/context`"
 
 ## Migration Plan
 
-1. Opening the store adds `requests.reported_cost` (NULL for existing rows). There is no re-ingest.
+1. Opening the store adds `requests.reported_cost` and `requests.context_tokens` (NULL for existing rows). There is no re-ingest.
 2. The first ingest after upgrade reads `~/.grok/sessions/**/updates.jsonl` from the start.
 3. Rollback: the older app ignores the extra column. It would show `grok` rows under All. To remove them, delete the `grok` rows of `raw_lines` and `files`, then run `rebuild`.

@@ -464,12 +464,14 @@ class GrokDeriver(store.Deriver):
         for i, (stream, size) in enumerate(calls):
             last = i == len(calls) - 1
             self.request(f"grok:{self.sid}:{pid}:{stream}", store.ts_of(iso(stream)), model, shares[i], costs[i],
-                         stop if last else None)
+                         stop if last else None, size if size > 0 else None)
             if s and size > s["peak"]:
                 s["peak"], s["peak_model"] = size, model
 
-    def request(self, mid, ts, model, kinds, cost, stop):
+    def request(self, mid, ts, model, kinds, cost, stop, context=None):
+        """A request row. context: the context size its model call stated (context_tokens), which pages read as its
+        context; its token columns are its share of the turn's usage. None for a turn whose calls cannot be told."""
         if mid in self.requests:
             return
         inp, out, thinking, cr, cw = kinds
-        self.requests[mid] = (mid, self.sid, ts, model, None, False, inp, out, thinking, cr, cw, 0, None, stop, None, cost)
+        self.requests[mid] = (mid, self.sid, ts, model, None, False, inp, out, thinking, cr, cw, 0, None, stop, None, cost, context)

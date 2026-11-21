@@ -243,7 +243,7 @@ class FiguresTest(GrokLiveCase):
         cur = self.con.cursor()
         now = self.at(before[-1], 5)
         mid = self.one("tools", now)
-        (turn2,) = cur.execute("SELECT arg_max(input + cache_read + cache_5m + cache_1h, ts) FROM requests "
+        (turn2,) = cur.execute("SELECT arg_max(context_tokens, ts) FROM requests "
                                "WHERE session_id = ? AND NOT subagent", [SESSION["tools"]]).fetchone()
         self.assertEqual((mid["state"]["kind"], mid["context"]), ("thinking", turn2))
         self.store("tools", self.until(lines, "session_start", 3))
@@ -251,6 +251,31 @@ class FiguresTest(GrokLiveCase):
         self.assertNotEqual(done["context"], turn2)
         self.assertAlmostEqual(done["cost"] - mid["cost"], 0.065869)
         self.assertEqual(done["requests"] - mid["requests"], 2)
+
+    def test_context_is_what_the_last_call_stated(self):
+        # The parent's turn holds its subagent's calls, so a request's share of the turn's input is no context size: the
+        # gauge, the pulse and the session timeline read the size the call stated.
+        lines = self.until(self.lines("probe"), "turn_completed")  # turn 1, the one finished turn
+        self.ingest()
+        cur = self.con.cursor()
+        sid = SESSION["probe"]
+        last_call = max((d for d in lines if grok.update(d).get("sessionUpdate") in grok.CALL_TYPES
+                         and "streamStartMs" in grok.meta(d)), key=lambda d: grok.meta(d)["streamStartMs"])
+        stream = grok.meta(last_call)["streamStartMs"]
+        stated = max(grok.meta(d)["totalTokens"] for d in lines if grok.meta(d).get("streamStartMs") == stream)
+        self.assertEqual(stated, 23170)
+        (share,) = cur.execute("SELECT arg_max(input + cache_read + cache_5m + cache_1h, ts) FROM requests").fetchone()
+        self.assertNotEqual(share, stated)
+        (last,) = cur.execute("SELECT last_ts FROM sessions WHERE session_id = ?", [sid]).fetchone()
+        now = live.aware(last) + timedelta(seconds=1)
+        self.assertEqual(live.session(cur, sid, now=now, prices=PRICES)["context"], stated)
+        self.assertEqual(live.sessions(cur, now=now, prices=PRICES)["sessions"][0]["context"], stated)
+        (end,) = cur.execute("SELECT max(ts) FROM requests").fetchone()
+        pulse = live.pulse(cur, sid, live.aware(end) + timedelta(seconds=1))
+        self.assertEqual(pulse["context"][-1]["tokens"], stated)
+        timeline = metrics.session(cur, sid, prices=PRICES)
+        self.assertEqual(timeline["requests"][-1]["context"], stated)
+        self.assertEqual(max(r["context"] for r in timeline["timeline"]), max(r["context"] for r in timeline["requests"]))
 
     def test_window_and_compaction(self):
         self.put("compaction")

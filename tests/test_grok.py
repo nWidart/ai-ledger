@@ -268,6 +268,55 @@ class UsageTest(GrokCase):
                 for t in ("raw_lines", "files", "sessions", "requests"):
                     self.con.execute(f"DELETE FROM {t}")
 
+    def stated(self, path):
+        """[(streamStartMs, the largest totalTokens its lines state)] of a one-turn fixture log, oldest first."""
+        with open(path) as fh:
+            lines = [json.loads(x) for x in fh]
+        sizes = {}
+        for d in lines:
+            m = grok.meta(d)
+            if grok.update(d).get("sessionUpdate") in grok.CALL_TYPES and "streamStartMs" in m:
+                sizes[m["streamStartMs"]] = max(sizes.get(m["streamStartMs"], 0), m.get("totalTokens") or 0)
+        return sorted(sizes.items())
+
+    def test_each_call_keeps_the_context_it_stated(self):
+        path, = self.put("long-turn")
+        self.ingest()
+        want = [size for _, size in self.stated(path)]
+        self.assertEqual([r[0] for r in self.q("SELECT context_tokens FROM requests ORDER BY ts")], want)
+        # The Context page's turns read the stated sizes: its curves, starting context and the session map's start.
+        from ai_ledger import context
+        _, _, _, fp, _, rq, rp = metrics.view("", 0, {}, datetime(2026, 12, 1).date())
+        got = [r[0] for r in self.con.execute(f"{context.ctes(rq)} SELECT prompt FROM turns ORDER BY turn", rp).fetchall()]
+        self.assertEqual(got, [n for n in want if n >= context.START_MIN_TOKENS])
+        self.assertNotEqual(got, [r[0] for r in self.q("SELECT input + cache_read + cache_5m + cache_1h FROM requests "
+                                                       f"WHERE input + cache_read >= {context.START_MIN_TOKENS} ORDER BY ts")])
+
+    def test_turn_whose_calls_cannot_be_told_states_no_context(self):
+        path, = self.put("long-turn")
+        with open(path) as fh:
+            lines = fh.readlines()
+        with open(path, "w") as fh:
+            fh.writelines(x for x in lines if not any(f'"{t}"' in x for t in grok.CALL_TYPES))
+        self.ingest()
+        self.assertEqual(self.q("SELECT context_tokens FROM requests"), [(None,)])
+
+    def test_store_without_context_tokens_gains_it_empty(self):
+        self.put("long-turn")
+        self.ingest()
+        from ai_ledger import live
+        cur = self.con.cursor()
+        sid = SESSION["long-turn"]
+        (last,) = cur.execute("SELECT last_ts FROM sessions").fetchone()
+        now = live.aware(last)
+        self.con.execute("ALTER TABLE requests DROP COLUMN context_tokens")  # the schema before stated context sizes
+        self.con.close()
+        self.con = store.open_store(self.db)
+        self.assertEqual(self.q("SELECT count(*), count(context_tokens) FROM requests"), [(5, 0)])
+        old = self.q("SELECT arg_max(input + cache_read + cache_5m + cache_1h, ts) FROM requests")[0][0]
+        self.assertEqual(live.session(self.con.cursor(), sid, now=now, prices={})["context"], old)  # as before: no line read again
+        self.assertEqual(self.count(), self.lines_of("long-turn"))
+
     def test_context_of_a_compacted_session(self):
         self.put("compaction")
         self.ingest()

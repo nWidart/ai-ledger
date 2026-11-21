@@ -40,8 +40,9 @@ OVERHEAD_TOP = 5  # overhead lists the largest MCP servers, memory files and ski
 
 def ctes(rq):
     """rq (metrics.requests_cte) followed by the CTEs every section shares: sess (the view's sessions with their window),
-    turns (the main-thread requests of those sessions with at least START_MIN_TOKENS prompt tokens, numbered per session)
-    and starts (each session's first turn)."""
+    turns (the main-thread requests of those sessions with at least START_MIN_TOKENS prompt tokens, numbered per session;
+    prompt is the context a request read, metrics.context_of) and starts (each session's first turn)."""
+    prompt = metrics.context_of("r.")
     return f"""{rq},
       sess AS (
         SELECT s.session_id, s.project, coalesce(s.source, 'claude') AS source, s.first_ts, s.compactions, s.peak_context,
@@ -49,10 +50,10 @@ def ctes(rq):
         FROM sessions s LEFT JOIN price p ON p.model = s.peak_model
         WHERE s.session_id IN (SELECT session_id FROM rq)),
       turns AS (
-        SELECT r.session_id, sess.project, r.message_id, r.ts, r.model, r.input + r.cache_read + r.cache_5m + r.cache_1h AS prompt,
-               r.cache_read, r.input, r.cache_1h, row_number() OVER (PARTITION BY r.session_id ORDER BY r.ts, r.message_id) AS turn
+        SELECT r.session_id, sess.project, r.message_id, r.ts, r.model, {prompt} AS prompt,
+               r.cache_read, r.input, r.cache_5m, r.cache_1h, row_number() OVER (PARTITION BY r.session_id ORDER BY r.ts, r.message_id) AS turn
         FROM requests r JOIN sess USING (session_id)
-        WHERE NOT r.subagent AND r.ts IS NOT NULL AND r.input + r.cache_read + r.cache_5m + r.cache_1h >= {START_MIN_TOKENS}),
+        WHERE NOT r.subagent AND r.ts IS NOT NULL AND {prompt} >= {START_MIN_TOKENS}),
       starts AS (SELECT session_id, prompt AS start_prompt, ts AS start_ts FROM turns WHERE turn = 1)"""
 
 
@@ -240,9 +241,10 @@ def cache_series(q, today):
 def breaks_cte():
     """The CTEs lagged and brk: every main-thread turn after the first with at least CACHE_MIN_PROMPT prompt tokens, less than
     CACHE_BREAK_SHARE of them read from the cache, with its uncached tokens and cost, its cause and its ts."""
-    return f"""lagged AS (SELECT session_id, message_id, model, ts, prompt, input, cache_read, turn,
+    # prompt is the request's context (metrics.context_of); uncached is token usage: the input and cache writes it was billed.
+    return f"""lagged AS (SELECT session_id, message_id, model, ts, prompt, input, cache_read, cache_5m, cache_1h, turn,
           lag(model) OVER w AS prev_model, lag(ts) OVER w AS prev_ts, lag(cache_1h) OVER w AS prev_1h FROM turns WINDOW w AS (PARTITION BY session_id ORDER BY turn)),
-        brk AS (SELECT l.session_id, l.ts, l.prompt - l.cache_read AS uncached, rq.cost_input + rq.cost_cache_5m + rq.cost_cache_1h AS uncached_cost,
+        brk AS (SELECT l.session_id, l.ts, l.input + l.cache_5m + l.cache_1h AS uncached, rq.cost_input + rq.cost_cache_5m + rq.cost_cache_1h AS uncached_cost,
             CASE WHEN l.model <> l.prev_model THEN 'model_switch'
                  WHEN sess.source = 'grok' THEN 'other'  -- Grok's logs state no cache lifetime: a Grok break is never an expiry
                  WHEN date_diff('second', l.prev_ts, l.ts) > CASE WHEN l.prev_1h > 0 THEN {CACHE_TTL_1H_S} WHEN sess.source = 'codex' THEN {CACHE_TTL_CODEX_S} ELSE {CACHE_TTL_S} END THEN 'expired' ELSE 'other' END AS cause

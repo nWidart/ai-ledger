@@ -312,6 +312,14 @@ _RATE = dict(input=("p_in", "l_in", "f_in"), output=("p_out", "l_out", "f_out"),
              cache_5m=("p_5m", "l_5m", "f_5m"), cache_1h=("p_1h", "l_1h", "f_1h"))
 
 
+def context_of(alias=""):
+    """SQL: the context a request read, for every reader of a request as a context or prompt size. It is the context
+    size the source stated (context_tokens: Grok's, whose token columns are a share of its turn's usage), else its input
+    and cache tokens. alias is the table's alias with its dot. Sums of token usage and cost read the token columns."""
+    a = alias
+    return f"coalesce({a}context_tokens, {a}input + {a}cache_read + {a}cache_5m + {a}cache_1h)"
+
+
 def requests_cte(pcte, where):
     """Requests with their session's project and source, total tokens, the estimated cost of each priced kind (cost_input, cost_output,
     cost_cache_read, cost_cache_5m, cost_cache_1h) and their sum as cost. All are NULL when the model is unpriced; the tier
@@ -964,7 +972,7 @@ def session_detail(cur, sid, allq, p, prices):
         models=rows(cur, f"{allq} SELECT model, coalesce(effort, '(none)') AS effort, subagent, count(*) AS requests, {sums}, "
                          f"sum(tokens) AS tokens, sum(cost) AS cost FROM rq GROUP BY 1, 2, 3 ORDER BY tokens DESC, model, effort, subagent", p),
         timeline=rows(cur, f"{allq} SELECT strftime(date_trunc('minute', ts), '%Y-%m-%dT%H:%M:00Z') AS minute, "
-                           f"sum(tokens) AS tokens, sum(cost) AS cost, max(input + cache_read + cache_5m + cache_1h) AS context "
+                           f"sum(tokens) AS tokens, sum(cost) AS cost, max({context_of()}) AS context "
                            f"FROM rq GROUP BY 1 ORDER BY 1", p),
         tools=rate_rows(rows(cur, f"""SELECT tool, count(*) AS calls, count(*) FILTER (WHERE is_error) AS errors,
             quantile_cont({latency()}, 0.5) AS p50_ms FROM tool_calls WHERE session_id = ?
@@ -981,8 +989,8 @@ TIMELINE_CAP = 5000  # rows per series in the session timeline; longer sessions 
 
 def session_timeline(cur, sid, allq, p):
     """Per-request and per-tool-call rows for the session sheet's timeline, plus compaction times and the first prompt.
-    context: the prompt size of each request (input plus cache), the same measure as sessions.peak_context."""
-    reqs = rows(cur, f"""{allq} SELECT ts, model, subagent, input + cache_read + cache_5m + cache_1h AS context, output, cost
+    context: the prompt size of each request (context_of), the same measure as sessions.peak_context."""
+    reqs = rows(cur, f"""{allq} SELECT ts, model, subagent, {context_of()} AS context, output, cost
         FROM rq ORDER BY ts, message_id LIMIT {TIMELINE_CAP}""", p)
     calls = rows(cur, f"""SELECT tool_use_id AS id, tool, start_ts, end_ts, is_error, category, subagent,
         is_commit AND coalesce(test_passed, false) AS is_commit

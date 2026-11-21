@@ -29,3 +29,14 @@ A request SHALL carry the cost its source reported for it, when the source repor
 #### Scenario: Rebuild keeps reported costs
 - **WHEN** the user runs a rebuild on a store with Grok requests
 - **THEN** each Grok request has the same reported cost as before
+
+### Requirement: Keep the context size a source states
+A request SHALL carry the context size its source stated for its model call, when the source states one apart from its token counts. Requests from sources that state none SHALL carry none, and their context SHALL be their input and cache tokens. Opening a store from before this field SHALL add it with no value, and SHALL NOT read any line again.
+
+#### Scenario: Existing store upgraded
+- **WHEN** the app opens a store whose requests have no stated context size field
+- **THEN** every existing request has no stated context size, and every figure is unchanged
+
+#### Scenario: Source that states none
+- **WHEN** Claude Code or Codex requests are ingested
+- **THEN** they carry no stated context size, and each one's context is its input and cache tokens

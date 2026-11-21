@@ -73,7 +73,11 @@ Each request of a Grok turn SHALL carry a share of the cost the turn reports (`c
 - **THEN** its three requests' reported costs add up to $0.134844
 
 ### Requirement: Record the context of a Grok session
-A Grok session's peak context SHALL be the largest context size of its main-thread model calls. Each completed automatic compaction SHALL count as a compaction of the session, and the context window a compaction notice states SHALL be the session's context window.
+A Grok session's peak context SHALL be the largest context size of its main-thread model calls. Each request of a model call SHALL keep the context size the call stated, and context readers SHALL use it as the request's context. Each completed automatic compaction SHALL count as a compaction of the session, and the context window a compaction notice states SHALL be the session's context window.
+
+#### Scenario: Turn that includes a subagent's calls
+- **WHEN** a parent's turn reports usage that includes its subagent's calls, and its last call states a context size of 23,170 tokens
+- **THEN** that call's request has a context of 23,170, not its share of the turn's input
 
 #### Scenario: Compacted session
 - **WHEN** a session's largest model call states 204,851 tokens, Grok says it compacts at a window of 256,000 and completes the compaction

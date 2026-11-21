@@ -157,11 +157,12 @@ def add_grok_session(con):
                                  "source", "context_window"],
                  [("g1", "foo", "/Users/example/foo", "2026-11-05 14:00:00", "2026-11-05 14:20:00", 0, 120_000, "grok-4.7-build",
                    "grok", 256_000)])
+    # Each call's stated context (context_tokens) differs from its share of the turn's input: pages show the stated one.
     store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "effort", "subagent", "input", "output", "thinking",
-                                 "cache_read", "cache_5m", "cache_1h", "thinking_ms", "reported_cost"],
-                 [("g1-1", "g1", "2026-11-05 14:01:00", "grok-4.7-build", None, False, 40_000, 2_000, 0, 30_000, 0, 0, 0, 0.2),
-                  ("g1-2", "g1", "2026-11-05 14:05:00", "grok-4.7-build", None, False, 20_000, 3_000, 0, 80_000, 0, 0, 0, 0.25),
-                  ("g1-3", "g1", "2026-11-05 14:12:00", "grok-4.7-build", None, False, 10_000, 1_000, 0, 110_000, 0, 0, 0, 0.3)])
+                                 "cache_read", "cache_5m", "cache_1h", "thinking_ms", "reported_cost", "context_tokens"],
+                 [("g1-1", "g1", "2026-11-05 14:01:00", "grok-4.7-build", None, False, 40_000, 2_000, 0, 30_000, 0, 0, 0, 0.2, 68_000),
+                  ("g1-2", "g1", "2026-11-05 14:05:00", "grok-4.7-build", None, False, 20_000, 3_000, 0, 80_000, 0, 0, 0, 0.25, 97_000),
+                  ("g1-3", "g1", "2026-11-05 14:12:00", "grok-4.7-build", None, False, 10_000, 1_000, 0, 110_000, 0, 0, 0, 0.3, 120_000)])
     store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "input_summary", "start_ts", "end_ts", "is_error",
                                    "category", "subagent", "is_commit", "is_test", "test_passed"],
                  [("g1-t1", "g1", "run_terminal_command", "npm test", "2026-11-05 14:02:00", "2026-11-05 14:02:09", True, "x", False,

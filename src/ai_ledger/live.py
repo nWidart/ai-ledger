@@ -418,7 +418,7 @@ def figures(cur, sids, prices):
             SELECT session_id, sum(cost) AS cost, count(*) AS requests,
               sum(cache_read) / nullif(sum(input + cache_read + cache_5m + cache_1h), 0) AS cache_read,
               arg_max(model, ts) FILTER (WHERE NOT subagent) AS model,
-              arg_max(input + cache_read + cache_5m + cache_1h, ts) FILTER (WHERE NOT subagent) AS context
+              arg_max({metrics.context_of()}, ts) FILTER (WHERE NOT subagent) AS context
             FROM rq GROUP BY 1""", pparams + [list(sids)]):
         out[r.pop("session_id")].update(r)
     for sid, n, err in cur.execute("""SELECT session_id, count(*), count(*) FILTER (WHERE is_error) FROM tool_calls
@@ -722,14 +722,14 @@ def compactions(cur, sid):
 
 
 def pulse(cur, sid, now):
-    """The session over the last PULSE, oldest first: the context of each main-thread request (what it read: input and
-    cache), with the last one before the span as its starting level, and each tool call that ended, subagents' included,
+    """The session over the last PULSE, oldest first: the context of each main-thread request (metrics.context_of),
+    with the last one before the span as its starting level, and each tool call that ended, subagents' included,
     with whether it failed. Nothing after `now` counts: it would fall past the pulse's end. Tokens per minute would count
     every cache reread as work; the context only grows with it."""
     naive = now.astimezone(timezone.utc).replace(tzinfo=None)
     start = naive - PULSE
-    context = cur.execute("""SELECT ts, tokens FROM (
-            SELECT ts, input + cache_read + cache_5m + cache_1h AS tokens, ts > ? AS inside,
+    context = cur.execute(f"""SELECT ts, tokens FROM (
+            SELECT ts, {metrics.context_of()} AS tokens, ts > ? AS inside,
               row_number() OVER (PARTITION BY ts > ? ORDER BY ts DESC) AS back
             FROM requests WHERE session_id = ? AND NOT subagent AND ts IS NOT NULL AND ts <= ?)
         WHERE inside OR back = 1 ORDER BY ts""", [start, start, sid, naive]).fetchall()

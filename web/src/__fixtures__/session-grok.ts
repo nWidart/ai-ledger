@@ -49,13 +49,13 @@ export default {
    "minute": "2026-11-05T14:01:00Z",
    "tokens": 72000,
    "cost": 0.2,
-   "context": 70000
+   "context": 68000
   },
   {
    "minute": "2026-11-05T14:05:00Z",
    "tokens": 103000,
    "cost": 0.25,
-   "context": 100000
+   "context": 97000
   },
   {
    "minute": "2026-11-05T14:12:00Z",
@@ -91,7 +91,7 @@ export default {
    "ts": "2026-11-05T14:01:00.000Z",
    "model": "grok-4.7-build",
    "subagent": false,
-   "context": 70000,
+   "context": 68000,
    "output": 2000,
    "cost": 0.2
   },
@@ -99,7 +99,7 @@ export default {
    "ts": "2026-11-05T14:05:00.000Z",
    "model": "grok-4.7-build",
    "subagent": false,
-   "context": 100000,
+   "context": 97000,
    "output": 3000,
    "cost": 0.25
   },

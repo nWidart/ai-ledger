@@ -78,7 +78,8 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE TABLE IF NOT EXISTS requests (
   message_id VARCHAR PRIMARY KEY, session_id VARCHAR, ts TIMESTAMP, model VARCHAR, effort VARCHAR,
   subagent BOOLEAN, input BIGINT, output BIGINT, thinking BIGINT, cache_read BIGINT,
-  cache_5m BIGINT, cache_1h BIGINT, thinking_ms BIGINT, stop_reason VARCHAR, speed VARCHAR, reported_cost DOUBLE);
+  cache_5m BIGINT, cache_1h BIGINT, thinking_ms BIGINT, stop_reason VARCHAR, speed VARCHAR, reported_cost DOUBLE,
+  context_tokens BIGINT);
 CREATE TABLE IF NOT EXISTS tool_calls (
   tool_use_id VARCHAR PRIMARY KEY, session_id VARCHAR, tool VARCHAR, mcp_server VARCHAR,
   skill VARCHAR, input_summary VARCHAR, start_ts TIMESTAMP, end_ts TIMESTAMP, is_error BOOLEAN,
@@ -189,6 +190,9 @@ def open_store(path=None):
     con.execute("ALTER TABLE requests ADD COLUMN IF NOT EXISTS speed VARCHAR")  # stores from before fast-mode pricing; NULL until rebuild
     # The USD cost a source states for a request (Grok's); NULL for sources that state none, so no line is read again.
     con.execute("ALTER TABLE requests ADD COLUMN IF NOT EXISTS reported_cost DOUBLE")
+    # The context size a source states for a request (Grok's, whose token columns are a share of its turn's); NULL for
+    # sources that state none, whose context is the request's input and cache tokens (metrics.context_of).
+    con.execute("ALTER TABLE requests ADD COLUMN IF NOT EXISTS context_tokens BIGINT")
     con.execute("ALTER TABLE tool_calls ADD COLUMN IF NOT EXISTS result_bytes BIGINT")  # stores from before the Context page; NULL until rebuild
     con.execute("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS context_window BIGINT")
     con.execute("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS first_compaction_ts TIMESTAMP")
@@ -578,7 +582,7 @@ class Deriver:
             sub = self.sub or bool(d.get("isSidechain"))
             self.requests[mid] = (mid, sid, ts, model, d.get("effort"), sub, inp, u.get("output_tokens") or 0,
                                   (u.get("output_tokens_details") or {}).get("thinking_tokens") or 0, cr, c5m or 0, c1h,
-                                  d.get("thinkingDurationMs"), msg.get("stop_reason"), u.get("speed"), None)
+                                  d.get("thinkingDurationMs"), msg.get("stop_reason"), u.get("speed"), None, None)
             if s and not sub and inp + cr + cw > s["peak"]:
                 s["peak"], s["peak_model"] = inp + cr + cw, model
         if not isinstance(content, list):
@@ -654,7 +658,7 @@ class Deriver:
                     "ELSE least(sessions.first_compaction_ts, excluded.first_compaction_ts) END")
         insert(cur, "requests", ["message_id", "session_id", "ts", "model", "effort", "subagent", "input", "output",
                                  "thinking", "cache_read", "cache_5m", "cache_1h", "thinking_ms", "stop_reason", "speed",
-                                 "reported_cost"],
+                                 "reported_cost", "context_tokens"],
                list(self.requests.values()))
         self.flush_tools()
         insert(cur, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], list(self.prompts.values()))
