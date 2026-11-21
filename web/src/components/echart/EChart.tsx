@@ -276,7 +276,8 @@ export function EChart({
   useImperativeHandle(ref, () => ({ reset: () => reset(), focus: () => box.current?.focus() }), []);
 
   // Escape ends a reading wherever the focus is: the pointer can open one while the focus is elsewhere. A key from
-  // inside the box is the box's own.
+  // inside the box is the box's own, so the reading ends once. The listener captures: a focused control that handles
+  // Escape and stops it (a toggletip) would keep it from a listener on the way up. The key is left to that control.
   const open = at != null;
   const end = useEffectEvent(() => readAt(null));
   useEffect(() => {
@@ -284,8 +285,8 @@ export function EChart({
     const escape = (ev: globalThis.KeyboardEvent) => {
       if (ev.key === "Escape" && !modified(ev) && !box.current?.contains(ev.target as Node)) end();
     };
-    document.addEventListener("keydown", escape);
-    return () => document.removeEventListener("keydown", escape);
+    document.addEventListener("keydown", escape, true);
+    return () => document.removeEventListener("keydown", escape, true);
   }, [open]);
 
   // The pointer: a move inside the grid reads the point under it, with the tooltip beside the pointer; a click there

@@ -336,6 +336,23 @@ describe("EChart reading", () => {
     expect((await drawn()).last).toMatchObject({ axisPointer: { link: [{ xAxisIndex: "all" }], triggerOn: "none" } });
   });
 
+  it("clears a pointer's reading on Escape from a control that stops the key, once, and leaves the key to that control", async () => {
+    // A toggletip handles Escape and stops it: the key never bubbles to the document.
+    const got: string[] = [];
+    render(<>{show()}<button type="button" onKeyDown={ev => { got.push(ev.key); ev.stopPropagation(); }}>About Active time</button></>);
+    const chart = await drawn();
+    chart.fire("mousemove", chart.pointAt(1));
+    const other = screen.getByRole("button", { name: "About Active time" });
+    expect(fireEvent.keyDown(other, { key: "Escape" })).toBe(true); // not prevented
+    expect(readout()).toBe("");
+    expect(tooltip()).toBeNull();
+    expect(got).toEqual(["Escape"]); // the control still got its key
+    expect(bands(chart)).toEqual(["at 1", "leave"]);
+    fireEvent.keyDown(other, { key: "Escape" }); // nothing read: the chart no longer listens
+    expect(bands(chart)).toEqual(["at 1", "leave"]);
+    expect(got).toEqual(["Escape", "Escape"]);
+  });
+
   it("clears the reading on Escape on the box when an element around it stops the key", async () => {
     // SessionMap's box and Toggletip stop an Escape they handle: it then never reaches the document.
     render(<div onKeyDown={ev => { if (ev.key === "Escape") ev.stopPropagation(); }}>{show()}</div>);
