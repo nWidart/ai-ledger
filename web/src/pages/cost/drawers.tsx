@@ -2,11 +2,11 @@ import type { ReactNode } from "react";
 import { type Totals, type TitledSessionRow, type View } from "../../api";
 import { ExportButtons } from "../../components/ExportButtons";
 import { dayStamp } from "../../components/export";
-import { DataTable } from "../../components/DataTable";
 import { Drawer } from "../../components/Drawer";
-import { Toggletip } from "../../components/Toggletip";
 import { ProjectName } from "../../components/ProjectDot";
-import { openSessionSheet, pickRow, sessName, shortId } from "../../components/sheets/session";
+import { openSessionSheet, shortId } from "../../components/sheets/session";
+import { SessionCell } from "../../components/table/cells";
+import { Table, type Column, type RowPick } from "../../components/table/Table";
 import { big, dayLabel, dur, num, pct, plural, usd, when } from "../../format";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
@@ -38,6 +38,18 @@ export function TokensDrawer({ t }: { t: Totals }) {
 
 /** A value rounded to 4 decimals for export; null stays an empty cell. */
 export const r4 = (n: number | null): number | null => (n == null ? null : Math.round(n * 1e4) / 1e4);
+const NO_SESSIONS: TitledSessionRow[] = [];
+const SESSION_COLUMNS: readonly Column<TitledSessionRow>[] = [
+  { id: "session", header: "Session", cellProps: () => ({ className: "when sess" }),
+    cell: s => <SessionCell s={s} sub={<>{when(s.first_ts)}{s.git_branch ? ` · ${s.git_branch}` : ""}{s.title ? ` · ${shortId(s.session_id)}` : ""}</>} /> },
+  { id: "project", header: "Project", cellProps: () => ({ className: "name" }), cell: s => <ProjectName project={s.project} /> },
+  { id: "active", header: "Active", tip: "Active time: pauses over 20 minutes left out", tipTerm: "Active time", align: "num", hide: 0, cell: s => dur(s.duration_s) },
+  { id: "prompts", header: "Prompts", align: "num", hide: 0, cell: s => num(s.prompts) },
+  { id: "commits", header: "Commits", align: "num", hide: 0, cell: s => num(s.commits) },
+  { id: "per_commit", header: "Cost / commit", align: "num", cell: s => s.commits && s.cost != null ? usd(s.cost / s.commits) : <NA /> },
+  { id: "cost", header: "Est. cost", align: "num", cell: s => <>{usd(s.cost)}<Unpriced n={s.unpriced} /></> },
+];
+const SESSION_PICK: RowPick<TitledSessionRow> = { value: s => s.session_id, open: openSessionSheet, subject: s => ({ kind: "session", value: s.session_id }) };
 const SESSION_HEAD = ["Session id", "Title", "Project", "Started", "Branch", "Active seconds", "Prompts", "Commits", "Cost per commit (USD)", "Est. cost (USD)"];
 
 /** The view's most expensive sessions; day: every session active that day (from the chart or the peak-day card), loaded
@@ -65,21 +77,12 @@ export function TopSessionsDrawer({ view, top, day, onDay, selected }: {
           s.project, s.first_ts, s.git_branch, s.duration_s, s.prompts, s.commits, r4(s.commits && s.cost != null ? s.cost / s.commits : null), r4(s.cost)])} />}
       </div>}
       <div className="hint" aria-live="polite">{hint}</div>
-      <DataTable name="Most expensive sessions" region="scroll tall">
-        <thead><tr><th scope="col">Session</th><th scope="col">Project</th><th scope="col" className="num opt">Active<Toggletip term="Active time">Active time: pauses over 20 minutes left out</Toggletip></th>
-          <th scope="col" className="num opt">Prompts</th><th scope="col" className="num opt">Commits</th><th scope="col" className="num">Cost / commit</th><th scope="col" className="num">Est. cost</th></tr></thead>
-        <tbody className={busy ? "stale" : undefined} aria-busy={busy || undefined}>
-          {error ? <tr><td colSpan={7} className="empty" role="alert">Could not load sessions ({error.message}). <button type="button" className="linkish"
-            onClick={retry}>Retry</button></td></tr>
-            : rows.length ? rows.map(s => <tr key={s.session_id} {...pickRow(s.session_id, openSessionSheet, { kind: "session", value: s.session_id }, s.session_id === selected ? "sel" : "")}>
-              <th scope="row" className="when sess"><button type="button" className="cellbtn" title={s.title || s.session_id}>{sessName(s)}</button>
-                <div className="muted small">{when(s.first_ts)}{s.git_branch ? ` · ${s.git_branch}` : ""}{s.title ? ` · ${shortId(s.session_id)}` : ""}</div></th>
-              <td className="name"><ProjectName project={s.project} /></td><td className="num opt">{dur(s.duration_s)}</td><td className="num opt">{num(s.prompts)}</td>
-              <td className="num opt">{num(s.commits)}</td><td className="num">{s.commits && s.cost != null ? usd(s.cost / s.commits) : <NA />}</td>
-              <td className="num">{usd(s.cost)}<Unpriced n={s.unpriced} /></td></tr>)
-            : !busy ? <tr><td colSpan={7} className="empty">{day ? "No sessions on that day." : "No sessions in this range."}</td></tr> : null}
-        </tbody>
-      </DataTable>
+      {/* An error replaces the rows; while loading with nothing to show, no empty state either. */}
+      <Table name="Most expensive sessions" region="scroll tall" rows={error ? NO_SESSIONS : rows} columns={SESSION_COLUMNS} rowId={s => s.session_id}
+        pick={SESSION_PICK} current={selected} body={{ className: busy ? "stale" : undefined, "aria-busy": busy || undefined }}
+        empty={error || busy ? undefined : day ? "No sessions on that day." : "No sessions in this range."}
+        after={error && <tr><td colSpan={SESSION_COLUMNS.length} className="empty" role="alert">Could not load sessions ({error.message}). <button type="button" className="linkish"
+          onClick={retry}>Retry</button></td></tr>} />
     </Drawer>
   );
 }

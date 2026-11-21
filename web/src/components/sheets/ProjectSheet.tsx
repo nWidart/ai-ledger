@@ -1,14 +1,14 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { ModelRow, Source, Totals, UsagePayload } from "../../api";
 import { big, dur, num, pct, usd, when } from "../../format";
 import { money, sgn } from "../../pages/cost/cost";
-import { DataTable } from "../DataTable";
 import { Spark } from "../Spark";
-import { Toggletip } from "../Toggletip";
 import { Ledger, LedgerRow } from "../Ledger";
+import { SessionCell } from "../table/cells";
+import { Table, type Column, type RowPick } from "../table/Table";
 import { FilterButton } from "./FilterButton";
 import { usePathname } from "../../url";
-import { appLink, errorsHref, projectHref, pickRow, sessName } from "./session";
+import { appLink, errorsHref, projectHref } from "./session";
 
 const TOP_MODELS = 8;
 /** A share as a whole percentage, "<1%" for a non-zero share that would round to 0%. */
@@ -74,17 +74,20 @@ export function ChangeDetail({ d, name }: { d: UsagePayload; name: string }) {
   </>;
 }
 
+type TopSession = UsagePayload["top_sessions"][number];
+const TOP_COLUMNS: readonly Column<TopSession>[] = [
+  { id: "session", header: "Session", cellProps: () => ({ className: "when sess" }), cell: s => <SessionCell s={s} sub={<>{when(s.first_ts)}</>} /> },
+  { id: "branch", header: "Branch", cellProps: () => ({ className: "name" }), cell: s => s.git_branch || "–" },
+  { id: "active", header: "Active", tip: "Active time: pauses over 20 minutes left out", tipTerm: "Active time", align: "num", cell: s => dur(s.duration_s) },
+  { id: "cost", header: "Est. cost", align: "num", cell: s => usd(s.cost) },
+];
+
 /** The most expensive sessions as a named table; a row opens its session through onSession. body: the tbody's ref, for useBackTo. */
 export function TopSessions({ top, onSession, body }: { top: UsagePayload["top_sessions"]; onSession: (id: string, el: HTMLElement) => void; body?: RefObject<HTMLTableSectionElement | null> }) {
-  return (
-    <DataTable name="Most expensive sessions"><thead><tr><th scope="col">Session</th><th scope="col">Branch</th>
-    <th scope="col" className="num">Active<Toggletip term="Active time">Active time: pauses over 20 minutes left out</Toggletip></th><th scope="col" className="num">Est. cost</th></tr></thead>
-    <tbody ref={body}>{top.length ? top.map(s => <tr key={s.session_id} {...pickRow(s.session_id, onSession, { kind: "session", value: s.session_id })}>
-      <th scope="row" className="when sess"><button type="button" className="cellbtn" title={s.title || s.session_id}>{sessName(s)}</button><div className="muted small">{when(s.first_ts)}</div></th>
-      <td className="name">{s.git_branch || "–"}</td><td className="num">{dur(s.duration_s)}</td><td className="num">{usd(s.cost)}</td></tr>)
-      : <tr><td colSpan={4} className="empty">No sessions in this range.</td></tr>}</tbody>
-    </DataTable>
-  );
+  const pick = useMemo<RowPick<TopSession>>(() => ({ value: s => s.session_id, open: (v, el) => onSession(v, el),
+    subject: s => ({ kind: "session", value: s.session_id }) }), [onSession]);
+  return <Table name="Most expensive sessions" rows={top} columns={TOP_COLUMNS} rowId={s => s.session_id} pick={pick} body={{ ref: body }}
+    empty="No sessions in this range." />;
 }
 
 /** The project sheet's body: its summary over the page's range, models and its most expensive sessions. */

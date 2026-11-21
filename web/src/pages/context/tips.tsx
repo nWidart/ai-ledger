@@ -1,10 +1,11 @@
 // The tips: each rule's finding as an item of one strip, and the drawer listing its sessions.
 import { useEffect, useState } from "react";
 import type { Tip, TipId } from "../../api";
-import { DataTable } from "../../components/DataTable";
 import { Drawer, openDrawer } from "../../components/Drawer";
 import { HowMeasured } from "../../components/HowMeasured";
-import { openSessionSheet, pickRow, sessName, shortId } from "../../components/sheets/session";
+import { openSessionSheet, shortId } from "../../components/sheets/session";
+import { SessionCell } from "../../components/table/cells";
+import { Table, type Column, type RowPick } from "../../components/table/Table";
 import { num, plural, when } from "../../format";
 import { Proj, SourceName } from "./cells";
 import { codeParts, TIP_KICKERS } from "./context";
@@ -52,6 +53,16 @@ export function TipStrip({ tips, onSessions }: { tips: Tip[]; onSessions: (id: T
   );
 }
 
+type TipSession = Tip["sessions"][number];
+const TIP_COLUMNS: readonly Column<TipSession>[] = [
+  { id: "session", header: "Session", cellProps: () => ({ className: "when sess" }),
+    cell: s => <SessionCell s={s} data sub={s.title && shortId(s.session_id)} /> },
+  { id: "project", header: "Project", cellProps: () => ({ className: "name" }), cell: s => <Proj project={s.project} /> },
+  { id: "source", header: "Source", cell: s => <SourceName source={s.source} /> },
+  { id: "started", header: "Started", cellProps: () => ({ className: "when" }), cell: s => when(s.first_ts) },
+];
+const TIP_PICK: RowPick<TipSession> = { value: s => s.session_id, open: openSessionSheet, subject: s => ({ kind: "session", value: s.session_id }) };
+
 /** The sessions a tip matches (the newest 20), each opening its sheet. Mounted while the URL names the tip; closing it clears the tip from the URL. */
 export function TipSessions({ tip, onClose }: { tip: Tip; onClose: () => void }) {
   // An effect, not a layout effect: the drawer registers itself in its own effect, which runs first (a child's before its parent's).
@@ -60,14 +71,7 @@ export function TipSessions({ tip, onClose }: { tip: Tip; onClose: () => void })
   return (
     <Drawer id="d-tip" title={`Sessions matching ${tip.title}`} count={num(tip.matched)} onToggle={o => { if (!o) onClose(); }}>
       <div className="hint">{tip.sessions.length < tip.matched ? `The ${num(tip.sessions.length)} newest of ${num(tip.matched)}` : plural(tip.matched, "session")}, newest first. Select one for details.</div>
-      <DataTable name={`Sessions matching ${tip.title}`}>
-        <thead><tr><th scope="col">Session</th><th scope="col">Project</th><th scope="col">Source</th><th scope="col">Started</th></tr></thead>
-        <tbody>{tip.sessions.map(s => <tr key={s.session_id} {...pickRow(s.session_id, openSessionSheet, { kind: "session", value: s.session_id })}>
-          <th scope="row" className="when sess"><button type="button" className="cellbtn" data-session={s.session_id} title={s.title || s.session_id}>{sessName(s)}</button>
-            {s.title && <div className="muted small">{shortId(s.session_id)}</div>}</th>
-          <td className="name"><Proj project={s.project} /></td>
-          <td><SourceName source={s.source} /></td><td className="when">{when(s.first_ts)}</td></tr>)}</tbody>
-      </DataTable>
+      <Table name={`Sessions matching ${tip.title}`} rows={tip.sessions} columns={TIP_COLUMNS} rowId={s => s.session_id} pick={TIP_PICK} />
       {left > 0 && <p className="hint">and {num(left)} more.</p>}
     </Drawer>
   );
