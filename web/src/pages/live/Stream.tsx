@@ -127,10 +127,15 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
   const hint = useId(); // two pinned streams share the page
   const put = useRef({ top: 0, reach: 0 });
   const [open, setOpen] = useState(() => new Set<string>());
-  const [seenAt, setSeenAt] = useState(s.events.length);
+  // The events held when Follow last turned off, by key, whichever way it turned off (a scroll, an opened row, the Follow
+  // checkbox): the events not in it are the new ones. By key, not by count: at the buffer's cap a new event drops the oldest
+  // and the count stays the same. null while Follow is on. Set while rendering, so the first render without Follow has it.
+  const keysOf = (events: readonly LiveEvent[]): ReadonlySet<string> => new Set(events.map(e => e.key));
+  const [seen, setSeen] = useState<ReadonlySet<string> | null>(() => (follow ? null : keysOf(s.events))), [wasFollow, setWasFollow] = useState(follow);
+  if (wasFollow !== follow) { setWasFollow(follow); setSeen(follow ? null : keysOf(s.events)); }
   // What the stable handlers below read, so the rows they reach keep the same props from one render to the next.
-  const cur = useRef({ c, setChoices, follow, setFollow, count: s.events.length });
-  cur.current = { c, setChoices, follow, setFollow, count: s.events.length };
+  const cur = useRef({ c, setChoices, follow, setFollow });
+  cur.current = { c, setChoices, follow, setFollow };
   const today = dayKey(now), wide = useMemo(() => s.events.some(e => dated(e.ts, today)), [s.events, today]);
   const rows = useMemo(() => streamRows(s.events), [s.events]);
   // Everything the rows draw that no tick changes: it is worked out again only when the events, the filters or the
@@ -163,8 +168,8 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
   const mark = (key: string) => (key === target ? newest : undefined);
   const toggle = useCallback((k: string) => {
     setOpen(o => { const n = new Set(o); if (!n.delete(k)) n.add(k); return n; });
-    const { follow, setFollow, count } = cur.current;
-    if (follow) { setFollow(false); setSeenAt(count); }
+    const { follow, setFollow } = cur.current;
+    if (follow) setFollow(false);
   }, []);
   const fold = useCallback((id: string, folded: boolean) => {
     const { c, setChoices } = cur.current;
@@ -189,7 +194,12 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
     }
     put.current = { top: el.scrollTop, reach: reachOf(el) };
   }, [follow, foot]);
-  const newer = !follow && s.events.length > seenAt;
+  // The events that came since Follow turned off, and how many of them are rows.
+  const { newer, fresh } = useMemo(() => {
+    if (follow || !seen) return { newer: false, fresh: 0 };
+    const added = s.events.filter(e => !seen.has(e.key));
+    return { newer: added.length > 0, fresh: added.filter(isRow).length };
+  }, [follow, seen, s.events]);
   // The box takes its place when what it draws changes (the rows, an open row, the text, the date column, the jump
   // button), not on each tick of the clock, which moves no row; and whenever the box or what it draws changes size with
   // no render: a web font that loads, a window resized, a row that wraps anew, a duration that grows a digit.
@@ -205,12 +215,12 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
   // on the row it showed: place sets it right, before the scroll event or after it.
   const onScroll = () => {
     const el = box.current!, { top, reach } = put.current;
-    if (follow && reachOf(el) === reach && Math.abs(el.scrollTop - top) > 1) { setFollow(false); setSeenAt(s.events.length); }
+    if (follow && reachOf(el) === reach && Math.abs(el.scrollTop - top) > 1) setFollow(false);
   };
   // One polite status, shown beside Jump to latest, for the rows that came while Follow is off (the stream itself is a log that
   // stays silent). It takes the count at once, then at most once every NEWS_MS: a count that changes sooner waits for the rest
   // of the interval. told is the count it shows, toldAt when it took it; Follow on empties it.
-  const fresh = newer ? s.events.slice(seenAt).filter(isRow).length : 0, [told, setTold] = useState(0), toldAt = useRef(-Infinity);
+  const [told, setTold] = useState(0), toldAt = useRef(-Infinity);
   if (!fresh && told) setTold(0); // set while rendering, so the next count starts from none
   useEffect(() => {
     if (!fresh) { toldAt.current = -Infinity; return; }

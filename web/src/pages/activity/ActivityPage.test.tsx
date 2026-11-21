@@ -367,7 +367,17 @@ describe("workbench tabs", () => {
     act(() => first.focus());
     expect(prevented(first)).toEqual([]);
     expect(document.activeElement).toBe(first);
-    expect(prevented(screen.getByRole("group", { name: /^Commits/ }))).toEqual([]);
+    const chart = screen.getByRole("group", { name: /^Commits/ });
+    expect(prevented(chart)).toEqual([]);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    // A modified Escape keeps an open reading, on the chart and anywhere else on the page.
+    act(() => chart.focus());
+    fireEvent.keyDown(chart, { key: "ArrowRight" });
+    expect(screen.getByRole("tooltip")).toBeTruthy();
+    fireEvent.keyDown(chart, { key: "Escape", altKey: true });
+    fireEvent.keyDown(document.body, { key: "Escape", ctrlKey: true });
+    expect(screen.getByRole("tooltip")).toBeTruthy();
+    fireEvent.keyDown(document.body, { key: "Escape" });
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 

@@ -94,7 +94,7 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, selected, 
   // Escape dismisses an open tooltip wherever the focus is: the pointer can open it while the focus is elsewhere.
   useEffect(() => {
     if (at == null) return;
-    const off = (ev: globalThis.KeyboardEvent) => { if (ev.key === "Escape") setAt(null); };
+    const off = (ev: globalThis.KeyboardEvent) => { if (ev.key === "Escape" && !modified(ev)) setAt(null); };
     document.addEventListener("keydown", off);
     return () => document.removeEventListener("keydown", off);
   }, [at]);

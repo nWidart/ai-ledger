@@ -81,6 +81,6 @@ export const refreshed = (client: QueryClient) => act(() => { noteStatus(client,
 export const MODIFIED_KEYS = [{ key: "ArrowLeft", altKey: true }, { key: "Home", ctrlKey: true }, { key: "End", metaKey: true },
   { key: "ArrowRight", shiftKey: true }, { key: "Enter", ctrlKey: true }, { key: "Escape", altKey: true }] as const;
 /** Which of the modified keys a key handler on el prevents, as "Alt+ArrowLeft": none, for one that leaves them to the browser. */
-export const prevented = (el: Element, keys: readonly (typeof MODIFIED_KEYS)[number][] = MODIFIED_KEYS): string[] =>
+export const prevented = (el: Element, keys: readonly { key: string; altKey?: true; ctrlKey?: true; metaKey?: true; shiftKey?: true }[] = MODIFIED_KEYS): string[] =>
   keys.filter(k => !fireEvent.keyDown(el, k)).map(k => [..."altKey" in k ? ["Alt"] : [], ..."ctrlKey" in k ? ["Ctrl"] : [],
     ..."metaKey" in k ? ["Meta"] : [], ..."shiftKey" in k ? ["Shift"] : [], k.key].join("+"));

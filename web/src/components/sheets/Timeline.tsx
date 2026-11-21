@@ -93,8 +93,9 @@ export function Timeline({ s, project }: { s: SessionDetail; project: string | n
     if (Math.abs(x(events[best]!.t) - px) <= 16) setSel(best);
   };
   const onKey = (ev: KeyboardEvent) => {
-    if (modified(ev, true)) return; // Alt+Left is history, Ctrl+Home the page: not ours. Shift is the longer step
-    const step =({ ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity } as Record<string, number>)[ev.key];
+    // Alt+Left is history, Ctrl+Home the page: not ours. Shift+Left and Shift+Right are the longer step; Shift+Home is not ours.
+    if (modified(ev, ev.key === "ArrowLeft" || ev.key === "ArrowRight")) return;
+    const step = ({ ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity } as Record<string, number>)[ev.key];
     if (step == null || !reqs.length) return;
     ev.preventDefault();
     const n = (ev.shiftKey && Math.abs(step) === 1 ? 10 : 1) * step;
