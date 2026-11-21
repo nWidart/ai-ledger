@@ -17,7 +17,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - Errors puts each control where it acts. The header keeps project, range and source; Day / Week moves into the rate chart's header, and "Include subagents" and "Hide noise and muted" into the type table's toolbar. Links and saved views keep working: the URL keys are the same.
-- Errors' type table has four columns and fits its pane without scrolling sideways: Type; Errors and Rate, with the share as a bar; Time lost, with the share not recovered under it; and Trend, with a tick on the day a fix was applied, and Change under it. All six sorts stay, two to a header where a column holds two figures. "Didn't recover" is now "Not recovered".
+- Errors' type table has four columns and fits its pane without scrolling sideways: Type; Errors and Rate, with the share as a bar; Time lost, with the share not recovered under it; and Trend, with a tick on the day a fix was applied, and Change under it; select a change to see the two rates behind it, or why it shows "–". All six sorts stay, two to a header where a column holds two figures. "Didn't recover" is now "Not recovered".
 - Errors matches the other pages: panels instead of cards, messages without contractions ("Could not load errors."), no "Ingested …" in the date line or ingest note under Where to start (the navigation shows both), and on a phone the whole summary, vitals two to a row, instead of a "More summary" button.
 - New logo: a bound ledger whose page ends in an accountant's double rule, in place of the bar-chart tile. It shows in the app's navigation, as the app's favicon, and in the docs site's title bar and favicon.
 

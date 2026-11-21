@@ -96,7 +96,7 @@ On a narrow screen the vitals show two to a row. Every line and vital shows at e
 | Type | The type's label, with a swatch matching its chart layer, a **Muted** chip when muted and a **✓ Fix applied** chip with its date when marked. | A to Z first |
 | Errors, Rate | Failed calls of the type, then its errors per 100 tool calls in the view, with two decimals. Under them, a bar and a percent give the type's share of the view's errors. | Errors or Rate; the default is Errors, most first. The share orders as Errors does |
 | Time lost, Not recovered | Time in retry loops: from each incident's first failure to its last, summed. An incident counts whole when any of its failures is in the view. "–" when no incident of the type has a measurable span. Under it, the share of the type's incidents whose outcome is not recovered, such as "37% not recovered". | Time lost or Not recovered |
-| Trend, Change | A sparkline of the type's rate over the range, with a green tick on the day its fix was applied. Under it, the type's rate against the comparison period, in percent, or counts when either side has fewer than 5 errors. | Change, by the change in points |
+| Trend, Change | A sparkline of the type's rate over the whole range, from its first day, with a green tick on the day its fix was applied. Under it, the type's rate against the comparison period, in percent, or counts when either side has fewer than 5 errors. Select the change to see the two rates behind it, or why it shows "–". | Change, by the change in points |
 
 With a bucket selected, the types, Errors, Rate, the share, Time lost and Not recovered follow the bucket; Trend and Change stay range-wide.
 

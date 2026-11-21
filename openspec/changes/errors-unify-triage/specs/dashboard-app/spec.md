@@ -8,5 +8,5 @@ A section's hint SHALL be one short line. Text that says how a figure is measure
 - **THEN** the Starting context hint is one line, and its method text shows only when the user activates, or rests the pointer on, its How measured toggletip
 
 #### Scenario: Errors' uncategorized share
-- **WHEN** the user opens Errors' summary on a phone
+- **WHEN** the user opens Errors' summary on a phone, with errors in the view
 - **THEN** the uncategorized line shows, ending with a How measured toggletip that names the catch-all types, and the line has no hover title

@@ -39,3 +39,16 @@
 - [x] 6.1 Update `PARITY.md`, the docs site's Errors page, glossary and playbook, `README.md` and `CHANGELOG.md`.
 - [x] 6.2 Point `tools/demo/record.mjs`'s types shot at `.panel.types`.
 - [x] 6.3 Run `uv run ruff check`, the Python tests, `cd web && npm run check`, `cd site && npm run check`, `openspec validate --specs --strict` and `openspec validate errors-unify-triage --strict`.
+
+## 7. Review fixes
+
+- [x] 7.1 Keep only real calendar days in the legacy markers (`loadFixes`, `isDay` shared from `url.ts`); test a mixed import of a malformed and a valid marker.
+- [x] 7.2 Let the Errors cell's figures wrap (the count after a separator only); add `tools/demo/typefit.mjs`, a browser check of each cell with the widest figures at 1280, 1000 and 390px.
+- [x] 7.3 Press (`aria-pressed`) the sort button whose figure sorts its header; test Errors to Rate.
+- [x] 7.4 Start each Trend sparkline on the range's first day, so a fix before the view's first call keeps its tick; hide the tick's note with the sparkline. Test the tick's position.
+- [x] 7.5 Make each Change figure a toggletip with the rates behind it, or why it shows "–"; test it from the keyboard.
+- [x] 7.6 Drop `aria-roledescription` from the rate chart, and invert its test.
+- [x] 7.7 Anchor the strip's ✓ to the last plotted failure (a zero-span test), and stroke it with `--good-text`.
+- [x] 7.8 Align the deltas: the uncategorized line needs errors, Where to start scopes muted types to the open fixes and Rising fastest, the chart table follows the drawn series, Change's figure explains itself.
+- [x] 7.9 Strengthen the tests: the selected type's chart-table rate and bucket, the scorecard's post-fix gate, the recovery ✓, the subagent toggle's counts.
+- [x] 7.10 Re-record the Errors docs shots and README GIFs from the demo store.
