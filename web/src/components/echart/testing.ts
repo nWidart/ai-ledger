@@ -4,12 +4,22 @@
 //
 // The fake has one grid, at fakeECharts.grid, over a category x axis (the points are the first x axis's `data`) and a value
 // y axis from 0 to its `max` (1 when the option names none). The zoom window is kept in point indexes. It imitates:
-// - setOption: each key the option names replaces the one before, as `replaceMerge` does for the keys it lists; the zoom
-//   window survives unless the option's dataZoom names `startValue` and `endValue`.
+// - setOption, merging as ECharts 6 does. With `notMerge`, the option replaces the whole one before. Otherwise a component
+//   key (dataZoom, grid, series, xAxis, yAxis) holds a list:
+//   - for a key `replaceMerge` lists, only the option's items stay, each one whose id matches an old item's merged into
+//     it, and a listed key the option leaves out is emptied;
+//   - for any other key the option names, each item merges into the old item with its id, else the one with its name
+//     (when one of them has no id), else the next old item by index (when it has no id), else it is added; old items
+//     it matches none of stay, so an empty list removes nothing;
+//   - two items with one id throw, as in ECharts.
+//   Merging is deep for plain objects; arrays, functions and other values replace. A top-level key that is not a
+//   component, such as textStyle, merges the same way. The zoom window survives while the first dataZoom is merged
+//   into, not new or gone, unless the option's dataZoom names `startValue` and `endValue`.
 // - dispatchAction: "dataZoom" moves the window and then fires "datazoom" with the payload, unless silent, as ECharts
 //   does; "updateAxisPointer" moves `band` to the point under x, and `currTrigger: "leave"` hides it.
 // - convertToPixel, convertFromPixel and containPixel over the grid, for a `gridIndex`, `xAxisIndex`, `yAxisIndex` or
-//   `seriesIndex` finder of 0.
+//   `seriesIndex` finder of 0. As in ECharts, convertFromPixel does not clamp: an x left of the grid gives a point
+//   before the first one shown, such as -1, and an x right of it a point after the last; containPixel tells them apart.
 // - getOption: components as arrays, each dataZoom with the window as `startValue`, `endValue`, `start` and `end`.
 // It is stricter than ECharts in one way: a call on a disposed chart, or a second live chart on one element, throws where
 // ECharts would log a warning, since either is a wrapper bug.
@@ -29,6 +39,61 @@ type Window = { from: number; to: number };
 const COMPONENTS = ["dataZoom", "grid", "series", "xAxis", "yAxis"];
 const list = (v: unknown): Option[] => (v == null ? [] : Array.isArray(v) ? v : [v]) as Option[];
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+const isPlain = (v: unknown): v is Option => typeof v === "object" && v !== null && Object.getPrototypeOf(v) === Object.prototype;
+/** ECharts' merge: plain objects merge key by key, any other value replaces. */
+function merge(old: unknown, next: unknown): unknown {
+  if (!isPlain(old) || !isPlain(next)) return next;
+  const out: Option = { ...old };
+  for (const [k, v] of Object.entries(next)) out[k] = merge(old[k], v);
+  return out;
+}
+
+/** One component key's items after a setOption: `fresh` holds the items that merged into no old one. */
+function mergeItems(old: Option[], next: Option[], replace: boolean): { items: Option[]; fresh: Set<Option> } {
+  const ids = new Set<string>();
+  for (const c of next) {
+    if (c.id == null) continue;
+    if (ids.has(String(c.id))) throw new Error(`FakeChart.setOption(): id duplicates: ${String(c.id)}`);
+    ids.add(String(c.id));
+  }
+  const slots: { old?: Option; next?: Option }[] = old.map(o => ({ old: o }));
+  let rest = [...next];
+  const place = (match: (slot: { old?: Option }, c: Option) => boolean) => {
+    rest = rest.filter(c => {
+      const slot = slots.find(s => s.next === undefined && s.old !== undefined && match(s, c));
+      if (slot) slot.next = c;
+      return !slot;
+    });
+  };
+  place((s, c) => c.id != null && s.old!.id != null && String(s.old!.id) === String(c.id));
+  if (replace) {
+    // Old items no id matched are dropped; new ones take their places, in order, then go at the end.
+    for (const s of slots) if (s.next === undefined) delete s.old;
+  } else {
+    place((s, c) => c.name != null && s.old!.name === c.name && (s.old!.id == null || c.id == null));
+    let at = 0;
+    rest = rest.filter(c => {
+      if (c.id != null) return true;
+      while (at < slots.length && (slots[at]!.next !== undefined || slots[at]!.old === undefined)) at++;
+      if (at === slots.length) return true;
+      slots[at++]!.next = c;
+      return false;
+    });
+  }
+  for (const c of rest) {
+    const hole = slots.find(s => s.old === undefined && s.next === undefined);
+    if (hole) hole.next = c;
+    else slots.push({ next: c });
+  }
+  const fresh = new Set<Option>();
+  const items = slots.flatMap(s => {
+    if (s.next === undefined) return s.old ? [s.old] : [];
+    if (s.old === undefined) { fresh.add(s.next); return [s.next]; }
+    return [merge(s.old, s.next) as Option];
+  });
+  return { items, fresh };
+}
 
 class Listeners {
   private handlers = new Map<string, Handler[]>();
@@ -72,7 +137,7 @@ export class FakeChart {
     this.grid = { ...fakeECharts.grid };
   }
 
-  /** The option as the chart holds it now: the last value of each key setOption named. */
+  /** The option as the chart holds it now, merged as setOption merges: each component key is a list. */
   get option(): Option { return this.current; }
   /** The last option given, for a test that reads one drawing. */
   get last(): Option | undefined { return this.options.at(-1)?.option; }
@@ -98,9 +163,19 @@ export class FakeChart {
     this.alive("setOption");
     const opts: SetOptionOpts = typeof notMerge === "object" ? notMerge : { notMerge, lazyUpdate };
     this.options.push({ option, opts });
-    this.current = opts.notMerge ? { ...option } : { ...this.current, ...option };
+    // notMerge starts from nothing, so there is nothing left to replace.
+    const listed: string[] = opts.notMerge || opts.replaceMerge == null ? [] : [opts.replaceMerge].flat();
+    const next: Option = opts.notMerge ? {} : { ...this.current };
+    let zoomFresh = !!opts.notMerge;
+    for (const key of new Set([...Object.keys(option), ...listed.filter(k => COMPONENTS.includes(k))])) {
+      if (!COMPONENTS.includes(key)) { next[key] = merge(next[key], option[key]); continue; }
+      const { items, fresh } = mergeItems(list(next[key]), list(option[key]), listed.includes(key));
+      next[key] = items;
+      if (key === "dataZoom" && items[0] && fresh.has(items[0])) zoomFresh = true;
+    }
+    this.current = next;
+    if (zoomFresh || !list(next.dataZoom).length) this.window = null;
     const zoom = list(option.dataZoom)[0];
-    if (opts.notMerge || !list(this.current.dataZoom).length) this.window = null;
     if (typeof zoom?.startValue === "number" && typeof zoom.endValue === "number") this.window = { from: zoom.startValue, to: zoom.endValue };
   }
 
@@ -202,7 +277,7 @@ export class FakeChart {
   private xPixel(i: number) { return this.grid.left + (i - this.shown.from + .5) * this.step(); }
   private xPoint(x: number) {
     const { from, to } = this.shown;
-    return to < from ? NaN : clamp(from + Math.floor((x - this.grid.left) / this.step()), from, to);
+    return to < from ? NaN : from + Math.floor((x - this.grid.left) / this.step());
   }
   private yMax() {
     const max = list(this.current.yAxis)[0]?.max;
@@ -210,7 +285,10 @@ export class FakeChart {
   }
   private yPixel(v: number) { return this.grid.top + this.grid.height * (1 - v / this.yMax()); }
   private yValue(y: number) { return (this.grid.top + this.grid.height - y) / this.grid.height * this.yMax(); }
-  private pointAtPixel(x: number, y: number) { return this.containPixel({ gridIndex: 0 }, [x, y]) ? this.xPoint(x) : null; }
+  // The grid's right edge itself maps to the point after the last one shown; the band stays on the last.
+  private pointAtPixel(x: number, y: number) {
+    return this.containPixel({ gridIndex: 0 }, [x, y]) ? Math.min(this.xPoint(x), this.shown.to) : null;
+  }
 
   private moveWindow(p: Payload) {
     const last = Math.max(0, this.points - 1);
