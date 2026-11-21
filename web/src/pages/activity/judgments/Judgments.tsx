@@ -17,11 +17,12 @@ import { validateSearch, type InsightsSearch } from "./search";
 import { queries } from "../../../queries";
 import { useApi } from "../../../useApi";
 import { armFocus, DRILL_KEYS, drillsOf, focusList, passes, pickProps, takeFocus, toggleDrill, type DrillKind } from "./drill";
-import { byWeight, countOf, headline, measured, stored, weightOf, WEIGHTS, weightSide, weightValue, type Weight } from "./figures";
+import { byWeight, colorOf, countOf, FEW_SESSIONS, FEW_TEXT, HELP_COLORS, headline, measured, mixParts, OUTCOME_COLORS, stored, weightOf, WEIGHTS, weightSide, weightValue, type Weight } from "./figures";
+import { MixBar } from "./MixBar";
 import { OutcomeTrend } from "./OutcomeTrend";
 import "./judgments.css";
 
-// Session-type strip colors, in the payload's fixed order; unknown types share the last.
+// Session-type bar and key colors, in the payload's fixed order; unknown types share the last.
 const TYPE_COLORS = ["var(--proj-2)", "var(--proj-4)", "var(--proj-5)", "var(--proj-1)", "var(--proj-other)"];
 
 /** A category name with spaces, its raw name in the title. */
@@ -163,13 +164,16 @@ function Goals({ d }: { d: InsightsPayload }) {
   );
 }
 
+/** Session types: one stacked bar of the analysed sessions over an inline key, the bar's text alternative: each type's name,
+ *  count and share. */
 function SessionTypes({ d }: { d: InsightsPayload }) {
-  const types = d.session_types.filter(t => t.n > 0), color = (i: number) => TYPE_COLORS[Math.min(i, TYPE_COLORS.length - 1)];
+  const types = d.session_types.filter(t => t.n > 0), color = (i: number) => TYPE_COLORS[Math.min(i, TYPE_COLORS.length - 1)], n = d.coverage.facets;
+  const colors: Record<string, string> = Object.fromEntries(types.map((t, i) => [t.name, color(i)!]));
   return (
     <Drawer id="d-types" title="Session types">
       {types.length ? <>
-        <div className="strip" aria-hidden="true">{types.map((t, i) => <i key={t.name} style={{ flex: t.n, background: color(i) }} />)}</div>
-        <ul className="key">{types.map((t, i) => <li key={t.name}><i className="sw" style={{ background: color(i) }} /><Cat name={t.name} /> <b>{num(t.n)}</b></li>)}</ul>
+        <MixBar parts={mixParts(types, colors, label, n)} total={n} />
+        <ul className="key">{types.map((t, i) => <li key={t.name}><i className="sw" style={{ background: color(i) }} /><Cat name={t.name} /> <b>{num(t.n)}</b> {pct(n ? t.n / n : 0)}</li>)}</ul>
       </> : <p className="empty">No session types recorded in this view.</p>}
     </Drawer>
   );
@@ -232,31 +236,50 @@ function HowItWorks({ d }: { d: InsightsPayload }) {
   );
 }
 
+/** The few-sessions warning as a sentence, from the trend's words. */
+const FEW_SENTENCE = FEW_TEXT[0]!.toUpperCase() + FEW_TEXT.slice(1) + ".";
+
+/** Outcomes: one stacked bar of the analysed sessions, then a keyed row per outcome (share, count) that filters the list. */
 function Outcomes({ d }: { d: InsightsPayload }) {
-  const raw = useSearchOf(validateSearch), n = d.coverage.facets;
+  const raw = useSearchOf(validateSearch), n = d.coverage.facets, any = d.outcomes.some(o => o.n > 0);
   return (
     <section className="panel sect" id="outcomes" aria-labelledby="outcomesTitle">
       <h2 id="outcomesTitle">Outcomes</h2>
       <p className="hint">Whether each session met its goal, judged by a model from the transcript.<HowMeasured what="outcomes" docs="reference/glossary#judgments">Shares are of
         the {plural(n, "analysed session")}.</HowMeasured></p>
-      <Ledger empty="No outcomes in this view.">{d.outcomes.map(o => <LedgerRow key={o.name} name={outcomeLabel(o.name)} title={o.name}
-        share={n ? o.n / n : 0} value={pct(n ? o.n / n : 0)} side={num(o.n)} {...pickProps(raw, "outcome", o.name, o.n)} />)}</Ledger>
+      {any ? <>
+        <MixBar parts={mixParts(d.outcomes, OUTCOME_COLORS, outcomeLabel, n)} total={n} />
+        {n < FEW_SESSIONS && <p className="hint few">{FEW_SENTENCE}</p>}
+        <Ledger keyed empty="No outcomes in this view.">{d.outcomes.map(o => <LedgerRow key={o.name} name={outcomeLabel(o.name)} title={o.name}
+          swatch={colorOf(OUTCOME_COLORS, o.name)} share={0} value={pct(n ? o.n / n : 0)} side={num(o.n)} {...pickProps(raw, "outcome", o.name, o.n)} />)}</Ledger>
+      </> : <p className="empty">No outcomes in this view.</p>}
     </section>
   );
 }
 
 function Feelings({ d }: { d: InsightsPayload }) {
-  const raw = useSearchOf(validateSearch), n = d.coverage.facets, smax = Math.max(0, ...d.satisfaction.map(s => s.n));
+  const raw = useSearchOf(validateSearch), n = d.coverage.facets, smax = Math.max(0, ...d.satisfaction.map(s => s.n)), any = d.helpfulness.some(x => x.n > 0);
   return (
     <section className="panel sect" id="satisfaction" aria-labelledby="feelTitle">
       <h2 id="feelTitle">Satisfaction and helpfulness</h2>
-      <p className="hint">User satisfaction signals the model saw, summed over the sessions.</p>
-      <TopLedger rows={d.satisfaction} empty="No satisfaction signals in this view." noun="signals" row={s => <LedgerRow key={s.name} name={label(s.name)}
-        title={s.name} share={smax ? s.n / smax : 0} value={num(s.n)} side={sessionsSide(s)} />} />
-      <h3>Claude's helpfulness</h3>
-      <p className="hint">Sessions per rating, from essential to unhelpful.</p>
-      <Ledger empty="No ratings in this view.">{d.helpfulness.map(x => <LedgerRow key={x.name} name={label(x.name)} title={x.name}
-        share={n ? x.n / n : 0} value={num(x.n)} side={pct(n ? x.n / n : 0)} {...pickProps(raw, "help", x.name, x.n)} />)}</Ledger>
+      <div className="feel">
+        <div>
+          <h3>Satisfaction signals</h3>
+          <p className="hint">User satisfaction signals the model saw, summed over the sessions.</p>
+          <TopLedger rows={d.satisfaction} empty="No satisfaction signals in this view." noun="signals" row={s => <LedgerRow key={s.name} name={label(s.name)}
+            title={s.name} share={smax ? s.n / smax : 0} value={num(s.n)} side={sessionsSide(s)} />} />
+        </div>
+        <div>
+          <h3>Claude's helpfulness</h3>
+          <p className="hint">Sessions per rating, from essential to unhelpful.</p>
+          {any ? <>
+            <MixBar parts={mixParts(d.helpfulness, HELP_COLORS, label, n)} total={n} />
+            {n < FEW_SESSIONS && <p className="hint few">{FEW_SENTENCE}</p>}
+            <Ledger keyed empty="No ratings in this view.">{d.helpfulness.map(x => <LedgerRow key={x.name} name={label(x.name)} title={x.name}
+              swatch={colorOf(HELP_COLORS, x.name)} share={0} value={pct(n ? x.n / n : 0)} side={num(x.n)} {...pickProps(raw, "help", x.name, x.n)} />)}</Ledger>
+          </> : <p className="empty">No ratings in this view.</p>}
+        </div>
+      </div>
     </section>
   );
 }

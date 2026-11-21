@@ -12,6 +12,10 @@
 .ledger .bar { height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; }
 .ledger .bar span { display: block; height: 100%; background: var(--text-muted); border-radius: 4px; }
 .ledger .n .pdot { margin-right: 8px; }
+/* Keyed: a swatch before the name and no bar; three columns (name, value, side), as wide as the content.
+   Its own columns beat the phone override below, and a keyed row has no bar to move under the name. */
+.ledger.keyed { --ledger-cols: minmax(0, 13rem) 4.5rem 3rem; width: fit-content; max-width: 100%; }
+.ledger .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 8px; vertical-align: -1px; }
 .ledger .v { text-align: right; font-weight: 500; }
 .ledger .s { text-align: right; color: var(--text-muted); font-size: .78125rem; }
 /* Phones: the share bar moves under the name instead of squeezing between name and value. */
