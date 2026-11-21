@@ -126,18 +126,35 @@ def split(total, weights):
     return shares
 
 
+INT64 = 2 ** 63 - 1
+
+
+def amount(v):
+    """v when it is a finite number from 0 to the largest signed 64-bit integer, else None: the only figures stored or
+    summed. JSON can say 1e309 (infinity), NaN, -1 or 2**80; storing one would break the API's JSON or overflow a BIGINT,
+    which rolls back the file's ingest."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or not 0 <= v <= INT64:
+        return None
+    return v
+
+
+def whole(v):
+    """amount(v), for a figure that must be an integer (a token count, a duration in ms, a window)."""
+    return amount(v) if store.is_int(v) else None
+
+
 def counts(u):
     """A turn_completed usage (the turn's or one model's) as the shared token columns, in TOKEN_KINDS order. inputTokens
     includes the cached input and the cache writes; outputTokens includes the reasoning."""
-    n = lambda k: u.get(k) if isinstance(u.get(k), int) and not isinstance(u.get(k), bool) else 0
+    n = lambda k: whole(u.get(k)) or 0
     cr, cw = n("cachedReadTokens"), n("cacheCreationTokens")
     return [max(n("inputTokens") - cr - cw, 0), n("outputTokens"), n("reasoningTokens"), cr, cw]
 
 
 def cost_of(u):
     """The USD a usage reports (costUsdTicks: 1e10 ticks are one dollar), or None when it reports none."""
-    ticks = u.get("costUsdTicks")
-    return ticks / 1e10 if isinstance(ticks, (int, float)) and not isinstance(ticks, bool) else None
+    ticks = amount(u.get("costUsdTicks"))
+    return None if ticks is None else ticks / 1e10
 
 
 def model_costs(usage, models):
@@ -284,7 +301,7 @@ def live_items(d):
     if t == "turn_completed":
         return ([dict(k="interrupt")] if u.get("stop_reason") == "cancelled" else []) + [dict(k="turn_end")]
     if t == "auto_compact_completed":
-        return [dict(k="compaction", pre=u.get("tokens_before") if store.is_int(u.get("tokens_before")) else None)]
+        return [dict(k="compaction", pre=whole(u.get("tokens_before")))]
     if t == "tool_call" and tid:
         name, _, summary = tool_of(u)
         raw = u.get("rawInput") if isinstance(u.get("rawInput"), dict) else {}
@@ -353,7 +370,7 @@ class GrokDeriver(store.Deriver):
             cancelled = self.prompt_named(string(u.get("prompt_id"))) if u.get("stop_reason") == "cancelled" else None
             if cancelled:
                 self.interrupted.add(cancelled)
-        elif t == "auto_compact_started" and store.is_int(u.get("context_window")):
+        elif t == "auto_compact_started" and whole(u.get("context_window")):
             s["window"] = u["context_window"]
         elif t == "auto_compact_completed":
             s["compactions"] += 1
@@ -445,9 +462,8 @@ class GrokDeriver(store.Deriver):
             if not isinstance(r, dict) or not string(r.get("name")):
                 continue
             st = r.get("status") if isinstance(r.get("status"), dict) else {}
-            ms = st.get("elapsed_ms")
             self.hooks.append((self.sid, ts, "hook_execution", event, r.get("name"),
-                               ms if store.is_int(ms) else None, st.get("status") != "success"))
+                               whole(st.get("elapsed_ms")), st.get("status") != "success"))
 
     def prompt_of(self):
         """(key, prompt id) of the prompt the line being derived belongs to: the newest user_prompt_submit line before it
@@ -469,9 +485,9 @@ class GrokDeriver(store.Deriver):
 
     def run(self, u, m):
         """The run of a finished turn: it started elapsed_ms before the line's time, and states only its API time."""
-        usage, end, took = u["usage"], m.get("agentTimestampMs"), u.get("elapsed_ms")
-        api = usage.get("apiDurationMs")
-        if store.is_int(end) and store.is_int(took) and store.is_int(api):
+        usage, end, took = u["usage"], whole(m.get("agentTimestampMs")), whole(u.get("elapsed_ms"))
+        api = whole(usage.get("apiDurationMs"))
+        if end is not None and took is not None and api is not None:
             self.runs.setdefault((self.sid, end - took), [api, None, None, None])  # RUN_FIGURES order
 
     def calls(self, d, pid):

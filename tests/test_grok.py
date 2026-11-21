@@ -913,6 +913,48 @@ class MalformedTest(GrokCase):
         self.assertEqual({t: self.q(f"SELECT * FROM {t} ORDER BY ALL") for t in store.DERIVED}, before)
 
 
+class AbsurdNumberTest(GrokCase):
+    """A figure that is no finite number from 0 to the largest signed 64-bit integer is absent: ingest goes on, and
+    every payload is valid JSON."""
+
+    def test_absurd_figures(self):
+        from ai_ledger import live
+        for raw in ("1e309", "-1e309", "NaN", "Infinity", "-1", str(2 ** 80), str(10 ** 400)):
+            with self.subTest(raw=raw):
+                shutil.rmtree(self.home, ignore_errors=True)
+                for t in ("raw_lines", "files", *store.DERIVED):
+                    self.con.execute(f"DELETE FROM {t}")
+                path, = self.put("long-turn")
+                with open(path) as fh:
+                    lines = [json.loads(x) for x in fh]
+                for d in lines:
+                    u = grok.update(d)
+                    if u.get("sessionUpdate") == "turn_completed":
+                        u["elapsed_ms"] = "@"
+                        for x in (u["usage"], *u["usage"]["modelUsage"].values()):
+                            x.update(costUsdTicks="@", inputTokens="@", outputTokens="@", apiDurationMs="@")
+                    if "totalTokens" in grok.meta(d):
+                        grok.meta(d)["totalTokens"] = "@"
+                    if u.get("sessionUpdate") == "auto_compact_started":
+                        u["context_window"] = "@"
+                    for r in u.get("runs") or []:
+                        r["status"]["elapsed_ms"] = "@"
+                with open(path, "w") as fh:
+                    fh.writelines(json.dumps(d).replace('"@"', raw) + "\n" for d in lines)
+                self.ingest()
+                self.assertEqual(self.count(), len(lines))
+                self.assertEqual(self.q("SELECT count(*), count(reported_cost), max(input), max(output) FROM requests"), [(5, 0, 0, 0)])
+                self.assertEqual(self.q("SELECT count(*) FROM session_runs"), [(0,)])
+                self.assertEqual(self.q("SELECT count(duration_ms) FROM hooks"), [(0,)])
+                self.assertEqual(self.q("SELECT context_window FROM sessions"), [(None,)])
+                cur = self.con.cursor()
+                sid = SESSION["long-turn"]
+                (last,) = cur.execute("SELECT last_ts FROM sessions").fetchone()
+                for payload in (metrics.session(cur, sid, prices={}), live.session(cur, sid, now=live.aware(last), prices={}),
+                                metrics.usage(cur, prices={}, today=datetime(2026, 12, 1).date())):
+                    json.dumps(payload, default=str, allow_nan=False)
+
+
 class AllSourcesRebuildTest(GrokCase):
     """A store holding Claude Code, Codex and Grok sessions: a rebuild gives every derived table as ingest made it."""
 
