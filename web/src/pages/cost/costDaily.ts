@@ -3,7 +3,7 @@
 // case-insensitive file system that name clashes with CostChart.tsx.
 import type { UsagePayload } from "../../api";
 import { niceMax, scaleMargins } from "../../components/chart";
-import { baseOption, categoryAxis, pointLabel, valueAxis } from "../../components/echart/option";
+import { baseOption, categoryAxis, pointLabel, valueAxis, zoomSlider } from "../../components/echart/option";
 import { stackSeries } from "../../components/echart/stack";
 import type { EChartsOption } from "../../components/echart/echarts";
 import type { ChartEnv } from "../../components/echart/tokens";
@@ -31,6 +31,8 @@ export interface CostModel {
   values: number[][];
   /** Whether the 7-day average is drawn: 14 days or more, and not in Share. */
   showAvg: boolean;
+  /** Whether the chart can be zoomed, with the slider under it: 14 days or more. */
+  zoom: boolean;
   /** Per day, the trailing 7-day mean of the totals, from the seventh day on; null without an average, and for today. */
   avg: (number | null)[];
   /** Today's index: the view ends on a day still in progress. */
@@ -58,9 +60,14 @@ export function costModel(d: UsagePayload, metric: CostMetric, hidden: readonly 
   const avg = days.map((_, i) => (!showAvg || i < 6 || i === live ? null : totals.slice(i - 6, i + 1).reduce((s, t) => s + t, 0) / 7));
   const peak = days.length ? totals.reduce((b, t, i) => (t > totals[b]! ? i : b), 0) : null;
   const axis = share ? { max: 1, step: .25 } : niceMax(Math.max(...totals, 0), niceStep);
-  return { cost, share, none: !cost && !kinds.length, kinds, days, totals, values, showAvg, avg, live, peak, axis };
+  return { cost, share, none: !cost && !kinds.length, kinds, days, totals, values, showAvg, zoom: days.length >= ZOOM_DAYS, avg, live, peak, axis };
 }
 
+/** The fewest days of a view that the chart can be zoomed in. */
+const ZOOM_DAYS = 14;
+/** What the zoom slider (20px, 4px off the bottom) and a 4px gap above it take under the day labels: the box is this much
+ *  taller with the slider, so the plot keeps its height. */
+export const SLIDER_ROOM = 28;
 /** The plot's margins at the default text size: room for the day labels below and the value labels on the left. */
 const MARGIN = { t: 22, r: 8, b: 26, l: 52 };
 
@@ -84,11 +91,13 @@ export function costOption(m: CostModel, env: ChartEnv): EChartsOption {
     const text = `Peak ${fy(m.totals[pk])} · ${dayLabel(m.days[pk]!.day)}${pk === m.live ? " so far" : ""}`;
     series.push({ ...pointLabel(env, { index: pk, value: m.totals[pk]!, text }), id: "peak" });
   }
+  // The slider names no window: the wrapper keeps the days shown, and the value axis and the average stay the whole view's.
   return {
     ...baseOption(env),
-    grid: { left: g.l, right: g.r, top: g.t, bottom: g.b },
+    grid: { left: g.l, right: g.r, top: g.t, bottom: g.b + (m.zoom ? SLIDER_ROOM : 0) },
     xAxis: categoryAxis(env, m.days.map(p => p.day), day => dayLabel(day)),
     yAxis: valueAxis(env, { ...m.axis, format: ty }),
     series,
+    ...(m.zoom ? { dataZoom: [{ ...zoomSlider(env), left: g.l, right: g.r }] } : {}),
   };
 }

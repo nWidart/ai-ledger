@@ -1,12 +1,12 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Source, UsagePayload } from "../../api";
 import { useColors } from "../../colors";
 import { ChartTable, DataTable } from "../../components/DataTable";
-import { EChart } from "../../components/echart/EChart";
+import { EChart, type EChartHandle, type Shown } from "../../components/echart/EChart";
 import type { ChartEnv } from "../../components/echart/tokens";
 import { big, dayLabel, pct, plural, usd } from "../../format";
 import { isOther, KINDS, SCALES, shares, STACKS, STACK_WORD, type CostDay, type Kind, type Stack, type TokenScale } from "./cost";
-import { costModel, costOption, type CostMetric } from "./costDaily";
+import { costModel, costOption, SLIDER_ROOM, type CostMetric } from "./costDaily";
 
 export type { CostMetric } from "./costDaily";
 
@@ -54,9 +54,17 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScal
   useEffect(() => { if (refocus.current) { refocus.current = false; legend.current?.querySelector("button")?.focus(); } }, [d]);
 
   const m = useMemo(() => costModel(d, metric, hidden, stack, scale), [d, metric, hidden, stack, scale]);
-  // One function per view: a new one is a new drawing, and ends the reading, as a new view did before.
+  // One function per view: a new one is a new drawing, and ends the reading and the zoom, as a new view did before.
   const option = useCallback((env: ChartEnv) => costOption(m, env), [m]);
-  const { cost, share, none, kinds, days: pts, totals, showAvg, avg, live, peak } = m;
+  const { cost, share, none, kinds, days: pts, totals, showAvg, zoom, avg, live, peak } = m;
+  // Whether the chart shows fewer than every day, as the wrapper reports it: it only shows "Show all days", and is no input
+  // of the option, so keeping it leaves the zoom alone. A new view's drawing reports every day shown, which clears it.
+  const box = useRef<EChartHandle>(null);
+  const [zoomed, setZoomed] = useState(false);
+  const onZoom = useCallback((s: Shown | null) => setZoomed(s != null), []);
+  const readZoom = (s: Shown | null) => (s
+    ? `Showing ${dayLabel(pts[s.from]!.day)} to ${dayLabel(pts[s.to]!.day)}, ${s.to - s.from + 1} of ${pts.length} days.`
+    : `Showing all ${pts.length} days.`);
   const total = (i: number) => totals[i]!;
   // The readouts and the table read the tokens (pts) and, in Share, each kind's share of them (frac).
   const frac = (p: CostDay, k: Kind) => shares(p.v, kinds)[k.k] ?? 0;
@@ -111,7 +119,8 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScal
     </>;
   };
   const what = cost ? (d.project && stack === "project" ? "Estimated cost" : `Estimated cost by ${STACK_WORD[stack].noun}`) : share ? "Token share by kind" : "Tokens by kind";
-  const keys = "Use the left and right arrow keys to read each day and Enter to list its sessions.";
+  const keys = zoom ? "Use the left and right arrow keys to read each day, Enter to list its sessions, and plus and minus to zoom."
+    : "Use the left and right arrow keys to read each day and Enter to list its sessions.";
   const label = !pk ? `${what} per day, no days yet.` : share ? `${what} per day, ${pts.length} days. ${keys}`
     : `${what} per day, ${pts.length} days, peaking at ${fy(total(peak!))} on ${dayLabel(pk.day, true)}${soFar(peak!)}. ${keys}`;
 
@@ -121,7 +130,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScal
         <div><h2 id="chartTitle">{cost ? `Estimated cost per day${stack === "project" ? "" : ` by ${STACK_WORD[stack].noun}`}` : share ? "Token share per day" : "Tokens per day"}</h2>
           <div className="hint">{cost ? `${STACK_HINT[stack](!!d.project)} list prices.`
             : share ? "Each bar is the day's tokens split by kind. Select a kind to hide it."
-              : "Select a kind to hide it. Cache reads usually dwarf the rest; Share compares the kinds."}{showAvg ? " The 7-day average covers complete days." : ""} Select a day, or use the arrow keys and Enter, for its sessions.</div></div>
+              : "Select a kind to hide it. Cache reads usually dwarf the rest; Share compares the kinds."}{showAvg ? " The 7-day average covers complete days." : ""} Select a day, or use the arrow keys and Enter, for its sessions.{zoom ? " Plus and minus zoom." : ""}</div></div>
         <div className="chart-ctl">
           {cost && <>
             <span className="muted" id="stackBy">Stack by</span>
@@ -153,10 +162,13 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScal
             onClick={() => onHidden(hidden.includes(k.k) ? hidden.filter(x => x !== k.k) : [...hidden, k.k])}><i style={{ background: k.c }} />{k.label}</button>)}
         {showAvg && !none && <span className="key"><i className="line" />7-day average</span>}
         {pts.length > 0 && !none && <span className="key"><i className="hatch" />Today so far</span>}
+        {/* The reset leaves with the zoom: focus goes to the chart it showed every day of. */}
+        {zoom && zoomed && !none && <button type="button" className="show-all" onClick={() => { box.current?.reset(); box.current?.focus(); }}>Show all days</button>}
       </div>
       {none && <div className="empty all-hidden" role="status">All token kinds are hidden.{" "}
         <button type="button" className="linkish" onClick={() => onHidden([])}>Show every kind</button></div>}
-      <EChart label={label} hidden={none} height={H} option={option} points={pts.length} tip={tip} read={read} onActivate={pick} />
+      <EChart ref={box} label={label} hidden={none} height={H + (zoom ? SLIDER_ROOM : 0)} option={option} points={pts.length} tip={tip} read={read}
+        onActivate={pick} zoom={zoom} onZoom={onZoom} readZoom={readZoom} />
       {/* The chart's text alternative: a figure per day and series in the current stacking, in the chart's units. */}
       {!none && <ChartTable><DataTable name={`${what} per day`} region="scroll tall">
         <thead><tr><th scope="col">Day</th>{kinds.map(k => <th key={k.k} scope="col" className="num">{k.label}</th>)}<th scope="col" className="num">Total</th></tr></thead>

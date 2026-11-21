@@ -24,8 +24,9 @@ const TITLES = {
  *  depend on a replay; it has no plot.
  *  Cost's chart is ECharts' SVG, which names no element. Its bar segments are the filled paths directly under the svg's group:
  *  the grid lines there are unfilled, the hatch is filled with a url() pattern, the average lines sit in clipped groups of their
- *  own and the pattern's paths in <defs>. The bars come first in document order, before the peak label. */
-const COST_BAR = '#spend .echart-plot svg > g > path:not([fill="none"]):not([fill^="url("])';
+ *  own and the pattern's paths in <defs>. The bars come first in document order, before any nested group: the zoom slider,
+ *  drawn after the average lines' groups, has filled paths of its own there, which `:not(g ~ path)` leaves out. */
+const COST_BAR = '#spend .echart-plot svg > g > path:not([fill="none"]):not([fill^="url("]):not(g ~ path)';
 const FIRST = [
   ["Cost's daily cost chart", "/cost?range=30", "#spend .echart", COST_BAR],
   ["Errors' rate chart", "/errors?range=30", ".chart-card", ".chart-card .bars rect"],

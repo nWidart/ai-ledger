@@ -347,3 +347,135 @@ describe("tokens chart: Share", () => {
     expect(screen.getByText("7-day average")).toBeTruthy();
   });
 });
+
+describe("cost chart: zoom", () => {
+  // 30 days, Oct 6 to Nov 4, the cost rising $1 a day: Oct 11 is day 5, Oct 20 day 14.
+  const view = (from: string, to: string): UsagePayload => {
+    const days = dayRange(from, to);
+    return { ...d, start: days[0]!, end: days.at(-1)!, range: days.length,
+      daily: days.map((x, i) => ({ ...usage.daily[0]!, day: x, cost: i + 1, unpriced: 0 })),
+      daily_projects: days.map((x, i) => ({ day: x, project: "A", cost: i + 1, tokens: 1 })), by_project: [proj("A", 465)],
+      daily_models: days.map((x, i) => ({ day: x, model: "claude-opus-4", cost: i + 1 })) };
+  };
+  const month = view("2026-10-06", "2026-11-04");
+  function Host({ data = month }: { data?: UsagePayload }) {
+    const [stack, setStack] = useState<Stack>("project");
+    return <CostChart d={data} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} scale="volume" onScale={() => {}} stack={stack} onStack={setStack}
+      onProject={() => {}} onSource={() => {}} onDay={() => {}} />;
+  }
+  const group = () => screen.getByRole("group", { name: /^Estimated cost/ });
+  const sr = () => document.querySelector(".sr")!.textContent;
+  const showAll = () => screen.queryByRole("button", { name: "Show all days" });
+  const hint = () => document.querySelector("#spend .hint")!.textContent;
+  const slider = async () => ((await drawn()).last!.dataZoom as unknown[] | undefined) ?? [];
+  /** The slider dragged to days from..to. */
+  const drag = async (from: number, to: number) => (await drawn()).zoomTo(from, to);
+
+  it("draws no slider and takes no zoom key under 14 days", async () => {
+    renderApp(<Host data={view("2026-10-24", "2026-11-05")} />);
+    expect(await slider()).toEqual([]);
+    expect(group().style.height).toBe("240px");
+    expect(group().getAttribute("aria-label")).not.toContain("plus and minus");
+    expect(hint()).not.toContain("zoom");
+    act(() => group().focus());
+    expect(fireEvent.keyDown(group(), { key: "+" })).toBe(true);
+    expect(fireEvent.keyDown(group(), { key: "-" })).toBe(true);
+  });
+
+  it("draws the slider, 28px more, and names the zoom keys from 14 days", async () => {
+    renderApp(<Host data={view("2026-10-22", "2026-11-04")} />);
+    expect(await slider()).toHaveLength(1);
+    expect(group().style.height).toBe("268px");
+    expect(group().getAttribute("aria-label")).toContain("plus and minus");
+    expect(hint()).toContain("zoom");
+  });
+
+  it("says the days a drag of the slider shows, and keeps the label, the heading and the data table to every day", async () => {
+    renderApp(<Host />);
+    const label = group().getAttribute("aria-label"), heading = screen.getByRole("heading", { level: 2 }).textContent;
+    await drag(5, 14);
+    expect(sr()).toBe("Showing Oct 11 to Oct 20, 10 of 30 days.");
+    expect(group().getAttribute("aria-label")).toBe(label);
+    expect(screen.getByRole("heading", { level: 2 }).textContent).toBe(heading);
+    await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
+    expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(31);
+  });
+
+  it("keeps the value axis and the average of the whole view while zoomed", async () => {
+    renderApp(<Host />);
+    const chart = await drawn();
+    const before = chart.last!, avg = (o: typeof before) => (o.series as SeriesOption[]).find(s => s.id === "avg")!.data;
+    // The zoom starts at Oct 12, whose average is the mean of Oct 6 to Oct 12 ($1 to $7), as without the zoom.
+    chart.fire("mousemove", chart.pointAt(6));
+    const unzoomed = sr();
+    expect(unzoomed).toContain(`7-day average ${usd(4)}`);
+    chart.fire("globalout");
+    await drag(6, 15);
+    chart.fire("mousemove", chart.pointAt(6));
+    expect(sr()).toContain("Oct 12, 2026:");
+    expect(sr()).toBe(unzoomed);
+    const after = chart.last!;
+    expect((after.yAxis as { max: number }).max).toBe((before.yAxis as { max: number }).max);
+    expect(avg(after)).toEqual(avg(before));
+  });
+
+  it("shows 'Show all days' while zoomed; it shows every day, goes away and returns the focus to the chart", async () => {
+    renderApp(<Host />);
+    expect(showAll()).toBeNull();
+    await drag(5, 14);
+    await userEvent.click(showAll()!);
+    const chart = await drawn();
+    expect(chart.shown).toEqual({ from: 0, to: 29 });
+    expect(showAll()).toBeNull();
+    expect(document.activeElement).toBe(group());
+    expect(sr()).toBe("Showing all 30 days.");
+  });
+
+  it("zooms in by keyboard around the day read, and says the days shown", async () => {
+    renderApp(<Host />);
+    const chart = await drawn();
+    act(() => group().focus());
+    fireEvent.keyDown(group(), { key: "End" });
+    for (let i = 0; i < 15; i++) fireEvent.keyDown(group(), { key: "ArrowLeft" }); // Oct 20
+    expect(sr()).toContain("Oct 20, 2026:");
+    fireEvent.keyDown(group(), { key: "+", shiftKey: true });
+    const { from, to } = chart.shown;
+    expect(to - from + 1).toBe(15);
+    expect(from <= 14 && to >= 14).toBe(true);
+    expect(sr()).toMatch(/^Showing \w+ \d+ to \w+ \d+, 15 of 30 days\.$/);
+    expect(showAll()).toBeTruthy();
+  });
+
+  it("reads past the zoom: End reads the last day and the days shown move to include it", async () => {
+    renderApp(<Host />);
+    const chart = await drawn();
+    await drag(5, 14);
+    act(() => group().focus());
+    fireEvent.keyDown(group(), { key: "End" });
+    expect(sr()).toContain("Nov 4, 2026 so far:");
+    expect(chart.shown.to).toBe(29);
+  });
+
+  it("leaves Ctrl and plus to the browser", async () => {
+    renderApp(<Host />);
+    const chart = await drawn();
+    act(() => group().focus());
+    expect(fireEvent.keyDown(group(), { key: "+", ctrlKey: true })).toBe(true);
+    expect(chart.shown).toEqual({ from: 0, to: 29 });
+    expect(showAll()).toBeNull();
+  });
+
+  it("shows every day again after a stack switch or a new view", async () => {
+    const { rerender } = renderApp(<Host />);
+    const chart = await drawn();
+    await drag(5, 14);
+    await userEvent.click(screen.getByRole("button", { name: "Model" }));
+    expect(chart.shown).toEqual({ from: 0, to: 29 });
+    expect(showAll()).toBeNull();
+    await drag(5, 14);
+    expect(showAll()).toBeTruthy();
+    rerender(<Host data={view("2026-10-16", "2026-11-04")} />);
+    expect(chart.shown).toEqual({ from: 0, to: 19 });
+    expect(showAll()).toBeNull();
+  });
+});

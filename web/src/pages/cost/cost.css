@@ -98,6 +98,8 @@
 .pg-cost .legend button.proj { max-width: 16rem; }
 .pg-cost .legend button.proj span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pg-cost .legend button.proj[aria-current=true] { border-color: var(--text-secondary); font-weight: 500; }
+/* "Show all days", while the daily chart is zoomed: at the legend's end, apart from the keys. */
+.pg-cost .legend .show-all { margin-left: auto; }
 
 
 /* Tokens and cache: four ratios in one ruled strip, then every token kind */

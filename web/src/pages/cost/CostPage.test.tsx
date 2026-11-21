@@ -8,6 +8,7 @@ import sources from "../../__fixtures__/usage-sources";
 import sessions from "../../__fixtures__/sessions";
 import session from "../../__fixtures__/session";
 import { openDrawer } from "../../components/Drawer";
+import { drawn } from "../../components/echart/testing";
 import { mockApi } from "../../components/sheets/testing";
 import { dayStamp, download } from "../../components/export";
 import { renderApp, renderPage } from "../../testing";
@@ -654,5 +655,21 @@ describe("CostPage", () => {
       cost: 10, cost_input: 6, cost_output: 4, cost_cache_read: 0, cost_cache_5m: 0, cost_cache_1h: 0 };
     await show({ ...usage, totals: { ...usage.totals, ...tie } }, ["d-tokens"]);
     expect(within(drawer("d-tokens")).getByText("Input is 70.0% of tokens and 60.0% of estimated cost.")).toBeTruthy();
+  });
+});
+
+describe("daily chart zoom", () => {
+  it("leaves the view alone: the heading, the project table and the URL keep 30 days, nothing is fetched, the data table lists them all", async () => {
+    await show(usage, []);
+    const chart = await drawn();
+    const heading = screen.getByRole("heading", { level: 1 }).textContent, projects = table().textContent, requests = fetched().length;
+    chart.zoomTo(5, 14);
+    expect(await screen.findByRole("button", { name: "Show all days" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(heading);
+    expect(table().textContent).toBe(projects);
+    expect(location.search).toBe("?range=30");
+    expect(fetched()).toHaveLength(requests);
+    await userEvent.click(within(document.getElementById("spend")!).getByRole("button", { name: "Show data table" }));
+    expect(within(screen.getByRole("table", { name: /per day$/ })).getAllByRole("row")).toHaveLength(31);
   });
 });

@@ -142,8 +142,38 @@ describe("costOption: today so far", () => {
   });
 
   it("scales the plot's margins with the text", () => {
-    expect(option(model(long)).grid).toEqual({ left: 52, right: 8, top: 22, bottom: 26 });
-    expect(option(model(long), env({ textScale: 1.5 })).grid).toEqual({ left: 78, right: 12, top: 33, bottom: 39 });
+    // A 20-day view has the slider under the day labels: its 28px do not scale.
+    expect(option(model(long)).grid).toEqual({ left: 52, right: 8, top: 22, bottom: 26 + 28 });
+    expect(option(model(long), env({ textScale: 1.5 })).grid).toEqual({ left: 78, right: 12, top: 33, bottom: 39 + 28 });
+  });
+});
+
+describe("costOption: zoom", () => {
+  const short = { ...long, start: days[7]!, daily: long.daily.slice(7), daily_projects: long.daily_projects.slice(7) };
+
+  it("draws the slider under the day labels, aligned with the grid, from 14 days", () => {
+    const m = model(long);
+    expect(m.zoom).toBe(true);
+    const o = option(m);
+    expect(o.dataZoom).toEqual([expect.objectContaining({ id: "zoom", type: "slider", left: 52, right: 8 })]);
+    expect(o.grid).toMatchObject({ bottom: 26 + 28 });
+    expect(option(m, env({ textScale: 1.5 })).dataZoom).toEqual([expect.objectContaining({ left: 78, right: 12 })]);
+  });
+
+  it("draws no slider under 14 days", () => {
+    const m = model(short);
+    expect(m.days).toHaveLength(13);
+    expect(m.zoom).toBe(false);
+    expect(option(m).dataZoom).toBeUndefined();
+    expect(option(m).grid).toMatchObject({ bottom: 26 });
+  });
+
+  it("keeps the whole view's value axis and average with the slider: the option names no window", () => {
+    const m = model(long);
+    const y = option(m).yAxis as { max: number };
+    expect(y.max).toBe(niceMax(40, niceStep).max);
+    expect((byId(m, "avg") as LineSeriesOption).data).toEqual(m.avg);
+    for (const z of option(m).dataZoom as Record<string, unknown>[]) for (const k of ["start", "end", "startValue", "endValue"]) expect(z[k]).toBeUndefined();
   });
 });
 
