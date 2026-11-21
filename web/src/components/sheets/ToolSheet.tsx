@@ -1,11 +1,12 @@
-import { useRef, type ReactNode, type RefObject } from "react";
+import { useMemo, useRef, type ReactNode, type RefObject } from "react";
 import type { RateRow, ToolKind, ToolPayload } from "../../api";
 import { dayLabel, dayRange, ms, num, pct, plural, when } from "../../format";
-import { DataTable } from "../DataTable";
 import { agentName } from "../Filters";
 import { ProjectName } from "../ProjectDot";
+import { RATE_COLUMNS, SessionCell } from "../table/cells";
+import { Table, type Column, type RowPick } from "../table/Table";
 import { Facts, useBackTo, type BackTo } from "./ProjectSheet";
-import { appLink, errorsHref, openToolSheet, pickRow, sessName, shortId, utc } from "./session";
+import { appLink, errorsHref, openToolSheet, sessName, shortId, utc } from "./session";
 
 export const TOOL_KINDS: Record<ToolKind, string> = { tool: "Tool", mcp: "MCP server", skill: "Skill" };
 
@@ -46,7 +47,32 @@ function Days({ d }: { d: ToolPayload }) {
 
 const Stat = ({ v, l }: { v: ReactNode; l: ReactNode }) => <span><b>{v}</b> {l}</span>;
 const rate = (r: RateRow) => `${plural(r.calls, "call")}, ${pct(r.failure_rate, 1)} failed`;
-const None = ({ cols }: { cols: number }) => <tr><td colSpan={cols} className="empty">None in this view.</td></tr>;
+const NONE = "None in this view.";
+const NAME = () => ({ className: "name" });
+
+type ToolCalls = Pick<RateRow, "calls" | "failure_rate"> & { tool: string; p50_ms: number | null };
+/** A tool's calls, failures and p50 latency; the row opens the tool's sheet. The session sheet shares them. */
+export const TOOL_COLUMNS: readonly Column<ToolCalls>[] = [
+  { id: "tool", header: "Tool", cellProps: NAME, cell: r => <button type="button" className="cellbtn">{r.tool}</button> },
+  ...RATE_COLUMNS,
+  { id: "p50", header: "p50", align: "num", cell: r => ms(r.p50_ms) },
+];
+export const TOOL_PICK: RowPick<ToolCalls> = { value: r => r.tool, open: v => openToolSheet("tool", v), subject: r => ({ kind: "tool", value: r.tool }) };
+const PROJECT_COLUMNS: readonly Column<ToolPayload["projects"][number]>[] = [
+  { id: "project", header: "Project", cellProps: NAME, cell: r => <ProjectName project={r.project} /> }, ...RATE_COLUMNS];
+const PATTERN_COLUMNS: readonly Column<NonNullable<ToolPayload["patterns"]>[number]>[] = [
+  { id: "pattern", header: "Pattern", cellProps: NAME, cell: r => <code>{r.pattern}</code> }, ...RATE_COLUMNS];
+
+type Call = ToolPayload["recent"][number];
+const errHref = (d: ToolPayload, ex?: string, cat?: string | null) => errorsHref(d.project, d.range, ex, { source: d.source, cat });
+const recentColumns = (kind: ToolKind, d: ToolPayload): Column<Call>[] => [
+  { id: "session", header: "Session", cellProps: () => ({ className: "when sess" }),
+    cell: c => <SessionCell s={c} sub={<>{when(c.ts)}{c.title ? ` · ${shortId(c.session_id)}` : ""}</>} /> },
+  { id: "project", header: "Project", cellProps: NAME, cell: c => <ProjectName project={c.project} /> },
+  { id: "input", header: "Input", cellProps: NAME, cell: c => <><code>{c.input}</code>{kind !== "tool" && <div className="muted small">{c.tool}</div>}</> },
+  { id: "result", header: <span className="sr">Result</span>, cellProps: () => ({ className: "when" }),
+    cell: c => c.is_error ? <a href={errHref(d, c.id)} onClick={appLink}>In Errors</a> : <span className="muted small">{ms(c.duration_ms)}</span> },
+];
 
 export interface ToolSheetProps {
   kind: ToolKind;
@@ -62,9 +88,12 @@ export interface ToolSheetProps {
 export function ToolSheet({ kind, name, d, error, retry, onSession, backTo }: ToolSheetProps) {
   const body = useRef<HTMLDivElement>(null);
   useBackTo(d, backTo, body);
+  const recent = useMemo(() => d && recentColumns(kind, d), [kind, d]);
+  const recentPick = useMemo<RowPick<Call>>(() => ({ value: c => c.id, open: (_, el, c) => onSession(c.session_id, el),
+    subject: c => ({ kind: "session", value: c.session_id }) }), [onSession]);
   if (error) return <div className="empty" role="alert">Could not load this {TOOL_KINDS[kind].toLowerCase()} ({error.message}). <button type="button" className="linkish" onClick={retry}>Retry</button></div>;
   if (!d) return <div className="empty" role="status">Loading…</div>;
-  const t = d.totals, p = d.previous, err = (ex?: string, cat?: string | null) => errorsHref(d.project, d.range, ex, { source: d.source, cat });
+  const t = d.totals, p = d.previous, err = (ex?: string, cat?: string | null) => errHref(d, ex, cat);
   const hint = <div className="hint">{d.start ? `Last ${d.range} days` : "All time"}, from the range filter{d.project ? `, project ${d.project}` : ""}
     {d.source ? `, ${agentName(d.source)} only` : ""}.{p ? ` Compared with the ${d.range} days before.` : ""}
     {kind === "skill" ? " Counts the calls that invoked the skill, not the calls made while it ran." : ""}</div>;
@@ -84,17 +113,9 @@ export function ToolSheet({ kind, name, d, error, retry, onSession, backTo }: To
       {d.sources.map(s => <span key={s.source}>{agentName(s.source)}: {rate(s)}</span>)}
       {d.threads.map(s => <span key={String(s.subagent)}>{s.subagent ? "Subagents" : "Main thread"}: {rate(s)}</span>)}
     </div>
-    <DataTable name="Projects"><thead><tr><th scope="col">Project</th><th scope="col" className="num">Calls</th><th scope="col" className="num">Failed</th></tr></thead>
-      <tbody>{d.projects.map(r => <tr key={r.project ?? ""}><th scope="row" className="name"><ProjectName project={r.project} /></th><RateCells r={r} n={r.calls} /></tr>)}</tbody></DataTable></div></div>
-    {d.tools && <><h3>Tools</h3><DataTable name="Tools">
-      <thead><tr><th scope="col">Tool</th><th scope="col" className="num">Calls</th><th scope="col" className="num">Failed</th><th scope="col" className="num">p50</th></tr></thead>
-      <tbody>{d.tools.length ? d.tools.map(r => <tr key={r.tool} {...pickRow(r.tool, v => openToolSheet("tool", v), { kind: "tool", value: r.tool })}>
-        <th scope="row" className="name"><button type="button" className="cellbtn">{r.tool}</button></th><RateCells r={r} n={r.calls} /><td className="num">{ms(r.p50_ms)}</td></tr>)
-        : <None cols={4} />}</tbody></DataTable></>}
-    {d.patterns && <><h3>Inputs</h3><DataTable name="Inputs">
-      <thead><tr><th scope="col">Pattern</th><th scope="col" className="num">Calls</th><th scope="col" className="num">Failed</th></tr></thead>
-      <tbody>{d.patterns.length ? d.patterns.map(r => <tr key={r.pattern}><th scope="row" className="name"><code>{r.pattern}</code></th><RateCells r={r} n={r.calls} /></tr>)
-        : <None cols={3} />}</tbody></DataTable></>}
+    <Table name="Projects" rows={d.projects} columns={PROJECT_COLUMNS} rowId={r => r.project ?? ""} /></div></div>
+    {d.tools && <><h3>Tools</h3><Table name="Tools" rows={d.tools} columns={TOOL_COLUMNS} rowId={r => r.tool} pick={TOOL_PICK} empty={NONE} /></>}
+    {d.patterns && <><h3>Inputs</h3><Table name="Inputs" rows={d.patterns} columns={PATTERN_COLUMNS} rowId={r => r.pattern} empty={NONE} /></>}
     {d.shell && <><h3>Tests and commits</h3><div className="statline">
       <Stat v={num(d.shell.test_runs)} l={d.shell.test_runs === 1 ? "test run" : "test runs"} />
       <Stat v={pct(d.shell.pass_rate)} l="passed" />
@@ -115,12 +136,6 @@ export function ToolSheet({ kind, name, d, error, retry, onSession, backTo }: To
         <button type="button" className="linkish" title={l.title || l.session_id} onClick={e => onSession(l.session_id, e.currentTarget)}>{sessName(l)}</button>, {when(utc(l.start_ts))}.{" "}
         <a href={err(l.first_id)} onClick={appLink}>Open in Errors</a></div>))}</>}</div>}</div>}
     <h3>Recent calls</h3>
-    <DataTable name="Recent calls" className="recent"><thead><tr><th scope="col">Session</th><th scope="col">Project</th><th scope="col">Input</th><th scope="col"><span className="sr">Result</span></th></tr></thead>
-      <tbody>{d.recent.map(c => <tr key={c.id} {...pickRow(c.id, (_, el) => onSession(c.session_id, el), { kind: "session", value: c.session_id })}>
-        <th scope="row" className="when sess"><button type="button" className="cellbtn" title={c.title || c.session_id}>{sessName(c)}</button>
-          <div className="muted small">{when(c.ts)}{c.title ? ` · ${shortId(c.session_id)}` : ""}</div></th>
-        <td className="name"><ProjectName project={c.project} /></td>
-        <td className="name"><code>{c.input}</code>{kind !== "tool" && <div className="muted small">{c.tool}</div>}</td>
-        <td className="when">{c.is_error ? <a href={err(c.id)} onClick={appLink}>In Errors</a> : <span className="muted small">{ms(c.duration_ms)}</span>}</td></tr>)}</tbody></DataTable>
+    <Table name="Recent calls" className="recent" rows={d.recent} columns={recent!} rowId={c => c.id} pick={recentPick} />
   </div>;
 }

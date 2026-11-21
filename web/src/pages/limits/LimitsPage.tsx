@@ -8,6 +8,7 @@ import { modified } from "../../components/keys";
 import { subjectAttrs } from "../../components/menu/subject";
 import { DocsLink } from "../../components/DocsLink";
 import { PageSkeleton } from "../../components/PageSkeleton";
+import { Table, type Column } from "../../components/table/Table";
 import { Toggletip } from "../../components/Toggletip";
 import { useLanding } from "../../components/useLanding";
 import { big, num, plural, usd } from "../../format";
@@ -79,17 +80,25 @@ function Used({ w, now }: { w: LimitWindow; now: string }) {
   );
 }
 
+type ChartRow = ReturnType<typeof chartRows>[number];
+type ModelRow = LimitsPayload["value"]["limits"][number]["models"][number];
+const MODEL_COLUMNS: Column<ModelRow>[] = [
+  { id: "model", header: "Model", cell: m => <>{m.model}{!m.priced && <span className="chip">unpriced</span>}</> },
+  { id: "points", header: "Points used", align: "num", cell: m => num(m.points, 1) },
+  { id: "tokens", header: "Tokens a point", align: "num", cell: m => big(m.tokens_per_point) },
+];
+
 /** The chart as a table: sampled times from start to reset and now, each with its percent and the safe pace after now. A closed
  *  window (now null) has no now and no safe pace, so its table has no such column. */
 function ChartData({ w, now }: { w: LimitWindow; now: string | null }) {
   const rows = chartRows(w, now);
+  const columns = useMemo((): Column<ChartRow>[] => [
+    { id: "time", header: "Time", cell: r => <>{whenDay(r.p.t)}{r.now && " (now)"}</> },
+    { id: "used", header: "Used", cell: r => pointText(r.p) },
+    ...(now != null ? [{ id: "safe", header: "Safe pace", align: "num" as const, cell: (r: ChartRow) => r.safe == null ? "–" : `${num(r.safe, 1)}%` }] : []),
+  ], [now]);
   if (!rows.length) return null;
-  return <DataTable name={`${windowName(w)}, chart data`}>
-    <thead><tr><th scope="col">Time</th><th scope="col">Used</th>{now != null && <th scope="col" className="num">Safe pace</th>}</tr></thead>
-    <tbody>{rows.map(({ p, now: isNow, safe }) => <tr key={p.t}>
-      <th scope="row">{whenDay(p.t)}{isNow && " (now)"}</th><td>{pointText(p)}</td>{now != null && <td className="num">{safe == null ? "–" : `${num(safe, 1)}%`}</td>}
-    </tr>)}</tbody>
-  </DataTable>;
+  return <Table name={`${windowName(w)}, chart data`} rows={rows} columns={columns} rowId={r => r.p.t} />;
 }
 
 /** The card's Details: every figure that is not in its header or footer, behind one button. */
@@ -266,11 +275,7 @@ function Value({ d, range }: { d: LimitsPayload; range: number }) {
         at API list prices; a model without a price has no points.</HowMeasured></div>
       {v.limits.length ? v.limits.map(l => <div key={`${l.provider}-${l.label}`} className="val">
         <h3>{windowName(l)}: {usd(l.cost_per_point)} a point{l.plan && <span className="muted"> · {planName(l.plan)}{l.past_plan && ", an earlier plan"}</span>}</h3>
-        <DataTable name={`Points by model, ${windowName(l)}`}>
-          <thead><tr><th scope="col">Model</th><th scope="col" className="num">Points used</th><th scope="col" className="num">Tokens a point</th></tr></thead>
-          <tbody>{l.models.map(m => <tr key={m.model}><th scope="row">{m.model}{!m.priced && <span className="chip">unpriced</span>}</th>
-            <td className="num">{num(m.points, 1)}</td><td className="num">{big(m.tokens_per_point)}</td></tr>)}</tbody>
-        </DataTable>
+        <Table name={`Points by model, ${windowName(l)}`} rows={l.models} columns={MODEL_COLUMNS} rowId={m => m.model} />
       </div>) : <p className="empty">No calibrated limit yet.</p>}
       {v.projects.length > 0 && <div className="val">
         <h3>Commits a point, by project</h3>
