@@ -200,7 +200,8 @@ describe("forced colors", () => {
     expect(css.match(/\.pg-judgments \.key \.sw/g)).toHaveLength(1);
     expect(css).toMatch(/\.pdot,[^{]*\.pg-judgments \.key \.sw \{ forced-color-adjust: none; outline: 1px solid CanvasText; \}/);
     expect(css).toContain(".pg-judgments .mixbar i:not(.rest) { outline-offset: -1px; }");
-    expect(css).toContain(".bar-seg");
+    // The hand-written stacked layers keep their colors inside a text-colored edge; the ECharts bars edge themselves (stack.ts).
+    expect(css).toMatch(/\.pg-errors #chart \.layer \{ forced-color-adjust: none; stroke: CanvasText;/);
     expect(css).not.toMatch(/outline: *(none|0)/);
   });
 });
