@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The Activity page: shows the work Claude Code did in each project (commits, prompts, sessions) and where it struggled (error loops, context pressure, flaky tools, failed tests, interruptions), so problems in projects and habits stand out. Cost is covered by the cost dashboard.
+The Activity page: shows the work Claude Code, Codex and Grok did in each project (commits, prompts, sessions) and where they struggled (error loops, context pressure, flaky tools, failed tests, interruptions), so problems in projects and habits stand out. Cost is covered by the cost dashboard.
 
 ## Requirements
 
@@ -312,7 +312,7 @@ When a session has a `/insights` facet, its sheet SHALL show, after the summary 
 - **THEN** the sheet shows a model-judged "/insights judgment" block above the timeline with the outcome badge "Partially achieved", the dissatisfied marker and the friction category
 
 ### Requirement: Leave out the judgment of an unanalysed session
-A session with no `/insights` facet SHALL show no judgment block and no link to the Judgments view in its sheet. Only Claude Code sessions are analysed, so a Codex session SHALL never show one.
+A session with no `/insights` facet SHALL show no judgment block and no link to the Judgments view in its sheet. Only Claude Code sessions are analysed, so a Codex or Grok session SHALL never show one.
 
 #### Scenario: Session without a facet
 - **WHEN** the user opens a session that has no facet
@@ -322,8 +322,12 @@ A session with no `/insights` facet SHALL show no judgment block and no link to 
 - **WHEN** the user opens a Codex session
 - **THEN** the sheet shows no `/insights` block
 
+#### Scenario: Grok session
+- **WHEN** the user opens a Grok session
+- **THEN** the sheet shows no `/insights` block
+
 ### Requirement: Link a session's judgment to the Judgments view
-The judgment block SHALL link to Activity's Judgments view, keeping the view's project, range, source and automated filters. A source of Codex alone SHALL be dropped from the link: the session is a Claude Code one, and Activity opens Overview for the judgments of Codex.
+The judgment block SHALL link to Activity's Judgments view, keeping the view's project, range, source and automated filters. A source other than Claude Code, picked alone, SHALL be dropped from the link: the session is a Claude Code one, and Activity opens Overview for the judgments of any other source.
 
 #### Scenario: Open in Insights
 - **WHEN** the user views project `foo` for the last 30 days and selects the link, now "Open in Judgments", in a judged session's sheet
@@ -332,6 +336,10 @@ The judgment block SHALL link to Activity's Judgments view, keeping the view's p
 #### Scenario: Over a Codex-only view
 - **WHEN** the source filter is Codex alone and the user opens a judged Claude Code session's sheet on `foo` over 30 days
 - **THEN** its link opens `/usage?project=foo&range=30&view=judgments`, the Judgments view, where the session is listed
+
+#### Scenario: Over a Grok-only view
+- **WHEN** the source filter is Grok alone and the user opens a judged Claude Code session's sheet on `foo` over 30 days
+- **THEN** its link opens `/usage?project=foo&range=30&view=judgments`, with no source in the link
 
 ### Requirement: Offer the work chart as a table
 Under the work chart, a "Show data table" button SHALL expose `aria-expanded` and, when expanded, show a named table with one row per day or week: the chosen measure by project with Other, its total, and errors per 100 tool calls. The table SHALL follow the chosen measure, SHALL be closed on every page load and SHALL NOT be rendered while closed.
@@ -381,6 +389,10 @@ The session sheet SHALL show the session's model time, tool time, output speed, 
 - **WHEN** the session is a Codex session
 - **THEN** its sheet shows no model time, tool time, output speed or lines changed
 
+#### Scenario: Grok session
+- **WHEN** a Grok session's turns record 10 minutes of model time and it wrote 60,000 output tokens
+- **THEN** its sheet shows 10 minutes of model time and 100 tokens per second, and no tool time or lines changed
+
 ### Requirement: Order the Activity page
 Activity SHALL show its view switch first. Its Overview SHALL then show, in this order: the lede, the prompts interrupted line, the attention summary, the work chart, the vitals, then the workbench tabs. Its filters are in the scope bar above the page. Overview SHALL have no section index.
 
@@ -419,22 +431,30 @@ A switch of view SHALL keep the shared filters (project, range, source and the a
 - **THEN** the URL is `/usage?range=7`, and focus is on the Overview button
 
 ### Requirement: Offer no Judgments for Codex alone
-When the source filter is Codex only, the Judgments button SHALL be unavailable: marked `aria-disabled`, still focusable, doing nothing when activated, and described by a reason shown beside the switch, "Codex writes no facets: /insights judges Claude Code sessions only." Activity SHALL show Overview.
+When the source filter is a source other than Claude Code, picked alone, the Judgments button SHALL be unavailable: marked `aria-disabled`, still focusable, doing nothing when activated, and described by a reason shown beside the switch that names the agent picked, such as "Codex writes no facets: /insights judges Claude Code sessions only." Activity SHALL show Overview.
 
 #### Scenario: Codex picked
 - **WHEN** the user picks Codex on Activity
 - **THEN** the Judgments button is unavailable, the reason shows beside the switch, and selecting the button changes nothing
+
+#### Scenario: Grok picked
+- **WHEN** the user picks Grok on Activity
+- **THEN** the Judgments button is unavailable, and the reason beside the switch reads "Grok writes no facets: /insights judges Claude Code sessions only."
 
 #### Scenario: Back to All
 - **WHEN** the user then picks All
 - **THEN** the Judgments button is available again and the reason is gone
 
 ### Requirement: Open Overview for a link to the judgments of Codex
-A URL that names both `source=codex` and `view=judgments` SHALL open Overview and drop the view and the judgment filters from the URL, with no history entry. Activity SHALL never show a page that only says there is nothing to show.
+A URL that names both `view=judgments` and a source other than Claude Code, such as `source=codex` or `source=grok`, SHALL open Overview and drop the view and the judgment filters from the URL, with no history entry. Activity SHALL never show a page that only says there is nothing to show.
 
 #### Scenario: A link to the judgments of Codex
 - **WHEN** the user opens `/usage?range=30&source=codex&view=judgments`
 - **THEN** Overview shows for Codex, the URL becomes `/usage?range=30&source=codex`, and the judgments are not requested
+
+#### Scenario: A link to the judgments of Grok
+- **WHEN** the user opens `/usage?range=30&source=grok&view=judgments`
+- **THEN** Overview shows for Grok, the URL becomes `/usage?range=30&source=grok`, and the judgments are not requested
 
 ### Requirement: Draw work and errors on two tracks
 The work chart SHALL draw its bars on a top track and errors per 100 tool calls on a thin track under it, sharing one x-axis. The rate track SHALL have its own scale on the left and no right-hand axis. One hover, tooltip and keyboard reading SHALL cover both tracks, and a view with no tool calls SHALL show no rate track or legend entry.

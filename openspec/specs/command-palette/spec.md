@@ -30,11 +30,15 @@ Every dashboard page SHALL open the palette on Cmd+K on macOS and Ctrl+K on othe
 - **THEN** the palette opens above the sheet
 
 ### Requirement: Narrow with `#` filters
-A `#` term SHALL select a filter: a project, a source (`#claude` for Claude Code, `#codex` for Codex), a time range (`#7d`, `#14d`, `#30d`, `#90d`, `#all`) or `#automated` to include automated sessions. Several `#` filters SHALL combine, and each SHALL write the same URL state as the page's own filter controls.
+A `#` term SHALL select a filter: a project, a source (`#claude` for Claude Code, `#codex` for Codex, `#grok` for Grok), a time range (`#7d`, `#14d`, `#30d`, `#90d`, `#all`) or `#automated` to include automated sessions. Several `#` filters SHALL combine, and each SHALL write the same URL state as the page's own filter controls.
 
 #### Scenario: Three filters on a page
 - **WHEN** the user commits `#myproject #codex #7d >cost`
 - **THEN** Cost opens filtered to project `myproject`, Codex and the last 7 days
+
+#### Scenario: Grok source
+- **WHEN** the user commits `#grok >activity`
+- **THEN** Activity opens with the source filter on Grok, and the URL records `source=grok`
 
 #### Scenario: All time and automated sessions
 - **WHEN** the user commits `#all #automated` on Activity
@@ -358,7 +362,7 @@ While a project filter is set, the palette button SHALL show the project's color
 - **THEN** the palette button shows "Search"
 
 ### Requirement: Go to the Judgments view with `>`
-`>judgments` SHALL open Activity's Judgments view, and `>insights`, its name when it was a page, SHALL find the same row. The row SHALL follow Activity in the list and say it is an Activity view. A move between Overview and Judgments SHALL carry the shared filters and leave the other view's own keys behind, as the view switch does. `>activity` from the Judgments view SHALL open Overview. When the filters name Codex only, the footer SHALL say that Overview opens.
+`>judgments` SHALL open Activity's Judgments view, and `>insights`, its name when it was a page, SHALL find the same row. The row SHALL follow Activity in the list and say it is an Activity view. A move between Overview and Judgments SHALL carry the shared filters and leave the other view's own keys behind, as the view switch does. `>activity` from the Judgments view SHALL open Overview. When the filters name one source other than Claude Code, the footer SHALL say that Overview opens.
 
 #### Scenario: Open Judgments
 - **WHEN** the user views project `myproject` for the last 7 days on Cost and commits `>judgments`
@@ -375,6 +379,10 @@ While a project filter is set, the palette button SHALL show the project's color
 #### Scenario: Codex only
 - **WHEN** the chips are `#codex` and `>judgments`
 - **THEN** the footer says Codex has no judgments and that Overview opens
+
+#### Scenario: Grok only
+- **WHEN** the chips are `#grok` and `>judgments`
+- **THEN** the footer says Grok has no judgments and that Overview opens
 
 ### Requirement: Open the docs with `>`
 A `>` term SHALL also name a docs command. "Docs: this page" SHALL open the documentation page for the current page, as the navigation's Docs link does. Each page of the documentation SHALL have a command named "Docs: " and its title, which opens that page. A docs command SHALL match "docs", "documentation", "help" and its page's title, and SHALL open its page in a new tab with no referrer.

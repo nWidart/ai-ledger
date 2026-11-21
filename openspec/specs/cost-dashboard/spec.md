@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Shows what Claude Code usage cost at API list prices, where that cost went, and why it changed against the previous period, so expensive projects, sessions and habits stand out.
+Shows what Claude Code, Codex and Grok usage cost, at API list prices or as the agent reported it, where that cost went, and why it changed against the previous period, so expensive projects, sessions and habits stand out.
 
 ## Requirements
 
@@ -58,15 +58,19 @@ The dashboard SHALL show input, output, thinking, cache read, 5-minute cache wri
 - **THEN** each project's row holds one token total, and no split by kind
 
 ### Requirement: Show estimated cost
-The dashboard SHALL show an estimated cost per project, model and day, computed from per-model prices for each token kind, and SHALL label the value as an API-price estimate. When a model has no price, the dashboard SHALL name the user prices file by its full path as the place to add one.
+The dashboard SHALL show an estimated cost per project, model and day, computed from per-model prices for each token kind, and SHALL label the value as an API-price estimate. A request that carries a cost its source reported SHALL cost that amount, not the estimate. When a model has no price, the dashboard SHALL name the user prices file by its full path as the place to add one.
 
 #### Scenario: Model without a price
-- **WHEN** a request used a model missing from the price table
+- **WHEN** a request used a model missing from the price table and has no reported cost
 - **THEN** its tokens are still counted, its cost shows as unknown, and the dashboard names the unpriced model and the path of the user prices file
 
 #### Scenario: Price added by the user
 - **WHEN** the user adds the model to the user prices file and reloads the page
 - **THEN** the model's requests are priced, with no rebuild
+
+#### Scenario: Reported cost
+- **WHEN** a Grok turn's requests carry reported costs that add up to $0.134844 and their model has no price
+- **THEN** the turn adds $0.134844 to the cost, and its model is not listed as unpriced
 
 ### Requirement: Price fast-mode requests
 A price entry MAY carry fast-mode rates: a request in fast mode on such a model SHALL cost those rates at any prompt size, replacing the long-prompt tier, because fast pricing applies across the full context window. A fast-mode request on a model without fast rates SHALL cost its standard price.

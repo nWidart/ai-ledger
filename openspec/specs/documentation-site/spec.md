@@ -156,11 +156,15 @@ Every screenshot on the site SHALL come from the synthetic demo store in `tools/
 - **THEN** it links to the site for the full documentation
 
 ### Requirement: Lead the Home page to an install
-The Home page SHALL name Claude Code and Codex in its heading, SHALL offer a hero install action that leads to the `uvx ai-ledger` command with its prerequisites, and SHALL repeat that command at the end of the page.
+The Home page SHALL name Claude Code, Codex and Grok in its heading, SHALL offer a hero install action that leads to the `uvx ai-ledger` command with its prerequisites, and SHALL repeat that command at the end of the page.
 
 #### Scenario: Install from the hero
 - **WHEN** a visitor opens `https://nwidart.github.io/ai-ledger/` and selects the hero's install action
 - **THEN** the page shows the `uvx ai-ledger` command with a copy button, the need for uv, and macOS and Linux as supported systems
+
+#### Scenario: Heading names the agents
+- **WHEN** a visitor opens the Home page
+- **THEN** its heading names Claude Code, Codex and Grok
 
 ### Requirement: Answer the privacy objection on the Home page
 The Home page SHALL say in plain terms where transcripts are stored, what the app sends over the network, and that it is free and open source. It SHALL make only claims the app's code and docs support, and SHALL show no invented testimonial or count.
