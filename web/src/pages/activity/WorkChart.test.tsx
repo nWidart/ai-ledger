@@ -518,8 +518,8 @@ describe("zoom", () => {
     renderApp(<Host d={view("2026-06-01", "2026-10-12", true)} />); // 20 Mondays
     const fake = await drawn();
     expect(await slider()).toHaveLength(1);
-    fake.zoomTo(14, 19);
-    expect(sr()).toBe("Showing the weeks of Sep 7 to Oct 12, 6 of 20 weeks.");
+    fake.zoomTo(13, 19);
+    expect(sr()).toBe("Showing the weeks of Aug 31 to Oct 12, 7 of 20 weeks.");
     await userEvent.click(showAll("Show all weeks")!);
     expect(sr()).toBe("Showing all 20 weeks.");
   });

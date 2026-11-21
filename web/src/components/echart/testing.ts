@@ -17,6 +17,10 @@
 //   into, not new or gone, unless the option's dataZoom names `startValue` and `endValue`.
 // - dispatchAction: "dataZoom" moves the window and then fires "datazoom" with the payload, unless silent, as ECharts
 //   does; "updateAxisPointer" moves `band` to the point under x, and `currTrigger: "leave"` hides it.
+// - the first slider's `minValueSpan`: a window narrower than it, from an action or from a setOption's `startValue` and
+//   `endValue`, is widened to it. The start is kept, unless the end would then pass the last point: then the window ends
+//   on the last point. On an axis of `minValueSpan` points or fewer, the window is every point. (ECharts 6.1: 10–12
+//   gives 10–16 and 27–29 gives 23–29 on 30 points with a span of 6; 1–3 gives 0–5 on 6 points.)
 // - convertToPixel, convertFromPixel and containPixel over the grid, for a `gridIndex`, `xAxisIndex`, `yAxisIndex` or
 //   `seriesIndex` finder of 0. As in ECharts, convertFromPixel does not clamp: an x left of the grid gives a point
 //   before the first one shown, such as -1, and an x right of it a point after the last; containPixel tells them apart.
@@ -31,8 +35,10 @@
 // A chart of several tracks (design decision 1 of echart-activity) draws a frame grid over one grid per track, each with
 // its own x axis. The fake keeps one grid, which is the frame: the first x axis's points and the first y axis's `max` are
 // all it reads, and a finder index other than 0 still throws. The tracks' grids and axes merge like any other item.
-// It is stricter than ECharts in five ways, since each is a bug here, in the wrapper or in a chart:
+// It is stricter than ECharts in six ways, since each is a bug here, in the wrapper or in a chart:
 // - a call on a disposed chart, or a second live chart on one element, throws where ECharts would log a warning;
+// - zoomTo(), a drag, throws on a window narrower than the slider's `minValueSpan` (or than every point, on a shorter
+//   axis), where ECharts would widen it: a drag cannot make such a window, so a test that asks for one is wrong;
 // - setOption throws when the merged option holds a slider and an x axis that slider does not drive, where ECharts
 //   zooms the axes it drives and leaves the others, so one track would zoom and the next would not;
 // - setOption throws when an x axis after the first sets `axisPointer.show` to true, where ECharts draws a second band,
@@ -263,7 +269,7 @@ export class FakeChart {
     this.current = next;
     if (zoomFresh || !list(next.dataZoom).length) this.window = null;
     const zoom = list(option.dataZoom)[0];
-    if (typeof zoom?.startValue === "number" && typeof zoom.endValue === "number") this.window = { from: zoom.startValue, to: zoom.endValue };
+    if (typeof zoom?.startValue === "number" && typeof zoom.endValue === "number") this.window = this.widen({ from: zoom.startValue, to: zoom.endValue });
   }
 
   getOption(): Option {
@@ -340,8 +346,11 @@ export class FakeChart {
   }
 
   /** A drag of the zoom slider to show points from..to: the window moves and "datazoom" fires in percent, as the
-   *  slider sends it. The wrapper reads the points from getOption(). Nothing is added to `actions`. */
+   *  slider sends it. The wrapper reads the points from getOption(). Nothing is added to `actions`. Throws on a window
+   *  narrower than the slider holds (the header). */
   zoomTo(from: number, to: number) {
+    const span = this.minSpan();
+    if (to - from < span) throw new Error(`FakeChart.zoomTo(${from}, ${to}): the slider holds no window under ${span + 1} points here; a drag cannot make this one`);
     const last = Math.max(1, this.points - 1);
     this.window = { from, to };
     this.emit("datazoom", { dataZoomId: "slider", start: from / last * 100, end: to / last * 100 });
@@ -390,7 +399,21 @@ export class FakeChart {
     const at = (value: unknown, percent: unknown, fallback: number) =>
       typeof value === "number" ? value : typeof percent === "number" ? Math.round(percent / 100 * last) : fallback;
     const { from, to } = this.shown;
-    this.window = { from: at(p.startValue, p.start, from), to: at(p.endValue, p.end, to) };
+    this.window = this.widen({ from: at(p.startValue, p.start, from), to: at(p.endValue, p.end, to) });
+  }
+
+  /** The narrowest window the first slider holds, as last point minus first: its `minValueSpan`, at most every point. */
+  private minSpan() {
+    const span = sliderOf(this.current)?.minValueSpan;
+    return typeof span === "number" ? Math.min(span, Math.max(0, this.points - 1)) : 0;
+  }
+
+  /** The window ECharts holds for `w`: widened to the slider's minimum, from its start or back from the last point. */
+  private widen(w: Window): Window {
+    const span = this.minSpan();
+    if (w.to - w.from >= span) return w;
+    const from = Math.min(w.from, Math.max(0, this.points - 1) - span);
+    return { from, to: from + span };
   }
 }
 
