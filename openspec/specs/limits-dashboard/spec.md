@@ -155,7 +155,7 @@ Limits SHALL show, per provider, when the last snapshot was taken, how long ago,
 - **THEN** Limits shows it was taken 5 hours ago, and Codex figures as estimated
 
 ### Requirement: Filter Limits by time range and source
-The page header SHALL show the Source filter only. Source SHALL apply to every section. The time range SHALL be set in the "Past windows" section header and SHALL apply to the past windows and to "What a point buys". Open windows SHALL always show, whatever the range. Limits SHALL have no project filter.
+The scope bar SHALL show the Source filter only on Limits. Source SHALL apply to every section. The time range SHALL be set in the "Past windows" section header and SHALL apply to the past windows and to "What a point buys". Open windows SHALL always show, whatever the range. Limits SHALL have no project filter.
 
 #### Scenario: Codex only
 - **WHEN** the user picks source Codex on Limits

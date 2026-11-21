@@ -596,11 +596,11 @@ The chart's keyboard and pointer reading of a bucket with too few calls for a st
 - **THEN** the reading says its rate, errors and calls, then "too few calls for a steady rate"
 
 ### Requirement: Place each control where it acts
-The Errors header SHALL hold only the page-level filters: project, range and source. Day / Week SHALL sit in the rate chart's header, as a group named "Granularity". "Include subagents" and "Hide noise and muted" SHALL sit in the type table's toolbar, shown even when the view lists no type. Each SHALL keep its id (`fGran`, `fSub`, `fNoise`) and URL key (`gran`, `sub`, `noise`).
+On Errors the scope bar SHALL hold only the page-level filters: project, range and source. The page header SHALL hold none. Day / Week SHALL sit in the rate chart's header, as a group named "Granularity". "Include subagents" and "Hide noise and muted" SHALL sit in the type table's toolbar, shown even when the view lists no type. Each SHALL keep its id (`fGran`, `fSub`, `fNoise`) and URL key (`gran`, `sub`, `noise`).
 
 #### Scenario: Day and Week
 - **WHEN** the user selects Week in the rate chart's header
-- **THEN** the URL holds `gran=week`, the chart draws weeks, and the header holds no Day / Week control
+- **THEN** the URL holds `gran=week`, the chart draws weeks, and the scope bar holds no Day / Week control
 
 #### Scenario: The toggles
 - **WHEN** the user clears "Include subagents" in the type table's toolbar

@@ -382,7 +382,7 @@ The session sheet SHALL show the session's model time, tool time, output speed, 
 - **THEN** its sheet shows no model time, tool time, output speed or lines changed
 
 ### Requirement: Order the Activity page
-Activity SHALL show its view switch first. Its Overview SHALL then show, in this order: the lede with the filters beside it, the prompts interrupted line, the attention summary, the work chart, the vitals, then the workbench tabs. Overview SHALL have no section index.
+Activity SHALL show its view switch first. Its Overview SHALL then show, in this order: the lede, the prompts interrupted line, the attention summary, the work chart, the vitals, then the workbench tabs. Its filters are in the scope bar above the page. Overview SHALL have no section index.
 
 #### Scenario: Chart before the vitals
 - **WHEN** the user opens Activity for a view with activity
