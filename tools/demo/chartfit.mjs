@@ -15,12 +15,13 @@
 // - with motion on, a zoom out draws the days that come back at full height: the bars grow on the first drawing only;
 // - the pointer is a hand over a day and not over the day labels;
 // - plus and minus zoom, Ctrl+plus is left to the browser; dragging a slider handle changes the days drawn, not the heading,
-//   the lede, the URL or the requests made; the live region says the days shown once, on release; "Show all days" resets
-//   and returns focus to the chart;
+//   the lede, the URL or the requests made; the live region says the days shown once, on release, also when the release
+//   comes right after the last move; "Show all days" resets and returns focus to the chart;
 // - the hint under the heading is one line at 1440px in every stacking and scale; a 7-day view has no slider, and back at
 //   30 days the slider returns with every day shown;
 // - zooming leaves the chart's accessible name alone; newer figures for the same view (the usage answered again with today's
 //   cost up, after a window focus) are drawn and keep the days shown, "Show all days" and the focus on it, with nothing said;
+//   after the root font size doubles with the chart mounted, the next such redraw draws the labels at twice their size;
 // - the page logs no CSP violation, no console error and no page error.
 // It runs locally, not in CI. It needs the build and the pinned Playwright:
 //   uv sync;  cd web && npm ci && npm run build;  cd tools/demo && npm ci
@@ -397,6 +398,22 @@ try {
       Object.keys(before).filter(k => before[k] !== after[k]).map(k => `${k}: ${before[k]} became ${after[k]}`).join("; "));
     line("the live region says the days shown once, on release", whileDown.length === 0 && dragged.said.length === 1 && shownBy(dragged.said[0])?.to - shownBy(dragged.said[0])?.from + 1 === dragged.days,
       `${whileDown.length} while down, then ${JSON.stringify(dragged.said)}`);
+    // A release right after the last move. ECharts can throttle the slider's updates: one still pending at the release
+    // would come after it and be said a second time. Six moves of the left handle and the release, as fast as they go.
+    const left = await ev(page, () => {
+      const hs = window.chartfit.handles(), l = hs[0];
+      return hs.length === 2 ? { x: (l.l + l.r) / 2, y: (l.t + l.b) / 2 } : null;
+    });
+    await ev(page, () => { window.__said = []; });
+    await page.mouse.move(left.x, left.y);
+    await page.mouse.down();
+    for (let k = 1; k <= 6; k++) await page.mouse.move(left.x + handle.slider * .2 * k / 6, left.y);
+    await page.mouse.up();
+    await sleep(400);
+    const quick = await ev(page, () => ({ days: window.chartfit.days().length, said: window.__said.filter(t => t.startsWith("Showing")) }));
+    line("a release right after the last move says the days shown once, as they are drawn",
+      quick.days < dragged.days && quick.said.length === 1 && shownBy(quick.said[0])?.to - shownBy(quick.said[0])?.from + 1 === quick.days,
+      `${quick.days} days drawn, said ${JSON.stringify(quick.said)}`);
     const showAll = page.locator("#spend .show-all");
     const shown = await showAll.isVisible();
     if (shown) await showAll.click();
@@ -525,6 +542,18 @@ try {
     line("newer figures for the same view are drawn", after !== before);
     line('the refresh keeps the days shown, "Show all days" and the focus on it, and says nothing', kept.days === zoomed && kept.focus && !kept.said.length,
       `${kept.days} of ${N} days drawn, ${zoomed} before; focus ${kept.focus ? "on the button" : "lost"}; said ${JSON.stringify(kept.said)}`);
+    // The browser's text size changes with no event, and here the chart's box keeps its size: the next redraw, for newer
+    // figures again, draws the labels at the new size.
+    const size = () => ev(page, () => Math.max(...window.chartfit.texts().map(t => t.size)));
+    const small = await size(), drawnBefore = await bars();
+    await ev(page, () => { document.documentElement.style.fontSize = "32px"; });
+    more = 2000;
+    await ev(page, () => window.dispatchEvent(new Event("visibilitychange")));
+    await until(bars, s => s !== drawnBefore);
+    const large = await until(size, s => s === 22);
+    line("after the root font size doubles, the next redraw draws the labels at twice their size", small === 11 && large === 22, `labels ${small}px, then ${large}px`);
+    // A refetch may still be on its way through a route: let it go, or its failed fetch ends the script before it cleans up.
+    await page.unrouteAll({ behavior: "ignoreErrors" });
     await page.done();
   }
 
