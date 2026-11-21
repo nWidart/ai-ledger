@@ -1,7 +1,9 @@
 import io
 import json
 import os
+import shutil
 import subprocess
+import tempfile
 import threading
 import unittest
 import urllib.error
@@ -329,6 +331,225 @@ class AppPollTest(StoreCase):
         self.assertIsNone(a.state["error"])
         self.assertEqual(a.status()["limits"]["claude"]["failures"], 0)
         self.assertEqual(self.q("SELECT count(*) FROM limit_polls"), [(6,)])
+
+
+GROK_TOKEN = "grok-access-SENTINEL-do-not-leak"
+GROK_LOGIN = limits.GROK_LOGINS[0]
+
+
+def grok_body(percent=10.0, type="USAGE_PERIOD_TYPE_WEEKLY", start="2026-11-19T21:27:03.738+00:00", end="2026-11-26T21:27:03.738+00:00"):
+    """A billing response as T3 Code reads it, with its non-limit keys left out."""
+    period = {k: v for k, v in dict(type=type, start=start, end=end).items() if v is not None}
+    config = dict(currentPeriod=period, productUsage=[dict(product="GrokBot", usagePercent=percent)])
+    if percent is not None:
+        config["creditUsagePercent"] = percent
+    return dict(config=config)
+
+
+class GrokParseTest(unittest.TestCase):
+    def rows(self, body, plan=None):
+        return [(r[0], r[1], r[2], r[3], r[4].isoformat(), r[6], r[7], r[8]) for r in limits.grok_rows(dict(plan=plan, response=body), NOW)]
+
+    def test_weekly_credits(self):
+        self.assertEqual(self.rows(grok_body()), [("grok", "weekly", "", 10080, "2026-11-26T21:27:00", 10.0, None, False)])
+        self.assertEqual(limits.label("grok", "weekly", "", 10080), "weekly")
+
+    def test_the_period_type_is_the_limit(self):
+        monthly = grok_body(type="USAGE_PERIOD_TYPE_MONTHLY", start="2026-12-01T00:00:00Z", end="2027-01-01T00:00:00Z")
+        self.assertEqual(self.rows(monthly), [("grok", "monthly", "", 44640, "2027-01-01T00:00:00", 10.0, None, False)])
+        # Its name, not "744-hour": a monthly period's length varies by month.
+        self.assertEqual(limits.label("grok", "monthly", "", 44640), "monthly")
+        daily = grok_body(type="USAGE_PERIOD_TYPE_DAILY", start="2026-11-26T00:00:00Z", end="2026-11-27T00:00:00Z")
+        self.assertEqual(self.rows(daily)[0][1:4], ("daily", "", 1440))
+
+    def test_the_length_without_a_start(self):
+        self.assertEqual(self.rows(grok_body(start=None))[0][1:4], ("weekly", "", 10080))  # a week, for a weekly period
+        self.assertEqual(self.rows(grok_body(type="USAGE_PERIOD_TYPE_MONTHLY", start="soon"))[0][1:4], ("monthly", "", None))
+        self.assertEqual(self.rows(grok_body(start="2026-11-27T00:00:00Z"))[0][3], 10080)  # a start after the end does not read
+        self.assertEqual(self.rows(grok_body(type=None))[0][1], "credits")
+
+    def test_at_the_cap_is_reached(self):
+        self.assertEqual(self.rows(grok_body(percent=100))[0][5:], (100.0, None, True))
+        self.assertEqual(self.rows(grok_body(percent=0))[0][5:], (0.0, None, False))
+
+    def test_no_percent_that_reads_is_no_limit(self):
+        for pct in (None, True, "10", -1, 100.5, float("nan")):
+            self.assertEqual(self.rows(grok_body(percent=pct)), [], pct)
+
+    def test_no_end_that_reads_is_no_limit(self):
+        for end in (None, "soon", 12, "9999-12-31T23:59:00-23:59"):
+            self.assertEqual(self.rows(grok_body(end=end)), [], end)
+
+    def test_an_unexpected_response_is_no_limit(self):
+        for body in (None, [], "x", {}, dict(config=None), dict(config=[1]), dict(config=dict(creditUsagePercent=5, currentPeriod="weekly"))):
+            self.assertEqual(self.rows(body), [], body)
+
+
+class GrokCredentialTest(unittest.TestCase):
+    """Every case runs on a temporary Grok home and system folder: never the real ~/.grok or /etc/grok."""
+
+    def setUp(self):
+        self.home = tempfile.mkdtemp()
+        self.system = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.home)
+        self.addCleanup(shutil.rmtree, self.system)
+        for patcher in (mock.patch("ai_ledger.limits.time.time", return_value=1_800_000_000),
+                        mock.patch("ai_ledger.limits.GROK_SYSTEM_DIR", self.system)):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.env = dict(GROK_HOME=self.home)
+
+    def entry(self, expires_in=3600, **over):
+        expires = datetime.fromtimestamp(1_800_000_000 + expires_in, timezone.utc).isoformat()
+        return dict(dict(key=GROK_TOKEN, refresh_token="rt-SENTINEL", expires_at=expires, auth_mode="oauth"), **over)
+
+    def auth(self, entry=None, issuer=GROK_LOGIN):
+        return json.dumps({issuer: self.entry() if entry is None else entry, "https://other.example": dict(key="other")})
+
+    def write(self, name, text, folder=None):
+        with open(os.path.join(folder or self.home, name), "w") as fh:
+            fh.write(text)
+
+    def read(self, **env):
+        return limits.read_grok_credential(dict(self.env, **env))
+
+    def test_the_grok_com_login(self):
+        self.write("auth.json", self.auth())
+        self.assertEqual(self.read(), (GROK_TOKEN, None))
+        self.write("auth.json", self.auth(issuer=limits.GROK_LOGINS[1]))  # the older sign-in issuer
+        self.assertEqual(self.read(), (GROK_TOKEN, None))
+        self.write("auth.json", self.auth(self.entry(expires_at=None)))  # no expiry: not known to be expired
+        self.assertEqual(self.read(), (GROK_TOKEN, None))
+
+    def test_grok_auth_holds_the_file(self):
+        self.assertEqual(self.read(GROK_AUTH=self.auth()), (GROK_TOKEN, None))
+        self.write("auth.json", self.auth(self.entry(key="from-the-file")))
+        self.assertEqual(self.read(GROK_AUTH=self.auth()), (GROK_TOKEN, None))
+
+    def test_an_unknown_account_is_nothing_to_poll(self):
+        self.assertIsNone(self.read())  # no file
+        self.write("auth.json", self.auth(issuer="https://other.example/sign-in"))
+        self.assertIsNone(self.read())  # no grok.com login
+        for entry in (self.entry(key=None), self.entry(key=""), dict(expires_at="2030-01-01T00:00:00Z"), self.entry(auth_mode="api_key")):
+            self.write("auth.json", self.auth(entry))
+            self.assertIsNone(self.read(), entry)
+
+    def test_an_api_key_or_an_override_is_another_account(self):
+        self.write("auth.json", self.auth())
+        for name in ("XAI_API_KEY", "GROK_OIDC_ISSUER", "GROK_OAUTH2_CLIENT_ID", "GROK_AUTH_PROVIDER_COMMAND", "GROK_LOCAL_AUTH",
+                     "GROK_CLI_CHAT_PROXY_BASE_URL", "GROK_MODELS_BASE_URL", "GROK_CONFIG", "GROK_CONFIG_PATH"):
+            self.assertIsNone(self.read(**{name: "x"}), name)
+        self.assertEqual(self.read(XAI_API_KEY=""), (GROK_TOKEN, None))  # set but empty is not set
+
+    def test_a_config_that_sets_auth_or_endpoints_is_another_account(self):
+        self.write("auth.json", self.auth())
+        for text in ("[endpoints]\nchat = 'https://proxy.example'\n", "  [[auth]]\nkind = 'x'\n", "auth.provider = 'okta'\n",
+                     "'grok_com_config' = {}\n", "theme = 'dark'\n\"endpoints\".chat = 'x'\n"):
+            self.write("config.toml", text)
+            self.assertIsNone(self.read(), text)
+        self.write("config.toml", "theme = 'dark'\nauth_mode_hint = 1\n# auth = 'x'\n[ui]\nendpoints_shown = true\n")
+        self.assertEqual(self.read(), (GROK_TOKEN, None))
+        self.write("managed_config.toml", "[auth]\n", folder=self.system)
+        self.assertIsNone(self.read())
+
+    def test_an_expired_token_skips(self):
+        self.write("auth.json", self.auth(self.entry(expires_in=-60)))
+        with self.assertRaises(limits.PollSkipped) as cm:
+            self.read()
+        self.assertEqual(str(cm.exception), "Grok token expired; it renews when the Grok CLI next runs")
+
+    def test_an_unreadable_credential_fails(self):
+        for text in ("{not json", "[1, 2]", json.dumps({GROK_LOGIN: "a token"})):
+            with self.assertRaises(limits.PollFailed) as cm:
+                self.read(GROK_AUTH=text)
+            self.assertEqual(str(cm.exception), "unreadable Grok credential")
+            self.assertNotIn("SENTINEL", str(cm.exception))
+
+    def test_sends_the_token_only_to_the_billing_endpoint(self):
+        self.write("auth.json", self.auth())
+        with mock.patch.dict(os.environ, self.env, clear=True), \
+                mock.patch("ai_ledger.limits.urllib.request.urlopen", return_value=Response(json.dumps(grok_body()).encode())) as urlopen:
+            plan, body = limits.grok_poll()
+        req = urlopen.call_args[0][0]
+        self.assertEqual((req.full_url, req.get_method()), (limits.GROK_BILLING_URL, "GET"))
+        self.assertEqual(req.get_header("Authorization"), f"Bearer {GROK_TOKEN}")
+        self.assertEqual(urlopen.call_args[1], dict(timeout=10))
+        self.assertEqual((plan, body), (None, grok_body()))
+
+    def test_no_login_sends_nothing(self):
+        with mock.patch.dict(os.environ, self.env, clear=True), mock.patch("ai_ledger.limits.urllib.request.urlopen") as urlopen:
+            self.assertIsNone(limits.grok_poll())
+        urlopen.assert_not_called()
+
+    def test_failures_are_fixed_text(self):
+        cases = ((urllib.error.HTTPError(limits.GROK_BILLING_URL, 401, f"no {GROK_TOKEN}", {}, io.BytesIO()), "billing endpoint answered HTTP 401"),
+                 (urllib.error.URLError(f"bad {GROK_TOKEN}"), "billing endpoint unreachable"),
+                 (OSError(GROK_TOKEN), "billing endpoint unreachable"))
+        for error, text in cases:
+            with mock.patch("ai_ledger.limits.urllib.request.urlopen", side_effect=error), self.assertRaises(limits.PollFailed) as cm:
+                limits.fetch_grok((GROK_TOKEN, None))
+            self.assertEqual(str(cm.exception), text)
+        with mock.patch("ai_ledger.limits.urllib.request.urlopen", return_value=Response(b"<html>")), self.assertRaises(limits.PollFailed) as cm:
+            limits.fetch_grok((GROK_TOKEN, None))
+        self.assertEqual(str(cm.exception), "billing endpoint returned invalid JSON")
+
+
+class GrokPollerTest(StoreCase):
+    def setUp(self):
+        super().setUp()
+        self.now = 1_800_000_000.0
+        self.lock = threading.Lock()
+        self.poller = limits.Poller("grok", limits.PROVIDERS["grok"], clock=lambda: self.now)
+
+    def run_poll(self, cred=(GROK_TOKEN, None), response=None, error=None):
+        read = mock.Mock(side_effect=error) if error else mock.Mock(return_value=cred)
+        urlopen = mock.Mock(return_value=Response(json.dumps(response).encode()))
+        with mock.patch("ai_ledger.limits.read_grok_credential", read), mock.patch("ai_ledger.limits.urllib.request.urlopen", urlopen):
+            self.poller.run(self.con, self.lock)
+        return urlopen
+
+    def test_no_login_leaves_the_poller_untouched(self):
+        before = dict(self.poller.state)
+        urlopen = self.run_poll(cred=None, response=grok_body())
+        urlopen.assert_not_called()
+        self.assertEqual(self.poller.state, before)
+        self.assertEqual(self.poller.next_at, self.now + limits.POLL_SECONDS)  # tried again at the next interval
+        self.assertEqual(self.q("SELECT count(*) FROM limit_polls"), [(0,)])
+        # Nor does a login that went away touch what an earlier poll left.
+        self.run_poll(response=grok_body())
+        before = dict(self.poller.state)
+        self.now += limits.POLL_SECONDS
+        self.run_poll(cred=None)
+        self.assertEqual(self.poller.state, before)
+
+    def test_success_stores_the_poll_and_its_snapshot(self):
+        self.run_poll(response=grok_body())
+        self.assertEqual(self.q("SELECT provider, limit_id, scope, window_minutes, used_percent, plan FROM limit_snapshots"),
+                         [("grok", "weekly", "", 10080, 10.0, None)])
+        self.assertEqual(self.q("SELECT provider FROM limit_polls"), [("grok",)])
+        self.assertEqual((self.poller.state["failures"], self.poller.state["last_ok"], self.poller.state["last_attempt"]),
+                         (0, limits.iso_utc(self.now), limits.iso_utc(self.now)))
+        self.assertNotIn("SENTINEL", " ".join(r[0] for r in self.q("SELECT json FROM limit_polls")) + json.dumps(self.poller.state))
+
+    def test_a_response_without_usage_is_a_failure(self):
+        self.run_poll(response=grok_body(percent=None))
+        self.assertEqual((self.poller.state["failures"], self.poller.state["error"]), (1, "usage endpoint returned no recognizable limit"))
+        self.assertEqual(self.q("SELECT (SELECT count(*) FROM limit_polls), (SELECT count(*) FROM limit_snapshots)"), [(0, 0)])
+
+    def test_an_expired_token_is_stale_not_failing(self):
+        urlopen = self.run_poll(error=limits.PollSkipped("Grok token expired; it renews when the Grok CLI next runs"))
+        urlopen.assert_not_called()
+        self.assertEqual((self.poller.state["stale"], self.poller.state["failures"], self.poller.state["last_attempt"]),
+                         (True, 0, limits.iso_utc(self.now)))
+
+    def test_a_rebuild_keeps_grok_polls_and_their_snapshots(self):
+        self.run_poll(response=grok_body())
+        self.con.execute("DELETE FROM limit_snapshots")
+        limits.rederive_polls(self.con.cursor())
+        self.assertEqual(self.q("SELECT provider, limit_id, window_minutes, resets_at, used_percent FROM limit_snapshots"),
+                         [("grok", "weekly", 10080, datetime(2026, 11, 26, 21, 27), 10.0)])
+        store.rebuild(self.con)
+        self.assertEqual(self.q("SELECT provider, limit_id, used_percent FROM limit_snapshots"), [("grok", "weekly", 10.0)])
 
 
 PRICES = {m: dict(input=1, output=0, cache_read=0, cache_5m=0, cache_1h=0, context=None)
@@ -735,18 +956,38 @@ class PayloadTest(AnalysisCase):
         out = self.payload(self.NOW, source="codex")
         self.assertEqual({w["provider"] for w in out["windows"]}, {"codex"})
         self.assertEqual([f["provider"] for f in out["freshness"]], ["codex"])
-        self.assertTrue(out["plan_limits"])
-        self.assertTrue(self.payload(self.NOW)["plan_limits"])
+        self.assertNotIn("plan_limits", out)  # every source has plan limits now
         with self.assertRaises(ValueError):
             self.payload(self.NOW, source="gemini")
 
-    def test_grok_reports_no_plan_limits(self):
+    def test_grok_has_its_weekly_window(self):
         self.spend("grok", "grok-4.7-build", (self.NOW - timedelta(hours=1), 2.0))
-        out = self.payload(self.NOW, source="grok")
-        self.assertFalse(out["plan_limits"])
-        self.assertEqual((out["windows"], out["binding"], out["suggestion"], out["history"], out["unused"], out["freshness"]),
-                         ([], None, None, [], [], []))
-        self.assertEqual(out["value"], dict(limits=[], projects=[]))
+        self.snap("grok", "weekly", self.NOW - timedelta(minutes=2), 10, resets=datetime(2026, 11, 12, 21, 27), plan=None)
+        out = self.payload(self.NOW, source="grok", polls=dict(grok=dict(last_ok="2026-11-06T11:58:00+00:00", last_attempt="2026-11-06T11:58:00+00:00",
+                                                                         failures=0, error=None, stale=False)))
+        self.assertEqual([(w["provider"], w["provider_label"], w["label"], w["window_minutes"], w["current"], w["plan"]) for w in out["windows"]],
+                         [("grok", "Grok", "weekly", 10080, 10.0, None)])
+        self.assertEqual(out["binding"], dict(provider="grok", limit_id="weekly", scope="", runs_out=False))
+        self.assertEqual([(f["provider"], f["polled"], f["flags"]) for f in out["freshness"]], [("grok", True, [])])
+        self.assertIn("grok", [w["provider"] for w in self.payload(self.NOW)["windows"]])
+
+    def test_a_grok_window_resets_on_schedule(self):
+        # After its reset with no newer poll, the next window is assumed on the billing schedule, a week on.
+        self.snap("grok", "weekly", self.NOW - timedelta(days=2), 40, resets=self.NOW - timedelta(days=1), plan=None)
+        w = next(w for w in self.payload(self.NOW)["windows"] if w["provider"] == "grok")
+        self.assertEqual((w["resets_at"], w["current"]), ("2026-11-12T12:00:00.000Z", 0.0))
+
+    def test_no_grok_login_shows_nothing_for_grok(self):
+        untouched = limits.Poller("grok", limits.PROVIDERS["grok"]).state
+        out = self.payload(self.NOW, polls=dict(grok=untouched))
+        self.assertNotIn("grok", [f["provider"] for f in out["freshness"]])
+        out = self.payload(self.NOW, source="grok", polls=dict(grok=untouched))
+        self.assertEqual((out["windows"], out["binding"], out["history"], out["freshness"]), ([], None, [], []))
+        # A poll that was sent and failed does show, though no snapshot came of it.
+        failed = dict(untouched, last_attempt="2026-11-06T11:58:00+00:00", failures=1, error="billing endpoint answered HTTP 401")
+        grok = self.payload(self.NOW, source="grok", polls=dict(grok=failed))["freshness"]
+        self.assertEqual([(f["provider"], f["flags"], f["error"]) for f in grok],
+                         [("grok", ["polling failing", "no snapshots"], "billing endpoint answered HTTP 401")])
 
     def test_freshness_flags_failing_polls(self):
         out = self.payload(self.NOW + timedelta(minutes=30), polls=dict(claude=dict(failures=3, last_ok="2026-11-06T12:00:00+00:00",

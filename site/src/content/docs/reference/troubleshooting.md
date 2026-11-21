@@ -82,7 +82,7 @@ ai-ledger rebuild
 
 ### Does AI Ledger send my transcripts anywhere?
 
-No. The server listens on `127.0.0.1` only. On macOS, the Limits page sends your Claude Code OAuth token from the Keychain to Anthropic's usage endpoint every 5 minutes; the token goes nowhere else and is never stored or logged. On Linux, Limits estimates from transcripts. Your browser loads a font from Google Fonts; no transcript data goes with the request. A link to these docs opens them in a new tab only when you follow it. See [Privacy and security model](/ai-ledger/concepts/privacy-security/).
+No. The server listens on `127.0.0.1` only. On macOS, the Limits page sends your Claude Code OAuth token from the Keychain to Anthropic's usage endpoint every 5 minutes; the token goes nowhere else and is never stored or logged. On Linux, Limits estimates from transcripts. If the Grok CLI is signed in with grok.com, the app also sends that login's access token, read from `~/.grok/auth.json`, to xAI's billing endpoint every 5 minutes; the token goes nowhere else and is never stored or logged. Your browser loads a font from Google Fonts; no transcript data goes with the request. A link to these docs opens them in a new tab only when you follow it. See [Privacy and security model](/ai-ledger/concepts/privacy-security/).
 
 ### Why does the first start take minutes?
 

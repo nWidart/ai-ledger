@@ -21,7 +21,15 @@ To show Claude Code's limits, the app asks Anthropic's usage endpoint, `https://
 
 The token goes to that endpoint and nowhere else. The app never writes it to the store, a log, an API response or a page, and never refreshes it: refreshing would replace the token Claude Code relies on. When the token has expired, the app skips the request until Claude Code renews it. What the app stores is the answer: the percent used of each limit, its reset time and your plan's name.
 
-Where the Keychain is not there, as on Linux, the app sends nothing. Codex's limits come from Codex's own transcripts and need no request. Grok reports no plan limits, so the app asks nothing about Grok either.
+Where the Keychain is not there, as on Linux, the app sends nothing for Claude Code. Codex's limits come from Codex's own transcripts and need no request.
+
+### Grok's plan limits
+
+To show Grok's limit, the app asks xAI's billing endpoint, `https://cli-chat-proxy.grok.com/v1/billing?format=credits`, once every 5 minutes while it runs. For each request it reads the access token of the Grok CLI's grok.com login from `~/.grok/auth.json` (or `$GROK_HOME/auth.json`). This works the same on macOS and Linux.
+
+The token goes to that endpoint and nowhere else. The app never writes it to the store, a log, an API response or a page, and never refreshes it: the Grok CLI does that. When the token has expired, the app skips the poll and marks Grok stale until the Grok CLI renews it. What the app stores is the answer: the percent of the period's credits used and the period (weekly or monthly). The answer names no plan.
+
+The app sends nothing, and Limits shows no Grok card, when there is no grok.com login: Grok is not installed, it uses an API key (`XAI_API_KEY`, or `auth_mode` set to `api_key`), or it has a custom auth or endpoint configuration.
 
 ### The font
 
