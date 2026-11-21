@@ -56,11 +56,15 @@ A session card SHALL show one line of figures measured from the session's stored
 - **THEN** the line leaves the cost out and keeps the other figures
 
 ### Requirement: Weigh friction by cost and active time
-Each friction family and label SHALL carry the estimated cost and the active time of the sessions that reported it, each session counted once and whole, whatever the range. A session with no transcript in the store, or no price, SHALL add nothing. The Friction section SHALL let the user weigh its rows by Cost (the default), Active time or Reports: the choice SHALL order the rows, set each bar and value, and show the other figures beside it. It SHALL NOT be kept in the URL.
+Each friction family and label SHALL carry the estimated cost and active time of the sessions that reported it, each session counted once and whole, whatever the range. A session with no transcript SHALL add nothing; one with no price SHALL add its active time but no cost. The user SHALL weigh the Friction rows by Cost (the default), Active time or Reports, not kept in the URL: the pick SHALL order the rows and set each bar and value, with the other two weights and the sessions beside it.
 
 #### Scenario: Cost first
 - **WHEN** `wrong_approach` was reported twice by a session that cost $42, and `tooling` 9 times by four sessions that cost $6.50 together
-- **THEN** with Cost, `wrong approach` is listed first with $42, then `tooling` with $6.50
+- **THEN** with Cost, `wrong approach` is listed first with $42 and "1.5h · 2 reports · 1 session" beside it, then `tooling` with $6.50
+
+#### Scenario: An unpriced session
+- **WHEN** a session with no priced request and 20 active minutes reports `buggy_code`
+- **THEN** it adds no cost to `buggy code` and adds its 20 minutes to the family's active time
 
 #### Scenario: By reports
 - **WHEN** the user picks Reports
@@ -71,7 +75,7 @@ Each friction family and label SHALL carry the estimated cost and the active tim
 - **THEN** the family counts that session's cost and active time once
 
 ### Requirement: Say what a friction weight is
-The Friction section's hint SHALL say the rows are weighed by the sessions that reported them. Behind its How measured toggletip it SHALL say that cost and active time are those of the whole sessions, not of the friction alone, that each session counts once in a row, and that a session with no transcript or no price adds nothing.
+The Friction section's hint SHALL say the rows are weighed by the sessions that reported them. Behind its How measured toggletip it SHALL say that cost and active time are those of the whole sessions, not of the friction alone, that each session counts once in a row, that a session with no transcript adds nothing, and that one with no price adds no cost but its active time.
 
 #### Scenario: Toggletip
 - **WHEN** the user activates the Friction section's How measured toggletip

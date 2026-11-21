@@ -140,7 +140,7 @@ function Friction({ d, weight, onWeight }: { d: InsightsPayload; weight: Weight;
         <div><h2 id="frictionTitle">Friction categories</h2>
           <p className="hint">What got in the way, weighed by the sessions that reported it.<HowMeasured what="friction">Cost and active time are those of
             the whole sessions that reported a friction, not of the friction alone, and each session counts once in a row. A session with no transcript in
-            the store, or with no price, adds no cost or time. Reports are the times a friction was reported; a session can report several. {FAMILY_HINT}</HowMeasured></p></div>
+            the store adds no cost or time; one with no price adds no cost, but its active time counts. Reports are the times a friction was reported; a session can report several. {FAMILY_HINT}</HowMeasured></p></div>
         <div className="seg" role="group" aria-label="Weigh friction by">
           {WEIGHTS.map(w => <button key={w.k} type="button" aria-pressed={w.k === weight} onClick={() => onWeight(w.k)}>{w.label}</button>)}
         </div>

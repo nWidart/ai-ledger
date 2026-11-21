@@ -692,6 +692,15 @@ class MeasuredTest(InsightsCase):
         self.assertEqual({m["name"]: (m["cost"], m["active_s"]) for m in bug["members"]}, dict(buggy_code=(5.0, 900), broken_build=(2.0, 600)))
         self.assertEqual((fams["wrong_approach"]["sessions"], fams["wrong_approach"]["cost"], fams["wrong_approach"]["active_s"]), (2, 0.5, 30))  # its request, then its tool call 30 s later
 
+    def test_an_unpriced_session_adds_no_cost_to_its_friction_but_its_active_time(self):
+        sid = self.add(1, dict(buggy_code=1), requests=[(0, 1_000_000), (20, 1_000_000)])
+        self.add(2, dict(buggy_code=1), requests=[(0, 1_000_000)])
+        self.con.execute("UPDATE requests SET model = 'm-unknown' WHERE session_id = ?", [sid])
+        self.ingest()
+        bug = self.payload()["friction_families"][0]
+        # The priced session's $1, and both sessions' time: the unpriced one's 20 minutes, the other's 30 s to its tool call.
+        self.assertEqual((bug["family"], bug["sessions"], bug["cost"], bug["active_s"]), ("buggy_code", 2, 1.0, 1230))
+
     def test_goal_families_carry_no_weight(self):
         sid = "0000eeee-0000-4000-8000-000000000009"
         self.session(sid, "p", "2026-11-03 09:00:00")

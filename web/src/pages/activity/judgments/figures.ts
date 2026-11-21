@@ -62,10 +62,11 @@ export type Weight = "cost" | "time" | "reports";
 export const WEIGHTS: { k: Weight; label: string }[] = [{ k: "cost", label: "Cost" }, { k: "time", label: "Active time" }, { k: "reports", label: "Reports" }];
 type Weighed = { n: number } & FrictionWeight;
 export const weightOf = (r: Weighed, w: Weight): number => (w === "cost" ? r.cost : w === "time" ? r.active_s : r.n);
-/** A row's figures in words: the chosen weight first, as its value, then the two others. */
+/** A row's figures in words: the chosen weight first, as its value, then the two others and the sessions. */
 export const weightValue = (r: Weighed, w: Weight): string => (w === "cost" ? usd0(r.cost) : w === "time" ? dur(r.active_s) : num(r.n));
 export const weightSide = (r: Weighed & { sessions: number }, w: Weight): string =>
-  [w !== "cost" && usd0(r.cost), w !== "time" && dur(r.active_s), plural(r.sessions, "session")].filter(Boolean).join(" · ");
+  [w !== "cost" && usd0(r.cost), w !== "time" && dur(r.active_s), w !== "reports" && plural(r.n, "report"), plural(r.sessions, "session")]
+    .filter(Boolean).join(" · ");
 /** Families heaviest first under w. Reports is the payload's order; a tie keeps it (most reported first). */
 export const byWeight = (rows: readonly FrictionFamily[], w: Weight): FrictionFamily[] =>
   w === "reports" ? [...rows] : [...rows].sort((a, b) => weightOf(b, w) - weightOf(a, w));

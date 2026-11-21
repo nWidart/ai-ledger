@@ -142,7 +142,7 @@ describe("Judgments view", () => {
     expect(rows).toEqual(["Fully achieved33%1", "Mostly achieved0%0", "Partially achieved33%1", "Not achieved0%0", "Unclear0%0", "abandoned33%1"]);
     // Friction is weighed by cost first; the fixture's two friction sessions have no transcript, so they weigh nothing.
     const fr = within(section(/^Friction/)).getAllByRole("listitem");
-    expect(fr.map(li => li.textContent)).toEqual(["buggy code$00s · 2 sessions2 labels ▾", "wrong approach$00s · 1 session"]);
+    expect(fr.map(li => li.textContent)).toEqual(["buggy code$00s · 4 reports · 2 sessions2 labels ▾", "wrong approach$00s · 3 reports · 1 session"]);
     expect(within(fr[0]!).getByTitle("buggy_code")).toBeTruthy();
     const feel = within(section(/Satisfaction/)).getAllByRole("listitem").map(li => li.textContent);
     expect(feel.slice(0, 4)).toEqual(["likely satisfied21 session", "dissatisfied11 session", "satisfied11 session", "unclear11 session"]);
@@ -986,14 +986,14 @@ describe("Judgments view", () => {
       const bars = () => rows().map(li => parseFloat(li.querySelector<HTMLElement>(".bar span")!.style.width));
       const by = (name: string) => within(fr()).getByRole("button", { name });
 
-      it("weighs by cost first: the costliest sessions' friction on top, with the active time and the sessions beside the cost", async () => {
+      it("weighs by cost first: the costliest sessions' friction on top, with the active time, the reports and the sessions beside the cost", async () => {
         show(weighed);
         await lede();
         const group = within(fr()).getByRole("group", { name: "Weigh friction by" });
         expect(within(group).getAllByRole("button").map(b => [b.textContent, b.getAttribute("aria-pressed")])).toEqual([["Cost", "true"], ["Active time", "false"], ["Reports", "false"]]);
         expect(names()).toEqual(["wrong approach", "buggy code", "tooling", "mood"]);
         expect(rows().map(li => [li.querySelector(".v")!.textContent, li.querySelector(".s")!.textContent])).toEqual([
-          ["$42", "1.5h · 1 session"], ["$18", "4h · 3 sessions"], ["$6.50", "1h · 4 sessions"], ["$0", "0s · 1 session"]]);
+          ["$42", "1.5h · 2 reports · 1 session"], ["$18", "4h · 5 reports · 3 sessions"], ["$6.50", "1h · 9 reports · 4 sessions"], ["$0", "0s · 1 report · 1 session"]]);
         expect(bars()).toEqual([100, expect.closeTo(100 * 18 / 42, 3), expect.closeTo(100 * 6.5 / 42, 3), 0]); // each against the heaviest
       });
 
@@ -1003,7 +1003,7 @@ describe("Judgments view", () => {
         await userEvent.click(by("Active time"));
         expect(by("Active time").getAttribute("aria-pressed")).toBe("true");
         expect(names()).toEqual(["buggy code", "wrong approach", "tooling", "mood"]);
-        expect(rows().map(li => [li.querySelector(".v")!.textContent, li.querySelector(".s")!.textContent])[0]).toEqual(["4h", "$18 · 3 sessions"]);
+        expect(rows().map(li => [li.querySelector(".v")!.textContent, li.querySelector(".s")!.textContent])[0]).toEqual(["4h", "$18 · 5 reports · 3 sessions"]);
         expect(bars()[1]).toBeCloseTo(100 * 5400 / 14400, 3);
         await userEvent.click(by("Reports"));
         expect(names()).toEqual(["tooling", "buggy code", "wrong approach", "mood"]); // the payload's order: most reported first
@@ -1016,7 +1016,7 @@ describe("Judgments view", () => {
         await lede();
         await userEvent.click(within(fr()).getByRole("button", { name: "2 labels in tooling" }));
         const members = within(fr()).getByRole("list", { name: "Labels in tooling" });
-        expect(within(members).getAllByRole("listitem").map(li => li.textContent)).toEqual(["flaky ci$5.0045m · 3 sessions", "environment$2.2525m · 2 sessions"]);
+        expect(within(members).getAllByRole("listitem").map(li => li.textContent)).toEqual(["flaky ci$5.0045m · 6 reports · 3 sessions", "environment$2.2525m · 3 reports · 2 sessions"]);
         // A session with both labels counts once in the family: the family weighs less than its labels added up.
         expect(friction_families[0]!.cost).toBeLessThan(5 + 2.25);
       });
@@ -1037,7 +1037,7 @@ describe("Judgments view", () => {
         await userEvent.click(within(fr()).getByRole("button", { name: "How measured: friction" }));
         const how = within(fr()).getByRole("tooltip").textContent!;
         expect(how).toContain("Cost and active time are those of the whole sessions that reported a friction, not of the friction alone, and each session counts once in a row.");
-        expect(how).toContain("A session with no transcript in the store, or with no price, adds no cost or time.");
+        expect(how).toContain("A session with no transcript in the store adds no cost or time; one with no price adds no cost, but its active time counts.");
       });
 
       it("orders and words the weights", () => {
@@ -1047,8 +1047,8 @@ describe("Judgments view", () => {
         // A tie keeps the payload's order, most reported first.
         expect(byWeight([fam("a", 3, 1), fam("b", 2, 1)], "cost").map(f => f.family)).toEqual(["a", "b"]);
         const f = friction_families[1]!;
-        expect([weightValue(f, "cost"), weightSide(f, "cost")]).toEqual(["$18", "4h · 3 sessions"]);
-        expect([weightValue(f, "time"), weightSide(f, "time")]).toEqual(["4h", "$18 · 3 sessions"]);
+        expect([weightValue(f, "cost"), weightSide(f, "cost")]).toEqual(["$18", "4h · 5 reports · 3 sessions"]);
+        expect([weightValue(f, "time"), weightSide(f, "time")]).toEqual(["4h", "$18 · 5 reports · 3 sessions"]);
         expect([weightValue(f, "reports"), weightSide(f, "reports")]).toEqual(["5", "$18 · 4h · 3 sessions"]);
       });
     });
@@ -1073,7 +1073,7 @@ describe("Judgments view", () => {
       await userEvent.click(exp);
       expect(exp.getAttribute("aria-expanded")).toBe("true");
       const members = within(row).getByRole("list", { name: "Labels in buggy code" });
-      expect(within(members).getAllByRole("listitem").map(li => li.textContent)).toEqual(["buggy code$00s · 2 sessions", "broken build$00s · 1 session"]);
+      expect(within(members).getAllByRole("listitem").map(li => li.textContent)).toEqual(["buggy code$00s · 3 reports · 2 sessions", "broken build$00s · 1 report · 1 session"]);
       expect(within(members).getByTitle("broken_build")).toBeTruthy();
       expect(hashOf()).toBe("?range=0"); // expanding filters nothing
       await userEvent.click(exp);

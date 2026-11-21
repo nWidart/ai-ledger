@@ -57,7 +57,8 @@ def group(kind, rows, pairs, weights=None):
     (name, session_id) pairs behind them. n sums the members' n; sessions counts the distinct sessions with any member. Members
     come most counted first, then by name; families by n, then sessions (both descending), then key.
     weights ({session_id: {cost, active_s}}): each family and member also gets the cost and active_s summed over its distinct
-    sessions, each session once. A session without a weight, or with a figure of None, adds nothing."""
+    sessions, each session once. A session without a weight (no transcript) adds nothing; a figure of None adds nothing to that
+    figure alone, so an unpriced session adds no cost but its active time."""
     keys = {r["name"]: family(kind, r["name"]) for r in rows}
     carried, named = {}, {}
     for name, sid in pairs:
