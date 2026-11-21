@@ -15,7 +15,8 @@ import { noFacets } from "../../../components/facets";
 import { ViewSwitch } from "../ViewSwitch";
 import { Judgments } from "./Judgments";
 import { FEW_SESSIONS, stored, trendCounts, trendText, weightSide, weightValue, byWeight } from "./figures";
-import { prevented, renderPage, renderRouter } from "../../../testing";
+import { drawn } from "../../../components/echart/testing";
+import { makeTestClient, prevented, renderPage, renderRouter } from "../../../testing";
 import { setSearch } from "../../../url";
 
 const fixture = insights as InsightsPayload, none = empty as InsightsPayload;
@@ -364,32 +365,22 @@ describe("Judgments view", () => {
       expect(panel().querySelector("ol.ledger")).toBeNull(); // bars, no more ledger rows
     });
 
-    it("draws each week as one full-height bar stacked by outcome, best first, with its sessions over it", async () => {
+    // The bars' geometry (full height, best outcome first, half width for few sessions, a thin part kept visible) is
+    // outcomeWeeks.test.ts'; here the chart is handed the weeks on screen, and the key names the parts.
+    it("draws each week as one bar stacked by outcome, best first, with the parts named in the key", async () => {
       await up();
-      const bars = [...chart().querySelectorAll<SVGGElement>("svg g.bar-seg")];
-      expect(bars.length).toBe(3);
-      // The parts of a bar add up to the whole plot (less the 2px gaps between them), whatever the week's sessions.
-      const plot = +chart().querySelector<SVGRectElement>("svg rect.hit")!.getAttribute("height")!;
-      const heights = bars.map(b => [...b.querySelectorAll("rect")].map(r => +r.getAttribute("height")!));
-      expect(heights.map(h => h.length)).toEqual([4, 3, 4]); // a part with no session is not drawn
-      heights.forEach(h => expect(h.reduce((a, b) => a + b, 0) + 2 * (h.length - 1)).toBeCloseTo(plot, 5));
-      expect(heights[0]![0]! / plot).toBeCloseTo(7 / 12, 2); // fully achieved, at the bottom
-      // The sample size: the count over each bar, since every bar is as tall as the next.
-      expect(bars.map(b => b.querySelector("text")!.textContent)).toEqual(["12", "3", "8"]);
+      const drawing = await drawn();
+      expect(drawing.points).toBe(3);
+      expect((drawing.option.xAxis as { data: string[] }[])[0]!.data).toEqual(trend.map(w => w.week));
+      expect((drawing.option.series as { data: number[][] }[])[0]!.data.map(r => r.length - 2)).toEqual([5, 5, 5]); // five parts a week
       // The parts keep one order and one color each, named in the key.
       expect([...panel().querySelectorAll(".legend .key")].map(k => k.textContent)).toEqual(
         ["Fully achieved", "Mostly achieved", "Partially achieved", "Not achieved", "No clear outcome", `Under ${FEW_SESSIONS} sessions`]);
-      expect(bars[0]!.querySelector("rect")!.getAttribute("fill")).toBe("var(--good)");
+      expect([...panel().querySelectorAll<HTMLElement>(".legend .key i")][0]!.style.background).toBe("var(--good)");
     });
 
-    it("marks a week with few sessions: a half-width bar in full color, a key for it, and the words in its reading", async () => {
+    it("marks a week with few sessions: a key for it, and the words in its reading", async () => {
       await up();
-      const bars = [...chart().querySelectorAll<SVGGElement>("svg g.bar-seg")];
-      expect(bars.map(b => b.classList.contains("few"))).toEqual([false, true, false]);
-      const width = (b: SVGGElement) => +b.querySelector("rect")!.getAttribute("width")!;
-      expect(width(bars[1]!)).toBeCloseTo(width(bars[0]!) / 2, 5);
-      // Not faded: a faint part would drop below 3:1 against the surface and its neighbours.
-      expect(bars[1]!.querySelectorAll("rect[opacity], rect[style]").length).toBe(0);
       expect(FEW_SESSIONS).toBe(5);
       expect(trendText(trend[1]!)).toBe("3 analysed sessions: 1 fully achieved (33%), 1 partially achieved (33%), 1 not achieved (33%); few sessions: one session moves this bar a lot");
       cleanup();
@@ -403,7 +394,7 @@ describe("Judgments view", () => {
       expect(chart().getAttribute("aria-label")).toBe(
         "Outcome mix per week of session start, 3 weeks: 70% of 23 analysed sessions fully or mostly achieved. Use the left and right arrow keys to read each week.");
       expect(chart().getAttribute("tabindex")).toBe("0");
-      expect(chart().querySelector("svg")!.getAttribute("aria-hidden")).toBe("true"); // the group's name, the reading and the table stand for it
+      expect(chart().querySelector(".echart-plot")!.getAttribute("aria-hidden")).toBe("true"); // the group's name, the reading and the table stand for it
       expect(readout()).toBe("");
       act(() => chart().focus());
       fireEvent.keyDown(chart(), { key: "ArrowRight" });
@@ -460,16 +451,6 @@ describe("Judgments view", () => {
       expect(how).toContain("A week with fewer than 5 sessions is drawn at half width.");
     });
 
-    it("keeps a part of 1 in 150 visible: at least 1px painted, with the 2px gap below it", async () => {
-      show({ ...fixture, trend: [week("2026-10-19", 149, 0, 0, 1), trend[2]!] });
-      await lede();
-      const plot = +chart().querySelector<SVGRectElement>("svg rect.hit")!.getAttribute("height")!;
-      const h = [...chart().querySelectorAll<SVGGElement>("svg g.bar-seg")[0]!.querySelectorAll("rect")].map(r => +r.getAttribute("height")!);
-      expect(h.length).toBe(2);
-      expect(h[1]!).toBeGreaterThanOrEqual(1);
-      expect(h[0]! + h[1]! + 2).toBeCloseTo(plot, 5); // the slots still fill the bar
-    });
-
     it("leaves Alt, Ctrl, Meta and Shift keys to the browser", async () => {
       await up();
       act(() => chart().focus());
@@ -481,17 +462,49 @@ describe("Judgments view", () => {
       }
     });
 
-    it("thins the sample counts on a phone with 26 weeks, so no two overlap", async () => {
-      // A 320px phone: the panel's plot box is about 254px wide.
-      vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(254);
+    // ECharts thins the counts when they would overlap, as it does the weeks: the browser check sees it on a phone.
+    it("draws each week's sessions over its bar, on an axis whose labels ECharts thins, with 26 weeks", async () => {
       const weeks = Array.from({ length: 26 }, (_, i) => week(new Date(Date.UTC(2026, 4, 4 + 7 * i)).toISOString().slice(0, 10), 10 + i, 2, 1, 1));
       show({ ...fixture, trend: weeks });
       await lede();
-      const counts = [...chart().querySelectorAll<SVGTextElement>("svg g.bar-seg > text")].filter(t => /^\d+$/.test(t.textContent!) && +t.getAttribute("y")! < 20);
-      expect(counts.length).toBeGreaterThan(1);
-      expect(counts.length).toBeLessThan(26);
-      const xs = counts.map(t => +t.getAttribute("x")!), wide = (2 * 6.6 + 4); // two digits at 11px, with room around them
-      xs.slice(1).forEach((x, k) => expect(x - xs[k]!).toBeGreaterThanOrEqual(wide));
+      const counts = (await drawn()).option.xAxis as { position?: string; data: string[]; axisLabel: { hideOverlap?: boolean; formatter: (w: string) => string } }[];
+      expect(counts[1]).toMatchObject({ position: "top", axisLabel: { hideOverlap: true } });
+      expect(counts[1]!.data.map(w => counts[1]!.axisLabel.formatter(w))).toEqual(weeks.map(w => String(w.n)));
+    });
+
+    it("keeps the week read when newer figures of the same weeks arrive, and ends it when a week joins", async () => {
+      let now: InsightsPayload = { ...fixture, trend };
+      const client = makeTestClient();
+      mockApi({ "/api/insights": () => now });
+      history.replaceState(null, "", "/usage?range=0");
+      renderPage(<Judgments views={<ViewSwitch view="judgments" />} />, client);
+      await lede();
+      await drawn();
+      act(() => chart().focus());
+      fireEvent.keyDown(chart(), { key: "ArrowRight" });
+      expect(readout()).toMatch(/: 12 analysed sessions/);
+      // A background refresh: the first week gained a session.
+      now = { ...fixture, trend: [week("2026-10-19", 8, 2, 2, 1), trend[1]!, trend[2]!] };
+      await act(() => client.refetchQueries());
+      await waitFor(() => expect(readout()).toMatch(/: 13 analysed sessions: 8 fully achieved/));
+      expect(tip().style.display).toBe("block");
+      // A new week: another view, so the reading ends.
+      now = { ...now, trend: [...now.trend, week("2026-11-09", 1, 1, 1, 1, 1)] };
+      await act(() => client.refetchQueries());
+      await waitFor(() => expect(readout()).toBe(""));
+      expect(tip().style.display).toBe("none");
+    });
+
+    it("closes a tooltip the pointer opened on Escape, with the focus on another control", async () => {
+      await up();
+      const drawing = await drawn();
+      const toggle = within(panel()).getByRole("button", { name: "Show data table" });
+      act(() => toggle.focus());
+      act(() => drawing.fire("mousemove", drawing.pointAt(0)));
+      expect(tip().style.display).toBe("block");
+      await userEvent.keyboard("{Escape}");
+      expect(tip().style.display).toBe("none");
+      expect(document.activeElement).toBe(toggle);
     });
   });
 

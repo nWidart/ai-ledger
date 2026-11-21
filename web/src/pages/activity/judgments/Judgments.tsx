@@ -384,7 +384,7 @@ export function Judgments({ views }: { views: ReactNode }) {
   const [h] = useView();
   // The URL's source stays for the other pages and for this view's links; the request names none.
   const here = viewOf(h), want: View = { ...here, source: "" };
-  const url = insightsUrl(want), { data: d, error, loading, retry } = useApi(queries.insights(want), { keepPrevious: true });
+  const url = insightsUrl(want), { data: d, error, loading, previous, retry } = useApi(queries.insights(want), { keepPrevious: true });
   useScopeProjects(d?.projects ?? []);
   const [shown, setShown] = useState(want);
   // Held here, not in Sessions or Friction: they unmount for a view with no analysed session, and the choices last the page visit.
@@ -396,6 +396,8 @@ export function Judgments({ views }: { views: ReactNode }) {
   // The first load shows the placeholder; the loading look (dimmed figures) belongs to a page that has figures.
   const first = !d && !error;
   const counted = d && d.meta.sessions > 0;
+  // The request whose figures are on screen: the view shown while a new one loads over the previous figures.
+  const onScreen = previous ? insightsUrl(shown) : url;
   return (
     <main id="content" className={"wrap pg-judgments" + (slow && !first ? " loading" : "") + (grow ? " grow" : "")} ref={wrap} aria-busy={loading || undefined}>
       {/* Drawn through every state, as Overview draws it: a switch keeps its focus while this view's first request is pending. */}
@@ -417,7 +419,7 @@ export function Judgments({ views }: { views: ReactNode }) {
             <Outcomes d={d} />
             <Friction d={d} weight={weight} onWeight={setWeight} />
           </div>
-          {d.trend.length > 1 && <OutcomeTrend weeks={d.trend} />}
+          {d.trend.length > 1 && <OutcomeTrend weeks={d.trend} view={onScreen} />}
           <Feelings d={d} />
           <Sessions d={d} view={{ ...shown, source: here.source }} sort={sort} onSort={setSort} />
           <div className="drawers"><Goals d={d} /><SessionTypes d={d} />{counted && <SessionFigures d={d} />}<CoverageDrawer d={d} />{howto && <HowItWorks d={d} />}</div>
