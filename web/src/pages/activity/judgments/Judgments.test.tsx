@@ -468,6 +468,42 @@ describe("Judgments view", () => {
       expect(tip().style.display).toBe("none");
     });
 
+    // The chart's view is the request whose figures it draws: a cached view shown while it refetches is that view, so its
+    // reading lasts while another range loads over it, and ends only when other figures are drawn.
+    it("keeps the week read on a cached view that refetches while another range loads over it", async () => {
+      const held = () => { let resolve!: (v: InsightsPayload) => void; const promise = new Promise<InsightsPayload>(r => { resolve = r; }); return { promise, resolve }; };
+      const week7 = { ...fixture, trend: trend.slice(1) }, refetch7 = held(), load14 = held();
+      let seven = 0;
+      const client = makeTestClient();
+      mockApi({ "/api/insights": q => (q.get("range") === "14" ? load14.promise : q.get("range") !== "7" ? { ...fixture, trend } : seven++ ? refetch7.promise : week7) });
+      history.replaceState(null, "", "/usage?range=0");
+      renderPage(<Judgments views={<ViewSwitch view="judgments" />} />, client);
+      await lede();
+      // The 7-day view, cached; back to all time, then an ingest marks the cache stale.
+      act(() => setSearch({ range: "7" }));
+      await waitFor(() => expect(chart().getAttribute("aria-label")).toMatch(/2 weeks/));
+      act(() => setSearch({ range: "0" }));
+      await waitFor(() => expect(chart().getAttribute("aria-label")).toMatch(/3 weeks/));
+      await act(() => client.invalidateQueries());
+      // The 7-day view again: its cached figures are drawn while it refetches, and a week is read.
+      act(() => setSearch({ range: "7" }));
+      await waitFor(() => expect(chart().getAttribute("aria-label")).toMatch(/2 weeks/));
+      await drawn();
+      act(() => chart().focus());
+      fireEvent.keyDown(chart(), { key: "ArrowRight" });
+      expect(readout()).toMatch(/: 3 analysed sessions/);
+      // 14 days, not cached: the 7-day figures stay drawn while it loads, and so does the reading.
+      act(() => setSearch({ range: "14" }));
+      await screen.findByText(/^Loading judgments for .*14 days/);
+      expect(chart().getAttribute("aria-label")).toMatch(/2 weeks/);
+      expect(readout()).toMatch(/: 3 analysed sessions/);
+      expect(tip().style.display).toBe("block");
+      // Other figures drawn: the reading ends.
+      await act(async () => { load14.resolve({ ...fixture, trend }); refetch7.resolve(week7); await load14.promise; });
+      await waitFor(() => expect(chart().getAttribute("aria-label")).toMatch(/3 weeks/));
+      expect(readout()).toBe("");
+    });
+
     it("closes a tooltip the pointer opened on Escape, with the focus on another control", async () => {
       await up();
       const drawing = await drawn();

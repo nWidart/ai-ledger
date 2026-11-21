@@ -161,7 +161,7 @@ Alternative: a `selected` prop on the wrapper. Rejected: the wrapper would add a
 | Chart | Key | Why |
 |---|---|---|
 | Work | range, bucket, first bar's day, project, source, automated filter, measure | A bar keeps its index while the view starts on the same bar and counts in the same bucket. The measure is in the key as Cost's metric is: the chart reads other figures. |
-| Outcome trend | the Judgments view on screen (its request URL), and every week's date | Weeks without a session are left out, so an older week can join in the middle and move the bars. The wrapper maps nothing by key, so any change to the list is another view. |
+| Outcome trend | the Judgments view on screen (the request URL of the figures drawn, cached ones shown while they refetch included), and every week's date | Weeks without a session are left out, so an older week can join in the middle and move the bars. The wrapper maps nothing by key, so any change to the list is another view. The view on screen follows the figures, not the end of a load: a cached view shown while it refetches is that view, so a reading on it lasts while another range loads over it. |
 
 - Not in the work chart's key: the selection, and anything from the figures. A new bar at the end keeps the view.
 - The outcome trend takes the view from `Judgments.tsx` as a prop. A new newest week ends its reading, at most once a week. It has no zoom to lose.

@@ -389,7 +389,9 @@ export function Judgments({ views }: { views: ReactNode }) {
   const [shown, setShown] = useState(want);
   // Held here, not in Sessions or Friction: they unmount for a view with no analysed session, and the choices last the page visit.
   const [sort, setSort] = useState<SortId>("newest"), [weight, setWeight] = useState<Weight>("cost");
-  useEffect(() => { if (d && !loading && !error) setShown(want); }, [d, loading, error, url]); // want is read through url
+  // The view whose figures are on screen: the request's own, also when they are cached ones shown while it refetches. The
+  // figures of an earlier request, kept while this one loads or after it failed, leave it on that request.
+  useEffect(() => { if (d && !previous) setShown(want); }, [d, previous, url]); // want is read through url
   const { slow, grow, wrap, retryBtn } = useLanding(d, url, loading, error, ":scope > :is(.grid2, .panel, .vitals, .drawers)");
   const howto = d && d.coverage.stored_facets > 0;
   const figures = d && d.coverage.facets > 0;

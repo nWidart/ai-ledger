@@ -53,6 +53,7 @@ How to read a step:
 - [x] 5.8 **Peak label inside the plot.** `pointLabel` measures its text and slides it inside the plot, or draws none; the 300px room rule is gone from the work chart and Cost (design decision 3).
 - [x] 5.9 **Rate dots in the days shown.** `lineDots` draws the rate line's dots as a custom series and decides a solid dot as it is drawn, so a point whose neighbour the zoom leaves out is a dot over its bar (design decision 3); a real-ECharts test at both edges of the window and a `chartfit` line.
 - [x] 5.10 **Selection frame in a narrow band.** `selectionMark`'s line is at most half the band, so the frame never leaves its band (design decision 4).
+- [x] 5.11 **Judgments' view on screen.** The view Judgments names as shown follows its figures, cached ones shown while they refetch included, so the outcome trend's reading lasts while another range loads over them (design decision 7). The work chart keys its view from the payload it draws and needed no change.
 
 ## Workflow follow-up
 
