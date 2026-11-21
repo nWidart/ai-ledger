@@ -154,12 +154,14 @@ export interface SessionDetail {
   /** null when /insights has not analysed the session (every Codex session). */
   insight: SessionInsight | null;
   models: SessionModelRow[];
-  timeline: { minute: Ts; tokens: number; cost: number | null; context: number }[];
+  /** context: the minute's largest request context; null when no request of it states one. */
+  timeline: { minute: Ts; tokens: number; cost: number | null; context: number | null }[];
   tools: { tool: string; calls: number; errors: number; p50_ms: number | null; failure_rate: number | null }[];
   commits: { tool_use_id: string; start_ts: Ts | null; command: string | null }[];
   prompts: { prompts: number; interrupted: number };
   error_loops: ErrorLoop[];
-  requests: { ts: Ts | null; model: string | null; subagent: boolean; context: number; output: number; cost: number | null }[];
+  /** context: null when unknown: a Grok request whose tokens are a whole turn's, not one model call's. */
+  requests: { ts: Ts | null; model: string | null; subagent: boolean; context: number | null; output: number; cost: number | null }[];
   calls: { id: string; tool: string; start_ts: Ts | null; end_ts: Ts | null; is_error: boolean; category: string | null; subagent: boolean; is_commit: boolean | null }[];
   compaction_ts: Ts[];
   first_prompt: string | null; first_prompt_cut: boolean; title: string | null; truncated: boolean;

@@ -190,8 +190,9 @@ def open_store(path=None):
     con.execute("ALTER TABLE requests ADD COLUMN IF NOT EXISTS speed VARCHAR")  # stores from before fast-mode pricing; NULL until rebuild
     # The USD cost a source states for a request (Grok's); NULL for sources that state none, so no line is read again.
     con.execute("ALTER TABLE requests ADD COLUMN IF NOT EXISTS reported_cost DOUBLE")
-    # The context size a source states for a request (Grok's, whose token columns are a share of its turn's); NULL for
-    # sources that state none, whose context is the request's input and cache tokens (metrics.context_of).
+    # The context size a source states for a request (Grok's, whose token columns are a share of its turn's); 0 for a
+    # Grok request whose tokens are not one call's, which states no context; NULL for sources that state none, whose
+    # context is the request's input and cache tokens (metrics.context_of).
     con.execute("ALTER TABLE requests ADD COLUMN IF NOT EXISTS context_tokens BIGINT")
     con.execute("ALTER TABLE tool_calls ADD COLUMN IF NOT EXISTS result_bytes BIGINT")  # stores from before the Context page; NULL until rebuild
     con.execute("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS context_window BIGINT")

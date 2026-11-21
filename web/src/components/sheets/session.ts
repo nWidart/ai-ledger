@@ -93,8 +93,9 @@ export interface TimelineModel {
 /** ts: the browser's text scale (textScale()); the room around the labels grows with it, the plot keeps its size. */
 export function timelineModel(s: SessionDetail, width: number, ts = 1): TimelineModel | null {
   const i = s.info, limit = i.context_limit || null;
-  const reqs: TlReq[] = s.requests.filter(r => !r.subagent && r.ts)
-    .map(r => ({ t: Date.parse(r.ts!), context: r.context, model: r.model ?? "", cost: r.cost }));
+  // A request with no known context (a Grok turn whose calls cannot be told) is no point of the context line.
+  const reqs: TlReq[] = s.requests.filter(r => !r.subagent && r.ts && r.context != null)
+    .map(r => ({ t: Date.parse(r.ts!), context: r.context!, model: r.model ?? "", cost: r.cost }));
   const calls: TlCall[] = s.calls.map(c => ({ id: c.id, tool: c.tool, t: Date.parse(c.start_ts || c.end_ts || ""), is_error: c.is_error,
     category: c.category, is_commit: !!c.is_commit })).filter(c => !isNaN(c.t));
   const comps = (s.compaction_ts || []).map(t => Date.parse(t)).filter(t => !isNaN(t));

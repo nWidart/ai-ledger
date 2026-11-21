@@ -393,6 +393,14 @@ describe("timelineModel", () => {
     expect([n.pb, w.pb]).toEqual([144, 194]);
     expect(w.H - n.H).toBe(50);
   });
+  it("plots no point for a request whose context is unknown", () => {
+    // A Grok turn whose calls cannot be told: its tokens are a whole turn's, so it states no context.
+    const reqs = sessionGrok.requests.map((r, k) => (k === 1 ? { ...r, context: null } : r));
+    const m = timelineModel({ ...sessionGrok, requests: reqs }, 600)!;
+    const known = sessionGrok.requests.filter((r, k) => k !== 1 && !r.subagent);
+    expect(m.reqs.map(r => r.context)).toEqual(known.map(r => r.context));
+    expect(m.maxC).toBe(Math.max(...known.map(r => r.context!)));
+  });
 });
 
 describe("ToolSheet", () => {

@@ -348,7 +348,39 @@ class UsageTest(GrokCase):
         with open(path, "w") as fh:
             fh.writelines(x for x in lines if not any(f'"{t}"' in x for t in grok.CALL_TYPES))
         self.ingest()
-        self.assertEqual(self.q("SELECT context_tokens FROM requests"), [(None,)])
+        # 0: the row's tokens are a whole turn's, not one call's, so its context is unknown (metrics.context_of: NULL).
+        self.assertEqual(self.q("SELECT context_tokens FROM requests"), [(0,)])
+
+    def test_fallback_turn_shows_no_context(self):
+        # A turn of millions of input tokens whose calls cannot be told: its tokens and cost count, its context is no point.
+        from ai_ledger import context, live
+        path, = self.put("long-turn")
+        with open(path) as fh:
+            lines = [json.loads(x) for x in fh if not any(f'"{t}"' in x for t in grok.CALL_TYPES)]
+        for d in lines:
+            u = grok.update(d)
+            if u.get("sessionUpdate") == "turn_completed":
+                for x in (u["usage"], *u["usage"]["modelUsage"].values()):
+                    x["inputTokens"] = 5_000_000 + x["cachedReadTokens"]
+        with open(path, "w") as fh:
+            fh.writelines(json.dumps(d) + "\n" for d in lines)
+        self.ingest()
+        cur = self.con.cursor()
+        sid = SESSION["long-turn"]
+        self.assertEqual(self.q("SELECT input FROM requests"), [(5_000_000,)])
+        (end, last) = cur.execute("SELECT max(r.ts), max(s.last_ts) FROM requests r, sessions s").fetchone()
+        one = live.session(cur, sid, now=live.aware(last), prices={})
+        self.assertIsNone(one["context"])
+        self.assertEqual(one["requests"], 1)
+        self.assertAlmostEqual(one["cost"], 0.1805245)
+        self.assertEqual(live.pulse(cur, sid, live.aware(end))["context"], [])
+        s = metrics.session(cur, sid, prices={})
+        self.assertEqual([r["context"] for r in s["requests"]], [None])
+        self.assertEqual([r["context"] for r in s["timeline"]], [None])
+        self.assertEqual(s["models"][0]["input"], 5_000_000)
+        _, _, _, _, _, rq, rp = metrics.view("", 0, {}, datetime(2026, 12, 1).date())
+        self.assertEqual(self.con.execute(f"{context.ctes(rq)} SELECT count(*) FROM turns", rp).fetchall(), [(0,)])
+        self.assertEqual(metrics.usage(cur, prices={}, today=datetime(2026, 12, 1).date())["totals"]["input"], 5_000_000)
 
     def test_store_without_context_tokens_gains_it_empty(self):
         self.put("long-turn")

@@ -731,8 +731,9 @@ def pulse(cur, sid, now):
     context = cur.execute(f"""SELECT ts, tokens FROM (
             SELECT ts, {metrics.context_of()} AS tokens, ts > ? AS inside,
               row_number() OVER (PARTITION BY ts > ? ORDER BY ts DESC) AS back
-            FROM requests WHERE session_id = ? AND NOT subagent AND ts IS NOT NULL AND ts <= ?)
-        WHERE inside OR back = 1 ORDER BY ts""", [start, start, sid, naive]).fetchall()
+            FROM requests WHERE session_id = ? AND NOT subagent AND ts IS NOT NULL AND ts <= ?
+              AND {metrics.context_of()} IS NOT NULL)
+        WHERE inside OR back = 1 ORDER BY ts""", [start, start, sid, naive]).fetchall()  # an unknown context is no point
     ticks = cur.execute("""SELECT end_ts, coalesce(is_error, false) FROM tool_calls
         WHERE session_id = ? AND end_ts > ? AND end_ts <= ? ORDER BY end_ts""", [sid, start, naive]).fetchall()
     return dict(start=iso(aware(start)), end=iso(now), context=[dict(ts=iso(aware(ts)), tokens=n or 0) for ts, n in context],

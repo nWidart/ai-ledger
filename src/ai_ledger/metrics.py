@@ -314,10 +314,13 @@ _RATE = dict(input=("p_in", "l_in", "f_in"), output=("p_out", "l_out", "f_out"),
 
 def context_of(alias=""):
     """SQL: the context a request read, for every reader of a request as a context or prompt size. It is the context
-    size the source stated (context_tokens: Grok's, whose token columns are a share of its turn's usage), else its input
-    and cache tokens. alias is the table's alias with its dot. Sums of token usage and cost read the token columns."""
+    size the source stated (context_tokens: Grok's, whose token columns are a share of its turn's usage); NULL, unknown,
+    when that is 0 (a Grok request whose tokens are not one call's states none); else, for a source that states none
+    (context_tokens NULL), its input and cache tokens. alias is the table's alias with its dot. Sums of token usage and
+    cost read the token columns."""
     a = alias
-    return f"coalesce({a}context_tokens, {a}input + {a}cache_read + {a}cache_5m + {a}cache_1h)"
+    return (f"CASE WHEN {a}context_tokens IS NULL THEN {a}input + {a}cache_read + {a}cache_5m + {a}cache_1h "
+            f"ELSE nullif({a}context_tokens, 0) END")
 
 
 def requests_cte(pcte, where):
