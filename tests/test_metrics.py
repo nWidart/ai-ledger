@@ -135,6 +135,33 @@ class ReportedCostTest(unittest.TestCase):
         self.assertEqual([u["totals"][f"cost_{k}"] for k in metrics.PRICE_KINDS], [None] * 5)
 
 
+def add_grok_session(con):
+    """A Grok session (g1, project foo, Nov 5) for the web fixtures, beside SourceFilterTest's Claude and Codex sessions: three
+    model calls of a model with no rates that carry the cost Grok reported ($0.75 in all) and no effort, one turn's run with
+    model time and no tool time or lines, a prompt, a failing run_terminal_command and a read_file. The test classes here
+    leave it out, so their figures stay those of Claude Code and Codex."""
+    c = con.cursor()
+    store.insert(c, "sessions", ["session_id", "project", "cwd", "first_ts", "last_ts", "compactions", "peak_context", "peak_model",
+                                 "source", "context_window"],
+                 [("g1", "foo", "/Users/example/foo", "2026-11-05 14:00:00", "2026-11-05 14:20:00", 0, 120_000, "grok-4.7-build",
+                   "grok", 256_000)])
+    store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "effort", "subagent", "input", "output", "thinking",
+                                 "cache_read", "cache_5m", "cache_1h", "thinking_ms", "reported_cost"],
+                 [("g1-1", "g1", "2026-11-05 14:01:00", "grok-4.7-build", None, False, 40_000, 2_000, 0, 30_000, 0, 0, 0, 0.2),
+                  ("g1-2", "g1", "2026-11-05 14:05:00", "grok-4.7-build", None, False, 20_000, 3_000, 0, 80_000, 0, 0, 0, 0.25),
+                  ("g1-3", "g1", "2026-11-05 14:12:00", "grok-4.7-build", None, False, 10_000, 1_000, 0, 110_000, 0, 0, 0, 0.3)])
+    store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "input_summary", "start_ts", "end_ts", "is_error",
+                                   "category", "subagent", "is_commit", "is_test", "test_passed"],
+                 [("g1-t1", "g1", "run_terminal_command", "npm test", "2026-11-05 14:02:00", "2026-11-05 14:02:09", True, "x", False,
+                   False, True, False),
+                  ("g1-t2", "g1", "read_file", "src/app.ts", "2026-11-05 14:03:00", "2026-11-05 14:03:01", False, None, False,
+                   False, False, None)])
+    store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [("g1-p1", "g1", "2026-11-05 14:00:00", False)])
+    # one turn: 60 s of model time over its 6,000 output tokens (100 per second); Grok states no tool time or lines
+    store.insert(c, "session_runs", ["session_id", "start_ms", "api_ms", "tool_ms", "lines_added", "lines_removed"],
+                 [("g1", 1_793_800_000_000, 60_000, None, None, None)])
+
+
 class MetricsTest(unittest.TestCase):
     """Fixture: project foo (sessions s1, s2), project bar (s3, outside a 7-day range), and the automated project
     observer-sessions (o1, with a request and a prompt on each of Nov 4 and 5), which every view leaves out by default."""

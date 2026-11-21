@@ -501,7 +501,7 @@ def tool_rates(cur, W, fp):
     tc = f"tool_calls t JOIN sessions s USING (session_id) WHERE {W('coalesce(t.start_ts, t.end_ts)')}"
     tools = rows(cur, f"""SELECT tool, count(*) AS calls, count(*) FILTER (WHERE is_error) AS errors,
         quantile_cont({latency()}, 0.5) AS p50_ms, quantile_cont({latency()}, 0.95) AS p95_ms
-        FROM {tc} GROUP BY 1 ORDER BY calls DESC""", fp)
+        FROM {tc} GROUP BY 1 ORDER BY calls DESC, 1""", fp)
     mcp = rows(cur, f"SELECT mcp_server AS name, count(*) AS calls, count(*) FILTER (WHERE is_error) AS errors "
                     f"FROM {tc} AND mcp_server IS NOT NULL GROUP BY 1 ORDER BY calls DESC", fp)
     skills = rows(cur, f"SELECT skill AS name, count(*) AS calls, count(*) FILTER (WHERE is_error) AS errors "
@@ -967,7 +967,7 @@ def session_detail(cur, sid, allq, p, prices):
                            f"FROM rq GROUP BY 1 ORDER BY 1", p),
         tools=rate_rows(rows(cur, f"""SELECT tool, count(*) AS calls, count(*) FILTER (WHERE is_error) AS errors,
             quantile_cont({latency()}, 0.5) AS p50_ms FROM tool_calls WHERE session_id = ?
-            GROUP BY 1 ORDER BY calls DESC""", [sid])),
+            GROUP BY 1 ORDER BY calls DESC, 1""", [sid])),
         commits=rows(cur, """SELECT tool_use_id, start_ts, left(input_summary, 200) AS command FROM tool_calls
             WHERE session_id = ? AND is_commit AND test_passed ORDER BY start_ts""", [sid]),
         prompts=rows(cur, "SELECT count(*) AS prompts, count(*) FILTER (WHERE interrupted) AS interrupted FROM prompts WHERE session_id = ?", [sid])[0],
