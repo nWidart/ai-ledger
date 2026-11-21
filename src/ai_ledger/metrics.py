@@ -842,11 +842,12 @@ def active_cte(ids, on_days=False):
 def runs_cte(ids):
     """CTEs ending in runs(session_id, model_ms, tool_ms, lines_added, lines_removed, output) for each session that ids (SQL)
     selects and that has a run (session_runs): its figures summed over its runs, and output its whole output, subagents
-    included, to match. Output tokens include thinking tokens, as Claude Code reports them. ids is used once."""
+    included, to match; 0 for a session with no model time, so a speed's output and model time come from the same sessions.
+    Output tokens include thinking tokens, as Claude Code reports them. ids is used once."""
     return f"""run_sums AS (SELECT session_id, sum(api_ms) AS model_ms, sum(tool_ms) AS tool_ms, sum(lines_added) AS lines_added,
                    sum(lines_removed) AS lines_removed FROM session_runs WHERE session_id IN ({ids}) GROUP BY 1),
         run_output AS (SELECT session_id, sum(output) AS output FROM requests
-                       WHERE session_id IN (SELECT session_id FROM run_sums) GROUP BY 1),
+                       WHERE session_id IN (SELECT session_id FROM run_sums WHERE model_ms > 0) GROUP BY 1),
         runs AS (SELECT run_sums.*, coalesce(run_output.output, 0) AS output FROM run_sums LEFT JOIN run_output USING (session_id))"""
 
 

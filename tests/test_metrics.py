@@ -1226,6 +1226,9 @@ class SessionRunsTest(unittest.TestCase):
         try:
             self.assertEqual(set(ids(sort="output_per_s", desc=True)[2:]), {"c", "x"})
             self.assertEqual(set(ids(sort="model_ms")[2:]), {"c", "x"})
+            # Its output stays out of the vital and the trend too: they read 98 tok/s from a and b alone, as the rows do.
+            self.assertEqual(self.totals()["output_per_s"], 98.0)
+            self.assertEqual(metrics.usage(c, "foo", 7, prices=PRICES, today=TODAY)["speed_trend"][0]["output_per_s"], 98.0)
         finally:
             c.execute("DELETE FROM session_runs WHERE session_id = 'c'")
 
