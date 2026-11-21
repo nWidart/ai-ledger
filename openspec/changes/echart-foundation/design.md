@@ -146,7 +146,7 @@ export interface ChartEnv {
 
 Rules that keep this safe:
 
-- Only color tokens go through `resolveColor`. A token that is not a color gives the inherited text color with no error (spike). `tokens.test.ts` reads `theme.css` and fails when a token named in `tokens.ts` or in a `var(--…)` string of `cost.ts` is not declared there as a color.
+- Only color tokens go through `resolveColor`. A token that is not a color gives the inherited text color with no error (spike). `tokens.test.ts` reads `theme.css` and fails when a token named in `tokens.ts` is not declared there as a color; `costDaily.test.ts` does the same for the `var(--…)` strings of `cost.ts` and the project colors of `colors.ts`.
 - Chart tokens stay hex, `rgb()` or `rgba()` inside `light-dark()`. A token in `oklch()` or `color-mix()` would compute to a form zrender's color parser does not read. The same test checks it.
 
 Alternative: register each token with `@property { syntax: "<color>" }` so `getPropertyValue` resolves. Rejected: one registration per token in `theme.css` to keep in step, for the same result.
@@ -264,7 +264,7 @@ Alternative: feed standard bars with values adjusted to the minimum height. Reje
 
 ### 9. Cost chart: every behavior and its ECharts form
 
-`CostChart.tsx` splits in two. `costChart.ts` is pure: `costModel(d, metric, hidden, stack, scale)` returns the kinds, the days, the drawn values, the averages, the peak and the flags, and `costOption(model, env)` returns the option. `CostChart.tsx` keeps the heading, the switches, the legend, the texts and the table, and renders `<EChart>`.
+`CostChart.tsx` splits in two. `costDaily.ts` is pure: `costModel(d, metric, hidden, stack, scale)` returns the kinds, the days, the drawn values, the averages, the peak and the flags, and `costOption(model, env)` returns the option. It is not named `costChart.ts`: on a case-insensitive file system, as macOS has by default, that name clashes with `CostChart.tsx`. `CostChart.tsx` keeps the heading, the switches, the legend, the texts and the table, and renders `<EChart>`.
 
 | Behavior today | ECharts form |
 |---|---|
@@ -308,7 +308,7 @@ What will look or behave differently:
 | Layer | What runs | What it proves |
 |---|---|---|
 | `stack.test.ts` | Pure `stackRects` | The thin-segment tests from `CostChart.test.tsx`: 1% and 0.1% shares above zero height, gaps kept, the bar fills its height, rounded top, the hatch twin |
-| `costChart.test.ts` | Pure `costModel` and `costOption` with a fake env (`color: s => s`) | The moved geometry tests: series colors per stacking, the average's 13 points and no point for today, hatch on the last day only, the 0 to 100% axis, no bar for an empty day, no average or peak in Share, both kept in Volume |
+| `costDaily.test.ts` | Pure `costModel` and `costOption` with a fake env (`color: s => s`) | The moved geometry tests: series colors per stacking, the average's 13 points and no point for today, hatch on the last day only, the 0 to 100% axis, no bar for an empty day, no average or peak in Share, both kept in Volume, and every color it hands to `env.color` declared in `theme.css` as a color |
 | `tokens.test.ts` | `theme.css` as text | Every chart token is declared as a hex or `rgb()` color |
 | `EChart.test.tsx` | The wrapper on the fake runtime | Keys, modified keys, Enter, Escape focused and on the document, blur, tooltip, readout, the actions sent to the runtime, a redraw on a theme change, `resize()`, `dispose()`, `animation: false`, the box's height before load, the failure text, zoom keys and reset |
 | `CostChart.test.tsx` | The component on the fake runtime | The kept tests: tooltip rows, Other's names, unpriced wording, "so far", stack switch, legend keys and filters, the data table, Share readings |

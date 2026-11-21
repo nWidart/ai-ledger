@@ -28,7 +28,7 @@ None.
 
 ## Impact
 
-- **Code.** New `web/src/components/echart/` (the wrapper, the lazy runtime, the token resolver, the stack and option helpers, a test fake). `web/src/pages/cost/CostChart.tsx` is rewritten around `<EChart>`, with its figures and option in a new pure module `costChart.ts`. `chart.css`, `theme.css` and `cost.css` lose their Cost-only SVG rules. `chart.ts` stays for the charts not yet migrated.
+- **Code.** New `web/src/components/echart/` (the wrapper, the lazy runtime, the token resolver, the stack and option helpers, a test fake). `web/src/pages/cost/CostChart.tsx` is rewritten around `<EChart>`, with its figures and option in a new pure module `costDaily.ts`. `chart.css`, `theme.css` and `cost.css` lose their Cost-only SVG rules. `chart.ts` stays for the charts not yet migrated.
 - **Dependencies.** `echarts` 6.1.0 (brings `zrender` and `tslib`). The packaged web build grows by about 0.54 MB (182 kB gzip), in one lazy chunk.
 - **Tests.** `CostChart.test.tsx` keeps its keyboard, tooltip, readout, legend and table tests; its SVG geometry tests move to tests of the pure option builder and the stack helper. New wrapper tests run against a fake runtime, and one smoke test draws with real ECharts in jsdom.
 - **Tooling.** `web/scripts/check-bundle.mjs`, a `tools/demo` browser check for the chart, and new selectors in `tools/demo/firstscreen.mjs`. The docs site's Cost chart images are recorded again.
