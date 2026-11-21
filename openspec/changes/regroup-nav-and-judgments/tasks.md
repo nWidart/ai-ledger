@@ -42,7 +42,7 @@
 
 ## 6. Docs and checks
 
-- [x] 6.1 Update `tools/demo/record.mjs` for the Judgments view. Screenshots and GIFs are not re-recorded: the pinned Playwright has no browser on this machine (see design.md, Risks).
+- [x] 6.1 Update `tools/demo/record.mjs` for the Judgments view, and re-record from the demo store with `CHROMIUM=` set: the Judgments, Project page and `tour-overview` screenshots, and every README GIF (each shows the navigation).
 - [x] 6.2 Update `README.md`, the docs site and `CHANGELOG.md` `[Unreleased]`.
 - [x] 6.3 Run `uv run ruff check`, `uv run python -m unittest discover -s tests`, `cd web && npm run check`, `cd site && npm run check`, `openspec validate --specs --strict` and `openspec validate regroup-nav-and-judgments --strict`.
 

@@ -110,7 +110,7 @@ Two other changes run in parallel: `errors-unify-triage` rewrites `web/src/pages
 - **The pill's percent and the alert's sentence can be about two windows** → the tab's name says both; the Limits page leads with the binding window as before.
 - **The friction cost is the session's, not the friction's** → said in the hint and behind How measured; Reports is one click away.
 - **`/insights` bookmarks** → redirected with every key; the server keeps the path.
-- **Screenshots and GIFs are stale.** The navigation shows in every GIF and in `tour-overview`, and the Judgments shots changed. `tools/demo`'s pinned Playwright has no browser installed on this machine, and the task forbids `playwright install`, so nothing was re-recorded. `record.mjs` is updated: the `insights` scene and shots now record the Judgments view, under the same file names, since published READMEs link to them. Re-record with `node record.mjs` and `node record.mjs shots` where the browser is installed.
+- **Screenshots and GIFs.** The navigation shows in every GIF and in `tour-overview`, and the Judgments shots changed. They are re-recorded from the demo store with `CHROMIUM=` pointing at an installed headless shell, since the pinned Playwright's own browser is not installed and `playwright install` is off limits. The `insights` scene and shots record the Judgments view under the same file names, since published READMEs link to them. The tour scene finds the Limits tab by the start of its name, which now carries the pill's words.
 - **Parallel changes** to Errors and Context will conflict where they touch their `UsageSheets` mount or their test render helper → both are one-line changes here.
 
 ## Migration Plan
