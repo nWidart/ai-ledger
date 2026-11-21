@@ -96,7 +96,7 @@ The advice names the commands of the agents that ran the matching sessions:
 | Sessions start with a large context | Trim `CLAUDE.md` or `AGENTS.md`; compare with `.mcp.json` or `claude mcp list`. | Trim `AGENTS.md`; compare with `~/.codex/config.toml` or `codex mcp list`. | Trim the instruction files and review the configured MCP servers, with no file or command named. |
 | Sessions compact repeatedly | A new session or `/clear` between tasks, `/compact` before the context fills. | A new session with `/new` between tasks, `/compact` before the context fills. | A new session between tasks, a compaction before the context fills, with no command named. |
 | Tool results fill the context | A remedy per tool, and a subagent for bulk reading. | A remedy per tool, with no subagent. | A remedy per tool, with no subagent; `run_terminal_command` takes the shell remedy. |
-| Requests are priced on the long-prompt tier | `/compact` or a new session before the threshold. | `/compact` or `/new` before the threshold. | |
+| Requests are priced on the long-prompt tier | `/compact` or a new session before the threshold. | `/compact` or `/new` before the threshold. | None: Grok's price-table entry has no threshold, so no Grok request counts as a long prompt. |
 
 When sessions of more than one agent match, the advice names each command for its agent.
 

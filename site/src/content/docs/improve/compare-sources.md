@@ -37,7 +37,7 @@ Compare only these figures. The others differ by what each agent records:
 | **Errors per 100 calls**, tool calls per prompt | No | The agents call different tools for the same work, so a call is not the same unit. | A shell command that exits non-zero is an error even when Grok marks it completed. |
 | Starting context | No | Each agent has its own system prompt and tools, and reads its own instruction file. | Grok has its own system prompt and tools too. |
 | **Cache hit**, **1h writes**, cache breaks | No | Codex reports one kind of cache write, and the app counts its cache as lasting 30 minutes. Claude Code has 5-minute and 1-hour writes. | xAI states no cache lifetime, so a Grok cache break is never **expired**. |
-| **Largest tool results** | No | Codex records no result size for `apply_patch` and `web_search`. | |
+| **Largest tool results** | No | Codex records no result size for `apply_patch` and `web_search`. | Grok records the size of every finished tool call's result, so no Grok tool is missing from the list. |
 | Model time, output speed | No | Codex records no model time. | Each Grok turn reports its API time. Grok reports no tool time and no lines added or removed. |
 | Outcomes, friction | No | Activity's [Judgments view](/ai-ledger/pages/insights/) covers Claude Code sessions only, and cannot be picked with Codex or Grok as the source. | Grok writes no facets. |
 | Points, percent of a limit | No | Each provider's plan sets its own limits. | Grok reports no plan limits. |
