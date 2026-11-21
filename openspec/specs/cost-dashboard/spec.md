@@ -58,7 +58,7 @@ The dashboard SHALL show input, output, thinking, cache read, 5-minute cache wri
 - **THEN** each project's row holds one token total, and no split by kind
 
 ### Requirement: Show estimated cost
-The dashboard SHALL show an estimated cost per project, model and day, computed from per-model prices for each token kind, and SHALL label the value as an API-price estimate. A request that carries a cost its source reported SHALL cost that amount, not the estimate. When a model has no price, the dashboard SHALL name the user prices file by its full path as the place to add one.
+The dashboard SHALL show cost per project, model and day. A request SHALL cost what its source reported, when it reported a cost. Otherwise the dashboard SHALL estimate its cost from per-model prices for each token kind, and SHALL label that cost as an API-price estimate. When a request has neither a reported cost nor an estimate, the dashboard SHALL name its model and the user prices file by its full path as the place to add a price.
 
 #### Scenario: Model without a price
 - **WHEN** a request used a model missing from the price table and has no reported cost
@@ -219,7 +219,7 @@ The drawer SHALL give an accessible table with each kind's tokens as a full coun
 - **THEN** each kind's cost reads $0.00 with a share of 0.0% and an empty cost bar, and the sentence says the priced requests cost $0.00, not that no request is priced
 
 ### Requirement: Price token kinds like the request
-Each request's kind costs SHALL use the same prices and tier as the request's cost and add up to it. Thinking tokens are billed as output: the dashboard SHALL show Output and thinking as one kind with one cost.
+The kind costs of a request priced from the price table SHALL use the same prices and tier as the request's cost and add up to it. A request that costs what its source reported SHALL have no kind costs, whatever prices its model has: the breakdown by kind covers the estimated cost only. Thinking tokens are billed as output: the dashboard SHALL show Output and thinking as one kind with one cost.
 
 #### Scenario: Kind costs add up
 - **WHEN** the view has priced requests

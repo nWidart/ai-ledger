@@ -22,7 +22,7 @@ Ingest SHALL read the Grok CLI's session logs: the file `updates.jsonl` of every
 - **THEN** ingest reads the other sources and reports no error
 
 ### Requirement: Key Grok lines by event id and time
-Each Grok line SHALL be stored under the key `grok:<event id>:<agentTimestampMs>`, because a resumed session counts its event ids from 1 again, with its `sessionUpdate` as its type and its `agentTimestampMs` as its time. A `hook_execution` line SHALL take its hook event's name as its type. Lines SHALL be derived by their own times and ids, not by their order in the file.
+A Grok line with an event id and an integer `agentTimestampMs` SHALL be stored under the key `grok:<event id>:<agentTimestampMs>`, because a resumed session counts its event ids from 1 again. Any other line SHALL be stored under its file path and byte offset. A line's time SHALL be its `agentTimestampMs`, and its type its `sessionUpdate`, or its hook event's name for a `hook_execution` line. The parser SHALL tell turns and prompts apart by the order of the lines in the file.
 
 #### Scenario: Line read twice
 - **WHEN** a file is truncated and read again from its start
@@ -37,7 +37,7 @@ Each Grok line SHALL be stored under the key `grok:<event id>:<agentTimestampMs>
 - **THEN** the line is stored and derives nothing
 
 ### Requirement: Count Grok usage per model call
-A finished Grok turn (a `turn_completed` line) SHALL become one request per model call of the turn. A model call is a distinct `streamStartMs` among the turn's lines; its time is that value and its context size is the largest `totalTokens` on its lines. Each token count of the turn SHALL be split over the calls in proportion to their context sizes, so that the requests add up to the turn's count exactly. A turn with no `turn_completed` SHALL make no request.
+A finished Grok turn whose model calls can be told and that names at most one model SHALL become one request per model call. A model call is a distinct `streamStartMs` among the turn's lines; its time is that value and its context size is the largest `totalTokens` on its lines. Each token count of the turn SHALL be split over the calls by their context sizes, so that the requests add up to it exactly. A turn with no `turn_completed` SHALL make no request.
 
 #### Scenario: Turn of three calls
 - **WHEN** a turn's lines show three model calls and its `turn_completed` reports 459 output tokens
@@ -99,14 +99,14 @@ Each request of a model call SHALL keep the context size the call stated, and co
 - **THEN** its request counts those tokens and their cost, and Live, the session timeline and Context show no context for it
 
 ### Requirement: Record Grok model time
-Each finished Grok turn SHALL add a run to its session with the API time the turn reports. A Grok run SHALL state no tool time and no lines added or removed.
+Each finished main-thread Grok turn that reports its API time and its elapsed time SHALL add a run to its session with that API time. A subagent's turn SHALL add none: the parent's turn already includes its time. A Grok run SHALL state no tool time and no lines added or removed.
 
 #### Scenario: Output speed
 - **WHEN** a session's one turn reports 100,000 output tokens and 1,000,000 ms of API time
 - **THEN** the session's output speed is 100 tokens per second
 
 ### Requirement: Attribute Grok subagents to their parent
-A Grok session that another session spawned SHALL NOT be a session of its own. Its tool calls and prompts SHALL belong to the parent session as subagent work. Its usage SHALL make no request: the parent's turn already includes it. The link SHALL come from the parent's stored `subagent_spawned` line, so that a rebuild gives the same result.
+A Grok session that another session spawned SHALL NOT be a session of its own. Its tool calls and hooks SHALL belong to the parent session, the tool calls as subagent work. Its task SHALL add no prompt: no person typed it. Its usage SHALL make no request: the parent's turn already includes it. The link SHALL come from the parent's stored `subagent_spawned` line, so that a rebuild gives the same result.
 
 #### Scenario: Probe with a subagent
 - **WHEN** a session spawns a subagent that reads one file, the parent's turn reports 5 model calls and the child's own turn reports 2

@@ -340,7 +340,7 @@ Each active-session entry and each session payload SHALL carry the session's tit
 - **THEN** the next list after the change notice carries the new title
 
 ### Requirement: Report a closed session as ended
-The app SHALL take as evidence of a close the `cost-state` line Claude Code writes as it exits, and the `session_end` hook line Grok writes as it exits, when it comes after the last timed line of the session's main transcript file. A subagent's lines SHALL NOT reopen a closed session, nor a line with no time. Codex writes no close line: a Codex session SHALL never be *ended*. An *ended* state SHALL carry the time of the newest timed line, as the close line has none.
+The untimed `cost-state` line Claude Code writes as it exits SHALL close a session when it follows the last timed line of the session's main transcript file. The timed `session_end` hook line Grok writes as it exits SHALL close a session when no line of the main file has a newer time. A subagent's lines SHALL NOT reopen a closed session, nor a line with no time. Codex writes no close line: a Codex session SHALL never be *ended*. An *ended* state SHALL carry the time of the newest timed line.
 
 #### Scenario: Closed session
 - **WHEN** a Claude Code session's main transcript ends with a `cost-state` line
