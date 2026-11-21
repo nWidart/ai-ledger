@@ -11,7 +11,7 @@ import type {
 export interface OptionEnv {
   /** A CSS color, such as "var(--critical)", as a concrete color. */
   color(css: string): string;
-  ink: { text: string; muted: string; grid: string; surface: string; border: string; cursor: string; accent: string; tint: string };
+  ink: { text: string; secondary: string; muted: string; grid: string; surface: string; border: string; cursor: string; accent: string; tint: string };
   /** (forced-colors: active): the ink roles are system colors. */
   forced: boolean;
   textScale: number;
@@ -60,6 +60,19 @@ export const valueAxis = (env: OptionEnv, { max, step, format }: { max: number; 
   axisLabel: { color: env.ink.muted, fontSize: size(env), margin: 6 * env.textScale, formatter: (v: number) => format(v) },
 });
 
+/** The part of a value axis that names it as a track's title, to spread into the axis `valueAxis` gives: the name drawn
+ *  left-aligned at the grid's left, its text box ending 7px (times the text scale) over the grid's top, in the secondary
+ *  ink at weight 500, cut with an ellipsis where it passes `maxWidth` px and drawn not at all where not even the
+ *  ellipsis fits (measured on ECharts 6). `maxWidth` is the plot's width: the box's less the layout's left and right.
+ *  `labelWidth(env, text, 500)` is the title's own width. */
+export const axisTitle = (env: OptionEnv, text: string, maxWidth: number): Pick<ValueAxis, "name" | "nameLocation" | "nameGap" | "nameTextStyle" | "nameTruncate"> => ({
+  name: text,
+  nameLocation: "end",
+  nameGap: 7 * env.textScale,
+  nameTextStyle: { align: "left", color: env.ink.secondary, fontSize: size(env), fontWeight: 500 },
+  nameTruncate: { maxWidth, ellipsis: "…" },
+});
+
 /** Where a label `width` px wide over a band goes, or null when the plot is narrower than the label. First by the rule of
  *  `peakLabelAt` in chart.ts: centred over the band's centre (cx), or, within 56px (times the text scale) of the plot's
  *  edge, anchored at the bar's edge. That rule assumes a short label: a long one ("Peak 66 sessions · Week of Nov 2" is
@@ -78,13 +91,14 @@ export function labelAnchor(cx: number, bar: number, plot: { x: number; width: n
 }
 
 let measure: CanvasRenderingContext2D | null | undefined;
-/** The width in px of a line of text in a canvas font: the measure zrender lays its text out by (platformApi.measureText
- *  in zrender/lib/core/platform.js), on a canvas of its own, so this module keeps out of the ECharts chunk. In Chromium it
- *  matches the drawn SVG text within 0.02px. jsdom has no canvas (test-setup): there it estimates 0.6em a character. */
-function textWidth(text: string, font: string, fontSize: number): number {
+/** The width in px of a line of text in the chart's font at its size (11px times the text scale) and a font weight: the
+ *  measure zrender lays its text out by (platformApi.measureText in zrender/lib/core/platform.js), on a canvas of its own,
+ *  so this module keeps out of the ECharts chunk. In Chromium it matches the drawn SVG text within 0.02px. jsdom has no
+ *  canvas (test-setup): there it estimates 0.6em a character. */
+export function labelWidth(env: OptionEnv, text: string, weight = 400): number {
   measure ||= document.createElement("canvas").getContext("2d");
-  if (!measure) return text.length * fontSize * .6;
-  measure.font = font;
+  if (!measure) return text.length * size(env) * .6;
+  measure.font = `${weight} ${size(env)}px ${FONT}`;
   return measure.measureText(text).width;
 }
 
@@ -100,7 +114,7 @@ export const pointLabel = (env: OptionEnv, { index, value, text }: { index: numb
   renderItem: (params, api) => {
     const [cx, cy] = api.coord([api.value(0), api.value(1)]) as [number, number];
     const band = (api.size!([1, 0]) as number[])[0]!, bar = Math.max(1, band - Math.min(4, band * .25));
-    const width = textWidth(text, `600 ${size(env)}px ${FONT}`, size(env));
+    const width = labelWidth(env, text, 600);
     const at = labelAnchor(cx, bar, params.coordSys as unknown as { x: number; width: number }, env.textScale, width);
     if (!at) return null;
     const { x, align } = at;

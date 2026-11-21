@@ -116,6 +116,10 @@ describe("stackSeries", () => {
     expect(g.children.map(c => c.shape.height).every(h => h >= 1)).toBe(true);
     expect(g.children[0]!.shape.y + g.children[0]!.shape.height).toBeCloseTo(Y0, 9);
     expect(g.children[2]!.shape.y).toBeCloseTo(TOP, 9);
+    // A kind's `o` is its rectangle's opacity; a kind without one is drawn opaque, the key absent.
+    const faint = draw(stackSeries({ kinds: [{ ...kinds[0]!, o: .2 }, kinds[1]!, kinds[2]!], values: shares, hatched: () => false, env: env() }), 0)!;
+    expect(faint.children[0]!.style.opacity).toBe(.2);
+    expect(faint.children[1]!.style).not.toHaveProperty("opacity");
   });
 
   it("takes a bar width rule of its own", () => {
