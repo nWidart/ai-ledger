@@ -701,7 +701,8 @@ def project_changes(by_project, previous):
     return sorted(out, key=lambda r: (-abs(r["delta"] if r["delta"] is not None else r["cost"] or r["prev_cost"] or 0), r["project"] or ""))
 
 
-SESSION_SORTS = ("first_ts", "duration_s", "prompts", "tokens", "cost", "peak_context", "errors", "compactions", "commits", "tests_failed")
+SESSION_SORTS = ("first_ts", "duration_s", "prompts", "tokens", "cost", "peak_context", "errors", "compactions", "commits", "tests_failed",
+                 "model_ms", "output_per_s")
 
 
 def session_list(cur, project="", range_days=0, q="", near=False, offset=0, limit=100, prices=None, today=None, day="", automated=False,
@@ -710,7 +711,7 @@ def session_list(cur, project="", range_days=0, q="", near=False, offset=0, limi
     or branch. day (YYYY-MM-DD): the sessions with requests on that day, or in the week from it (days=7), every figure (active
     time included) limited to those days in the range, costliest first and all of them, so their costs add up to the days'.
     sort (one of SESSION_SORTS, ascending unless desc) orders them instead, before the page; rows without a value come last.
-    Raises ValueError for another sort or span, or a span without a day."""
+    Each row also carries its whole-session model time and output speed (add_runs). Raises ValueError for another sort or span, or a span without a day."""
     if sort and sort not in SESSION_SORTS:
         raise ValueError(f"unknown sort: {sort}")
     prices = load_prices() if prices is None else prices
@@ -733,9 +734,21 @@ def session_list(cur, project="", range_days=0, q="", near=False, offset=0, limi
         offset, limit = 0, len(hits)
     else:
         hits.sort(key=lambda x: x["first_ts"] or "", reverse=True)
+    add_runs(cur, hits)
     if sort:
         hits = sorted((x for x in hits if x[sort] is not None), key=lambda x: x[sort], reverse=desc) + [x for x in hits if x[sort] is None]
     return dict(total=len(hits), offset=offset, sessions=titles.with_titles(cur, hits[offset:offset + limit]))
+
+
+def add_runs(cur, xs):
+    """Set model_ms and output_per_s on each session row in xs: its whole-session figures (runs_cte), None for a session that
+    records no run (every Codex session, older Claude Code ones) or no model time. Only the sessions list carries them."""
+    ids = [x["session_id"] for x in xs]
+    runs = {r["session_id"]: r for r in rows(cur, f"WITH {runs_cte('SELECT unnest(?::VARCHAR[])')} SELECT * FROM runs", [ids])} if ids else {}
+    for x in xs:
+        r = runs.get(x["session_id"])
+        x["model_ms"] = r["model_ms"] if r and r["model_ms"] else None
+        x["output_per_s"] = speed(r["output"], r["model_ms"]) if r else None
 
 
 def median(xs):

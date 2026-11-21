@@ -1203,8 +1203,31 @@ class SessionRunsTest(unittest.TestCase):
         self.assertEqual({sid: r["output"] for sid, r in runs.items()}, dict(a=150_000, b=85_200, d=81_000))  # c and x record no run
         listed = metrics.session_list(self.con.cursor(), "foo", 7, prices=PRICES, today=TODAY)["sessions"]
         self.assertEqual({x["session_id"] for x in listed}, set("abcx"))
+        # The sessions list carries each session's whole model time and speed; c and x record none.
+        self.assertEqual({x["session_id"]: (x["model_ms"], x["output_per_s"]) for x in listed},
+                         dict(a=(30 * 60_000, 150_000 / 1800), b=(10 * 60_000, 142.0), c=(None, None), x=(None, None)))
         for x in listed:
-            self.assertFalse({"model_ms", "tool_ms", "timed_output"} & x.keys(), x["session_id"])
+            self.assertFalse({"tool_ms", "timed_output"} & x.keys(), x["session_id"])
+
+    def test_sort_by_model_time_and_output_speed(self):
+        ids = lambda **k: [x["session_id"] for x in metrics.session_list(self.con.cursor(), "foo", 7, prices=PRICES, today=TODAY, **k)["sessions"]]
+        # a: 30 min at 83.3 tok/s; b: 10 min at 142; c and x record no model time and come last both ways, newest first.
+        self.assertEqual(ids(sort="output_per_s", desc=True)[:2], ["b", "a"])
+        self.assertEqual(ids(sort="output_per_s")[:2], ["a", "b"])
+        self.assertEqual(ids(sort="model_ms", desc=True)[:2], ["a", "b"])
+        self.assertEqual(ids(sort="model_ms")[:2], ["b", "a"])
+        for key in ("output_per_s", "model_ms"):
+            for desc in (False, True):
+                self.assertEqual(set(ids(sort=key, desc=desc)[2:]), {"c", "x"}, (key, desc))
+        self.assertEqual(ids(sort="output_per_s", source="codex"), ["x"])
+        # A session with a run but no model time sorts with those that record none.
+        c = self.con.cursor()
+        store.insert(c, "session_runs", ["session_id", "start_ms", "api_ms", "tool_ms", "lines_added", "lines_removed"], [("c", 9, 0, 0, 0, 0)])
+        try:
+            self.assertEqual(set(ids(sort="output_per_s", desc=True)[2:]), {"c", "x"})
+            self.assertEqual(set(ids(sort="model_ms")[2:]), {"c", "x"})
+        finally:
+            c.execute("DELETE FROM session_runs WHERE session_id = 'c'")
 
     def test_speed_trend(self):
         trend = lambda r, source="": metrics.usage(self.con.cursor(), "foo", r, prices=PRICES, today=TODAY, source=source)["speed_trend"]

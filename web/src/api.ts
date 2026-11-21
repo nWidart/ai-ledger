@@ -116,8 +116,12 @@ export interface UsagePayload {
   session?: SessionDetail | null;
 }
 
-export interface SessionsPage { total: number; offset: number; sessions: TitledSessionRow[] }
-export type SessionSort = "first_ts" | "duration_s" | "prompts" | "tokens" | "cost" | "peak_context" | "errors" | "compactions" | "commits" | "tests_failed";
+/** A /api/sessions row: also its whole-session model time and output tokens per second of it, null when the session records
+ *  no model time (every Codex session, older Claude Code ones). */
+export interface ListedSessionRow extends TitledSessionRow { model_ms: number | null; output_per_s: number | null }
+export interface SessionsPage { total: number; offset: number; sessions: ListedSessionRow[] }
+export type SessionSort = "first_ts" | "duration_s" | "prompts" | "tokens" | "cost" | "peak_context" | "errors" | "compactions" | "commits" | "tests_failed"
+  | "model_ms" | "output_per_s";
 
 /** /api/day: the usage payload's project, tool, hook, error-loop and failed-test rows, limited to the view's local days from
  *  day: one, or the week a work chart bar holds (days 7), clipped to the view's range: start and end are the days counted. */

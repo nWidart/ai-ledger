@@ -213,7 +213,7 @@ function Overview({ views }: { views: ReactNode }) {
     sessions: () => go("sessions"),
     tests: () => go("loops", "tests-h"),
     subagents: () => { setProjSort({ key: "subagent_share", desc: true }); go("projects"); },
-    speed: () => { setSessSort({ key: "duration_s", desc: true }); go("sessions"); },
+    speed: () => { setSessSort({ key: "output_per_s", desc: true }); go("sessions"); },
   };
   // A pick lists the bucket's sessions as such: the search, the near-limit filter and the sort go. Only the current view's
   // chart takes one.

@@ -762,6 +762,27 @@ class TipsTest(unittest.TestCase):
         ev = {e["label"]: e["value"] for e in self.tip(b.payload(), "large_results")["evidence"]}
         self.assertEqual(ev["MCP servers"], "srv 1")
 
+    def test_large_results_advice_names_subagents_for_claude_code_only(self):
+        b = Builder(self)
+        b.session("x", "cdx", source="codex", window=258_400)
+        b.turn("x", 0, 5_000)
+        b.call("x", "exec_command", 1, 250_000)
+        for p in (b.payload(), b.payload(source="codex")):
+            advice = self.tip(p, "large_results")["advice"]
+            self.assertIn("`head`, `tail` or `grep`", advice)
+            self.assertNotIn("subagent", advice)
+        only = Builder(self)  # a tool with no remedy of its own still gets advice
+        only.session("y", "cdx", source="codex", window=258_400)
+        only.turn("y", 0, 5_000)
+        only.call("y", "view_image", 1, 250_000)
+        self.assertEqual(self.tip(only.payload(), "large_results")["advice"], "Ask for a smaller part of a file or command output at a time.")
+        b.session("a", "foo")  # a Claude Code session joins the matching ones
+        b.turn("a", 0, 5_000)
+        b.call("a", "Bash", 1, 250_000)
+        both = self.tip(b.payload(), "large_results")["advice"]
+        self.assertIn("In Claude Code, hand bulk reading to a subagent", both)
+        self.assertIn("Hand bulk reading to a subagent", self.tip(b.payload(source="claude"), "large_results")["advice"])
+
     def test_cache_breaks(self):
         b = Builder(self)
         b.session("a", "foo", peak=90_000)

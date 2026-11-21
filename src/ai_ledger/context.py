@@ -460,8 +460,10 @@ def large_results_advice(ctx, sources):
         lines.append("Cap search results with `head_limit`, or list file names only with `-l`.")
     if any(r["mcp_server"] for r in rs):
         lines.append("Ask MCP tools for a smaller page (a page size or limit argument).")
-    lines.append("Hand bulk reading to a subagent, which returns a short report.")
-    return " ".join(lines)
+    sub = "hand bulk reading to a subagent, which returns a short report."
+    lines.append(per_agent(sources, sub.capitalize(), "" if lines else "Ask for a smaller part of a file or command output at a time.",
+                           f"In Claude Code, {sub}"))
+    return " ".join(x for x in lines if x)
 
 
 def large_results_match(ctx):

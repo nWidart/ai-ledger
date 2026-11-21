@@ -16,17 +16,20 @@ import { queries } from "../../queries";
 export interface SessFilter { q: string; near: boolean; day: string; days: Span }
 export const NO_FILTER: SessFilter = { q: "", near: false, day: "", days: 1 };
 
-const COLS = 11;
+const COLS = 13;
 const WHOLE = "Whole-session figure, not only the selected days";
 // The columns: label, the server's sort key (none: not sortable), class, title; whole: a whole-session figure on a day.
 const HEAD: [string, SessionSort | null, string, string?, boolean?][] = [
-  ["Session", "first_ts", ""], ["Project", null, ""], ["Active", "duration_s", "num opt", "Active time: pauses over 20 minutes left out"], ["Prompts", "prompts", "num opt"],
+  ["Session", "first_ts", ""], ["Project", null, ""], ["Active", "duration_s", "num opt", "Active time: pauses over 20 minutes left out"],
+  ["Model", "model_ms", "num opt2", "Model time: waiting on the model, over the whole session; Codex records none", true],
+  ["Tok/s", "output_per_s", "num opt2", "Output speed: output tokens per second of model time, over the whole session", true], ["Prompts", "prompts", "num opt"],
   ["Tokens", "tokens", "num opt2"], ["Est. cost", "cost", "num"], ["Peak context", "peak_context", "num", undefined, true], ["Failed", "errors", "num opt"],
   ["Compactions", "compactions", "num opt2", undefined, true], ["Commits", "commits", "num opt"], ["Tests", "tests_failed", "num opt", "Test and build runs: passed of run"],
 ];
 // The order each sort gives, most first then least first.
 const ORDER: Record<SessionSort, [string, string]> = {
   first_ts: ["newest first", "oldest first"], duration_s: ["longest active time first", "shortest active time first"],
+  model_ms: ["most model time first", "least model time first"], output_per_s: ["fastest output first", "slowest output first"],
   prompts: ["most prompts first", "fewest prompts first"], tokens: ["most tokens first", "fewest tokens first"], cost: ["costliest first", "cheapest first"],
   peak_context: ["largest peak context first", "smallest peak context first"], errors: ["most failed calls first", "fewest failed calls first"],
   compactions: ["most compactions first", "fewest compactions first"], commits: ["most commits first", "fewest commits first"],
@@ -96,7 +99,9 @@ export function SessionsPanel({ view, filter, onFilter, sort, onSort, selected }
             : rows.length ? rows.map(s => <tr key={s.session_id} {...pickRow(s.session_id, openSessionSheet, { kind: "session", value: s.session_id }, s.session_id === selected ? "sel" : "")}>
               <th scope="row" className="when sess"><button type="button" className="cellbtn" title={s.title || s.session_id}>{sessName(s)}</button>
                 <div className="muted small">{when(s.first_ts)}{s.git_branch ? ` · ${s.git_branch}` : ""}{s.title ? ` · ${shortId(s.session_id)}` : ""}</div></th>
-              <td className="name"><ProjectName project={s.project} /></td><td className="num opt">{dur(s.duration_s)}</td><td className="num opt">{num(s.prompts)}</td>
+              <td className="name"><ProjectName project={s.project} /></td><td className="num opt">{dur(s.duration_s)}</td>
+              <td className="num opt2">{s.model_ms == null ? "–" : dur(s.model_ms / 1000)}</td><td className="num opt2">{num(s.output_per_s)}</td>
+              <td className="num opt">{num(s.prompts)}</td>
               <td className="num opt2">{big(s.tokens)}</td><td className="num">{usd(s.cost)}</td>
               <td className="num">{big(s.peak_context)}{s.near_limit && <> <span className="chip warn" title={`${pct(s.context_share)} of the context window`}>{pct(s.context_share)}</span></>}</td>
               <td className={"num opt" + (s.errors ? " bad" : "")}>{num(s.errors)}</td><td className="num opt2">{num(s.compactions)}</td><td className="num opt">{num(s.commits)}</td>
