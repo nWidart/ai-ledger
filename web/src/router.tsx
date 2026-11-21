@@ -13,7 +13,7 @@ import { savedPatch } from "./pages/errors/view";
 import { validateSearch as liveSearch } from "./pages/live/search";
 import { viewOf, type View } from "./api";
 import { queries } from "./queries";
-import { applyPatch, bindRouter, formatSearch, parseSearch, parseView, validateRoot } from "./url";
+import { applyPatch, bindRouter, formatSearch, judged, parseSearch, parseView, validateRoot } from "./url";
 
 interface RouterContext { queryClient: QueryClient }
 
@@ -59,10 +59,10 @@ const viewLoader = <K extends QueryKey>(query: (v: View) => FetchQueryOptions<an
   loaderDeps: ({ search }: { search: Record<string, unknown> }) => { const d = viewDeps(search); return limits ? { ...d, auto: false, project: "" } : d; },
   loader: ({ context, deps }: { context: RouterContext; deps: ReturnType<typeof viewDeps> }) => { void context.queryClient.prefetchQuery(query(viewOf(deps))); },
 });
-// Activity starts the query of the view it shows: Judgments' (view=judgments, never for Codex alone, and with no source: only
-// Claude Code sessions are judged), else Overview's. The view is a dep, so a switch of view starts the other one.
+// Activity starts the query of the view it shows: Judgments' (view=judgments, never for another source than Claude Code alone,
+// and with no source: only Claude Code sessions are judged), else Overview's. The view is a dep, so a switch of view starts the other one.
 const activityLoader = {
-  loaderDeps: ({ search }: { search: Record<string, unknown> }) => { const d = viewDeps(search); return { ...d, judgments: search.view === "judgments" && d.source !== "codex" }; },
+  loaderDeps: ({ search }: { search: Record<string, unknown> }) => { const d = viewDeps(search); return { ...d, judgments: search.view === "judgments" && judged(d.source) }; },
   loader: ({ context, deps }: { context: RouterContext; deps: ReturnType<typeof viewDeps> & { judgments: boolean } }) => {
     if (deps.judgments) void context.queryClient.prefetchQuery(queries.insights({ ...viewOf(deps), source: "" }));
     else void context.queryClient.prefetchQuery(queries.usage(viewOf(deps)));

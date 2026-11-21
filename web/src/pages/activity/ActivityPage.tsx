@@ -13,7 +13,8 @@ import { DocsLink } from "../../components/DocsLink";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
 import { dayLabel, dur, num, pct, plural } from "../../format";
-import { setSearch, usePathname, useSearchOf, useView } from "../../url";
+import { judged, setSearch, usePathname, useSearchOf, useView } from "../../url";
+import { noFacets } from "../../components/facets";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { Judgments } from "./judgments/Judgments";
@@ -78,9 +79,14 @@ function Interrupted({ d }: { d: UsagePayload }) {
     fmt={n => pct(n, 1)} worse="up" />; {num(t.turns_per_prompt, 1)} turns and {num(t.tool_calls_per_prompt, 1)} tool calls per prompt.</p>;
 }
 
-/** The time note of the Output speed vital: the model and tool time. */
-const timeNote = (t: Totals): string =>
-  `${dur(t.model_ms / 1000)} waiting on the model and ${t.tool_ms == null ? "–" : dur(t.tool_ms / 1000)} running tools, in ${plural(t.timed_sessions, "session")}.`;
+/** The time note of the Output speed vital: the model and tool time. Grok records model time and no tool time, so with Grok
+ *  sessions in the view the tool time is that of the Claude Code sessions alone, or there is none. */
+const timeNote = (t: Totals): string => {
+  const model = dur(t.model_ms / 1000), n = plural(t.timed_sessions, "session");
+  if (t.tool_ms == null) return `${model} waiting on the model, in ${n}, which record no tool time.`;
+  if (t.session_sources.includes("grok")) return `${model} waiting on the model, in ${n}, and ${dur(t.tool_ms / 1000)} running tools in the Claude Code ones.`;
+  return `${model} waiting on the model and ${dur(t.tool_ms / 1000)} running tools, in ${n}.`;
+};
 /** The Sessions vital's time: the median session, the active time in all and the thinking, when recorded. Thinking stands
  *  apart from Output speed: a view can record thinking but no model time. */
 const sessionTime = (t: Totals): string =>
@@ -138,8 +144,8 @@ function Vitals({ d, go }: { d: UsagePayload; go: { sessions: () => void; tests:
 }
 
 /** Activity (/usage): two views of the same sessions, picked by the view switch and kept in the URL. Overview is what the
- *  coding agents did and where they struggled, measured; Judgments (view=judgments) is how /insights judged them. A Codex-only
- *  view has no judgments, so it always shows Overview, with the switch saying why. */
+ *  coding agents did and where they struggled, measured; Judgments (view=judgments) is how /insights judged them. A view of one
+ *  agent other than Claude Code has no judgments, so it always shows Overview, with the switch saying why. */
 export function ActivityPage() {
   const [h] = useView(), inUrl = useSearchOf(validateSearch, s => s.view === "judgments");
   // The URL changes before the route does. While the app leaves Activity for another page, whose URL names no view, the view
@@ -147,10 +153,11 @@ export function ActivityPage() {
   // Kept as state set while rendering: the usual way to hold the last value of something derived.
   const here = usePathname() === "/usage", [last, setLast] = useState(inUrl);
   if (here && last !== inUrl) setLast(inUrl);
-  const asked = here ? inUrl : last, codex = h.source === "codex", judgments = asked && !codex;
-  // A link to the judgments of Codex sessions opens Overview: the URL drops the view, so a copied link says what the page shows.
-  useEffect(() => { if (here && asked && codex) setSearch({ view: null, ...NO_JUDGMENTS_KEYS }, { push: false }); }, [here, asked, codex]);
-  const views = <ViewSwitch view={judgments ? "judgments" : "overview"} codex={codex} />;
+  const asked = here ? inUrl : last, unjudged = h.source && !judged(h.source) ? noFacets(h.source) : undefined;
+  const judgments = asked && !unjudged;
+  // A link to the judgments of such a source opens Overview: the URL drops the view, so a copied link says what the page shows.
+  useEffect(() => { if (here && asked && unjudged) setSearch({ view: null, ...NO_JUDGMENTS_KEYS }, { push: false }); }, [here, asked, unjudged]);
+  const views = <ViewSwitch view={judgments ? "judgments" : "overview"} unjudged={unjudged} />;
   return judgments ? <Judgments views={views} /> : <Overview views={views} />;
 }
 

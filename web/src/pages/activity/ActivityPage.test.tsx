@@ -5,6 +5,8 @@ import type { DayView, Previous, ProjectRow, UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
 import usageAll from "../../__fixtures__/usage-all";
 import usageCodex from "../../__fixtures__/usage-codex";
+import usageSources from "../../__fixtures__/usage-sources";
+import { ScopeBar } from "../../components/ScopeBar";
 import sessions from "../../__fixtures__/sessions";
 import session from "../../__fixtures__/session";
 import tool from "../../__fixtures__/tool";
@@ -190,12 +192,32 @@ describe("model time and output speed", () => {
     expect(document.getElementById("vitals")!.textContent).not.toMatch(/waiting on the model|running tools|n\/a tok/);
   });
 
-  it("shows a dash for tool time when the timed sessions state none", async () => {
-    serve({ ...usage, totals: { ...usage.totals, tool_ms: null } });
+  it("names no tool time when the timed sessions state none, as Grok's do", async () => {
+    serve({ ...usageSources, totals: { ...usageSources.totals, session_sources: ["grok"] } });
+    at("?range=30&source=grok");
+    renderApp(<ActivityPage />);
+    await loaded();
+    expect(usageSources.totals.tool_ms).toBeNull();
+    expect(tile("Output speed")).toEqual(["100 tok/s", "1m waiting on the model, in 1 session, which record no tool time."]);
+    expect(document.querySelector("#vitals .vitals-note")).toBeNull(); // Grok records model time: not the Codex note
+  });
+
+  it("says the tool time is the Claude Code sessions' alone when Grok sessions are timed beside them", async () => {
+    serve({ ...usageSources, totals: { ...usageSources.totals, model_ms: 120_000, tool_ms: 30_000, timed_sessions: 2 } });
     at();
     renderApp(<ActivityPage />);
     await loaded();
-    expect(tile("Output speed")[1]).toMatch(/waiting on the model and – running tools, in /);
+    expect(tile("Output speed")[1]).toBe("2m waiting on the model, in 2 sessions, and 30s running tools in the Claude Code ones.");
+  });
+
+  it("offers Grok in the source filter and no Judgments for Grok alone", async () => {
+    serve(usageSources);
+    at("?range=30&source=grok");
+    renderApp(<><ScopeBar /><ActivityPage /></>);
+    await loaded();
+    expect(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Grok" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Judgments" }).getAttribute("aria-disabled")).toBe("true");
+    expect(screen.getByText("Grok writes no facets: /insights judges Claude Code sessions only.")).toBeTruthy();
   });
 
   it("says no session records model time when Claude Code sessions in the view have none", async () => {

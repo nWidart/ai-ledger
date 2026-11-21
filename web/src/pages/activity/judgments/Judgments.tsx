@@ -68,7 +68,7 @@ function Sub({ d, view }: { d: InsightsPayload; view: View }) {
   return <p className="sub">{judgedName(view)}. Model-judged: a model's reading of each session, not a measurement.
     <HowMeasured what="the judgments" docs="reference/glossary#judgments">The figures come from <code>/insights</code> facets, except Session figures and Coverage, which are counted, and each
       session's cost, peak context and tool errors, which are measured from its transcript. <code>/insights</code> judges Claude Code sessions only: Codex
-      writes no facets, so this view has no source filter. A session counts here by its start time; Overview counts a session with a request in the range,
+      and Grok write no facets, so this view has no source filter. A session counts here by its start time; Overview counts a session with a request in the range,
       so the two totals can differ slightly.</HowMeasured></p>;
 }
 

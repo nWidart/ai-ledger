@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import { Popover } from "@base-ui/react/popover";
 import { rootRouteId, useRouterState } from "@tanstack/react-router";
 import { plural } from "../format";
-import { setSearch, sourceOf, usePathname, useSearchOf } from "../url";
+import { judged, setSearch, sourceOf, usePathname, useSearchOf } from "../url";
 import { BriefLink, Filters, useChangedFilters, type FilterSet, type ProjectList } from "./Filters";
 import { ProjectDot } from "./ProjectDot";
 import "./ScopeBar.css";
@@ -19,8 +19,9 @@ export function scopeOf(path: string, judgments: boolean): FilterSet {
     default: return ALL;
   }
 }
-// Activity's Judgments view, as ActivityPage picks it: asked for in the URL, and not for Codex alone (that shows Overview).
-const judgedSearch = (raw: Readonly<Record<string, string>>) => raw.view === "judgments" && raw.source !== "codex";
+// Activity's Judgments view, as ActivityPage picks it: asked for in the URL, and not for a source with no judgments alone
+// (that shows Overview).
+const judgedSearch = (raw: Readonly<Record<string, string>>) => raw.view === "judgments" && judged(sourceOf(raw.source));
 
 // The current page's project list. The shell draws the bar before the page's data comes, so the page hands its list over
 // once it has one, and takes it back when it leaves.

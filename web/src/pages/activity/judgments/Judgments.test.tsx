@@ -11,7 +11,7 @@ import { openDrawer } from "../../../components/Drawer";
 import { mockApi } from "../../../components/sheets/testing";
 import { when } from "../../../format";
 import { ActivityPage } from "../ActivityPage";
-import { NO_FACETS } from "../../../components/facets";
+import { noFacets } from "../../../components/facets";
 import { ViewSwitch } from "../ViewSwitch";
 import { Judgments } from "./Judgments";
 import { FEW_SESSIONS, stored, trendCounts, trendText, weightSide, weightValue, byWeight } from "./figures";
@@ -29,7 +29,7 @@ const show = (d: InsightsPayload, hash = "?range=0", open = DRAWERS) => {
   toOpen = open;
   const f = mockApi({ "/api/insights": () => d });
   history.replaceState(null, "", "/usage" + hash);
-  renderPage(<Judgments views={<ViewSwitch view="judgments" codex={false} />} />);
+  renderPage(<Judgments views={<ViewSwitch view="judgments" />} />);
   return f;
 };
 /** A friction family as the payload sends it: its labels, and the weight of the sessions that reported it. */
@@ -58,7 +58,7 @@ describe("Judgments view", () => {
     await userEvent.click(within(sub).getByRole("button", { name: "How measured: the judgments" }));
     const how = sub.querySelector(".tt-pop")!.textContent!;
     expect(how).toContain("The figures come from /insights facets, except Session figures and Coverage, which are counted, and each session's cost, peak context and tool errors, which are measured from its transcript.");
-    expect(how).toContain("/insights judges Claude Code sessions only: Codex writes no facets, so this view has no source filter.");
+    expect(how).toContain("/insights judges Claude Code sessions only: Codex and Grok write no facets, so this view has no source filter.");
     expect(how).toContain("A session counts here by its start time; Overview counts a session with a request in the range, so the two totals can differ slightly.");
     const cov = document.getElementById("coverage")!;
     expect(cov.getAttribute("role")).toBe("status");
@@ -1476,8 +1476,7 @@ describe("Activity's view switch", () => {
       expect(j.getAttribute("aria-disabled")).toBe("true");
       expect(j.hasAttribute("disabled")).toBe(false); // focusable, so its reason can be reached from the keyboard
       const why = document.getElementById(j.getAttribute("aria-describedby")!)!;
-      expect(why.textContent).toBe(NO_FACETS);
-      expect(NO_FACETS).toBe("Codex writes no facets: /insights judges Claude Code sessions only.");
+      expect(why.textContent).toBe("Codex writes no facets: /insights judges Claude Code sessions only.");
       expect(why.closest(".views")).toBeTruthy(); // shown, not a hover text
       expect(j.hasAttribute("title")).toBe(false);
       const before = history.length;
@@ -1497,9 +1496,31 @@ describe("Activity's view switch", () => {
       await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "All" }));
       expect(btn("Judgments").hasAttribute("aria-disabled")).toBe(false);
       expect(btn("Judgments").hasAttribute("aria-describedby")).toBe(false);
-      expect(screen.queryByText(NO_FACETS)).toBeNull();
+      expect(screen.queryByText(noFacets("codex"))).toBeNull();
       await userEvent.click(btn("Judgments"));
       expect(location.search).toBe("?range=30&view=judgments");
+    });
+
+    it("names Grok in the reason when the source is Grok alone, and asks for no judgments", async () => {
+      const f = open("?range=30&source=grok");
+      await overview();
+      const j = btn("Judgments");
+      expect(j.getAttribute("aria-disabled")).toBe("true");
+      const why = document.getElementById(j.getAttribute("aria-describedby")!)!;
+      expect(why.textContent).toBe("Grok writes no facets: /insights judges Claude Code sessions only.");
+      await userEvent.click(j);
+      expect(location.search).toBe("?range=30&source=grok");
+      expect(calls(f, "/api/insights")).toEqual([]);
+    });
+
+    it("opens Overview for a link to the judgments of Grok, dropping the view", async () => {
+      const f = serve();
+      history.replaceState(null, "", "/usage?range=30&source=grok&view=judgments");
+      renderPage(<ActivityPage />);
+      await overview();
+      await waitFor(() => expect(location.search).toBe("?range=30&source=grok"));
+      expect(btn("Judgments").getAttribute("aria-disabled")).toBe("true");
+      expect(calls(f, "/api/insights")).toEqual([]);
     });
 
     it("opens Overview for a link to the judgments, never a dead-end page: the URL drops the view with no new entry", async () => {
