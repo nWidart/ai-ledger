@@ -8,6 +8,8 @@ See `proposal.md` for the motivation. What the code does today, and what constra
 - **Sessions** (`pages/activity/SessionsPanel.tsx`) has 13 columns: Session, Project and 11 figures. Project does not sort. Columns hide by width through classes: `opt2` under 78.75em (Tokens, Compactions), `opt1` under 66em (Model, Tok/s), `opt` under 43.75em (Active, Prompts, Failed, Commits, Tests). Est. cost and Peak context never hide. The sorted column carries `sorted`, which shows it at any width. The Session header is a custom `th` only to keep `sorted` off its cells.
 - **The server sorts and pages.** `metrics.session_list` takes `sort` (one of `SESSION_SORTS`) and `desc`, orders the list its own way first (newest first; nearest the limit with `near`; costliest with `day`, all rows on one page), then applies one stable Python sort with no-value rows last. `app.py` turns a `ValueError` into a 400. Rows with the same `first_ts` have no tie-break: their order is whatever the SQL returned.
 - **The rows go inert while stale.** A new query keeps the old rows on screen with `inert` on the `tbody`; focus moves to the search field first.
+- **The page keeps the last answer while a new view loads.** `Overview` reads `/api/usage` with `keepPrevious` and gives `SessionsPanel` the scope of the response on screen (`d.project`, `d.range`, `d.automated`, `d.source`), not the URL's. Until the new response lands, the sessions query key does not change, so the earlier view's rows stay on screen and are not inert.
+- **The handler drops a blank value.** `app.py` builds its parameters with `parse_qs(url.query)`, which leaves out a key with an empty value, so `sort=` reaches `session_list` as no sort. `parse_span` reads `days` with `keep_blank_values=True` for the same reason.
 - **Rows open the sheet.** `pickRow` (`components/sheets/session.ts`) puts one click handler on the `tr`. It ignores clicks on links and during a text selection, and runs the pick with the row's first `button`. A checkbox in the row would toggle and open the sheet (left open on PR #168).
 - **Where view state lives.** The URL holds what makes a view (project, range, source, tab, `q`, `near`, `day`, `week`) and every open sheet, sheets as pushed entries so Back closes them. Browser storage holds display preferences: the chart metric, Cost's hidden token kinds, the sheet width. Page state holds ways of reading a table: every table sort, the Sessions sort included ("The sort SHALL NOT be kept in the URL").
 - **Guards.** `web/src/css.test.ts` allows no raw colors, only scale tokens for sizes, radii and spacing, and no new `:is(.pg-…)` page lists. At most two bars stick to the top.
@@ -81,7 +83,9 @@ The chooser and the stored choice live in `pages/activity/`, not in `components/
 
 ### 2. Multi-sort
 
-**2.1 The endpoint takes a list in `sort`.** `sort=-cost,prompts`: one to three keys, comma-separated, each from `SESSION_SORTS`, a leading `-` for descending. `sort=cost&desc=1` keeps its meaning: `desc=1` applies to one key without a `-`. The server answers 400 for an unknown key, a repeated key, an empty item, more than three keys, and `desc=1` beside a list or a `-` key. The parsing is in `metrics.session_list`, which already raises `ValueError` for an unknown sort; `app.py` passes the strings through unchanged.
+**2.1 The endpoint takes a list in `sort`.** `sort=-cost,prompts`: one to three keys, comma-separated, each from `SESSION_SORTS`, a leading `-` for descending. `sort=cost&desc=1` keeps its meaning: `desc=1` applies to one key without a `-`. The server answers 400 for an unknown key, a repeated key, an empty item, more than three keys, and `desc=1` beside a list or a `-` key. The parsing is in `metrics.session_list`, which already raises `ValueError` for an unknown sort.
+
+A blank `sort=` is an empty key and answers 400, but `session_list` cannot see it: the handler's `parse_qs` drops a blank value, and `sort=""` is the function's "no sort" for its Python callers, which stays. So the handler tells the two apart, as `parse_span` does for `days`: it reads `sort` from `parse_qs(url.query, keep_blank_values=True)`, raises `ValueError` when the key is there with an empty value, and passes `""` only when the key is absent. An item left empty inside a value (`sort=cost,`) is refused by `session_list`. `desc=1` with no `sort` is ignored, as today.
 
 Rejected:
 - *Repeated parameters (`sort=cost&desc=1&sort=prompts`).* The handler reads one value per key, and pairing each `desc` with its `sort` depends on order.
@@ -144,13 +148,28 @@ Rejected: *`stopPropagation` on the checkbox.* Every later control would need th
 
 Rejected: *Enabled checkboxes that refuse a fifth.* A box that does not tick when pressed reads as broken.
 
-**3.4 The selection is page state: a map from session id to its row.** It lives in `Overview` beside `sessSort`, so it survives a tab change. It holds the row as last listed, in the order selected. On each render a selected id found in the loaded rows uses that row; otherwise the held row.
+**3.4 The selection is page state: held rows, stamped with their scope.** It lives in `Overview` beside `sessSort`, so it survives a tab change. It is `{ scope, rows }`: `rows` maps a session id to its row, in the order selected, and `scope` is the scope those rows were counted in.
 
-- It survives Show more, a sort, a search or near-limit change, a refresh, a tab change and a sheet: none of them changes what a figure means.
-- It clears when the project, range, source, automated toggle, or selected day or week changes: the figures are then counted over other days or other sessions, and a comparison would mix scopes.
+A scope is six values: `project`, `range`, `automated`, `source`, and the selected `day` and `days`.
+
+- *The requested scope* is the URL's: the view `Overview` already builds as `want` (`viewOf(h)`), and the URL's day or week.
+- *The rows' scope* is the one the panel queried with: the `view` prop (the four values of the `/api/usage` response on screen) and the `day` and `days` of that query. Rows shown as placeholder data belong to an earlier query and have no scope.
+
+`Overview` passes the panel the requested view beside the `view` it passes today. The panel compares `project`, `range`, `automated` and `source` of the two, each with `===`, and needs `isPlaceholderData` to be false. Its `day` and `days` already come from the URL, so they differ from the rows on screen only while those are placeholder data. When all of this holds, the rows are *in scope*. Three rules follow:
+
+- **Read.** A selection whose `scope` is not the requested scope reads as empty. So a change of project, range, source, automated toggle, day or week clears it with no effect to run and nothing to race: the figures would be counted over other days or other sessions, and a comparison would mix scopes.
+- **Write.** A tick is accepted only while the rows are in scope, and it stamps the selection with the requested scope. While they are not, the row checkboxes are disabled.
+- **Refresh.** Whenever the rows are in scope, each selected session found among them replaces its held row (when the row object differs). The comparison draws from the held rows alone, so a session keeps its newest figures after a search or a sort moves it off the loaded pages.
+
+The write rule closes a gap the read rule leaves. A range change empties the selection at once, but the earlier range's rows stay on screen, not inert, until the new `/api/usage` response lands (see Context). A session ticked then would carry the earlier range's figures into the new range's comparison. The refresh rule has the same guard for the same reason.
+
+- The selection survives Show more, a sort, a search or near-limit change, a refresh, a tab change and a sheet: none of them changes a figure's scope.
 - A selected session the list no longer shows stays selected. The bar counts it, and the comparison's Remove button or Clear selection unselects it.
 
 Rejected:
+- *Clear the selection in an effect when the view changes, with no scope on it.* It leaves the gap above, and a tick made in it lands after the clear.
+- *Make the rows inert while `/api/usage` loads.* It closes the gap but changes what the table does today for every user: rows open their sheet during that load.
+- *Draw each session from its loaded row, else from the row held at tick time.* A session that refreshed (0 to 2 commits) and then left the loaded pages would fall back to the older row and read 0 again.
 - *TanStack's `rowSelectionFeature`.* Its state belongs to the rows the table holds; this selection must outlive them.
 - *Ids only, figures fetched on demand.* It needs a new server parameter (`ids=`) or four heavy `/api/session` requests; see 3.6.
 
@@ -163,9 +182,9 @@ Rejected:
 
 **3.6 The comparison shows the list's figures.** One column per selected session, one row per figure, in the table's order: Project, Start, Active, Model, Tok/s, Prompts, Tokens, Est. cost, Peak context, Failed, Compactions, Commits, Tests. It is drawn by `Table` with the figures as rows, and each figure reuses the Sessions column's own `cell` and `cellProps`, so format, "bad" marks and titles cannot drift from the table. Hidden columns still have their row: the comparison is the place to read every figure.
 
-The figures are the view's, limited to the range or the selected days exactly as the row beside them, so the comparison never disagrees with the table. No request is made.
+The comparison uses each figure's scope from the Sessions list. Start is the session's actual start, and Active covers the whole session unless a day or week is selected. Model, Tok/s, Peak context and Compactions are whole-session figures. Prompts, Tokens, Est. cost, Failed, Commits and Tests count the view's range, or the selected days. No request is made. This is how `metrics.sessions()` builds a row (`s.first_ts`; `active_cte` clipped only with a day; the counts limited by the view), so the comparison never disagrees with the row beside it, and a session that starts before a 7-day view reads the same Start and Active in both.
 
-Rejected: *The session detail endpoint.* It has more (tool time, lines changed, model mix, judgment) but its figures are whole-session, so they would differ from the table on a selected day or a short range, and it sends each session's full timeline.
+Rejected: *The session detail endpoint.* It has more (tool time, lines changed, model mix, judgment) but every figure of it is whole-session, so the counts would differ from the table on a selected day or a short range, and it sends each session's full timeline.
 
 **3.7 Headers, removal and focus.** Each session column's header is a custom `th` with the session's name as a `SessionCell` button (it opens the session sheet; the sheet returns focus to it) and a "Remove {name} from the comparison" button. Removing moves focus to the next column's Remove button, else the previous one's. Below two sessions the comparison closes and focus goes to Clear selection. Clear selection moves focus to the search field, as stale rows do.
 
@@ -175,7 +194,7 @@ Rejected: *The session detail endpoint.* It has more (tool time, lines changed, 
 
 **4.1 Missing values.** A missing figure reads "–", as the table shows it (`usd`, `num` and the Model and Tok/s cells already do). When a compared session has no model time, one line under the comparison says: "– : the session records no model time (Codex and older Claude Code sessions)." The list rows carry no `source`, so the note cannot name the agent per column; the session sheet does. On a selected day, Model, Tok/s, Peak context and Compactions keep the table's "Whole-session figure" toggletip on their row header.
 
-**4.2 Stale and inert.** Only the `tbody` goes inert, so the row checkboxes go with it. The tools row, the headers, the bar and the comparison stay usable: the comparison draws from held rows and needs no loaded page.
+**4.2 Stale and inert.** Only the `tbody` goes inert, so the row checkboxes go with it. The tools row, the headers, the bar and the comparison stay usable: the comparison draws from held rows and needs no loaded page. Rows of an earlier view that are on screen and not inert (decision 3.4) keep opening their sheet; only their checkboxes are disabled.
 
 **4.3 At 390px.** The tools row already wraps; the two new controls take their own lines. The popover uses fixed positioning with collision padding and a `max-height` with scroll. The selection column has no `opt` class. Sorted and kept columns show and the region scrolls sideways. The comparison is a `Table` in its own named scroll region.
 
@@ -183,10 +202,10 @@ Rejected: *The session detail endpoint.* It has more (tool time, lines changed, 
 
 **4.5 Tests.**
 
-- `tests/test_metrics.py`: two and three keys in both directions; no-value rows last per key; ties keep the list's order, then session id; pages of a fully tied list hold every session once; the earlier form equals the list form; each 400. One request through the HTTP handler for a 400 and for a list.
+- `tests/test_metrics.py`: two and three keys in both directions; no-value rows last per key; ties keep the list's order, then session id (two sessions with identical start timestamps: the list sorts on milliseconds); pages of a fully tied list hold every session once; the earlier form equals the list form; each 400. Through the HTTP handler: a list, a 400, and a blank `sort=` (400) beside an omitted `sort` (the default order).
 - `Sort.test.tsx`: `nextSort` (replace, reverse, add, remove, cap); `SortTh` rank mark and name.
 - `Table.test.tsx`: the list form marks headers, keeps one `aria-sort`, sorts in the browser by two keys, calls `onSort` with the next list, adds on Shift and on `sortAdd`; the single form draws the same DOM as before; a pick row with a checkbox does not open, a label neither, a plain cell still does.
-- `ActivityPage.test.tsx`: the chooser (open, hide, storage, reset, blocked storage, unreadable value, focus return, narrow width through a mocked `matchMedia`, hide a sorted column, a vital shows a hidden column); multi-sort (checkbox, Shift, request URL, hint, cap, actions clear it); selection (no sheet, cap, survives Show more, sort, search and refresh, clears on range and day, bar, Clear focus); comparison (figures, "–" and its note, remove and focus, closes under two, opens a sheet).
+- `ActivityPage.test.tsx`: the chooser (open, hide, storage, reset, blocked storage, unreadable value, focus return, narrow width through a mocked `matchMedia`, hide a sorted column, a vital shows a hidden column); multi-sort (checkbox, Shift, request URL, hint, cap, actions clear it); selection (no sheet, cap, survives Show more, sort, search and refresh, clears on range and day, bar, Clear focus; with the new range's `/api/usage` response held pending, the earlier rows' checkboxes are disabled and nothing enters the selection); comparison (figures and their scopes, "–" and its note, remove and focus, closes under two, opens a sheet; a refresh followed by a search that leaves the session out keeps the refreshed figures).
 - A test that the TypeScript widths equal `activity.css`'s.
 - By hand on the demo store at 390, 1000 and 1440px, light and dark, with a screen reader for the header names and the status.
 
@@ -199,7 +218,7 @@ Seven steps, each one pull request that ships alone. Tiers are the project's: So
 | Step | Files | After | Tier | Risk |
 | --- | --- | --- | --- | --- |
 | 1 Column chooser | `pages/activity/` (`SessionsPanel.tsx`, new chooser and choice files, `activity.css`, tests), docs | – | Opus | Medium: the width rule read in two places |
-| 2 Sort list on the server | `metrics.py`, `tests/test_metrics.py`, `CHANGELOG.md` | – | Sonnet | Low: exact rules, no payload change |
+| 2 Sort list on the server | `metrics.py`, `app.py` (the blank `sort`), `tests/test_metrics.py`, `CHANGELOG.md` | – | Sonnet | Low: exact rules, no payload change |
 | 3 Sort list in `Table` | `Sort.tsx`, `Sort.css`, `Table.tsx`, their tests | – | Opus | High: every table draws through these |
 | 4 Multi-sort on Sessions | `api.ts`, `queries.ts`, `SessionsPanel.tsx`, `ActivityPage.tsx`, tests, docs | 1, 2, 3 | Opus | Medium |
 | 5 Selection | `sheets/session.ts`, `Table.test.tsx`, `SessionsPanel.tsx`, `ActivityPage.tsx`, `activity.css`, tests, docs | 4 | Opus | Medium: `pickRow` serves every pick row |
@@ -217,7 +236,9 @@ Checks: `cd web && npm run check` for every web step; `uv run ruff check` and `u
 - [The width rule is declared in CSS and in TypeScript] → One test compares them; the CSS stays the only thing that hides.
 - [A kept or sorted column makes the table wider than a phone] → The region scrolls sideways and takes focus; Reset columns undoes it.
 - [One more tab stop per row] → Accepted for native markup: 100 rows mean 100 more stops for a keyboard user who tabs through the table. The search field and the sort reach a session faster than Tab does.
-- [A selected session that is no longer listed shows figures as last listed] → Stated in the spec; the figures refresh as soon as the list holds the session again.
+- [A selected session that is no longer listed shows figures as last listed] → Stated in the spec; every in-scope row updates its held row, so "last listed" is the newest the list ever showed, and the figures refresh as soon as the list holds the session again.
+- [A session ticked while an earlier view's rows are still on screen brings that view's figures into the comparison] → Ticks and held-row updates are taken only from rows in the requested scope (decision 3.4); a test holds the new `/api/usage` response pending.
+- [A blank `sort=` now answers 400, where it gave the default order] → The app never sends it (`qs` leaves out an empty value); a script that did gets a clear error.
 - [A mode checkbox for multi-sort may be missed] → Its label says what it does, the docs name Shift, and single sort works as before for anyone who never ticks it.
 - [`desc=1` beside a list now answers 400] → No such request could be made before: a list in `sort` was already a 400.
 
@@ -227,12 +248,14 @@ No data migration and no rebuild. Each step merges on its own; reverting a step'
 
 ## Open Questions
 
-None that block the work. These are product defaults the owner may change; each changes a number or one decision, not the task list, except the last two:
+None. The owner accepted these product defaults on review of the proposal:
 
 1. The sort holds at most three keys, and a fourth replaces the last (2.3).
 2. At most four sessions compare (3.3).
 3. Hiding a sorted column takes it out of the sort (1.5).
 4. A column ticked on a narrow window stays shown at every width (1.4).
-5. The comparison shows the list's figures, not the sheet's whole-session ones (3.6).
-6. The Sessions sort stays out of the URL (2.7). Putting it there changes the spec ("The sort SHALL NOT be kept in the URL") and adds a URL key to group 4.
-7. The comparison is in the page and not in the URL (3.5). A comparison link needs a sheet and an `ids=` parameter on `/api/sessions`: a further group.
+5. The comparison shows the list's figures, each with the scope it has there, not the sheet's (3.6).
+6. The Sessions sort stays out of the URL (2.7).
+7. The comparison is in the page and not in the URL (3.5).
+8. Each row gains one tab stop, its checkbox (Risks).
+9. The three extras are one change.

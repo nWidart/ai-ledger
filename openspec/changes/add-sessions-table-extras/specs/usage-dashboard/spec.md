@@ -53,6 +53,14 @@ The server SHALL answer 400 for a `sort` that holds an unknown key, the same key
 - **WHEN** a client asks for `sort=-cost,prompts&desc=1`
 - **THEN** the server answers 400
 
+#### Scenario: Blank sort
+- **WHEN** a client asks for `/api/sessions?sort=`
+- **THEN** the server answers 400
+
+#### Scenario: No sort
+- **WHEN** a client asks for `/api/sessions` with no `sort` key
+- **THEN** the server answers the list in its own order, newest first
+
 ### Requirement: Page a sorted list without repeats
 Rows that every sort key leaves tied SHALL keep the list's own order: newest first, nearest the limit first with the near-limit filter, costliest first on a selected day. Rows still tied SHALL be ordered by session id. The order SHALL be the same on every request over the same data, so pages neither repeat nor skip a session.
 
@@ -60,8 +68,8 @@ Rows that every sort key leaves tied SHALL keep the list's own order: newest fir
 - **WHEN** 250 sessions all have 0 failed calls and a client reads `sort=-errors` in pages of 100
 - **THEN** the three pages hold each of the 250 sessions once, newest first
 
-#### Scenario: Same start time
-- **WHEN** two sessions start in the same second and no sort key tells them apart
+#### Scenario: Identical start timestamps
+- **WHEN** two sessions have identical start timestamps and no other sort or default order tells them apart
 - **THEN** every request lists them in the order of their session ids
 
 ### Requirement: Add a column to the Sessions sort
@@ -246,6 +254,21 @@ The selection SHALL survive Show more, a sort change, a change of the search tex
 - **WHEN** two sessions are selected and the user selects a day on the work chart
 - **THEN** no session is selected
 
+### Requirement: Select only rows of the view asked for
+While the rows on screen were counted for another project, range, source, automated setting or selected days than the URL asks for, their checkboxes SHALL be disabled, and no figure of those rows SHALL enter the selection or the comparison. The rows SHALL still open their session sheet.
+
+#### Scenario: A range that is still loading
+- **WHEN** the user changes the range from 30 to 7 days and the 7-day figures have not arrived, so Sessions still lists the 30-day rows
+- **THEN** no session is selected, every row's checkbox is disabled, and a row still opens its sheet
+
+#### Scenario: The range arrives
+- **WHEN** the 7-day figures and rows arrive
+- **THEN** the checkboxes are enabled, and a session ticked then shows the figures of its row in the 7-day view in the comparison
+
+#### Scenario: A range that fails to load
+- **WHEN** the 7-day figures fail to load and Sessions keeps the 30-day rows
+- **THEN** the checkboxes stay disabled until the view asked for and the rows shown agree again
+
 ### Requirement: Keep the selection out of the URL
 The selection and the comparison SHALL NOT be written to the URL or saved in the browser: a reload or a copied link SHALL show Sessions with no session selected.
 
@@ -279,6 +302,21 @@ The comparison SHALL have one row for each of project, start, active time, model
 - **WHEN** a session's row reads $4.20 and 12/14 tests in the Sessions table
 - **THEN** its comparison column reads $4.20 and 12/14
 
+### Requirement: Keep each figure's scope in the comparison
+The comparison SHALL use each figure's scope from the Sessions list. Start SHALL be the session's actual start, and Active SHALL cover the whole session unless a day or week is selected. Model time, output speed, peak context and compactions SHALL be whole-session figures. Prompts, tokens, estimated cost, failed calls, commits and tests SHALL count the view's range, or the selected days. The comparison SHALL make no request.
+
+#### Scenario: A session that starts before the range
+- **WHEN** a session started 10 days ago, was active 3 hours in all and 1 hour in the last 7 days, and the user compares it in a 7-day view with no day selected
+- **THEN** its Start reads the day it started, 10 days ago, its Active reads 3 hours, and its prompts count the last 7 days only, as its row in the Sessions table reads
+
+#### Scenario: A selected day
+- **WHEN** the user selects a day on the work chart and compares two of its sessions
+- **THEN** Active, prompts, tokens, estimated cost, failed calls, commits and tests are that day's, and model time, output speed, peak context and compactions are the whole session's
+
+#### Scenario: No request
+- **WHEN** the user opens the comparison
+- **THEN** the app asks the server for nothing
+
 ### Requirement: Show a missing figure in the comparison
 A figure a session does not record SHALL read "–" in the comparison. When a compared session records no model time, a note under the comparison SHALL say that "–" there means the session records no model time. On a selected day, the whole-session figures SHALL say that they are, as the Sessions table's do.
 
@@ -295,7 +333,7 @@ A figure a session does not record SHALL read "–" in the comparison. When a co
 - **THEN** its estimated cost reads "–"
 
 ### Requirement: Keep compared figures current
-The comparison SHALL show, for each selected session the list holds, the figures of its current row, so a refresh updates them. A selected session the list no longer holds SHALL keep the figures it had when it was last listed.
+The comparison SHALL show, for each selected session the list holds, the figures of its current row, so a refresh updates them. A selected session the list no longer holds SHALL keep the figures of the last row the list showed for it in the view asked for, not those it had when it was selected.
 
 #### Scenario: Refresh
 - **WHEN** a compared session gains 2 commits and an ingest refreshes the rows that hold it
@@ -304,6 +342,10 @@ The comparison SHALL show, for each selected session the list holds, the figures
 #### Scenario: Not listed
 - **WHEN** a search leaves a compared session out of the list and an ingest refreshes the rows
 - **THEN** its comparison column keeps the figures it had
+
+#### Scenario: Refresh, then a search
+- **WHEN** a session is selected with 0 commits, an ingest refreshes its row to 2 commits, and the user then types a search that leaves it out of the list
+- **THEN** its comparison column still reads 2 commits
 
 ### Requirement: Open and remove a session from the comparison
 Each comparison column's header SHALL hold the session's name as a button that opens its session sheet, and a Remove button named after the session, which SHALL unselect it. Removing SHALL move focus to the next column's Remove button, else to the previous one's. When fewer than two sessions stay selected, the comparison SHALL close and focus SHALL move to Clear selection.
