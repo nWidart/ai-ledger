@@ -13,7 +13,7 @@ Only the shots a page shows are kept: a shot no page references is deleted, and 
 | `tour-overview` | The first screen of Activity: header, filters, what needs attention, the work chart, the vitals row and the workbench tabs. Poster and reduced-motion still for the `tour` video. | Home (tour video) |
 | `activity-attention` | "Needs attention": the short list of things to look at (error loops, sessions near the window, failing tools, failed tests). | Activity, First tour |
 | `activity-vitals` | The work-health row of tiles. | Activity |
-| `activity-work` | "Work per day": commits per day by project, with errors per 100 calls on a track under the bars. | Activity |
+| `activity-work` | "Work per day": commits per day by project, with errors per 100 calls on a track under the bars and the zoom slider under both. | Activity |
 | `cost-overview` | The heading, the filters and the plan gauge. | Cost |
 | `cost-spend` | "Estimated cost per day", stacked by project, with the 7-day average and the zoom slider under the day labels. | Cost |
 | `cost-projects` | "Project spend and change": trend, spend, change, cost per commit and cache hit per project. | Cost |
