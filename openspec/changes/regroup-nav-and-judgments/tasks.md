@@ -45,3 +45,14 @@
 - [x] 6.1 Update `tools/demo/record.mjs` for the Judgments view. Screenshots and GIFs are not re-recorded: the pinned Playwright has no browser on this machine (see design.md, Risks).
 - [x] 6.2 Update `README.md`, the docs site and `CHANGELOG.md` `[Unreleased]`.
 - [x] 6.3 Run `uv run ruff check`, `uv run python -m unittest discover -s tests`, `cd web && npm run check`, `cd site && npm run check`, `openspec validate --specs --strict` and `openspec validate regroup-nav-and-judgments --strict`.
+
+## 7. Review fixes
+
+- [x] 7.1 Draw the view switch in every state of both views and hand focus back in a layout effect. Verify with `Judgments.test.tsx` ("keeps the focus on the switch while … first request is pending"): focus and Tab order before the request settles, both ways.
+- [x] 7.2 Give the Limits pill one fixed width and opaque fills, keep its room on the page chooser, mark an alert in forced colors, and say the percent in the chooser's name. Verify with `Nav.test.tsx` ("Limits pill", "page chooser"); contrast worked out in design.md.
+- [x] 7.3 Fill the Live waiting count under a lock. Verify with `tests/test_app.py` (`test_concurrent_status_requests_work_out_the_waiting_count_once`: five callers behind a barrier, one read).
+- [x] 7.4 Outcome trend: slots from `stackHeights()`, counts thinned on narrow charts, few weeks at half width, modified keys left alone. Verify with `Judgments.test.tsx` ("outcome trend": 1 in 150, 26 weeks at phone width, modified keys).
+- [x] 7.5 Friction: an unpriced session adds its active time, not cost; every weight shows the report count. Verify with `tests/test_insights.py` (`test_an_unpriced_session_adds_no_cost_to_its_friction_but_its_active_time`) and `Judgments.test.tsx` ("friction weights").
+- [x] 7.6 Mark Limits' project rows as menu subjects. Verify with `LimitsPage.test.tsx` ("opens a project's menu from …").
+- [x] 7.7 Keep a section anchor through the `/insights` redirect; drop a Codex source from the sheet's Judgments link; replace the Project page's link with the reason for Codex. Verify with `router.test.tsx`, `sheets.test.tsx` and `ProjectPage.test.tsx`.
+- [x] 7.8 Reconcile the deltas: Judgments inside Activity (purpose and requirement names), filter placement, one shared sheet host, the index's empty cases, payload order, the old-app pill rule, and the Codex cases.
