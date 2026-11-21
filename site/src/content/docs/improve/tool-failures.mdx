@@ -25,9 +25,9 @@ Failed test runs ("N failed test runs of M.") also start here: their type is **T
 
 Find out which of five causes you have. Errors counts automated sessions too; it has no **Include automated** control.
 
-1. Open Errors with the range at **30d**. Turn on **Hide noise and muted**: harness errors, user rejections and muted types leave the view.
+1. Open Errors with the range at **30d**. Turn on **Hide noise and muted**, in the type table's toolbar: harness errors, user rejections and muted types leave the view.
 2. In **Where to start**, select the first type under **Open fixes**: it lost the most time in retry loops. If **Open fixes** reads "Nothing open with a known fix.", sort the **Error types** table by **Time lost** and open the top row.
-3. In the type detail, read the incident line, such as "40 errors in 12 incidents, 25% didn't recover … Largest: 6 attempts over 4m" (an example). Then read **By project** and **By agent**: they tell you which project and which agent to fix.
+3. In the type detail, read the incident line, such as "40 errors in 12 incidents, 25% did not recover … Largest: 6 attempts over 4m" (an example). Then read **By project** and **By agent**: they tell you which project and which agent to fix.
 4. Read **Potential fix**. Note whether it has a line to paste with **Copy instruction line**, or names a shell or agent setting.
 5. If it has neither, switch the list to **By message**. The top message, with its share of the type's errors, names the repeated cause.
 6. If you came from the error loops of Activity, select **See loops** on its **Needs attention** card. Note the tool and the number of failures of each loop.
@@ -151,7 +151,7 @@ There is no type to mark for this rule. Verify it with the error loops of Activi
 
 The same day: in the type detail, select **Every error, newest first** and **Refresh** in the navigation bar. No new error of the type should appear after the time you pasted the fix. A session that started before the change still runs on the old file: judge new sessions only.
 
-After the fix has collected enough calls (the more calls a day, the sooner), open the type with the same project and source filters, and read **Before and after the fix**. It compares the error rate before the day you marked with the rate since, over all time.
+After the fix has collected enough calls (the more calls a day, the sooner), open the type with the same project and source filters, and read **Before and after the fix**. It compares the error rate before the day you marked with the rate since, over all time. To check every fix at once, read **Applied fixes** under **Where to start**, with no type open: one row per fix, with the same verdict.
 
 | Verdict | What to do |
 | --- | --- |

@@ -5,7 +5,7 @@ import { openToolSheet, sessionLink } from "../../components/sheets/session";
 import { dur, num as fmt, plural, when as at } from "../../format";
 import { queries } from "../../queries";
 import { useKeyed, useRow, type RowCtx } from "./context";
-import { incSpan, msgOpenKey, OUTCOME, PAYLOAD_INPUT, sessionHref, type Err, type Group, type MsgGroup } from "./model";
+import { attemptStrip, incSpan, msgOpenKey, OUTCOME, PAYLOAD_INPUT, sessionHref, type Err, type Group, type MsgGroup } from "./model";
 import { viewLink } from "./view";
 
 // Examples opened with "Show full", by id (or time and tool for an example without one).
@@ -21,7 +21,7 @@ async function loadFull(x: RowCtx, client: QueryClient, id: string) {
   } catch (e) {
     // Nobody shows the example any more (it unmounted mid-request): Query cancelled the request, and there is nothing to report.
     if (isCancelledError(e)) return;
-    return x.say("Couldn't load the full example. Use Retry to try again.");
+    return x.say("Could not load the full example. Use Retry to try again.");
   }
   x.opened.add(id);
   x.say("Full example shown");
@@ -89,7 +89,7 @@ export const Example = memo(function Example({ e }: { e: Err }) {
       {t.r ? <><blockquote>{t.r}</blockquote>{note("r")}</> : null}
       <button type="button" className={"full" + (failed && !busy ? " failed" : "")} data-full={key} aria-expanded={open} aria-busy={busy || undefined}
         hidden={!open && !cut && !clamped && !busy && !failed} onClick={full}>
-        {busy ? "Loading…" : failed ? "Couldn't load full text · Retry" : open ? "Show less" : "Show full"}
+        {busy ? "Loading…" : failed ? "Could not load full text · Retry" : open ? "Show less" : "Show full"}
       </button>
     </div>
   );
@@ -113,11 +113,29 @@ export const Incident = memo(function Incident({ g }: { g: Group }) {
         <span className="who"><ProjectName project={g.p} /><span>{g.t}</span>{g.sub ? <span className="muted">subagent</span> : null}</span>
         <span className={"out " + oc} title={g.outcome === "recovered" ? `The next ${g.t} call in this session succeeded` : undefined}>{ol}</span>
         <span className="when">{when}{g.ok ? ` · ${fmt(g.ok)} successful ${g.t} call${g.ok === 1 ? "" : "s"} in between` : ""}<span className="chev" aria-hidden="true">›</span></span>
+        <AttemptStrip g={g} />
       </button>
       <div className="inc-b" id={`incb-${g.i}`} hidden={!open}>{open && <IncBody g={g} />}</div>
     </div>
   );
 });
+
+/** The incident's attempts on a time strip (see attemptStrip), with the strip in words for screen readers. Sized in rem, so it follows the
+ *  text size. */
+function AttemptStrip({ g }: { g: Group }) {
+  const s = useMemo(() => attemptStrip(g), [g]), H = 12, y = H / 2;
+  const fails = s.marks.filter(k => !k.ok), x0 = fails[0]?.x ?? 0, x1 = fails[fails.length - 1]?.x ?? 0, ok = s.marks.find(k => k.ok);
+  return <span className="strip">
+    <svg viewBox={`0 0 ${s.w.toFixed(1)} ${H}`} style={{ width: `${s.w / 16}rem`, height: `${H / 16}rem` }} aria-hidden="true">
+      {/* The failures' time line, solid; the step to the call that recovered, dotted: it is not drawn to scale. */}
+      <line x1={x0} x2={x1} y1={y} y2={y} stroke="var(--border)" strokeWidth="1.5" />
+      {ok && <line x1={x1 + 4} x2={ok.x - 4} y1={y} y2={y} stroke="var(--text-muted)" strokeWidth="1" strokeDasharray="1 2" />}
+      {s.marks.map((k, i) => <path key={i} className={k.ok ? "ok" : "fail"} fill="none" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
+        d={k.ok ? `M${k.x - 3.5},${y}L${k.x - 1},${y + 3}L${k.x + 3.5},${y - 3}` : `M${k.x - 3},${y - 3}L${k.x + 3},${y + 3}M${k.x + 3},${y - 3}L${k.x - 3},${y + 3}`} />)}
+    </svg>
+    <span className="sr">{s.text}</span>
+  </span>;
+}
 
 function IncBody({ g }: { g: Group }) {
   const { m } = useRow(), after = g.rts ? dur(Math.max(0, Date.parse(g.rts) - Date.parse(g.last ?? "")) / 1000) : "";

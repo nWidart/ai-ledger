@@ -317,7 +317,7 @@ const SHOT_PAGES = {
     ["growth", "#growth", { url: "/context?range=30&tab=growth" }], ["fills", "#fills", { url: "/context?range=30&tab=growth" }],
     ["cost", "#cost", { url: "/context?range=30&tab=cache" }]] },
   errors: { url: "/errors?range=30", panels: [
-    ["summary", "#kpis"], ["chart", ".chart-card"], ["types", ".card.types"], ["detail", "#detail"]] },
+    ["summary", "#kpis"], ["chart", ".chart-card"], ["types", ".panel.types"], ["detail", "#detail"]] },
   limits: { url: "/limits?range=30", panels: [
     ["windows", ".lim-grid"], ["history", "#history"]] },
   insights: { url: "/insights?range=30", panels: [

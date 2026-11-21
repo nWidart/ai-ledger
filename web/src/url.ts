@@ -46,6 +46,8 @@ const sheetKeys = (path: string): string[] => ["inspect", "tool", "mcp", "skill"
 export const SHARED_KEYS = ["project", "range", "source", "auto"] as const;
 
 const isRange = (n: number): n is Range => (RANGES as readonly number[]).includes(n);
+/** A real calendar day as YYYY-MM-DD: 2026-02-30 is not one. */
+export const isDay = (s: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s)) && new Date(s).toISOString().startsWith(s);
 /** A source value, or "" (all) when missing or unknown. */
 export const sourceOf = (v: string | null | undefined): Source | "" => ((SOURCES as readonly string[]).includes(v ?? "") ? (v as Source) : "");
 

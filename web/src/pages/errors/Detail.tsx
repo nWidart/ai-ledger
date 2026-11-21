@@ -1,5 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Source } from "../../api";
+import { DataTable } from "../../components/DataTable";
 import { agentName } from "../../components/Filters";
 import { HowMeasured } from "../../components/HowMeasured";
 import { ProjectName } from "../../components/ProjectDot";
@@ -49,8 +50,34 @@ function WhereToStart() {
         act={fixes[x.c] ? "Check the fix" : "See what changed"} />)
         : <div className="empty slim">{why ? `${why}, nothing to compare.` : "Nothing is rising in this range."}</div>}
     </>}
-    <div className="ex"><div className="muted xs">The app ingests new transcript lines every minute; use Refresh above to ingest now. Fix markers are kept in the store, so they follow you to another port or browser.</div></div>
+    <Scorecard />
+    <div className="ex"><div className="muted xs">Fix markers are kept in the store, so they follow you to another port or browser.</div></div>
   </>;
+}
+
+/** Every recorded fix, newest first, with its rate before and since and the verdict of FixResult (the same gated model, all time, under the
+ *  project, source and subagent filters). A type with errors in the view opens from its row. Absent with no fix recorded. */
+function Scorecard() {
+  const { m, v, vt, fixes, pick } = useErrors();
+  const rows = Object.entries(fixes).sort((a, b) => (a[1] < b[1] ? 1 : a[1] > b[1] ? -1 : a[0] < b[0] ? -1 : 1));
+  if (!rows.length) return null;
+  const pct = (r: number | null) => (r == null ? "–" : fmt(r, 2) + "%");
+  return <section className="score" id="scorecard" aria-labelledby="scoreTitle">
+    <h3 className="subh" id="scoreTitle">Applied fixes</h3>
+    <p className="why tight">Error rate before each fix and since, all time. A verdict waits for enough calls since the fix.</p>
+    <DataTable name="Applied fixes" region="sscroll">
+      <thead><tr><th scope="col">Type</th><th scope="col" className="num">Before</th><th scope="col" className="num">Since</th><th scope="col">Verdict</th></tr></thead>
+      <tbody>{rows.map(([c, day]) => {
+        const { sides: [b4, af], verdict } = beforeAfter(m, v, c, day), name = m.cats[c]?.label ?? c;
+        return <tr key={c} data-c={c}>
+          <th scope="row">{vt.counts[c] ? <button type="button" className="linkbtn" data-c={c} onClick={() => pick(c, true)}>{name}</button> : name}
+            <span className="muted xs"> · {yearLabel(m, day)}</span></th>
+          <td className="num">{pct(b4.r)}</td><td className="num">{pct(af.r)}</td>
+          <td><span className={"out " + verdict[1]}>{verdict[0]}</span></td>
+        </tr>;
+      })}</tbody>
+    </DataTable>
+  </section>;
 }
 
 function TypeDetail({ cat }: { cat: string }) {
@@ -146,7 +173,7 @@ function TypeDetail({ cat }: { cat: string }) {
     </div>
     <p className="why">{c.why}</p>
     {base.length ? <p className="istat">
-      <b>{fmt(base.length)}</b> error{base.length === 1 ? "" : "s"} in <b>{fmt(is.n)}</b> incident{is.n === 1 ? "" : "s"}, <b>{fmt(is.pct, 0)}%</b> didn't recover.{lost ? <> <b>{dur(lost / 1000)}</b> lost in retry loops.</> : null}
+      <b>{fmt(base.length)}</b> error{base.length === 1 ? "" : "s"} in <b>{fmt(is.n)}</b> incident{is.n === 1 ? "" : "s"}, <b>{fmt(is.pct, 0)}%</b> did not recover.{lost ? <> <b>{dur(lost / 1000)}</b> lost in retry loops.</> : null}
       {worst && worst.errs.length > 1 ? ` Largest: ${fmt(worst.errs.length)} attempts over ${dur(incSpan(worst) / 1000)}.` : ""}
       <HowMeasured what="incidents">An incident is one agent retrying one tool with this error, each failure within {m.gap} minutes of the last and
         at most {m.maxOk} successful calls of that tool apart. {RECOVERED_NOTE}</HowMeasured></p> : null}
@@ -163,7 +190,7 @@ function TypeDetail({ cat }: { cat: string }) {
       </div>
     </div>
     <div className="row mutebox" aria-busy={muteBusy || undefined}>
-      {fixedNoise ? <span className="muted xs" id="alwaysNoise">This type is always noise: "Hide noise and muted" leaves it out, and it can't be muted.</span> : <>
+      {fixedNoise ? <span className="muted xs" id="alwaysNoise">This type is always noise: "Hide noise and muted" leaves it out, and it cannot be muted.</span> : <>
         <button type="button" id="mute" aria-busy={muteBusy || undefined} onClick={toggleMute}>{isMuted ? "Unmute" : "Mute this type"}</button>
         {isMuted && <span className="chip muted-type">Muted</span>}
         <span className="muted xs">Muted types count as noise: "Hide noise and muted" leaves them out of the rate.</span>
@@ -178,7 +205,7 @@ function TypeDetail({ cat }: { cat: string }) {
     <ByAgent base={base} />
     {outside && <div className="outnote" id="outside">
       <div className="row between"><b>Outside current filters</b><button type="button" id="clearF" onClick={clearFilters}>Clear filters</button></div>
-      <div className="muted xs">This linked example doesn't match the project, agent, range, bucket, tool or toggles above.</div>
+      <div className="muted xs">This linked example does not match the project, agent, range, bucket, tool or toggles above.</div>
       <Example e={focused!} />
     </div>}
     <div className="exbar" ref={bar}>

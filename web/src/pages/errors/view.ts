@@ -1,7 +1,7 @@
 // The URL is the view: project, range, source, sub=0 (no subagents), noise=0 (noise hidden), gran=week, cat (open type), ex (one
 // linked example), at (the chart bucket the table and detail narrow to), etool (the tool the open type's detail narrows to; tool is the tool sheet's key). The last view and the list mode live in localStorage under the old
 // page's keys and shapes. The applied fixes live in the store; FIXES_KEY is where an older page kept them, read once to move them there (see marks.ts).
-import { RANGES, sourceOf, type RootSearch, type SearchPatch, type Range } from "../../url";
+import { isDay, RANGES, sourceOf, type RootSearch, type SearchPatch, type Range } from "../../url";
 import type { ErrorsSearch } from "./search";
 import type { Fixes, Model, View } from "./model";
 
@@ -16,10 +16,11 @@ export const store = {
   set(k: string, v: unknown) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage off */ } },
   remove(k: string) { try { localStorage.removeItem(k); } catch { /* storage off */ } },
 };
+/** The older page's markers, each a real calendar day: a malformed one ("not-a-day") is dropped, as the page would throw on it. */
 export const loadFixes = (): Fixes => {
   const f = store.get<unknown>(FIXES_KEY, {});
   return f && typeof f === "object" && !Array.isArray(f)
-    ? Object.fromEntries(Object.entries(f).filter((x): x is [string, string] => typeof x[1] === "string")) : {};
+    ? Object.fromEntries(Object.entries(f).filter((x): x is [string, string] => typeof x[1] === "string" && isDay(x[1]))) : {};
 };
 export const loadMode = (): Mode => { const m = store.get<string>(MODE_KEY, "inc"); return m === "flat" || m === "msg" ? m : "inc"; };
 
