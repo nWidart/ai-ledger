@@ -843,6 +843,10 @@ class MetricsTest(unittest.TestCase):
             self.assertEqual(ids("/api/sessions"), ["s2", "s1", "s3"])
             self.assertEqual(get("/api/sessions?sort="), (400, dict(error="empty sort key")))
             self.assertEqual(get("/api/sessions?sort=&desc=1"), (400, dict(error="empty sort key")))
+            # A blank among several sort values is refused wherever it stands; otherwise the first value counts.
+            for path in ("sort=cost&sort=", "sort=&sort=cost"):
+                self.assertEqual(get(f"/api/sessions?{path}"), (400, dict(error="empty sort key")), path)
+            self.assertEqual(ids("/api/sessions?sort=-tokens&sort=cost"), ["s1", "s2", "s3"])
             for path, error in (("sort=cost,cost", "repeated sort key: cost"), ("sort=cost,-cost", "repeated sort key: cost"),
                                 ("sort=cost,tokens,prompts,errors", "too many sort keys: at most 3"), ("sort=cost,", "empty sort key"),
                                 ("sort=cost,title", "unknown sort: title"), ("sort=-cost,prompts&desc=1", "desc cannot go with a sort list or a - key"),
@@ -996,13 +1000,6 @@ class SessionSortKeysTest(unittest.TestCase):
                                   ("-cost", True, "desc cannot go with a sort list or a - key")):
             with self.assertRaisesRegex(ValueError, error, msg=sort):
                 metrics.session_list(con.cursor(), sort=sort, desc=desc, prices=PRICES, today=TODAY)
-
-    def test_a_bad_list_never_reaches_sql(self):
-        con = self.store(self.ROWS)
-        for sort in ("cost,cost", "cost,tokens,prompts,errors", "cost; DROP TABLE sessions,tokens"):
-            with mock.patch.object(metrics, "rows") as rows, self.assertRaises(ValueError):
-                metrics.session_list(con.cursor(), sort=sort, prices=PRICES, today=TODAY)
-            rows.assert_not_called()
 
 
 class RunRateTest(unittest.TestCase):

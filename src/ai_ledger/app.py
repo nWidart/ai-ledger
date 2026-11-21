@@ -103,12 +103,12 @@ def parse_span(query):
 
 
 def parse_sort(query):
-    """The sort= of a /api/sessions query string: "" when the key is absent (the default order). A blank value raises ValueError
-    (parse_qs would drop it, and the request would read as unsorted)."""
+    """The sort= of a /api/sessions query string: "" when the key is absent (the default order), else its first value. A blank
+    value, whichever of several, raises ValueError (parse_qs would drop it, and the request would read as unsorted)."""
     got = parse_qs(query, keep_blank_values=True).get("sort")
     if got is None:
         return ""
-    if not got[0]:
+    if "" in got:
         raise ValueError("empty sort key")
     return got[0]
 
