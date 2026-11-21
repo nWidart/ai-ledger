@@ -20,7 +20,7 @@ from http.server import ThreadingHTTPServer
 
 import duckdb
 
-from ai_ledger import app, limits, live, metrics, store
+from ai_ledger import app, limits, live, metrics, prom, store
 
 USAGE_DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "usage-data")
 
@@ -324,12 +324,13 @@ class AppTest(unittest.TestCase):
         seen = {}
 
         def refuse(db):
-            seen.update(prices=metrics.USER_PRICES, automated=metrics.USER_AUTOMATED)
+            seen.update(prices=metrics.USER_PRICES, automated=metrics.USER_AUTOMATED, workloads=prom.USER_WORKLOADS)
             raise store.StoreBusy("busy")
-        with mock.patch.object(metrics, "USER_PRICES"), mock.patch.object(metrics, "USER_AUTOMATED"), \
+        with mock.patch.object(metrics, "USER_PRICES"), mock.patch.object(metrics, "USER_AUTOMATED"), mock.patch.object(prom, "USER_WORKLOADS"), \
                 mock.patch.object(store, "open_store", side_effect=refuse), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             app.main(["--db", "/data/ledger/x.duckdb"])
-        self.assertEqual(seen, dict(prices="/data/ledger/prices.json", automated="/data/ledger/automated.json"))
+        self.assertEqual(seen, dict(prices="/data/ledger/prices.json", automated="/data/ledger/automated.json",
+                                    workloads="/data/ledger/workloads.json"))
 
     def test_day(self):
         status, _, body = self.get("/api/day?day=2026-11-04&range=0")
@@ -637,9 +638,11 @@ class LimitsAlertTest(unittest.TestCase):
         got = self.app.status()
         self.assertEqual((got["limits_alert"], got["limits_peak"]),
                          (None, dict(provider="claude", provider_label="Claude Code", label="5-hour", current=62.0, measured=False)))
+        self.assertEqual(self.app.limit_windows, ws)  # kept for /metrics
         with mock.patch.object(limits, "payload", side_effect=RuntimeError("secret text")), contextlib.redirect_stderr(io.StringIO()):
             self.app.refresh_alert()
-        self.assertIsNone(self.app.status()["limits_peak"])  # a failure clears both
+        self.assertIsNone(self.app.status()["limits_peak"])  # a failure clears both, and the windows
+        self.assertEqual(self.app.limit_windows, [])
 
     def test_the_waiting_count_is_worked_out_on_a_status_request_and_kept_for_a_while(self):
         with mock.patch.object(live, "waiting", side_effect=[2, 5]) as waiting:

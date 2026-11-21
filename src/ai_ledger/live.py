@@ -482,17 +482,26 @@ def sessions(cur, project="", source="", automated=False, now=None, prices=None,
 WAITING = ("wait", "you")  # the states that wait on the user: a likely approval wait, and your turn
 
 
-def waiting(cur, now=None):
-    """How many active sessions wait on the user (a state in WAITING), over every project and source, automated sessions
-    left out: the nav's Live badge. The states are those sessions() gives the same sessions at the same time."""
+def states(cur, now=None, automated=False):
+    """The active sessions over every project and source, automated ones left out unless automated:
+    [{session_id, project, source, state}], state the kind sessions() gives the same session at the same time. Names and
+    kinds only: no title, figure or text is read."""
     now = now or now_utc()
-    where, params = metrics.scope("", False, "")
+    where, params = metrics.scope("", automated, "")
     since = (now - ACTIVE).astimezone(timezone.utc).replace(tzinfo=None)
-    info = cur.execute(f"SELECT s.session_id, s.source, s.last_ts FROM sessions s WHERE s.last_ts >= ? AND {where}", [since] + params).fetchall()
+    info = cur.execute(f"SELECT s.session_id, s.project, s.source, s.last_ts FROM sessions s WHERE s.last_ts >= ? AND {where}",
+                       [since] + params).fetchall()
     sids = [r[0] for r in info]
     lines, ended, copied = recent(cur, sids), closed(cur, sids), forked(cur, sids)
-    return sum(state(assemble(lines.get(sid, []), copied)[0], now, source, aware(last), sid in ended)["kind"] in WAITING
-               for sid, source, last in info)
+    return [dict(session_id=sid, project=project, source=source,
+                 state=state(assemble(lines.get(sid, []), copied)[0], now, source, aware(last), sid in ended)["kind"])
+            for sid, project, source, last in info]
+
+
+def waiting(cur, now=None):
+    """How many active sessions wait on the user (a state in WAITING), over every project and source, automated sessions
+    left out: the nav's Live badge."""
+    return sum(s["state"] in WAITING for s in states(cur, now))
 
 
 def title_of(found, sid):

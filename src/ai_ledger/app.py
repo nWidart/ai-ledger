@@ -22,7 +22,7 @@ from datetime import date, datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
-from . import context, insights, limits, live, measure, metrics, store, titles
+from . import context, insights, limits, live, measure, metrics, prom, store, titles
 
 HOST, PORT = "127.0.0.1", 8765  # PORT is the default; --port changes it
 INTERVAL = 60
@@ -158,10 +158,18 @@ class App:
         self.stopping = threading.Event()
         # last_change: the time of the last ingest that stored anything, so pages refetch only when data changed.
         self.state = dict(ingesting=False, last_ingest=None, last_change=None, last_stats=None, error=None)
+        # How many times last_change was set: last_change has a resolution of a second, and two ingests can store in one.
+        self.change_count = 0
         # The nav's Limits pill: limits.alert_of and limits.peak_of over the open windows, worked out after each full cycle
-        # (see refresh_alert).
+        # (see refresh_alert), and those windows, for /metrics.
         self.limits_alert = None
         self.limits_peak = None
+        self.limit_windows = []
+        # /metrics: the rendered counters with the key they were built for (see metrics_text), and each session's workload.
+        self.counters = None
+        self.counters_lock = threading.Lock()
+        self.workloads = prom.Workloads()
+        self.version = importlib.metadata.version("ai-ledger")
         # The nav's Live badge: (the count, when it was worked out), see live_waiting. Its lock lets one request thread fill it
         # while the others wait for that count.
         self.waiting = (None, None)
@@ -183,7 +191,7 @@ class App:
                 now = datetime.now(timezone.utc).isoformat(timespec="seconds")
                 self.state.update(last_ingest=now, last_stats=stats, error=None)
                 if stats["inserted"] or stats.get("usage_files"):
-                    self.state["last_change"] = now
+                    self.changed_at(now)
                 if sessions:
                     self.publish(sessions)
                 if usage and (stats["files"] or stats.get("usage_files") or stats.get("usage_skipped")):
@@ -202,7 +210,11 @@ class App:
                 was = dict(p.state)
                 p.run(self.con, self.lock)
                 if p.state != was:  # a stored reading or a change in poll health changes Limits, so pages refetch
-                    self.state["last_change"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                    self.changed_at(datetime.now(timezone.utc).isoformat(timespec="seconds"))
+
+    def changed_at(self, now):
+        self.state["last_change"] = now
+        self.change_count += 1
 
     def refresh_alert(self):
         """Work out the nav's limits alert and its fullest open window, as the Limits page's payload gives them with no
@@ -210,13 +222,31 @@ class App:
         open page polls status. A read, as the routes do it: no store lock. It runs in the loop thread, so it delays the next
         fast pass of a Live page by the payload's duration (about 0.14 s on a store of 90,000 requests, once per INTERVAL); if
         a store ever makes it slow, the remedy is a thread of its own. Never raises: whatever the payload does, both are None
-        and ingest goes on."""
+        and ingest goes on. Keeps the open windows for /metrics, none after a failure."""
         try:
             payload = limits.payload(self.con.cursor(), polls={p.name: dict(p.state) for p in self.pollers})
             self.limits_alert, self.limits_peak = limits.alert_of(payload["windows"]), limits.peak_of(payload["windows"])
+            self.limit_windows = payload["windows"]
         except Exception as e:  # the type only: the message could carry stored text
             self.limits_alert = self.limits_peak = None
+            self.limit_windows = []
             print(f"limits alert failed: {type(e).__name__}", file=sys.stderr, flush=True)
+
+    def metrics_text(self):
+        """The /metrics body. The counters are worked out again only when the store changed (an ingest or a limit poll
+        stored something) or the workloads file did, under a lock of their own, so concurrent scrapes build them once; the
+        gauges at every scrape. Reads, as the routes do: no store lock. Raises what a query raises, and the next scrape tries
+        again."""
+        cur = self.con.cursor()
+        with self.counters_lock:
+            key = (self.change_count, self.workloads.stat())
+            if self.counters is None or self.counters[0] != key:
+                sids = [r[0] for r in cur.execute("SELECT session_id FROM sessions").fetchall()]
+                self.counters = (key, prom.counters(cur, self.workloads.get(cur, sids)))
+            counters = self.counters[1]
+        active = live.states(cur, automated=True)
+        workloads = self.workloads.get(cur, [a["session_id"] for a in active])
+        return counters + prom.gauges(active, workloads, self.limit_windows, self.state, self.version)
 
     def live_waiting(self):
         """How many active sessions wait on the user (live.waiting), for the nav's Live badge. A session's state depends on
@@ -451,6 +481,13 @@ def handler(app, port=PORT):
                     else:  # names carry a content hash, so a file never changes
                         with open(found[0], "rb") as fh:
                             self.send(200, fh.read(), found[1], cache="public, max-age=31536000, immutable")
+                elif url.path == "/metrics":
+                    try:
+                        body = app.metrics_text()
+                    except Exception as e:  # the type only: the message could carry stored text
+                        print(f"metrics failed: {type(e).__name__}", file=sys.stderr, flush=True)
+                        return self.send(500, f"{type(e).__name__}\n", "text/plain; charset=utf-8")
+                    self.send(200, body, prom.CONTENT_TYPE)
                 elif url.path == "/api/live/events":
                     self.live_events()
                 elif url.path == "/api/live":
@@ -606,6 +643,7 @@ def main(argv=None):
     roots = dict(claude=a.projects, codex=a.codex, grok=a.grok, insights=a.usage_data)
     folder = os.path.dirname(os.path.abspath(a.db or store.DEFAULT_DB))  # the user files sit next to the store
     metrics.USER_PRICES, metrics.USER_AUTOMATED = os.path.join(folder, "prices.json"), os.path.join(folder, "automated.json")
+    prom.USER_WORKLOADS = os.path.join(folder, "workloads.json")
     try:
         con = store.open_store(a.db)
     except (store.StoreBusy, store.StoreNotMoved) as e:
