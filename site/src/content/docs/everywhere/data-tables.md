@@ -95,7 +95,7 @@ The URL and the browser keep no selection and no comparison: a reload or a share
 
 With two or more sessions selected, **Compare** in the selection bar shows the selected sessions side by side, in a table named "Session comparison" between the bar and the Sessions table. It is the Sessions table turned on its side: one row per figure, one column per session, in the order you selected them.
 
-- Each figure reads as its Sessions cell does and keeps the scope it has there. [Compare sessions](/ai-ledger/pages/activity/#sessions) on the Activity page lists each figure's scope.
+- Each figure reads as its Sessions cell does and keeps the scope it has there. [Compare sessions](/ai-ledger/pages/activity/#compare-sessions) on the Activity page lists each figure's scope.
 - Every figure has its row, even a column you hid or the width hides.
 - Ticking another row while the comparison shows adds its column.
 - The comparison reads the rows the list has loaded and makes no request. A refresh updates the figures of each session the list holds; a session a search leaves out keeps its last figures.
