@@ -15,7 +15,14 @@
 
 - [x] 3.1 Fix the rules for Live's pressed Errors figure, Activity's selected tab and Limits' Last 24 h pace toggle; drop the dead `rect[class^="seg-"]` and `.daystrip` rules. Verify with `css.test.ts` ("forced-colors rules").
 
-## 4. Docs and checks
+## 4. Review round 1
 
-- [x] 4.1 Add the changes to `CHANGELOG.md` `[Unreleased]`, and to the docs site's Live and Keyboard and screen reader pages.
-- [x] 4.2 Run `uv run ruff check`, the Python tests, `cd web && npm run check`, `openspec validate --specs --strict` and `openspec validate a11y-keyboard-parity --strict`.
+- [x] 4.1 Count new events by key from where Follow turned off, by any path. Verify with `LivePage.test.tsx` ("counts from where the Follow checkbox …", "counts new events by key once the buffer is full …").
+- [x] 4.2 Name a wall tile from its content, with no `aria-label` or `aria-description`. Verify with `LivePage.test.tsx` ("names a tile by its pin action …").
+- [x] 4.3 Keep the timeline's Shift exception to Left and Right, and guard the work chart's document Escape. Verify with `sheets.test.tsx` ("… its ten-request step", 15 requests) and `ActivityPage.test.tsx` ("leave keys with Alt …").
+- [x] 4.4 Fill Last 24 h pace when pressed in forced colors, and check that each required control keeps a forced-colors rule. Verify with `css.test.ts` ("cover each control …").
+
+## 5. Docs and checks
+
+- [x] 5.1 Add the changes to `CHANGELOG.md` `[Unreleased]`, and to the docs site's Live and Keyboard and screen reader pages.
+- [x] 5.2 Run `uv run ruff check`, the Python tests, `cd web && npm run check`, `openspec validate --specs --strict` and `openspec validate a11y-keyboard-parity --strict`.

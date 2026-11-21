@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Leave modified keys to the browser
-Every chart, strip and tab list that reads keys SHALL leave a key pressed with Alt, Ctrl or Meta to the browser, and with Shift too unless Shift gives the key a meaning of its own, as the session timeline's longer step. Alt+Left SHALL still go back in history, Ctrl+Home to the top of the page and Shift+Space up the page while such a control has focus.
+Every chart, strip and tab list that reads keys, and every page-wide Escape a chart listens for, SHALL leave a key pressed with Alt, Ctrl or Meta to the browser, and with Shift too unless Shift gives that key a meaning of its own, as Shift+Left and Shift+Right on the session timeline. Alt+Left SHALL still go back in history, Ctrl+Home to the top of the page and Shift+Space up the page while such a control has focus.
 
 #### Scenario: Back from a tab list
 - **WHEN** a tab on Context has focus and the user presses Alt+Left
@@ -37,4 +37,8 @@ In a forced-colors mode (Windows high contrast), pressed buttons, the selected t
 
 #### Scenario: Pressed toggles on Live and Limits
 - **WHEN** forced colors is on, Live's Errors figure is pressed and Limits' Last 24 h pace is on
-- **THEN** each is outlined in the system highlight color, and the unpressed ones are not
+- **THEN** the Errors figure is outlined and Last 24 h pace is filled in the system highlight color, and the unpressed ones are not
+
+#### Scenario: A pressed toggle with keyboard focus
+- **WHEN** forced colors is on and Last 24 h pace is on and has keyboard focus
+- **THEN** it shows the focus ring and still reads as pressed
