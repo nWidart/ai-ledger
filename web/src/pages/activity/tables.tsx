@@ -132,24 +132,24 @@ function usePreview<T>(rows: readonly T[], total: number, label: string, id: str
 }
 
 /** A session in a list row that opens nothing itself: its button opens the session, the short id under a titled one. It is the
- *  row's header; the When column before it is not. */
-const SESSION = { id: "session", header: "Session", rowHeader: true, cellProps: () => ({ className: "when sess" }),
+ *  first column, so the row's header: a row header names only the cells after it. */
+const SESSION = { id: "session", header: "Session", cellProps: () => ({ className: "when sess" }),
   cell: (s: { session_id: string; title?: string | null }) => <SessionCell s={s} data subject onOpen={openSessionSheet} sub={s.title && shortId(s.session_id)} /> } as const;
 const LINK = <span className="sr">Link</span>;
 
 type Test = UsagePayload["failed_tests"][number];
 const loopColumns = (range: number): Column<ErrorLoop>[] => [
-  { id: "when", header: "When", rowHeader: false, cellProps: () => ({ className: "when" }), cell: l => when(utc(l.start_ts)) },
-  { id: "project", header: "Project", cellProps: NAME, cell: l => <ProjectName project={l.project} /> },
   SESSION,
+  { id: "when", header: "When", cellProps: () => ({ className: "when" }), cell: l => when(utc(l.start_ts)) },
+  { id: "project", header: "Project", cellProps: NAME, cell: l => <ProjectName project={l.project} /> },
   { id: "tool", header: "Tool", cellProps: l => ({ className: "name", title: l.tool }), cell: l => l.tool },
   { id: "failures", header: "Failures", align: "num", cell: l => num(l.failures) },
   { id: "link", header: LINK, cell: l => <a href={errorsHref(l.project, range, l.first_id)} onClick={appLink}>Open in Errors</a> },
 ];
 const testColumns = (range: number): Column<Test>[] => [
-  { id: "when", header: "When", rowHeader: false, cellProps: () => ({ className: "when" }), cell: t => when(t.ts) },
-  { id: "project", header: "Project", cellProps: NAME, cell: t => <ProjectName project={t.project} /> },
   SESSION,
+  { id: "when", header: "When", cellProps: () => ({ className: "when" }), cell: t => when(t.ts) },
+  { id: "project", header: "Project", cellProps: NAME, cell: t => <ProjectName project={t.project} /> },
   { id: "command", header: "Command", cellProps: t => ({ className: "name", title: t.command }), cell: t => t.command ? <code>{t.command}</code> : "–" },
   { id: "link", header: LINK, cell: t => <a href={errorsHref(t.project, range, t.id, { source: t.source })} onClick={appLink}>Open in Errors</a> },
 ];

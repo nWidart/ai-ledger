@@ -6,8 +6,8 @@ Four tables have no row header: every cell is a plain data cell. A screen reader
 
 ## What Changes
 
-- Every data table row has a row header cell scoped to the row. The spec states this in "Name data tables and their headers".
-- Error loops and Failed test runs: the session cell is the row header. The first column ("When") stays a data cell.
+- Every row that presents data has a row header scoped to the row, before the row's data cells. The spec states this in "Name data tables and their headers".
+- Error loops and Failed test runs: the session cell is the row header. A row header names only the cells after it, so Session becomes the first column of both tables and When moves right after it.
 - Closed windows: the Window cell is the row header.
 - Error types: the Type cell is the row header.
 - The new header cells look exactly like the data cells they replace.

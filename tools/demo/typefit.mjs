@@ -25,7 +25,7 @@ try {
       set(".c-rate", "100.00%"); set(".c-share > span", "100%");
       set(".c-lost .l1", "23h 59m"); set(".c-unrec", "100% not recovered"); set(".c-change .tt", "▲ +1,000%");
       const bad = [];
-      for (const td of row.querySelectorAll("td")) {
+      for (const td of row.querySelectorAll('td, th[scope="row"]')) {
         const box = td.getBoundingClientRect();
         for (const el of td.querySelectorAll("*")) {
           // Screen-reader text is clipped to a pixel, and an SVG's shapes sit inside its own box.
