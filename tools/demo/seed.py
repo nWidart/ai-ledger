@@ -259,5 +259,79 @@ for sid, project, start in [(s[0], s[1], s[4]) for s in claude] + orphans:
         text = json.dumps(d)
         facet_rows.append((f"/home/demo/.claude/usage-data/{'facets' if kind == 'facet' else 'session-meta'}/{sid}.json", kind, sid, len(text), mtime, text, NOW))
 store.insert(c, "usage_files", ["path", "kind", "session_id", "size", "mtime", "json", "ingested_at"], facet_rows)
+
+# Grok sessions, a modest share of the day's sessions (about a third of Codex's). They come last and draw from their own
+# random stream, so the Claude and Codex rows above are the same as without them. Grok has no limits, facets, /context
+# snapshots, effort, branch or version, and no price in prices.json: each request carries the cost its log reports.
+GROK_RATE = 0.08  # Grok sessions per Claude Code or Codex session
+GROK_MODEL, GROK_WINDOW = "grok-4.7-build", 256_000
+GROK_PRICE = (2.0, 0.5, 6.0)  # USD per million uncached input, cache read, output tokens
+GROK_OK = [("read_file", "src/{f}.ts"), ("read_file", "src/{f}.py"), ("search_replace", "src/{f}.ts"), ("search_replace", "src/{f}.py"),
+           ("grep", "TODO|FIXME"), ("list_dir", "src"), ("run_terminal_command", "npm test"), ("run_terminal_command", "git status"),
+           ("run_terminal_command", "uv run pytest"), ("run_terminal_command", "git diff")]
+GROK_FAIL = [("search_replace", "src/{f}.ts", "String to replace not found in file.\nString: const total = items.reduce("),
+             ("run_terminal_command", "npm test", "Exit code 1\nFAIL src/cart.test.ts\n  ● cart › applies discount\n    expected 90, received 100\nTests: 1 failed, 41 passed"),
+             ("run_terminal_command", "uv run pytest", "Exit code 1\nFAILED tests/test_orders.py::test_rate_limit - AssertionError: 429 != 200\n1 failed, 88 passed"),
+             ("read_file", "src/{f}.tsx", "File does not exist."), ("run_terminal_command", "pnpm build", "Exit code 127\nzsh: command not found: pnpm")]
+GROK_RESULT = {"read_file": 9_000, "search_replace": 300, "grep": 2_500, "list_dir": 900, "run_terminal_command": 4_000}
+grnd = random.Random(11)
+g_sessions, g_reqs, g_tools, g_prompts, g_runs = [], [], [], [], []
+gn = 0
+for d in range(DAYS, -1, -1):
+    day = TODAY - timedelta(days=d)
+    ramp = 0.5 + 0.8 * (DAYS - d) / DAYS
+    for project, (weight, _) in PROJECTS.items():
+        expected = weight * ramp * (0.3 if day.weekday() >= 5 else 1) * 0.6 * GROK_RATE / (1 - GROK_RATE)
+        for _ in range(int(expected) + (grnd.random() < expected % 1)):
+            gn += 1
+            sid = f"demo-grok-{gn:04d}"
+            start = datetime.combine(day, datetime.min.time()) + timedelta(hours=grnd.choice([9, 10, 11, 14, 15, 16, 21]), minutes=grnd.randrange(60))
+            if start > NOW - timedelta(minutes=30):
+                continue
+            t, ctx, peak = start, int(grnd.gauss(START[project], START[project] * 0.2)), 0
+            for p in range(grnd.randint(1, 5)):
+                pid = f"{sid}-p{p}"
+                g_prompts.append((pid, sid, t, grnd.random() < 0.08))
+                turn_start, api_ms = t, 0
+                for r in range(grnd.randint(3, 14)):  # a turn is many model calls, a few seconds apart
+                    gap = grnd.randint(2, 9)
+                    t += timedelta(seconds=gap)
+                    api_ms += gap * 1000
+                    ctx = min(ctx + grnd.randint(2_000, 12_000), int(GROK_WINDOW * 0.9))
+                    peak = max(peak, ctx)
+                    cache = int(ctx * grnd.uniform(0.6, 0.95)) if r or p else 0
+                    uncached, out = ctx - cache + grnd.randint(50, 800), grnd.randint(100, 2_500)
+                    cost = (uncached * GROK_PRICE[0] + cache * GROK_PRICE[1] + out * GROK_PRICE[2]) / 1e6
+                    g_reqs.append((f"{sid}-r{p}-{r}", sid, t, GROK_MODEL, None, False, uncached, out, out // 4, cache, 0, 0, None, "end_turn", cost))
+                    for k in range(grnd.randint(0, 2)):
+                        if grnd.random() < 0.1:
+                            tool, inp, err = grnd.choice(GROK_FAIL)
+                        else:
+                            (tool, inp), err = grnd.choice(GROK_OK), None
+                        inp = inp.replace("{f}", grnd.choice(FILES))
+                        commit = tool in categorize.SHELL_TOOLS and err is None and grnd.random() < 0.1
+                        if commit:
+                            inp = "git commit -m \"wip\""
+                        test = tool in categorize.SHELL_TOOLS and categorize.runs_tests(inp)
+                        size = len(err) if err else min(int(GROK_RESULT[tool] * grnd.lognormvariate(0, 0.7)), 600_000)
+                        g_tools.append((f"{sid}-t{p}-{r}-{k}", sid, tool, None, None, inp, t, t + timedelta(milliseconds=grnd.randint(40, 6_000)),
+                                        err is not None, err, categorize.categorize(err, tool, inp) if err else None,
+                                        "Fixed the input and retried." if err else None, False, commit, test, (test and err is None) or commit,
+                                        None, None, size))
+                g_runs.append((sid, int(turn_start.replace(tzinfo=timezone.utc).timestamp() * 1000), api_ms))
+                t += timedelta(minutes=grnd.randint(2, 20))
+            g_sessions.append((sid, project, f"/home/demo/code/{project}", None, start, t, "cli", None, 0, peak, GROK_MODEL, "grok",
+                               GROK_WINDOW, None))
+store.insert(c, "sessions", ["session_id", "project", "cwd", "git_branch", "first_ts", "last_ts", "entrypoint", "version",
+                             "compactions", "peak_context", "peak_model", "source", "context_window", "first_compaction_ts"], g_sessions)
+store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "effort", "subagent", "input", "output", "thinking",
+                             "cache_read", "cache_5m", "cache_1h", "thinking_ms", "stop_reason", "reported_cost"], g_reqs)
+store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "mcp_server", "skill", "input_summary", "start_ts", "end_ts",
+                               "is_error", "error", "category", "followup", "subagent", "is_commit", "is_test", "test_passed",
+                               "result_file", "result_seq", "result_bytes"], g_tools)
+store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], g_prompts)
+store.insert(c, "session_runs", ["session_id", "start_ms", "api_ms"], g_runs)
+
 insights.rederive(c)
-print(f"{len(sessions)} sessions, {len(reqs)} requests, {len(tools)} tool calls, {len(snaps)} limit snapshots, {len(facet_rows) // 2} facets")
+print(f"{len(sessions)} sessions, {len(reqs)} requests, {len(tools)} tool calls, {len(snaps)} limit snapshots, {len(facet_rows) // 2} facets; "
+      f"{len(g_sessions)} Grok sessions, {len(g_reqs)} requests")
