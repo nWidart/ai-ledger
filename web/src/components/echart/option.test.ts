@@ -6,6 +6,7 @@ import {
   baseOption, categoryAxis, FRAME_AXES, lineSeries, pointLabel, selectionMark, SLIDER_ROOM, sliderTrend, trackAxes, trackLayout,
   tracksOption, valueAxis, zoomSlider, type OptionEnv,
 } from "./option";
+import { sliderShadowOf } from "./testing";
 import type { ChartEnv } from "./tokens";
 
 // Type-level: a chart passes its own `ChartEnv` to these helpers; tsc fails here if that stops holding.
@@ -249,6 +250,12 @@ describe("selectionMark", () => {
     expect(r.shape).toEqual({ x: 53, y: 21, width: 38, height: 170 });
     expect(r.style).toEqual({ fill: "none", stroke: "ink-accent", lineWidth: 2 });
   });
+
+  it("draws nothing for an index outside the axis, which ECharts would place in a margin or off the box", () => {
+    // The frame runs from x 52 to 584: band 12's centre (552) is inside, band 13's (592) and band -1's (32) are not.
+    expect(draw(env(), 12)).not.toBeNull();
+    for (const i of [-1, 13, 25, NaN]) expect(draw(env(), i)).toBeNull();
+  });
 });
 
 describe("lineSeries", () => {
@@ -297,5 +304,16 @@ describe("sliderTrend", () => {
     // Transparent too: ECharts writes the path, and with no color it would take one of its default palette's.
     expect(t.lineStyle).toEqual({ color: "transparent", opacity: 0 });
     expect(t.areaStyle).toBeUndefined();
+  });
+
+  it("is the slider's trend on the first track, before a line on the next; not after a line on its own track or under one on an earlier axis", () => {
+    const layout = trackLayout(1, { ...WORK, slider: true });
+    const axes = tracksOption(env(), { layout, labels: ["a", "b"], format: String, y: [valueAxis(env(), { max: 1, step: 1, format: String }), valueAxis(env(), { max: 1, step: 1, format: String })] });
+    const rate = (t: number) => lineSeries(env(), { id: "rate", data: [0, 1], color: "x", ...trackAxes(t) });
+    const trend = (t: number) => sliderTrend([1, 2], trackAxes(t));
+    const drawsFrom = (series: unknown[]) => sliderShadowOf({ ...axes, series, dataZoom: [zoomSlider(env())] })?.id;
+    expect(drawsFrom([trend(0), rate(1)])).toBe("trend"); // the work chart: the trend on the bars, the rate under them
+    expect(drawsFrom([trend(1), rate(0)])).toBe("rate"); // listed first, on a later axis: the earlier axis's line wins
+    expect(drawsFrom([rate(0), trend(0)])).toBe("rate");
   });
 });

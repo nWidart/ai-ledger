@@ -163,7 +163,8 @@ export function tracksOption(env: OptionEnv, { layout, labels, format, y }: {
 /** The selected point's mark: a one-item custom series on the frame, drawn over the grid lines and under the marks (z 1). It
  *  frames the point's whole band over the frame's height, inset by half its line, so it reads apart from the reading band,
  *  which has no frame: tinted in a 1.5px accent frame in the theme, unfilled in a 2px frame in forced colors, where the
- *  accent is Highlight. A point outside the zoom window is filtered out and draws nothing. */
+ *  accent is Highlight. A point outside the zoom window is filtered out and draws nothing. So does an index outside the
+ *  axis: ECharts places it by extrapolation, in a margin or off the box, and does not clip a custom series. */
 export const selectionMark = (env: OptionEnv, { index }: { index: number }): CustomSeriesOption => ({
   type: "custom",
   id: "selected",
@@ -173,8 +174,9 @@ export const selectionMark = (env: OptionEnv, { index }: { index: number }): Cus
   silent: true,
   z: 1,
   renderItem: (params, api) => {
-    const frame = params.coordSys as unknown as { y: number; height: number };
+    const frame = params.coordSys as unknown as { x: number; y: number; width: number; height: number };
     const [cx] = api.coord([api.value(0), 0]) as [number, number];
+    if (!(cx >= frame.x && cx <= frame.x + frame.width)) return null;
     const band = (api.size!([1, 0]) as number[])[0]!, line = env.forced ? 2 : 1.5;
     return {
       type: "rect",
@@ -219,8 +221,12 @@ export function lineSeries(env: OptionEnv, { id, data, color, dots, xAxisIndex, 
   };
 }
 
-/** A line that draws nothing, for the slider's faint trend: the slider draws the first line on an axis it drives, so this
- *  one, listed before any other line, makes the trend these values (such as the bars' totals) and not another line's.
+/** A line that draws nothing, for the slider's faint trend. ECharts' rule (SliderZoomView._prepareDataShadowInfo): the
+ *  slider walks the x axes it drives in index order, and draws the first line, bar, candlestick or scatter series on the
+ *  lowest-index axis that carries one; the series' order counts only among the series on that axis. So this line makes
+ *  the trend these values (such as the bars' totals) only when it is listed first on the lowest-index axis that carries
+ *  a line: put it on the first track that has a line, before that track's lines, and no line on an axis before it. The
+ *  fake runtime throws on an option whose slider would draw another series (`sliderShadowOf` in testing.ts).
  *  ECharts still writes its path, so it is transparent too: with no color it would take one of the default palette's. */
 export const sliderTrend = (data: readonly number[], axes: SeriesAxes): LineSeriesOption => ({
   type: "line",

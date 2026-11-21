@@ -16,16 +16,23 @@ export interface ZoomReset {
  *  by the chart's `zoom` prop: a view that loses its slider would take the button away in that render, before onZoom
  *  could move the focus off it. A press shows every point and focuses the chart. When the zoom ends with the focus on the
  *  button and no one pressed it (a new view, a view under the slider's threshold, fewer points), the focus goes where the
- *  button sends it, to the chart, and not to the page's body. */
+ *  button sends it, to the chart, and not to the page's body. A chart that unmounts sends no report: the button goes when
+ *  React lets go of the chart's handle, so a page that swaps the chart for an empty state leaves no button that does
+ *  nothing. */
 export function useZoomReset(): ZoomReset {
-  const ref = useRef<EChartHandle>(null), showAll = useRef<HTMLButtonElement>(null);
+  const handle = useRef<EChartHandle>(null), showAll = useRef<HTMLButtonElement>(null);
   const [zoomed, setZoomed] = useState(false);
+  // The chart's ref: an object ref over `handle` that sees React set it to null, as React does when the chart unmounts.
+  const [ref] = useState((): RefObject<EChartHandle | null> => ({
+    get current() { return handle.current; },
+    set current(next) { handle.current = next; if (!next) setZoomed(false); },
+  }));
   const onZoom = useCallback((s: Shown | null) => {
-    if (!s && showAll.current && document.activeElement === showAll.current) ref.current?.focus();
+    if (!s && showAll.current && document.activeElement === showAll.current) handle.current?.focus();
     setZoomed(s != null);
   }, []);
   const button = (label: string) => (zoomed
-    ? <button ref={showAll} type="button" className="show-all" onClick={() => { ref.current?.reset(); ref.current?.focus(); }}>{label}</button>
+    ? <button ref={showAll} type="button" className="show-all" onClick={() => { handle.current?.reset(); handle.current?.focus(); }}>{label}</button>
     : null);
   return { ref, onZoom, button };
 }

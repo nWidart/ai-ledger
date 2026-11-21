@@ -27,7 +27,7 @@ See `proposal.md` for the motivation. `echart-foundation` (archived under `opens
 | A custom series on the frame, one item at the selected point? | Drawn as one rectangle over the frame's whole height, after the grid lines and before the bars (`z: 1`). With the point outside the zoom window it is not drawn; back inside, it is. |
 | A line series with `symbol: "none"` and a symbol on single data items? | Only those items draw a symbol, with their own size, fill and border. `connectNulls: false` breaks the line at a null. |
 | `axisLabel.verticalAlignMaxLabel: "top"` on a value axis of two ticks? | The top label hangs under its line. The lower label is unchanged. |
-| Which series does the slider's faint trend draw? | The first `line`, `bar`, `candlestick` or `scatter` series on an axis it drives; a custom series never. With the rate line alone, the trend is the error rate. With a hidden line of the bars' totals listed before it, the trend is the totals. |
+| Which series does the slider's faint trend draw? | The first `line`, `bar`, `candlestick` or `scatter` series on an axis it drives; a custom series never. With the rate line alone, the trend is the error rate. With a hidden line of the bars' totals listed before it, the trend is the totals. A later check (jsdom): the axis comes first, so a line on the first track wins over a totals line listed before it on the second. |
 | A redraw that drops a track (one grid, two axes and a series less)? | No error. `getOption()` then holds `null` in the dropped series' place. The frame takes its new height. Adding the track back works. |
 | A second x axis on the top of a grid, labels from a formatter? | Drawn, and thinned by ECharts: 26 of 26 counts at 800px, 9 of 26 at 254px. |
 | Where do Activity's chart and tab list sit at 1440×900 on the demo store? | Chart 408 to 624px. Tab list ends at 842px (30 days, 29 bars) and 839px (all time, 11 weeks). 58px are free. |
@@ -100,7 +100,7 @@ All in `web/src/components/echart/option.ts` unless said, pure, and typed from `
 - `trackAxes(t)` and `FRAME_AXES`.
 - `selectionMark(env, { index })`: decision 4.
 - `lineSeries(env, { id, data, color, dots, ...axes })`: a line with no symbols, broken at nulls, not clipped, silent. `dots(i)` gives `"solid"`, `"hollow"` or nothing for point `i`. Colors by decision 5.
-- `sliderTrend(data, axes)`: a hidden line (`id: "trend"`, no symbol, line opacity 0). Listed before any other line, it is what the slider's faint trend draws.
+- `sliderTrend(data, axes)`: a hidden line (`id: "trend"`, no symbol, line opacity 0, transparent). The slider draws its faint trend from the first line, bar, candlestick or scatter series on the lowest-index x axis it drives that carries one; the series' order counts only among the series on that axis (`SliderZoomView._prepareDataShadowInfo`, ECharts 6.1.0). So the trend line goes on the first track that has a line, listed before that track's lines, with no line on an axis before it: on the work chart, on the bars' track, over the rate line's track. The fake runtime throws when the slider would draw another series, by the same rule (`sliderShadowOf` in `testing.ts`).
 - `zoomSlider(env)`: gains `xAxisIndex: "all"`.
 - `SLIDER_ROOM` (28) and `ZOOM_FROM` (14, `ZOOM_DAYS` in `costDaily.ts` today) move here from `costDaily.ts`, which imports them and still exports `SLIDER_ROOM`, so `CostChart.tsx` is not touched by this.
 - `stack.ts`: `width` becomes `(band, i) => number`. The outcome trend halves the width of a week with few sessions.
@@ -112,7 +112,7 @@ Cost's `avgLine` stays as it is: a haloed text-colored line is another thing tha
 - **How a chart tells it.** The chart's model holds `selected: number | null`, the index of the selected point, and its option builder adds `selectionMark(env, { index })`. The wrapper has no prop for it. The selection is not part of `view`, so selecting redraws the same view: the reading and the zoom stay.
 - **How it is drawn.** A custom series with `id: "selected"` on the frame, `z: 1` (over the grid lines, under the marks), one item, silent. Its rectangle is the point's whole band over the frame's height, inset by half the frame line. Theme: fill `ink.tint` (the accent at 16%), a 1.5px frame in `ink.accent`. Forced colors: no fill, a 2px frame in `ink.accent`, which is `Highlight` there.
 - **Apart from the reading.** The reading band has no frame and sits over the marks: a neutral wash in the theme, a `Highlight` wash in forced colors. The frame is the selection in both modes, so the two differ by shape and not by hue alone. Both show on a point that is selected and read.
-- **Zoom.** A selected point outside the points shown draws nothing (spike). The chip still names it.
+- **Zoom.** A selected point outside the points shown draws nothing (spike). The chip still names it. An index outside the axis draws nothing either: ECharts would place it by extrapolation, in a margin or off the box.
 - **Words.** The chip names the selection, and `status` says a selection or a clear once. A bar's reading does not say "selected": it does not today.
 
 Alternative: a `selected` prop on the wrapper. Rejected: the wrapper would add a series to an option it does not own, for a mark that needs no React state. The peak label is drawn the same way, by the option.
@@ -272,7 +272,7 @@ No new name matches an existing file's name in another case: `workChart.ts` and 
 | A mark outside the zoom window is not drawn | Work's smoke test | Not modelled: no component test depends on it |
 | Symbols on single items of a line without symbols | Work's smoke test: a hollow and a solid dot are drawn, and no other | Not modelled |
 | The top label of a two-tick axis hangs under its line | `chartfit`: no label overlaps at 16px and 32px | Not modelled |
-| The hidden totals line is the slider's trend | `chartfit`, by screenshot review | Not modelled |
+| The hidden totals line is the slider's trend | `chartfit`, by screenshot review | New: `sliderShadowOf` follows ECharts' rule, and `setOption` throws when a slider would draw its trend from another series than `trend` |
 | A redraw that drops a track | Work's smoke test: a payload without tool calls leaves no rate path and logs no error | Already so: `replaceMerge` empties a listed key |
 
 Rules kept from the foundation: component tests assert what a user reaches; geometry and option details are tested on the pure modules; one smoke test per chart draws on real ECharts.

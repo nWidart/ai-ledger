@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadECharts, preloadECharts } from "./load";
-import { fakeECharts, type FakeChart } from "./testing";
+import { fakeECharts, sliderShadowOf, type FakeChart } from "./testing";
 
 // The fake runtime that every chart test runs on: test-setup puts it in place of the load module.
 const chartOf = async (points = 10, option: Record<string, unknown> = {}) => {
@@ -188,6 +188,56 @@ describe("the fake ECharts runtime", () => {
     const chart = await chartOf(10, tracks(3, 10, i => ({ axisPointer: { show: i === 0 } })));
     expect(() => chart.setOption({ xAxis: [{}, {}, { axisPointer: { show: true } }] })).toThrow("x axis 2 shows an axis pointer");
     expect(list(chart.option.xAxis).map(a => a.axisPointer)).toEqual([{ show: true }, { show: false }, { show: false }]);
+  });
+
+  it("records a refused option nowhere: not in options, not as last", async () => {
+    const chart = await chartOf(10, tracks());
+    const taken = chart.last;
+    const refused = { dataZoom: [{ type: "slider" }] };
+    expect(() => chart.setOption(refused)).toThrow("does not drive x axis 1, 2");
+    expect(chart.options).toHaveLength(1);
+    expect(chart.last).toBe(taken);
+    expect(chart.options.map(o => o.option)).not.toContain(refused);
+    // So is one with two items of one id, which throws before the rules do.
+    expect(() => chart.setOption({ series: [{ id: "a" }, { id: "a" }] })).toThrow("id duplicates: a");
+    expect(chart.options).toHaveLength(1);
+  });
+
+  // Measured on ECharts 6.1 in jsdom with the SVG renderer: the slider's shadow followed a line on x axis 1 over a trend
+  // listed before it on x axis 2, and the trend over a line listed after it on the same axis.
+  describe("the slider's trend (sliderShadowOf)", () => {
+    const slider = { dataZoom: [{ type: "slider", xAxisIndex: "all" }] };
+    const line = (id: string, xAxisIndex: number) => ({ type: "line", id, xAxisIndex });
+    const shadow = (series: Record<string, unknown>[], over: Record<string, unknown> = {}) =>
+      sliderShadowOf({ ...tracks(), ...slider, series, ...over })?.id;
+
+    it("takes the first line on the lowest-index x axis the slider drives, whatever the order of the series", () => {
+      expect(shadow([line("trend", 1), { type: "custom", id: "stack", xAxisIndex: 1 }, line("rate", 2)])).toBe("trend");
+      expect(shadow([line("trend", 2), line("rate", 1)])).toBe("rate"); // the axis wins over the order
+      expect(shadow([line("rate", 1), line("trend", 1)])).toBe("rate"); // on one axis, the order
+      expect(shadow([line("avg", 0), line("trend", 1)])).toBe("avg"); // a line on the frame wins over every track
+    });
+
+    it("skips a custom series, and reads a series with no xAxisIndex as on x axis 0", () => {
+      expect(shadow([{ type: "custom", id: "mark", xAxisIndex: 0 }, line("trend", 1)])).toBe("trend");
+      expect(shadow([{ type: "line", id: "plain" }, line("trend", 1)])).toBe("plain");
+      expect(shadow([{ type: "bar", id: "bars", xAxisIndex: 1 }, line("trend", 1)])).toBe("bars");
+    });
+
+    it("draws none without a slider, with showDataShadow false, or with no such series; with true, any series", () => {
+      expect(sliderShadowOf({ ...tracks(), series: [line("trend", 1)] })).toBeUndefined();
+      expect(shadow([line("trend", 1)], { dataZoom: [{ type: "slider", xAxisIndex: "all", showDataShadow: false }] })).toBeUndefined();
+      expect(shadow([{ type: "custom", id: "stack", xAxisIndex: 1 }])).toBeUndefined();
+      expect(shadow([{ type: "custom", id: "stack", xAxisIndex: 1 }], { dataZoom: [{ type: "slider", xAxisIndex: "all", showDataShadow: true }] })).toBe("stack");
+    });
+
+    it("throws for a trend series the slider does not draw, where ECharts draws another series' trend", async () => {
+      await expect(chartOf(10, { ...tracks(), ...slider, series: [line("trend", 2), line("rate", 1)] }))
+        .rejects.toThrow('the slider draws its trend from series rate, not from "trend"');
+      await expect(chartOf(10, { ...tracks(), ...slider, series: [line("trend", 1), line("rate", 2)] })).resolves.toBeTruthy();
+      // No slider, no trend to draw: nothing to refuse.
+      await expect(chartOf(10, { ...tracks(), series: [line("trend", 2), line("rate", 1)] })).resolves.toBeTruthy();
+    });
   });
 
   it("merges an option of three grids and answers from the first, which is the frame", async () => {

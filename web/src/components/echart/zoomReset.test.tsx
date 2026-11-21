@@ -18,12 +18,15 @@ const month = (env: ChartEnv): EChartsOption => ({
 });
 const read = (i: number) => `${MONTH[i]}: $${i}.00`;
 
-/** A chart of 30 points with the slider, and its "Show all days" button; `view` changes to end the zoom. */
-function Zoomed({ view = "30 days" }: { view?: string }) {
+/** A chart of 30 points with the slider, and its "Show all days" button; `view` changes to end the zoom, and without
+ *  `chart` an empty state takes the chart's place. */
+function Zoomed({ view = "30 days", chart = true }: { view?: string; chart?: boolean }) {
   const { ref, onZoom, button } = useZoomReset();
   return <>
     {button("Show all days")}
-    <EChart ref={ref} label={LABEL} height={268} option={month} view={view} points={MONTH.length} read={read} zoom onZoom={onZoom} />
+    {chart
+      ? <EChart ref={ref} label={LABEL} height={268} option={month} view={view} points={MONTH.length} read={read} zoom onZoom={onZoom} />
+      : <p>No work yet.</p>}
   </>;
 }
 const box = () => screen.getByRole("group", { name: LABEL });
@@ -64,5 +67,19 @@ describe("useZoomReset", () => {
     expect(chart.shown).toEqual({ from: 0, to: 29 });
     expect(showAll()).toBeNull();
     expect(document.activeElement).toBe(box());
+  });
+
+  it("takes the button away when the chart unmounts zoomed, and shows it again only for a new zoom", async () => {
+    const { rerender } = render(<Zoomed />);
+    (await drawn()).zoomTo(10, 19);
+    expect(showAll()).toBeTruthy();
+    rerender(<Zoomed chart={false} />);
+    expect(screen.queryByRole("group", { name: LABEL })).toBeNull();
+    expect(showAll()).toBeNull();
+    rerender(<Zoomed />);
+    const again = await drawn();
+    expect(showAll()).toBeNull();
+    again.zoomTo(10, 19);
+    expect(showAll()).toBeTruthy();
   });
 });
