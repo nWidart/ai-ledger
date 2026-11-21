@@ -1661,4 +1661,60 @@ describe("Sessions sort by several columns", () => {
     await waitFor(() => expect(lastSessionsUrl()).toBe("/api/sessions?range=30&sort=-tokens%2C-commits"));
     await waitFor(() => expect(hint()).toContain("most tokens first, then most commits first."));
   });
+
+  it("moves focus to the search field when a press takes the focused header's column out of the sort and the width hides it", async () => {
+    // A phone: the width hides Tok/s (opt1).
+    vi.stubGlobal("matchMedia", (q: string) => ({ media: q, matches: true, addEventListener() {}, removeEventListener() {} }));
+    const user = userEvent.setup();
+    await visit();
+    await user.click(vital("Output speed").closest("button")!);
+    await waitFor(() => expect(marks()).toEqual([["output_per_s", "↓"]]));
+    await user.click(several());
+    const speed = sortButton("output_per_s");
+    act(() => speed.focus());
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(marks()).toEqual([["output_per_s", "↑"]]));
+    expect(document.activeElement).toBe(speed);
+    // The second press removes the key: the width hides the column, so focus goes to the search field, not the page.
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(marks()).toEqual([]));
+    expect(document.activeElement).toBe(panel().getByRole("searchbox", { name: "Search sessions" }));
+  });
+
+  it("keeps focus on the pressed header while its column shows", async () => {
+    vi.stubGlobal("matchMedia", (q: string) => ({ media: q, matches: true, addEventListener() {}, removeEventListener() {} }));
+    const user = userEvent.setup();
+    await visit();
+    // One press with the box unticked replaces the sort: the old sorted column may hide, the pressed one shows.
+    await user.click(vital("Output speed").closest("button")!);
+    await waitFor(() => expect(marks()).toEqual([["output_per_s", "↓"]]));
+    const cost = sortButton("cost");
+    act(() => cost.focus());
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(marks()).toEqual([["cost", "↓"]]));
+    expect(document.activeElement).toBe(cost);
+    // Removing a key whose column never hides (Est. cost) leaves focus on it.
+    await user.click(several());
+    act(() => cost.focus());
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(marks()).toEqual([["cost", "↑"]]));
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(marks()).toEqual([]));
+    expect(document.activeElement).toBe(cost);
+  });
+
+  it("says the order of every key when no session matches, and nothing of it without keys", async () => {
+    mockApi({ "/api/usage": () => usage, "/api/sessions": q => q.get("q") ? { total: 0, offset: 0, sessions: [] } : sessions });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    const user = userEvent.setup();
+    await user.type(panel().getByRole("searchbox", { name: "Search sessions" }), "nothing");
+    await waitFor(() => expect(hint()).toBe("0 sessions match."));
+    await user.click(sortButton("cost"));
+    await waitFor(() => expect(hint()).toBe("0 sessions match, costliest first."));
+    await user.click(several());
+    await user.click(sortButton("prompts"));
+    await waitFor(() => expect(hint()).toBe("0 sessions match, costliest first, then most prompts first."));
+  });
 });

@@ -66,7 +66,7 @@ A box is ticked when its column shows in the window now. On a narrow window the 
 
 The button reads "Columns, 2 hidden" while you hide two columns.
 
-The sorted column always shows, even a column you hid; your choice applies again when the sort moves to another column. Unticking the sorted column hides it and takes it out of the sort, so the list returns to its own order.
+Every sorted column shows, even a column you hid. Your visibility choice applies again when a column leaves the sort. Unticking a sorted column hides it and removes its sort key. The table returns to its default order when the last key is removed.
 
 The browser keeps the choice for every view and after a reload. The URL does not hold it: a shared link opens at the reader's own columns. When the browser blocks site storage, the choice lasts until you reload the page.
 

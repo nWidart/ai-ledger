@@ -79,7 +79,7 @@ export function SessionsPanel({ view, filter, onFilter, sort, onSort, selected }
   selected: string;
 }) {
   const [several, setSeveral] = useState(false);
-  const body = useRef<HTMLTableSectionElement>(null), search = useRef<HTMLInputElement>(null), focusRow = useRef(-1);
+  const root = useRef<HTMLDivElement>(null), body = useRef<HTMLTableSectionElement>(null), search = useRef<HTMLInputElement>(null), focusRow = useRef(-1);
   // Searching waits for a pause in typing; clearing the box searches at once.
   const debounced = useDebouncedValue(filter.q, 200), qt = (filter.q ? debounced : "").trim();
   const narrowed = !!(qt || filter.near || filter.day);
@@ -126,12 +126,19 @@ export function SessionsPanel({ view, filter, onFilter, sort, onSort, selected }
       if (sorted.has(id)) onSort(sort.filter(s => s.key !== id));
     } else setColumnChoice(widthHides(all.find(c => c.id === id)!) ? { ...rest, [id]: true } : rest);
   };
-  // The whole order: each key's phrase, the first key first.
+  // A press that takes the focused header's column out of the sort hides it when the user's choice or the width does: focus moves
+  // to the search field first, so it does not fall to the page.
+  const sortBy = (next: SortBy<SessionSort>[]) => {
+    const th = document.activeElement?.closest<HTMLElement>("th[data-sort]"), c = th && root.current?.contains(th) ? all.find(c => c.id === th.dataset.sort) : undefined;
+    if (c && choosable(c.id) && !next.some(s => s.key === c.id) && !(choice[c.id] ?? !widthHides(c))) search.current?.focus();
+    onSort(next);
+  };
+  // The whole order: each key's phrase, the first key first. Said with no session too while keys are set, so a sort change is heard.
   const order = sort.length ? sort.map(s => ORDER[s.key][s.desc ? 0 : 1]).join(", then ") : filter.near ? "nearest the limit first" : filter.day ? `by their cost on ${filter.days === 1 ? "that day" : "those days"}` : "newest first";
-  const hint = moreError ?? (loadingHint || (failed ? "" : `${plural(total, "session")}${narrowed ? " match" : ""}` + (total ? `, ${order}. `
-    + `${rows.length < total ? `Showing ${num(rows.length)}. ` : ""}Select a session for details.` : ".")));
+  const hint = moreError ?? (loadingHint || (failed ? "" : `${plural(total, "session")}${narrowed ? " match" : ""}` + (total || sort.length ? `, ${order}.` : ".")
+    + (total ? ` ${rows.length < total ? `Showing ${num(rows.length)}. ` : ""}Select a session for details.` : "")));
   return (
-    <div id="sessions">
+    <div id="sessions" ref={root}>
       <div className="tools-row">
         <input type="search" ref={search} value={filter.q} placeholder="Search by title, session id, project or branch" aria-label="Search sessions"
           onChange={e => onFilter({ ...filter, q: e.target.value })} />
@@ -142,7 +149,7 @@ export function SessionsPanel({ view, filter, onFilter, sort, onSort, selected }
       <div className="hint"><span aria-live="polite">{hint}</span>
         <HowMeasured what="the session count">A session counts here when it has a request in the range; the Judgments view counts sessions by their start time, so the two totals can differ slightly.</HowMeasured></div>
       <Table name="Sessions" region="scroll tall" rows={rows} columns={columns} rowId={s => s.session_id} manualSort sort={sort}
-        onSort={s => onSort(s as SortBy<SessionSort>[])} sortAdd={several} current={selected} pick={PICK}
+        onSort={s => sortBy(s as SortBy<SessionSort>[])} sortAdd={several} current={selected} pick={PICK}
         body={{ ref: body, className: stale ? "stale" : undefined, "aria-busy": busy || undefined, inert: stale || undefined }}
         empty={failed || busy ? undefined : narrowed ? "No sessions match." : "No sessions in this range."}
         after={failed ? <tr><td colSpan={columns.length} className="empty" role="alert">Could not load sessions ({failed}). <button type="button" className="linkish"
