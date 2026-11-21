@@ -17,12 +17,16 @@ Ingest SHALL read the Grok CLI's session logs: the file `updates.jsonl` of every
 - **WHEN** `~/.grok` does not exist
 - **THEN** ingest reads the other sources and reports no error
 
-### Requirement: Key Grok lines by event id
-Each Grok line SHALL be stored under the key `grok:<event id>`, with its `sessionUpdate` as its type and its `agentTimestampMs` as its time. A `hook_execution` line SHALL take its hook event's name as its type. Lines SHALL be derived by their own times and ids, not by their order in the file.
+### Requirement: Key Grok lines by event id and time
+Each Grok line SHALL be stored under the key `grok:<event id>:<agentTimestampMs>`, because a resumed session counts its event ids from 1 again, with its `sessionUpdate` as its type and its `agentTimestampMs` as its time. A `hook_execution` line SHALL take its hook event's name as its type. Lines SHALL be derived by their own times and ids, not by their order in the file.
 
 #### Scenario: Line read twice
 - **WHEN** a file is truncated and read again from its start
 - **THEN** each line is stored once
+
+#### Scenario: Resumed session
+- **WHEN** a session is resumed and its new run writes a line with event id `<session>-1`, an id its first run used too
+- **THEN** both lines are stored
 
 #### Scenario: Unknown update
 - **WHEN** a line's `sessionUpdate` is one this version does not know

@@ -60,6 +60,12 @@ A headless run (`grok -p … --always-approve`) in an empty git folder: turn 1 s
 ### Ingest only `updates.jsonl`
 It holds everything the derived tables need and it is append-only, so the byte-offset reader fits. `usage.json` repeats `turn_completed` but is rewritten in place. `unified.jsonl` is shared and trimmed.
 
+### Lines are keyed by event id and time
+The key is `grok:<eventId>:<agentTimestampMs>`. The probe (task 2.1) showed that a resumed run counts event ids from 1 again, so the event id alone repeats within a session and the second line would be dropped. A line keeps both values when its file is read again, so the key still stores each line once. This replaces the survey's "event ids are unique", which held only because no surveyed session had been resumed.
+
+### A headless turn cut by a signal reports no usage
+The probe's cancelled headless turn wrote `session_end` and no `turn_completed`. Such a turn makes no request: its usage is in no append-only file. The docs say so. An interactive cancel does write `turn_completed`.
+
 ### One request per model call, the turn's usage split by context size
 A call is a distinct `streamStartMs` among the lines of one `promptId`. Its context size is the largest `totalTokens` on its lines. When `turn_completed` arrives, the deriver makes one request per call:
 
