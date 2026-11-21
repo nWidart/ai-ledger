@@ -207,6 +207,12 @@ describe("Filters Brief link and clear button", () => {
     renderApp(<Filters projects={["foo", "bar"]} />);
     await userEvent.click(screen.getByRole("button", { name: "Codex" }));
     expect(location.search).toBe("?source=codex");
+    cleanup();
+    history.replaceState(null, "", "/live?project=foo&sheet=s2");
+    renderApp(<Filters projects={["foo", "bar"]} />);
+    await userEvent.click(screen.getByRole("combobox", { name: "Project" }));
+    await userEvent.click(screen.getByRole("option", { name: "bar" }));
+    expect(location.search).toBe("?project=bar");
   });
 
   it("clears the Activity day with the project filter", async () => {

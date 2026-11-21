@@ -184,8 +184,9 @@ describe("ErrorsPage", () => {
       // x: no call before its day, so the model gives no verdict; gone has no errors and no row in the view, and still has its line.
       expect(rows).toEqual([["x · Nov 4", "–", "60.00%", "No calls before this date"], ["gone · Oct 1", "–", "0.00%", "No calls before this date"]]);
       expect(table.querySelector('tr[data-c="gone"] button')).toBeNull(); // nothing to open: no error of it in the view
-      // Each row is its type's subject for the context menu, as the type table's rows are.
-      expect([...table.querySelectorAll("tbody tr")].map(r => r.getAttribute("data-subject"))).toEqual(["category:x", "category:gone"]);
+      // A row with errors in the view is its type's subject for the context menu, as the type table's rows are; gone's is none, as
+      // its Open on Errors would open nothing.
+      expect([...table.querySelectorAll("tbody tr")].map(r => r.getAttribute("data-subject"))).toEqual(["category:x", null]);
       await userEvent.click(within(table).getByRole("button", { name: "x" }));
       expect(location.search).toContain("cat=x");
       expect(document.activeElement?.id).toBe("detailTitle");

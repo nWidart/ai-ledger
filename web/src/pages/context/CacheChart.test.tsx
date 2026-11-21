@@ -118,6 +118,16 @@ describe("cache chart", () => {
     expect(stack([["seg-input", 5], ["seg-write", 0]], 100, 1).map(p => p.key)).toEqual(["seg-input"]);
   });
 
+  it("keeps the busiest day's breaks inside the 48px strip, its thin causes shown", () => {
+    render(<CacheChart series={daily(b("2026-11-01", { ...DAY, model_switch: 998, expired: 1, other: 1 }))} />);
+    const rects = [...document.querySelectorAll<SVGRectElement>('rect[data-cause][data-day="2026-11-01"]')];
+    expect(rects.map(r => r.getAttribute("data-cause"))).toEqual(["model_switch", "expired", "other"]);
+    const y = (r: Element) => Number(r.getAttribute("y")), bottom = y(rects[0]!) + h(rects[0]!);
+    // The busiest day fills the strip exactly: from its baseline up 48px, no higher.
+    expect(bottom - y(rects.at(-1)!)).toBeCloseTo(48);
+    for (const r of rects) expect(h(r)).toBeGreaterThanOrEqual(2);
+  });
+
   it("reads a 90% cache-hit ratio, the breaks by cause and the cache reads, with the reads switched off", () => {
     render(<CacheChart series={daily(b("2026-11-01", { ...DAY, model_switch: 2, expired: 1 }))} />);
     act(() => chart().focus());

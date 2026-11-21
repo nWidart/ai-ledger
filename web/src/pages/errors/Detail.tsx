@@ -70,7 +70,8 @@ function Scorecard() {
       <thead><tr><th scope="col">Type</th><th scope="col" className="num">Before</th><th scope="col" className="num">Since</th><th scope="col">Verdict</th></tr></thead>
       <tbody>{rows.map(([c, day]) => {
         const { sides: [b4, af], verdict } = beforeAfter(m, v, c, day), name = m.cats[c]?.label ?? c;
-        return <tr key={c} data-c={c} {...subjectAttrs("category", c)}>
+        // A subject for the context menu only with errors in the view: its "Open on Errors" would open nothing otherwise.
+        return <tr key={c} data-c={c} {...subjectAttrs("category", vt.counts[c] ? c : null)}>
           <th scope="row">{vt.counts[c] ? <button type="button" className="linkbtn" data-c={c} onClick={() => pick(c, true)}>{name}</button> : name}
             <span className="muted xs"> · {yearLabel(m, day)}</span></th>
           <td className="num">{pct(b4.r)}</td><td className="num">{pct(af.r)}</td>

@@ -137,16 +137,22 @@ describe("chart by project", () => {
 
   it("keeps a thin segment at least 1px tall, inside the bar's height", () => {
     // 1 commit of c over 1,000 of a: drawn to scale it would be a tenth of a pixel, under the 2px gap.
-    const day = "2026-11-04", rows = [row(day, { commits: 1001 })];
-    panel({ ...usage, work: rows, daily_work: rows, work_projects: [wp(day, "a", { commits: 1000 }), wp(day, "c", { commits: 1 })] });
-    const bar = document.querySelector("#work .bar-seg")!;
-    const hs = [...bar.children].map(seg => {
+    // The next day: the same 1,001 commits, all of a, as one segment drawn to scale.
+    const day = "2026-11-04", next = "2026-11-05", rows = [row(day, { commits: 1001 }), row(next, { commits: 1001 })];
+    panel({ ...usage, work: rows, daily_work: rows,
+      work_projects: [wp(day, "a", { commits: 1000 }), wp(day, "c", { commits: 1 }), wp(next, "a", { commits: 1001 })] });
+    const segsOf = (bar: Element) => [...bar.children].map(seg => {
       const dd = seg.getAttribute("d");
       if (!dd) return { top: +seg.getAttribute("y")!, h: +seg.getAttribute("height")! };
       const m = /^M[\d.]+,([\d.]+) V([\d.]+)/.exec(dd)!;
       return { top: +m[2]! - 3, h: +m[1]! - (+m[2]! - 3) };
     });
+    const [bar, whole] = [...document.querySelectorAll("#work .bar-seg")].map(segsOf);
+    const hs = bar!;
     expect(hs).toHaveLength(2);
+    // The stack is as tall as its total drawn to scale: the thin segment takes its pixel from a, not from above the bar.
+    expect(whole).toHaveLength(1);
+    expect(hs[1]!.top).toBeCloseTo(whole![0]!.top);
     for (const s of hs) expect(s.h).toBeGreaterThanOrEqual(1);
     expect(hs[0]!.top + hs[0]!.h).toBeCloseTo(BARS_BOTTOM);
     expect(hs[1]!.top + hs[1]!.h + 2).toBeCloseTo(hs[0]!.top); // the 2px gap below it
