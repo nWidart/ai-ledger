@@ -90,7 +90,7 @@
   .pg-judgments .ledger.keyed :is(.v, .s) { text-align: left; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .pg-judgments.grow .mixbar { transform-origin: left; animation: grow-x .6s cubic-bezier(.2,.7,.2,1) both; }
+  .pg-judgments.grow .mixbar { transform-origin: left; animation: grow-x .6s var(--ease-out) both; }
 }
 
 /* Session types: the shared stacked bar (MixBar) over an inline key */

@@ -40,6 +40,18 @@
   --shadow-sheet: -8px 0 32px rgba(0,0,0,.16);
   --scroll-shadow: light-dark(rgba(20,18,12,.16), rgba(0,0,0,.55));
   --scrim: rgba(0,0,0,.3); /* behind the sheet and the command palette */
+  /* Scales, smallest first. css.test.ts keeps every other stylesheet on them: z-index, the monospace stack and the easing
+     curve only through these tokens; font sizes, radii and spacing through these tokens or a shrinking allow-list of raw values. */
+  --fs-2xs: .6875rem; --fs-xs: .75rem; --fs-sm: .8125rem; --fs-md: .875rem; --fs-lg: 1rem; --fs-xl: 1.25rem; --fs-2xl: 1.5rem; --fs-3xl: 1.75rem;
+  --space-1: 2px; --space-2: 4px; --space-3: 6px; --space-4: 8px; --space-5: 10px; --space-6: 12px; --space-7: 16px; --space-8: 20px;
+  --space-9: 24px; --space-10: 32px;
+  --radius-xs: 2px; --radius-sm: 4px; --radius-md: 6px; --radius-lg: 8px; --radius-xl: 12px; --radius-pill: 999px;
+  /* Stacking: raised lifts an element over its neighbours (a sticky table head, a chart tooltip), raised-2 over a raised one;
+     sticky is the scope bar under the nav; then the nav, the toast, the pickers' popovers, tooltips and the chooser, and on top
+     the context menu and the skip link. */
+  --z-raised: 1; --z-raised-2: 2; --z-sticky: 4; --z-nav: 5; --z-toast: 20; --z-popover: 30; --z-tooltip: 40; --z-menu: 50;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --ease-out: cubic-bezier(.2, .7, .2, 1); /* the bars' grow-in */
 }
 :root[data-theme="light"] { color-scheme: light; }
 :root[data-theme="dark"] { color-scheme: dark; }
@@ -49,7 +61,7 @@ body { margin: 0; background: var(--bg); color: var(--text-primary);
   font: .875rem/1.5 "IBM Plex Sans", ui-sans-serif, -apple-system, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 a { color: var(--link); }
-code { font: .75rem/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
+code { font: .75rem/1.4 var(--font-mono); }
 .muted { color: var(--text-muted); }
 .empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -91,7 +103,7 @@ input[type=checkbox], input[type=radio] { width: .8125rem; height: .8125rem; }
 .pick-project.all .pdot { display: none; }
 .pick-chev { position: absolute; right: 12px; width: .375rem; height: .375rem; margin-top: -.1875rem; border: solid var(--text-muted); border-width: 0 1.5px 1.5px 0;
   transform: rotate(45deg); pointer-events: none; }
-.pick-pos { z-index: 30; }
+.pick-pos { z-index: var(--z-popover); }
 .pick-pop { box-sizing: border-box; min-width: var(--anchor-width); max-width: min(22.5rem, calc(100vw - 16px)); max-height: min(20rem, var(--available-height));
   overflow-y: auto; padding: 4px; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-pop); }
 .pick-opt { padding: 6px 10px; border-radius: 6px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -119,7 +131,7 @@ input[type=checkbox], input[type=radio] { width: .8125rem; height: .8125rem; }
 /* Chart tooltip */
 .tip { position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
   border-radius: 8px; padding: 8px 10px; font-size: .75rem; box-shadow: var(--shadow-pop);
-  white-space: nowrap; display: none; z-index: 2; }
+  white-space: nowrap; display: none; z-index: var(--z-raised-2); }
 .tip b { font-variant-numeric: tabular-nums; }
 
 /* Sheet: details over the page from the right */

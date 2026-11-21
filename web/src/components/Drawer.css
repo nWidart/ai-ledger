@@ -15,7 +15,7 @@
 .drawer .drawer-toggle .c { color: var(--text-muted); font-size: .8125rem; font-weight: 400; }
 .drawer > .drawer-head .w { color: var(--text-muted); font-size: .78125rem; margin-left: auto; text-align: right; }
 /* A control beside the title (a toggletip) sits above the click target. */
-.drawer > .drawer-head h2 > :not(.drawer-toggle) { position: relative; z-index: 1; margin-left: 4px; }
+.drawer > .drawer-head h2 > :not(.drawer-toggle) { position: relative; z-index: var(--z-raised); margin-left: 4px; }
 .drawer-body { padding: 0 0 24px; }
 .drawer > .drawer-body[hidden] { display: none !important; }
 @media (max-width: 56.25em) { .drawer > .drawer-head .w { display: none; } }

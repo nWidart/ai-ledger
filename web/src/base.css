@@ -15,7 +15,7 @@
 .app-warning code { overflow-wrap: anywhere; }
 /* Skip link: off-screen until focused by keyboard, then above the sticky nav. It lands on the page heading, which takes focus
    without a ring. */
-.skip { position: fixed; top: 8px; left: 8px; z-index: 50; padding: 8px 14px; border-radius: 8px; background: var(--surface-1); color: var(--accent);
+.skip { position: fixed; top: 8px; left: 8px; z-index: var(--z-menu); padding: 8px 14px; border-radius: 8px; background: var(--surface-1); color: var(--accent);
   border: 2px solid var(--accent); font-weight: 600; transform: translateY(-200%); }
 .skip:focus-visible { transform: none; }
 /* The two bars stuck to the top, the nav (--appnav-h, kept by Nav) and the scope bar under it (--scope-h, kept by ScopeBar, 0 with

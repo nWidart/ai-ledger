@@ -73,7 +73,7 @@ dialog.sheet :is(td, th).name .cellbtn { white-space: normal; overflow-wrap: any
 dialog.sheet :is(td, th).name code { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .75rem; }
 /* Source: the first prompt exactly as recorded */
 dialog.sheet pre.fp-raw { margin: 0 0 8px; padding: 10px 12px; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
-  border-left: 3px solid var(--accent); background: var(--surface-1); border-radius: 0 8px 8px 0; font: .75rem/1.5 ui-monospace, "SF Mono", Menlo, monospace; }
+  border-left: 3px solid var(--accent); background: var(--surface-1); border-radius: 0 8px 8px 0; font: .75rem/1.5 var(--font-mono); }
 
 /* Session timeline: context per request over time, with tool calls, compactions and commits on the same axis */
 dialog.sheet .tl { margin: 4px 0 6px; }

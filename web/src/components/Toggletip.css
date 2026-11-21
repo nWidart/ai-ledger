@@ -7,7 +7,7 @@
 /* How measured: a link-like label at the end of a hint (see HowMeasured.tsx). */
 .tt.how { color: var(--link); text-decoration: underline dotted; text-underline-offset: 2px; white-space: nowrap; }
 .tt.how:hover, .tt.how[aria-expanded=true] { text-decoration-style: solid; }
-.tt-pos { z-index: 40; }
+.tt-pos { z-index: var(--z-tooltip); }
 /* No taller than the room Base UI finds beside the button (Cost's method on a short window): the rest scrolls, by keyboard too
    (Toggletip.tsx makes a popup that scrolls a tab stop). */
 .tt-pop { max-width: min(20rem, calc(100vw - 16px)); max-height: var(--available-height, none); box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-1);

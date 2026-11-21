@@ -79,7 +79,7 @@
 .pg-errors .tip .tot { border-bottom: 1px solid var(--border); margin-bottom: 4px; padding-bottom: 4px; }
 /* Motion only for readers who haven't asked for less. */
 @media (prefers-reduced-motion: no-preference) {
-  .pg-errors #chart svg.grow .bars { animation: err-grow .55s cubic-bezier(.2, .7, .2, 1) both; transform-box: view-box; }
+  .pg-errors #chart svg.grow .bars { animation: err-grow .55s var(--ease-out) both; transform-box: view-box; }
   .pg-errors #chart svg.grow .rline { stroke-dasharray: 1; animation: err-draw .7s .15s ease-out both; }
   .pg-errors .bar > i { animation: err-bar-in .45s ease-out both; transform-origin: left; }
   @keyframes err-grow { from { transform: scaleY(0); } }
@@ -95,7 +95,7 @@
   .pg-errors .types { position: sticky; top: calc(var(--bars-h) + 12px); display: flex; flex-direction: column;
     max-height: calc(100vh - var(--bars-h) - 24px); }
   .pg-errors .types .tscroll { overflow-y: auto; min-height: 0; }
-  .pg-errors .types thead th { position: sticky; top: 0; z-index: 1; background: var(--surface-1); }
+  .pg-errors .types thead th { position: sticky; top: 0; z-index: var(--z-raised); background: var(--surface-1); }
 }
 /* The type table's toolbar: the filter box, then the view's toggles. */
 .pg-errors .ttools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 8px; }
@@ -217,7 +217,7 @@
 .pg-errors .fixbox { background: var(--surface-2); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
 .pg-errors .fixbox .t { font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px; }
 .pg-errors pre.snip { margin: 8px 0 0; padding: 10px; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
-  font: .75rem/1.4 ui-monospace, "SF Mono", Menlo, monospace; white-space: pre-wrap; word-break: break-word; }
+  font: .75rem/1.4 var(--font-mono); white-space: pre-wrap; word-break: break-word; }
 .pg-errors .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .pg-errors .row.between { justify-content: space-between; }
 .pg-errors .row.nowrap { flex-wrap: nowrap; }
@@ -252,7 +252,7 @@
 .pg-errors #exList .ex { content-visibility: auto; contain-intrinsic-size: auto 7.5rem; }
 .pg-errors #exList .inc { content-visibility: auto; contain-intrinsic-size: auto 3.5rem; }
 .pg-errors .ex .meta { font-size: .75rem; color: var(--text-muted); display: flex; gap: 8px; flex-wrap: wrap; overflow-wrap: anywhere; }
-.pg-errors .ex code, .pg-errors .ex .err { display: block; font: .75rem/1.4 ui-monospace, "SF Mono", Menlo, monospace; white-space: pre-wrap; word-break: break-word;
+.pg-errors .ex code, .pg-errors .ex .err { display: block; font: .75rem/1.4 var(--font-mono); white-space: pre-wrap; word-break: break-word;
   overflow-wrap: anywhere; background: var(--surface-2); border-radius: 6px; padding: 6px 8px; margin-top: 6px; }
 .pg-errors .ex .err { color: var(--critical-text); }
 /* Long bodies start clamped; "Show full" opens one example. */
@@ -302,7 +302,7 @@
 /* By message: a message row is an incident row whose text is the message, with the copy button beside it. */
 .pg-errors .msg-row { display: flex; align-items: flex-start; gap: 4px; }
 .pg-errors .msg-h { flex: 1; min-width: 0; }
-.pg-errors .msg-h .lbl { min-width: 0; font: .75rem/1.4 ui-monospace, "SF Mono", Menlo, monospace; overflow-wrap: anywhere; }
+.pg-errors .msg-h .lbl { min-width: 0; font: .75rem/1.4 var(--font-mono); overflow-wrap: anywhere; }
 .pg-errors .msg-h .shr { font-size: .75rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .pg-errors .msgcopy { flex: none; margin-top: 9px; font-size: .6875rem; padding: 1px 7px; border-radius: 6px; }
 .pg-errors .msgmore { display: block; width: 100%; margin-top: 8px; }
@@ -317,7 +317,7 @@
 /* Wide screens: the type header and the example search stay in view while the examples scroll, inside the detail pane and
    under the nav and the scope bar (--bars-h). */
 @media (min-width: 56.3125em) {
-  .pg-errors #detail .dhead, .pg-errors #detail .exbar { position: sticky; z-index: 1; background: var(--surface-1); margin: 0 -20px; padding: 10px 20px; }
+  .pg-errors #detail .dhead, .pg-errors #detail .exbar { position: sticky; z-index: var(--z-raised); background: var(--surface-1); margin: 0 -20px; padding: 10px 20px; }
   .pg-errors #detail .dhead { top: var(--bars-h); flex-wrap: nowrap; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
   .pg-errors #detail .dhead h2 { margin: 0; min-width: 0; }
   .pg-errors #detail .exbar { top: calc(var(--bars-h) + var(--dhead-h, 0px)); border-bottom: 1px solid var(--border); padding-bottom: 0; }
@@ -328,10 +328,10 @@
 /* Narrow screens: an open type shows in a sheet over the page; the detail renders in it instead of beside the table. */
 .pg-errors dialog.sheet { background: var(--surface-1); }
 .pg-errors .sheet > .detail { border: 0; border-radius: 0; min-height: 100%; padding-top: 0; overflow-wrap: anywhere; }
-.pg-errors .sheet .dhead { position: sticky; top: 0; z-index: 1; flex-wrap: nowrap; margin: 0 -20px 12px; padding: 12px 20px;
+.pg-errors .sheet .dhead { position: sticky; top: 0; z-index: var(--z-raised); flex-wrap: nowrap; margin: 0 -20px 12px; padding: 12px 20px;
   background: var(--surface-1); border-bottom: 1px solid var(--border); }
 .pg-errors .sheet .dhead h2 { margin: 0; min-width: 0; }
-.pg-errors .sheet .exbar { position: sticky; top: var(--dhead-h, 0px); z-index: 1; margin: 0 -20px; padding: 0 20px;
+.pg-errors .sheet .exbar { position: sticky; top: var(--dhead-h, 0px); z-index: var(--z-raised); margin: 0 -20px; padding: 0 20px;
   background: var(--surface-1); border-bottom: 1px solid var(--border); }
 .pg-errors .sheet .ex, .pg-errors .sheet .inc { scroll-margin-top: calc(var(--dhead-h, 0px) + var(--exbar-h, 0px) + 12px); }
 /* Phone: only the type header sticks, so the list keeps most of the screen. */

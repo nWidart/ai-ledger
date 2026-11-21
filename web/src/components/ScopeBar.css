@@ -1,6 +1,6 @@
 /* The scope bar: the page-wide filters, under the nav and stuck under it (--appnav-h, kept by Nav). Its content lines up with
    the nav's and the page's (1240px, 16px gutters). It keeps its own view transition layer, as the nav does (base.css). */
-.scopebar { position: sticky; top: var(--appnav-h, 56px); z-index: 4; background: var(--bg); border-bottom: 1px solid var(--border);
+.scopebar { position: sticky; top: var(--appnav-h, 56px); z-index: var(--z-sticky); background: var(--bg); border-bottom: 1px solid var(--border);
   view-transition-name: scopebar; }
 .scopebar-in { max-width: 1240px; margin: 0 auto; padding: 4px 16px; box-sizing: border-box; display: flex; align-items: center; gap: 8px; min-width: 0; }
 /* Compact controls, as the nav's: the bar is about 40px, so the first screen gives it as little as it can. */
@@ -27,7 +27,7 @@
   font-size: .75rem; line-height: 1.25rem; text-align: center; font-variant-numeric: tabular-nums; }
 /* The filters over the page, one per line, under the bar: nothing on the page moves when they open. */
 /* At the project list's level (theme.css), so the list, portaled after it, opens over it; toggletips (40) open over both. */
-.scopebar-pos { z-index: 30; }
+.scopebar-pos { z-index: var(--z-popover); }
 .scopebar-pop { box-sizing: border-box; width: min(22rem, calc(100vw - 16px)); max-height: var(--available-height); overflow-y: auto; padding: 12px;
   background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-pop); }
 .scopebar-pop .filters { flex-direction: column; align-items: stretch; gap: 12px; }

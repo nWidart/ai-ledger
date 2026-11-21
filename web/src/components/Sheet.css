@@ -2,7 +2,7 @@
 dialog.sheet { background: var(--bg); }
 dialog.sheet { scroll-padding-top: 80px; } /* a row scrolled into view clears the sticky head */
 .sheet-in { min-height: 100%; }
-.sheet-head { position: sticky; top: 0; z-index: 1; display: flex; gap: 8px; align-items: center; padding: 12px 20px;
+.sheet-head { position: sticky; top: 0; z-index: var(--z-raised); display: flex; gap: 8px; align-items: center; padding: 12px 20px;
   background: var(--surface-1); border-bottom: 1px solid var(--border); }
 .sheet-head h2 { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 1rem; font-weight: 600; margin: 0; letter-spacing: -.005em; }
 .sheet-head h2:focus { outline: none; }

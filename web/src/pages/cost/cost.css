@@ -45,7 +45,7 @@
 .pg-cost .g-key.tick { width: 2px; height: 10px; border-radius: 1px; background: var(--text-primary); vertical-align: -1px; }
 .pg-cost .g-note { flex-basis: 100%; }
 @media (prefers-reduced-motion: no-preference) {
-  .pg-cost.grow .g-bar :is(.g-now, .g-pace) { transform-origin: left; animation: grow-x .6s cubic-bezier(.2,.7,.2,1) both; }
+  .pg-cost.grow .g-bar :is(.g-now, .g-pace) { transform-origin: left; animation: grow-x .6s var(--ease-out) both; }
 }
 @media (forced-colors: active) {
   .pg-cost .g-bar { forced-color-adjust: none; background: Canvas; outline: 1px solid CanvasText; }
@@ -169,7 +169,7 @@
   .tpairs .tp-name i { forced-color-adjust: none; outline: 1px solid CanvasText; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .grow .tpairs .tp-bar i { animation: grow-x .6s cubic-bezier(.2,.7,.2,1) both; }
+  .grow .tpairs .tp-bar i { animation: grow-x .6s var(--ease-out) both; }
   .grow .tpairs .tp-l .tp-bar i { transform-origin: right; }
   .grow .tpairs .tp-r .tp-bar i { transform-origin: left; }
 }

@@ -9,7 +9,7 @@
    under the bar's right end, taking no room, so nothing moves when it opens or goes. */
 .pg-live .chk.ft { padding: 2px 8px; border-radius: 999px; border: 1px solid transparent; }
 .pg-live .chk.ft.on { background: var(--warning-soft); border-color: var(--warning-text); color: var(--warning-text); }
-.pg-live .ft-warn { position: absolute; top: calc(100% + 4px); right: 0; z-index: 5; margin: 0; max-width: min(34rem, 100%); box-sizing: border-box;
+.pg-live .ft-warn { position: absolute; top: calc(100% + 4px); right: 0; z-index: var(--z-nav); margin: 0; max-width: min(34rem, 100%); box-sizing: border-box;
   box-shadow: var(--shadow-pop); border: 1px solid var(--border); border-left: 3px solid var(--warning-text); }
 .pg-live .conn::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--good); margin-right: 6px; vertical-align: 1px; }
 .pg-live .conn.lost { color: var(--warning-text); }
@@ -108,7 +108,7 @@
 .pg-live .tool:hover { background: var(--surface-2); }
 .pg-live .tool[aria-expanded=true] { background: var(--surface-2); border-color: var(--border); border-radius: 8px 8px 0 0; }
 .pg-live .tool .nm { font-weight: 600; font-size: .8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pg-live .tool .sum { font: .75rem/1.45 ui-monospace, "SF Mono", Menlo, monospace; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-live .tool .sum { font: .75rem/1.45 var(--font-mono); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pg-live .tool .sum.said { font: inherit; font-size: .78125rem; } /* a description is prose, not a command */
 .pg-live .tool .dur { font-size: .75rem; color: var(--text-muted); min-width: 2.75rem; text-align: right; }
 .pg-live .tool .res { text-align: center; font-size: .8125rem; }
@@ -120,7 +120,7 @@
 .pg-live .detail dl { display: grid; grid-template-columns: 4.375rem minmax(0, 1fr); gap: 4px 10px; margin: 0; }
 .pg-live .detail dt { color: var(--text-muted); }
 .pg-live .detail dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-.pg-live .detail pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: .75rem/1.45 ui-monospace, "SF Mono", Menlo, monospace; max-height: 200px; overflow: auto; }
+.pg-live .detail pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: .75rem/1.45 var(--font-mono); max-height: 200px; overflow: auto; }
 .pg-live .hint { font-size: .75rem; color: var(--warning-text); margin: 6px 0 0; }
 .pg-live .lane { border-left: 2px solid var(--proj-4); border-radius: 0 8px 8px 0; background: color-mix(in srgb, var(--proj-4) 6%, transparent); padding-bottom: 4px; }
 .pg-live .lane-head { width: 100%; border: 0; background: none; text-align: left; padding: 5px 10px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; font-size: .8125rem; }
@@ -166,7 +166,7 @@
 .pg-live .pulse .base { stroke: var(--border); vector-effect: non-scaling-stroke; }
 .pg-live .pulse .cur { fill: var(--track); }
 /* The readout opens under the pulse, over the page, so the strip does not move. */
-.pg-live .pulse .readout { position: absolute; top: calc(100% + 4px); left: 0; z-index: 4; white-space: nowrap; font-size: .75rem; color: var(--text-primary);
+.pg-live .pulse .readout { position: absolute; top: calc(100% + 4px); left: 0; z-index: var(--z-sticky); white-space: nowrap; font-size: .75rem; color: var(--text-primary);
   background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; box-shadow: var(--shadow-pop); }
 .pg-live .pulse .readout:empty { display: none; }
 .pg-live .meter { display: block; height: 10px; border-radius: 6px; background: var(--track); overflow: hidden; position: relative; margin: 8px 0 4px; }
