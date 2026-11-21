@@ -44,6 +44,7 @@ DEFAULT_DB = os.path.join(data_dir(), "ai-ledger.duckdb")
 EARLIER_DBS = checkout_stores()
 DEFAULT_ROOT = os.path.expanduser("~/.claude/projects")
 DEFAULT_CODEX = os.path.expanduser("~/.codex")
+DEFAULT_GROK = os.path.expanduser("~/.grok")
 DEFAULT_USAGE_DATA = os.path.expanduser("~/.claude/usage-data")  # Claude Code's /insights facets and session meta
 BUSY = "the app is running and owns the store; use Refresh in the dashboard"
 
@@ -850,12 +851,16 @@ class Source(NamedTuple):
 
 
 from . import codex  # noqa: E402  (it subclasses Deriver)
+from . import grok  # noqa: E402  (it subclasses Deriver)
 from . import limits  # noqa: E402  (it writes snapshots through this module)
 from . import insights  # noqa: E402  (it reads usage data through this module)
 
 SOURCES = {"claude": Source(transcript_files, line_key, Deriver, lambda cur, path, lines: (None, "/subagents/" in path)),
            "codex": Source(codex.files, codex.key, codex.CodexDeriver, codex.placement, codex.fields, codex.read,
-                            codex.prompt_text, "event_msg", codex.live_items, None)}
+                            codex.prompt_text, "event_msg", codex.live_items, None),
+           "grok": Source(grok.files, grok.key, grok.GrokDeriver, grok.placement, grok.fields,
+                          prompt_text=grok.prompt_text, prompt_type="user_message_chunk", live_items=grok.live_items,
+                          close_type="session_end", type=grok.line_type)}
 
 
 def rebuild(con, log=None):
