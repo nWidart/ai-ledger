@@ -80,6 +80,28 @@ describe("workModel", () => {
     expect(model(many, "prompts").kinds.map(k => k.label)).toEqual(["g", "e", "c", "a", "Other (3)"]);
   });
 
+  it("stacks every bar from the baseline, each segment to one scale across the view, under the plot's top", () => {
+    // Five days of a, c and e (each a hue) and b (Other): 10 to 50 commits a segment, so no segment is held at its minimum.
+    const five = dayRange("2026-11-01", "2026-11-05"), owned = ["a", "c", "e", "b"];
+    const projectsOf = five.flatMap((day, i) => owned.map((p, j) => wp(day, p, { commits: 10 * (1 + (i + j) % 5) })));
+    const rows = five.map(day => row(day, { commits: projectsOf.filter(r => r.day === day).reduce((s, r) => s + r.commits, 0) }));
+    for (const metric of ["commits", "sessions"] as const) {
+      const m = model(days(usage, rows.map(r => ({ ...r, sessions: metric === "sessions" ? r.commits : r.sessions })),
+        projectsOf.map(r => ({ ...r, sessions: r.commits }))), metric);
+      expect(m.kinds).toHaveLength(4);
+      const px = H / m.axis.max; // one scale for every bar
+      m.values.forEach((v, i) => {
+        const s = segs(m, i);
+        expect(s).toHaveLength(4);
+        expect(s[0]!.shape.y + s[0]!.shape.height).toBeCloseTo(Y0); // the bottom segment starts at the baseline
+        // Each segment's slot (its height and the 2px gap below it) is its value to scale.
+        s.forEach((seg, j) => expect(seg.shape.height + (j ? 2 : 0)).toBeCloseTo(v[j]! * px, 6));
+        expect(s.at(-1)!.shape.y).toBeGreaterThanOrEqual(Y0 - H); // under the plot's top
+        expect(s.at(-1)!.shape.y).toBeCloseTo(Y0 - m.totals[i]! * px, 6);
+      });
+    }
+  });
+
   it("draws plain bars of the measure in the first series color for one project", () => {
     const m = model({ ...many, project: "a" }, "prompts");
     expect(m.stacked).toBe(false);

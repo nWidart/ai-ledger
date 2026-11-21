@@ -1066,6 +1066,29 @@ describe("ActivityPage", () => {
     expect(document.activeElement).toBe(screen.getByRole("group", { name: /^Commits per day/ }));
   });
 
+  it("drops the chart's selection sentence when the tab note or an attention action clears the selection, and says the next selection as new", async () => {
+    mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": () => noDay("2026-11-04") });
+    at("?range=30");
+    renderApp(<ActivityPage />);
+    await loaded();
+    const chart = screen.getByRole("group", { name: /^Commits per day/ }), sr = () => document.querySelector("#work div.sr[aria-live]")!.textContent;
+    const select = () => { act(() => chart.focus()); fireEvent.keyDown(chart, { key: "Home" }); fireEvent.keyDown(chart, { key: "Enter" }); };
+    const SELECTED = "Nov 4, 2026 selected; the tabs below show its figures.";
+    select();
+    expect(location.search).toBe("?range=30&day=2026-11-04");
+    expect(sr()).toBe(SELECTED);
+    await userEvent.click(within(screen.getByRole("tabpanel")).getByRole("button", { name: "Show the whole range" }));
+    expect(location.search).toBe("?range=30");
+    expect(sr()).toBe("");
+    select();
+    expect(sr()).toBe(SELECTED); // a new selection, not "still selected"
+    await userEvent.click(attention().getByRole("button", { name: "See tests" }));
+    expect(location.search).toBe("?range=30&tab=loops");
+    expect(sr()).toBe("");
+    select();
+    expect(sr()).toBe(SELECTED);
+  });
+
   it("keeps the selection's figures honest: a vital or attention action reports the range, so it clears the selection", async () => {
     mockApi({ "/api/usage": () => ({ ...usage, work_bucket: "week" }), "/api/sessions": () => sessions, "/api/day": () => noDay("2026-11-02", 7) });
     at("?range=30&week=2026-11-02");
