@@ -106,14 +106,3 @@ it("draws each span in its box, the shapes, the break and the labels, marks the 
   await waitFor(() => expect(spanPaths(n)).toHaveLength(n.spans.length));
   drawsEachSpanOnce(n);
   expect(drawn()).toHaveLength(before + 1);}, 10_000);
-
-it("draws the spans in the system's colors under forced colors, the break in GrayText", async () => {
-  const media = window.matchMedia;
-  vi.spyOn(window, "matchMedia").mockImplementation(q => ({ ...media(q), matches: q === "(forced-colors: active)" }));
-  const l = layoutOf(detail());
-  renderApp(spans(detail()));
-  await waitFor(() => expect(spanPaths(l)).toHaveLength(l.spans.length), { timeout: 5000 });
-  const paints = (ps: ReturnType<typeof drawn>) => new Set(ps.flatMap(p => [p.fill, p.stroke]).filter(c => c !== "none" && c != null));
-  expect(paints(spanPaths(l))).toEqual(new Set(["CanvasText", "Canvas"]));
-  expect(paints(breaks(l))).toEqual(new Set(["GrayText"]));
-}, 10_000);

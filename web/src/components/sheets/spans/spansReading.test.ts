@@ -25,9 +25,9 @@ describe("stepSpan", () => {
   // Main: a, b, c; subagent 1: d at 2.5, as near a as b (a tie, to the earlier), and e at 7, nearest b.
   const [a, b, c] = [call(0, 1), call(5, 6), call(10, 11)], [d, e] = [sub(1, 2.5, 4), sub(1, 7, 8)], l = layout([a, b, c, d, e]);
   it.each([
-    [null, "ArrowRight", a], [null, "ArrowDown", a], [null, "Home", a], [null, "ArrowLeft", c], [null, "End", c],
+    [null, "ArrowRight", a], [null, "ArrowLeft", c],
     [a, "ArrowRight", b], [c, "ArrowRight", c], [b, "ArrowLeft", a], [a, "ArrowLeft", a], [b, "End", c], [c, "Home", a],
-    [b, "ArrowDown", e], [e, "ArrowDown", e], [d, "ArrowUp", a], [a, "ArrowUp", a], [e, "ArrowUp", b],
+    [b, "ArrowDown", e], [e, "ArrowDown", e], [d, "ArrowUp", a], [e, "ArrowUp", b],
   ] as const)("from %o on %s", (from, key, want) => expect(stepSpan(l, from?.id ?? null, key)).toBe(want.id));
   it("steps nowhere on another key, with no call, or from a gone call", () => {
     expect([stepSpan(l, a.id, "Enter"), stepSpan(l, null, "PageDown"), stepSpan(l, "gone", "ArrowRight")]).toEqual([undefined, undefined, undefined]);

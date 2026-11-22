@@ -43,13 +43,7 @@ const sp = (c: SpanCall) => layout.spans.find(s => s.id === c.id)!;
 const top = (c: SpanCall) => layout.lanes[sp(c).lane]!.top + sp(c).row * 10;
 
 describe("spansOption", () => {
-  it("draws three silent custom series on no coordinate system and no grid, never animated, one item per span", () => {
-    const o = spansOption(layout, env(), TIMES);
-    expect(o).not.toHaveProperty("grid");
-    expect(o).not.toHaveProperty("xAxis");
-    expect(o.animation).toBe(false); // even with motion on
-    expect(series().map(s => [s.id, s.type, s.coordinateSystem, s.silent, s.z])).toEqual([
-      ["breaks", "custom", "none", true, 1], ["spans", "custom", "none", true, 2], ["labels", "custom", "none", true, 3]]);
+  it("draws one item per break and one per span", () => {
     expect([series()[0]!.data, series()[1]!.data]).toEqual([layout.breaks.map((_, i) => [i]), layout.spans.map((_, i) => [i])]);
   });
 

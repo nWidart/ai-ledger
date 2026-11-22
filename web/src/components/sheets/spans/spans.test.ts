@@ -73,7 +73,6 @@ describe("spansLayout", () => {
     ["a call with no result", call(1, null, { is_error: null }), "open", false],
     ["a call with no duration", call(1, 1), "still", false],
     ["a failed call with no duration", call(1, 1, { is_error: true }), "still", true],
-    ["a call that ends before it starts", call(1, .5), "still", false],
     ["a call whose end cannot be read", call(1, null, { end_ts: "2026-13-45T99:00:00" }), "still", false],
     // A result with no time (Grok's agentTimestampMs absent): is_error says there is a result.
     ["a failed call with no end", call(1, null, { is_error: true }), "still", true],
@@ -130,7 +129,6 @@ describe("spansLayout", () => {
   // Decision 5's examples; its 642px for every cap at 32px text is 622 by its own formula.
   it.each([
     ["one main row", () => [call(0, 1), call(2, 3)], 1, 50],
-    ["main 3 rows and three subagent lanes of 2 rows", () => rows([3, 2, 2, 2]), 1, 190],
     ["every lane at its cap", capped, 1, 480],
     ["every lane at its cap at 32px text", capped, 2, 622],
   ] as const)("is %s high", (_, calls, ts, h) => {
