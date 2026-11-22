@@ -27,7 +27,7 @@ export const readWeek = (w: Week) =>
 
 /** The view's median starting context per week of session start with its 25th to 75th percentile band. Weeks sit by date, so a week
  *  with no session is a gap in the spacing; a week under TREND_MIN_SESSIONS sessions is drawn as a hollow, faded dot. */
-export function StartTrend({ trend }: { trend: Trend }) {
+export function StartTrend({ trend }: { trend: Trend; view: string }) {
   const box = useRef<HTMLDivElement>(null), W = useWidth(box);
   const [at, setAt] = useState<number | null>(null);
   if (!trend.length) return null;

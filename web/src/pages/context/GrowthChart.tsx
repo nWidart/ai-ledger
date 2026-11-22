@@ -42,7 +42,7 @@ export const readShare = (p: GrowthPoint) =>
  *  x is the turn, y the prompt tokens of that turn (or, with `share`, the fraction of the window); a point needs at least 5 sessions,
  *  so a curve stops where the sessions run out. A strip under the axis shows how many sessions are still running at each turn.
  *  A project key isolates that project and its own band. */
-export function GrowthChart({ curve, projects, share }: { curve: GrowthPoint[]; projects: Curves; share?: GrowthPoint[] }) {
+export function GrowthChart({ curve, projects, share }: { curve: GrowthPoint[]; projects: Curves; share?: GrowthPoint[]; view: string }) {
   const color = useColors(), box = useRef<HTMLDivElement>(null), W = useWidth(box);
   const [at, setAt] = useState<number | null>(null); // an index into the curve in view
   const [mode, setMode] = useState<Mode>("tokens"), [sel, setSel] = useState<string | null>(null);

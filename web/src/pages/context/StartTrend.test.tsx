@@ -10,14 +10,14 @@ const trend = [wk("2026-11-02", 24_000), wk("2026-11-16", 20_000, 2), wk("2026-1
 
 describe("StartTrend", () => {
   it("places weeks by date and leaves a gap for a missing week", () => {
-    const { container } = render(<StartTrend trend={trend} />);
+    const { container } = render(<StartTrend view="v" trend={trend} />);
     const cx = [...container.querySelectorAll("circle.dot")].map(c => +c.getAttribute("cx")!);
     expect(cx).toHaveLength(3);
     expect((cx[1]! - cx[0]!) / (cx[2]! - cx[1]!)).toBeCloseTo(2, 5);
   });
 
   it("marks a week of 2 sessions and names it in the readout", () => {
-    const { container } = render(<StartTrend trend={trend} />);
+    const { container } = render(<StartTrend view="v" trend={trend} />);
     expect(container.querySelectorAll("circle.dot.few")).toHaveLength(1);
     const chart = screen.getByRole("group");
     fireEvent.keyDown(chart, { key: "ArrowRight" });
@@ -29,13 +29,13 @@ describe("StartTrend", () => {
   });
 
   it("leaves keys with Alt, Ctrl, Meta or Shift to the browser", () => {
-    render(<StartTrend trend={trend} />);
+    render(<StartTrend view="v" trend={trend} />);
     expect(prevented(screen.getByRole("group"))).toEqual([]);
     expect(document.querySelector(".readout")!.textContent).toBe("");
   });
 
   it("steps with the arrow keys, Home and End, and clears with Escape", () => {
-    render(<StartTrend trend={trend} />);
+    render(<StartTrend view="v" trend={trend} />);
     const chart = screen.getByRole("group"), out = () => document.querySelector(".readout")!.textContent;
     fireEvent.keyDown(chart, { key: "End" });
     expect(out()).toBe(readWeek(trend[2]!));
@@ -49,7 +49,7 @@ describe("StartTrend", () => {
   });
 
   it("draws a band, a halo under the median, the 30k line, and states first and last medians", () => {
-    const { container } = render(<StartTrend trend={trend} />);
+    const { container } = render(<StartTrend view="v" trend={trend} />);
     expect(container.querySelectorAll("path.band")).toHaveLength(1);
     expect(container.querySelectorAll("path.trend-line")).toHaveLength(2);
     expect(container.querySelector("g.threshold")).not.toBeNull();
@@ -60,7 +60,7 @@ describe("StartTrend", () => {
 
   it("breaks the line and the band at a week with no session", () => {
     const w = (week: string) => ({ week, median: 24_000, p25: 20_000, p75: 30_000, sessions: 9 });
-    const { container } = render(<StartTrend trend={[w("2026-10-19"), w("2026-10-26"), w("2026-11-09"), w("2026-11-16")]} />);
+    const { container } = render(<StartTrend view="v" trend={[w("2026-10-19"), w("2026-10-26"), w("2026-11-09"), w("2026-11-16")]} />);
     const ms = (sel: string) => container.querySelector(sel)!.getAttribute("d")!.match(/M/g)!.length;
     expect(ms("path.trend-line")).toBe(2);
     expect(ms("path.band")).toBe(2);
@@ -69,14 +69,14 @@ describe("StartTrend", () => {
 
   it("draws the spread of a week with no neighbour as a span", () => {
     const w = (week: string) => ({ week, median: 24_000, p25: 20_000, p75: 30_000, sessions: 9 });
-    const { container } = render(<StartTrend trend={[w("2026-11-02"), w("2026-11-16")]} />);
+    const { container } = render(<StartTrend view="v" trend={[w("2026-11-02"), w("2026-11-16")]} />);
     const spans = [...container.querySelectorAll("line.span")];
     expect(spans).toHaveLength(2);
     expect(Number(spans[0]!.getAttribute("y1"))).toBeLessThan(Number(spans[0]!.getAttribute("y2")));
   });
 
   it("reads the week under the pointer", () => {
-    const { container } = render(<StartTrend trend={trend} />);
+    const { container } = render(<StartTrend view="v" trend={trend} />);
     const rect = container.querySelector("svg rect")!;
     rect.getBoundingClientRect = () => ({ left: 52, right: 786, width: 734, top: 10, bottom: 154, height: 144, x: 52, y: 10, toJSON: () => ({}) });
     fireEvent.pointerMove(rect, { clientX: 52 + 734 });
@@ -84,7 +84,7 @@ describe("StartTrend", () => {
   });
 
   it("lists every week in a table, closed until asked for", () => {
-    render(<StartTrend trend={trend} />);
+    render(<StartTrend view="v" trend={trend} />);
     expect(screen.queryByRole("table")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Show data table" }));
     const rows = screen.getAllByRole("row");
@@ -93,10 +93,10 @@ describe("StartTrend", () => {
   });
 
   it("draws one dot and no line for one week, and nothing for none", () => {
-    const { container, rerender } = render(<StartTrend trend={[wk("2026-11-02", 24_000)]} />);
+    const { container, rerender } = render(<StartTrend view="v" trend={[wk("2026-11-02", 24_000)]} />);
     expect(container.querySelectorAll("circle.dot")).toHaveLength(1);
     expect(container.querySelector("path.trend-line")).toBeNull();
-    rerender(<StartTrend trend={[]} />);
+    rerender(<StartTrend view="v" trend={[]} />);
     expect(container.querySelector("svg")).toBeNull();
   });
 });

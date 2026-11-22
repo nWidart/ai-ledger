@@ -23,7 +23,7 @@ const chartOf = () => screen.getByRole("group", { name: /^Session map/ });
 const picked: (Quad | null)[] = [];
 function Map({ map, start = null }: { map: Parameters<typeof SessionMap>[0]["map"]; start?: Quad | null }) {
   const [quad, setQuad] = useState<Quad | null>(start);
-  return <SessionMap map={map} quad={quad} onQuad={q => { picked.push(q); setQuad(q); }} />;
+  return <SessionMap view="v" map={map} quad={quad} onQuad={q => { picked.push(q); setQuad(q); }} />;
 }
 
 beforeEach(() => { history.replaceState(null, "", location.pathname); setOrder(["foo", "bar"]); });

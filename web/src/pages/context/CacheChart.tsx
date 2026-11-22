@@ -62,7 +62,7 @@ export function stack(parts: [string, number][], y0: number, per: number): { key
 /** Per day or week, the prompt tokens not read from the cache (uncached input, cache writes) as stacked bars, the cache breaks by
  *  cause on a strip under them, and the cache-hit ratio on its own thin track, all over the same slots. Cache reads join the bars
  *  only when the user turns them on. */
-export function CacheChart({ series }: { series: Series }) {
+export function CacheChart({ series }: { series: Series; view: string }) {
   const box = useRef<HTMLDivElement>(null), tip = useRef<HTMLDivElement>(null), W = useWidth(box);
   const [at, setAt] = useState<number | null>(null), pos = useRef({ x: 0, y: 0 });
   const [reads, setReads] = useState(false);

@@ -51,7 +51,7 @@ const PICK: RowPick<SessionPoint> = { value: p => p.session_id, open: v => openS
 
 /** Every session of the view with a measured start, a known window and a peak, as a dot. quad: the selected quadrant (null for none);
  *  onQuad selects one, or clears it with null. */
-export function SessionMap({ map, quad, onQuad }: { map: SessionsMap; quad: Quad | null; onQuad: (q: Quad | null) => void }) {
+export function SessionMap({ map, quad, onQuad }: { map: SessionsMap; quad: Quad | null; onQuad: (q: Quad | null) => void; view: string }) {
   const color = useColors(), box = useRef<HTMLDivElement>(null), tip = useRef<HTMLDivElement>(null), W = useWidth(box);
   const quadsRef = useRef<HTMLDivElement>(null);
   /** Clears the quadrant from its controls: Clear goes away with it, so focus moves to the quadrant that was pressed, not to the body. */

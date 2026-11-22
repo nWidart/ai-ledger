@@ -16,7 +16,7 @@ const bar = { project: "bar", sessions: 5, curve: view.slice(0, 3).map(p => ({ .
 describe("GrowthChart", () => {
   it("draws the view's median with its band and one line per project", () => {
     setOrder(["foo", "bar"]);
-    const { container } = renderApp(<GrowthChart curve={view} projects={[foo, bar]} />);
+    const { container } = renderApp(<GrowthChart view="v" curve={view} projects={[foo, bar]} />);
     expect(container.querySelectorAll("path.curve.proj")).toHaveLength(2);
     // The median is drawn twice, a halo under the ink line.
     expect(container.querySelectorAll("path.curve.view")).toHaveLength(2);
@@ -28,7 +28,7 @@ describe("GrowthChart", () => {
   });
 
   it("describes itself, naming the median at the last turn shown", () => {
-    renderApp(<GrowthChart curve={view} projects={[foo]} />);
+    renderApp(<GrowthChart view="v" curve={view} projects={[foo]} />);
     const chart = screen.getByRole("group");
     const label = chart.getAttribute("aria-label")!;
     expect(label).toContain("70k at turn 5");
@@ -38,13 +38,13 @@ describe("GrowthChart", () => {
   });
 
   it("leaves keys with Alt, Ctrl, Meta or Shift to the browser", () => {
-    renderApp(<GrowthChart curve={view} projects={[foo]} />);
+    renderApp(<GrowthChart view="v" curve={view} projects={[foo]} />);
     expect(prevented(screen.getByRole("group"))).toEqual([]);
     expect(document.querySelector(".readout")!.textContent).toBe("");
   });
 
   it("reads a turn with the arrow keys, and dismisses it with Escape or on blur", () => {
-    renderApp(<GrowthChart curve={view} projects={[foo]} />);
+    renderApp(<GrowthChart view="v" curve={view} projects={[foo]} />);
     const chart = screen.getByRole("group");
     act(() => chart.focus());
     fireEvent.keyDown(chart, { key: "ArrowRight" });
@@ -58,7 +58,7 @@ describe("GrowthChart", () => {
   });
 
   it("offers every turn as a table, closed until asked for, with each project's median", async () => {
-    renderApp(<GrowthChart curve={view} projects={[foo, bar]} />);
+    renderApp(<GrowthChart view="v" curve={view} projects={[foo, bar]} />);
     expect(screen.queryByRole("table")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
     const table = screen.getByRole("table", { name: "Median context at each turn" });
@@ -74,7 +74,7 @@ describe("GrowthChart", () => {
 
   it("reads the turn under the pointer, away from the endpoints", () => {
     const long = Array.from({ length: 101 }, (_, i) => pt(i + 1, 10_000 + i * 100));
-    const { container } = renderApp(<GrowthChart curve={long} projects={[]} />);
+    const { container } = renderApp(<GrowthChart view="v" curve={long} projects={[]} />);
     // jsdom has no layout: the plot rect starts at the left margin and spans the inner width, as in the browser.
     const rect = container.querySelector("svg rect")!;
     rect.getBoundingClientRect = () => ({ left: 52, right: 786, width: 734, top: 12, bottom: 230, height: 218, x: 52, y: 12, toJSON: () => ({}) });
@@ -83,16 +83,16 @@ describe("GrowthChart", () => {
   });
 
   it("draws a curve of one point, and nothing without one", () => {
-    const { container, rerender } = renderApp(<GrowthChart curve={[pt(1, 12_000)]} projects={[]} />);
+    const { container, rerender } = renderApp(<GrowthChart view="v" curve={[pt(1, 12_000)]} projects={[]} />);
     expect(container.querySelectorAll("path.curve.view")).toHaveLength(2);
     expect(screen.getByRole("group").getAttribute("aria-label")).toContain("12k tokens");
-    rerender(<GrowthChart curve={[]} projects={[]} />);
+    rerender(<GrowthChart view="v" curve={[]} projects={[]} />);
     expect(container.querySelector("svg")).toBeNull();
   });
 
   it("draws a strip with one bar per turn, taller for more sessions", () => {
     const fading = [pt(1, 20_000, 20), pt(2, 30_000, 10), pt(3, 40_000, 5)];
-    const { container } = renderApp(<GrowthChart curve={fading} projects={[]} />);
+    const { container } = renderApp(<GrowthChart view="v" curve={fading} projects={[]} />);
     const bars = [...container.querySelectorAll("rect.strip-bar")].map(r => Number(r.getAttribute("height")));
     expect(bars).toHaveLength(3);
     expect(bars[0]).toBeGreaterThan(bars[1]!);
@@ -102,18 +102,18 @@ describe("GrowthChart", () => {
   });
 
   it("offers the share switch only with a share curve", () => {
-    const { rerender } = renderApp(<GrowthChart curve={view} projects={[foo]} />);
+    const { rerender } = renderApp(<GrowthChart view="v" curve={view} projects={[foo]} />);
     expect(screen.queryByRole("button", { name: "Share of window" })).toBeNull();
-    rerender(<GrowthChart curve={view} projects={[foo]} share={[]} />);
+    rerender(<GrowthChart view="v" curve={view} projects={[foo]} share={[]} />);
     expect(screen.queryByRole("button", { name: "Share of window" })).toBeNull();
-    rerender(<GrowthChart curve={view} projects={[foo]} share={shareView} />);
+    rerender(<GrowthChart view="v" curve={view} projects={[foo]} share={shareView} />);
     expect(screen.getByRole("button", { name: "Tokens" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "Share of window" }).getAttribute("aria-pressed")).toBe("false");
   });
 
   it("switches to share: the 80% line, percentage axis, share readout and table", async () => {
     setOrder(["foo", "bar"]);
-    const { container } = renderApp(<GrowthChart curve={view} projects={[foo, bar]} share={shareView} />);
+    const { container } = renderApp(<GrowthChart view="v" curve={view} projects={[foo, bar]} share={shareView} />);
     expect(container.querySelector("g.limit")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Share of window" }));
     expect(screen.getByRole("button", { name: "Share of window" }).getAttribute("aria-pressed")).toBe("true");
@@ -137,7 +137,7 @@ describe("GrowthChart", () => {
 
   it("isolates a project with its own band, and restores every project", async () => {
     setOrder(["foo", "bar"]);
-    const { container } = renderApp(<GrowthChart curve={view} projects={[foo, bar]} />);
+    const { container } = renderApp(<GrowthChart view="v" curve={view} projects={[foo, bar]} />);
     const fooKey = screen.getByRole("button", { name: /^foo/ }), barKey = screen.getByRole("button", { name: /^bar/ });
     expect(fooKey.getAttribute("aria-pressed")).toBe("false");
     expect(container.querySelectorAll("path.band")).toHaveLength(1);
@@ -166,7 +166,7 @@ describe("GrowthChart", () => {
 
   it("clears an isolated project that has no share curve when switching mode", async () => {
     setOrder(["foo", "bar"]);
-    const { container } = renderApp(<GrowthChart curve={view} projects={[foo, bar]} share={shareView} />);
+    const { container } = renderApp(<GrowthChart view="v" curve={view} projects={[foo, bar]} share={shareView} />);
     await userEvent.click(screen.getByRole("button", { name: /^bar/ }));
     expect(container.querySelectorAll("path.curve.proj")).toHaveLength(1);
     await userEvent.click(screen.getByRole("button", { name: "Share of window" }));

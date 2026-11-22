@@ -3,6 +3,7 @@ import { contextUrl, viewOf, type ContextPayload, type TipId } from "../../api";
 import { setOrder } from "../../colors";
 import { agentName, viewName } from "../../components/Filters";
 import { useScopeProjects } from "../../components/ScopeBar";
+import { preloadECharts } from "../../components/echart/load";
 import { HowMeasured } from "../../components/HowMeasured";
 import { ProjectDot } from "../../components/ProjectDot";
 import { jumpTo } from "../../components/Drawer";
@@ -21,6 +22,9 @@ import { CostSection, Fills, Growth, Pressure, Starting } from "./sections";
 import { Tabs, type TabDef } from "./Tabs";
 import { TipSessions, TipStrip } from "./tips";
 import "./context.css";
+
+// The charts' runtime is requested with the page's own chunk, not after the page has rendered.
+preloadECharts();
 
 /** The heading answers "how much context do sessions start with?": the view's median start and its share of the window, two
  *  figures (the sessions that compacted are Growth's). Every source reads "session", never one agent's name. */
@@ -73,6 +77,8 @@ export function ContextPage() {
   // A link to a section from before the tabs (#pressure, #d-breaks) opens the tab that holds it, keeping the fragment so a reload
   // opens it again, then scrolls to it, without moving focus (a direct load does not). Once the page has figures, and again
   // whenever only the fragment changes.
+  // The key of the view on screen, from the payload, not the URL: a chart keeps its reading while the same view reloads.
+  const view = d ? [d.project, d.range, d.automated, d.source].join("|") : "";
   const loaded = !!d;
   useEffect(() => {
     if (!loaded) return;
@@ -103,9 +109,9 @@ export function ContextPage() {
         <TipStrip tips={d.tips} onSessions={openTip} />
         {tip && <div className="drawers tip-drawer"><TipSessions tip={tip} onClose={closeTip} /></div>}
         <Tabs tabs={TAB_DEFS} current={tab} onChange={setTab} label="Context">
-          {tab === "overhead" && <><Starting d={d} /><Grids d={d} /><Pressure d={d} /></>}
-          {tab === "growth" && <><Growth d={d} /><Fills d={d} /><div className="drawers"><LargestDrawer rows={d.fills.largest} /></div></>}
-          {tab === "cache" && <><CostSection d={d} /><div className="drawers"><BreaksDrawer cost={d.cost} /></div></>}
+          {tab === "overhead" && <><Starting d={d} view={view} /><Grids d={d} /><Pressure d={d} view={view} /></>}
+          {tab === "growth" && <><Growth d={d} view={view} /><Fills d={d} /><div className="drawers"><LargestDrawer rows={d.fills.largest} /></div></>}
+          {tab === "cache" && <><CostSection d={d} view={view} /><div className="drawers"><BreaksDrawer cost={d.cost} /></div></>}
         </Tabs>
       </>}
     </main>

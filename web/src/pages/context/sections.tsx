@@ -18,7 +18,7 @@ import { StartTrend } from "./StartTrend";
 type D = ContextPayload;
 
 /** Each session's first turn: the range of the start per project (10th to 90th percentile), the share of the window, and the weekly trend. */
-export function Starting({ d }: { d: D }) {
+export function Starting({ d, view }: { d: D; view: string }) {
   const s = d.starting, c = d.coverage;
   return (
     <section className="panel sect" id="starting" aria-labelledby="startTitle">
@@ -29,7 +29,7 @@ export function Starting({ d }: { d: D }) {
           The dashed line is the {short(START_LARGE_TOKENS)}-token mark the large-start tip uses.
           {" "}{num(s.sessions)} of {plural(c.sessions, "session")} in this view have a measured start; {num(c.with_window)} have a known window, which is all a share of the window can cover.</HowMeasured></div>
       <StartRanges starting={s} />
-      {s.trend.length > 0 && <><h3>Median start by week</h3><StartTrend trend={s.trend} /></>}
+      {s.trend.length > 0 && <><h3>Median start by week</h3><StartTrend trend={s.trend} view={view} /></>}
     </section>
   );
 }
@@ -52,7 +52,7 @@ const GROWTH_COLUMNS: Column<GrowthRow>[] = [
 ];
 
 /** How fast context grows and how far sessions get before the first compaction. */
-export function Growth({ d }: { d: D }) {
+export function Growth({ d, view }: { d: D; view: string }) {
   const g = d.growth, tc = g.to_compaction, c = d.coverage, by = g.by_project;
   const tiles = tc.sessions > 0;
   return (
@@ -61,7 +61,7 @@ export function Growth({ d }: { d: D }) {
       <div className="hint">The median context at each turn, over the sessions that reach it.
         <HowMeasured what="growth" docs="reference/glossary#context">A point needs at least {CURVE_MIN_SESSIONS} sessions, so a curve stops where they run out.
           The strip under the chart counts how many sessions each turn rests on; the switch above it shows the curve as a share of the model's window instead of tokens.</HowMeasured></div>
-      {g.curve.length ? <GrowthChart curve={g.curve} projects={g.by_project_curves} share={g.share_curve} />
+      {g.curve.length ? <GrowthChart curve={g.curve} projects={g.by_project_curves} share={g.share_curve} view={view} />
         : <p className="empty">No turn is shared by {CURVE_MIN_SESSIONS} or more sessions in this view, so there is no curve yet.</p>}
       <div className="vitals" style={{ ["--n" as string]: tiles ? 4 : 2 }}>
         <Tile v={num(g.added_per_prompt)} unit="tokens" l="Added per prompt" dsc="Median per session: the rises between turns over its prompts. A fall, as after a compaction, adds nothing." />
@@ -82,7 +82,7 @@ export function Growth({ d }: { d: D }) {
 
 /** How full sessions peak, by window size, and every session by its start and its peak. A quadrant selected on the map narrows the
  *  bars to its sessions on the map. */
-export function Pressure({ d }: { d: D }) {
+export function Pressure({ d, view }: { d: D; view: string }) {
   const g = d.growth, c = d.coverage, m = d.sessions_map;
   const [quad, setQuad] = useState<Quad | null>(null);
   const q = quad && QUADS.find(x => x.id === quad)!;
@@ -98,7 +98,7 @@ export function Pressure({ d }: { d: D }) {
       {fill.length ? <PressureBars key={quad ?? ""} fill={fill} points={pts} /> : <p className="empty">{q ? `No session on the map is in ${q.label}.` : "No session in this view has a known window."}</p>}
       <h3>Sessions by start and peak</h3>
       <div className="hint">Each dot is a session: how much context it started with, and how much of its window it filled at its peak. Select a quadrant to narrow the bars above.</div>
-      <SessionMap map={m} quad={quad} onQuad={setQuad} />
+      <SessionMap map={m} quad={quad} onQuad={setQuad} view={view} />
     </section>
   );
 }
@@ -133,7 +133,7 @@ const COST_COLUMNS: Column<CostRow>[] = [
 ];
 
 /** Cost as the Cost page counts it: the view and each project, the cache reads and the long-prompt tier. */
-export function CostSection({ d }: { d: D }) {
+export function CostSection({ d, view }: { d: D; view: string }) {
   const c = d.cost, whole: CostRow = { ...c, project: "", whole: true };
   return (
     <section className="panel sect" id="cost" aria-labelledby="costTitle">
@@ -141,7 +141,7 @@ export function CostSection({ d }: { d: D }) {
       <div className="hint">Estimated at API list prices, as on the Cost page.
         <HowMeasured what="cost" docs="concepts/cost-estimates">An unpriced model reads as unknown (–), never as zero. The long-prompt tier prices the whole request higher once the prompt passes a model's threshold.</HowMeasured></div>
       <h3>Cache use over time</h3>
-      <CacheChart series={c.series} />
+      <CacheChart series={c.series} view={view} />
       <h3>By project</h3>
       <Table name="Cost by project" rows={c.by_project.length > 1 ? c.by_project.map((p): CostRow => ({ ...p, whole: false })) : []} columns={COST_COLUMNS}
         rowId={r => r.whole ? "total" : `project:${r.project ?? ""}`} pinned={[whole]} pick={PROJECT_PICK} rowProps={r => r.whole ? WHOLE_ROW : {}} />
