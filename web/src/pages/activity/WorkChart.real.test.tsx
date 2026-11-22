@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DailyWorkRow, UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
 import { color, setOrder } from "../../colors";
+import { box, centreX, probeColors, textX, tokenOf } from "../../components/echart/realTesting";
 import { dayRange } from "../../format";
 import { renderApp } from "../../testing";
 import type { WorkMetric } from "./work";
@@ -16,16 +17,6 @@ import { workLayout, workModel, type WorkPick } from "./workTracks";
 // frame apart from it, a zoom that narrows both tracks together, a redraw that leaves no path of the old drawing, and an
 // unmount that takes the drawing with it.
 vi.unmock("../../components/echart/load");
-
-// jsdom resolves no var(), so every token would compute to black. The color probe answers each token with an rgb() of its
-// own, which the drawing's fills and strokes can be told apart by.
-const rgb = new Map<string, string>();
-const resolved = (token: string) => {
-  if (!rgb.has(token)) rgb.set(token, `rgb(${rgb.size + 1}, 100, 200)`);
-  return rgb.get(token)!;
-};
-/** The token a drawn color resolved from: the renderer writes rgb() with or without spaces. */
-const tokenOf = (c: string | null) => (c ? [...rgb].find(([, v]) => v === c || v.replaceAll(" ", "") === c)?.[0] : undefined);
 
 // 20 days, three projects with a hue, a commit each a day. Day 15 has few calls (a hollow dot); day 12 has calls between two
 // days without (a solid dot); the rest 100 calls. Day 2 is selected.
@@ -48,33 +39,12 @@ const plot = () => document.querySelector<HTMLElement>("#work .echart-plot")!;
 const group = () => screen.getByRole("group", { name: /per day/ });
 const paths = () => [...plot().querySelectorAll("svg path")];
 
-/** A path's box: ECharts' SVG renderer writes a rect as M, then l moves, a rounded top with L and A, a circle with A and C. */
-function box(dd: string) {
-  const xs: number[] = [], ys: number[] = [];
-  let x = 0, y = 0;
-  for (const [, c, args] of dd.matchAll(/([MLlACZ])([^MLlACZ]*)/g)) {
-    const n = (args!.match(/-?\d+(?:\.\d+)?(?:e-?\d+)?/g) ?? []).map(Number);
-    if (c === "M" || c === "L") [x, y] = [n[0]!, n[1]!];
-    else if (c === "l") [x, y] = [x + n[0]!, y + n[1]!];
-    else if (c === "A") [x, y] = [n[5]!, n[6]!];
-    else if (c === "C") [x, y] = [n[4]!, n[5]!];
-    else continue;
-    xs.push(x); ys.push(y);
-  }
-  const left = Math.min(...xs), top = Math.min(...ys);
-  return { left, top, width: Math.max(...xs) - left, height: Math.max(...ys) - top, cx: (left + Math.max(...xs)) / 2 };
-}
 const filled = (token: string) => paths().filter(p => tokenOf(p.getAttribute("fill")) === token);
 /** The bars' segments, as the project each one is drawn in, with its box. */
 const segments = () => paths().flatMap(p => {
   const t = tokenOf(p.getAttribute("fill"));
   return t && COLORS.includes(t) ? [{ token: t, ...box(p.getAttribute("d")!) }] : [];
 });
-/** A dot's centre: the renderer writes a circle as an arc from its rightmost point, "M x y A r r …". */
-const centreX = (e: Element) => {
-  const [, x, r] = /^M(-?[\d.]+) -?[\d.]+A([\d.]+)/.exec(e.getAttribute("d") ?? "")!;
-  return Number(x) - Number(r);
-};
 const by = (fill: string, stroke: string) => paths().filter(p => tokenOf(p.getAttribute("fill")) === fill && tokenOf(p.getAttribute("stroke")) === stroke);
 const rateLine = () => paths().filter(p => p.getAttribute("fill") === "none" && tokenOf(p.getAttribute("stroke")) === "var(--critical)");
 const solid = () => by("var(--critical)", "var(--surface-1)");
@@ -88,11 +58,7 @@ const selection = () => paths().filter(p => tokenOf(p.getAttribute("fill")) === 
 beforeEach(() => {
   setOrder(PROJECTS);
   COLORS = PROJECTS.map(color);
-  const real = window.getComputedStyle.bind(window);
-  vi.spyOn(window, "getComputedStyle").mockImplementation((el: Element, pseudo?: string | null) => {
-    if (!(el instanceof HTMLElement) || el.dataset.chartProbe === undefined) return real(el, pseudo);
-    return { color: resolved(/;color:(.*)$/.exec(el.getAttribute("style") ?? "")![1]!) } as CSSStyleDeclaration;
-  });
+  probeColors();
 });
 afterEach(() => setOrder([]));
 
@@ -253,7 +219,7 @@ describe("by week in a narrow box", () => {
     expect(Math.abs(box(selection()[0]!.getAttribute("d")!).cx - newest.cx)).toBeLessThanOrEqual(.5);
     const label = [...plot().querySelectorAll("svg text")].find(t => t.textContent === "Week of Nov 16")!;
     expect(label.getAttribute("text-anchor")).toBe("end");
-    expect(Number(/translate\(([\d.]+)/.exec(label.getAttribute("transform") ?? "")?.[1] ?? label.getAttribute("x"))).toBeLessThanOrEqual(width);
+    expect(textX(label)).toBeLessThanOrEqual(width);
     unmount();
   });
 
@@ -272,7 +238,7 @@ describe("by week in a narrow box", () => {
     await waitFor(() => expect(filled("var(--series-1)")).toHaveLength(11));
     const text = [...plot().querySelectorAll("svg text")].find(t => t.textContent?.startsWith("Peak "))!;
     expect(text.textContent).toMatch(/^Peak 9 commits · Week of /);
-    const x = Number(/translate\(([\d.]+)/.exec(text.getAttribute("transform") ?? "")?.[1] ?? text.getAttribute("x"));
+    const x = textX(text);
     const w = per(text.textContent!, /font-size:\s*([\d.]+px)/.exec(text.getAttribute("style") ?? "")![1]!);
     const left = x - { start: 0, middle: w / 2, end: w }[text.getAttribute("text-anchor") as "start" | "middle" | "end"];
     const layout = workLayout(workModel(data, "commits", null), 1);

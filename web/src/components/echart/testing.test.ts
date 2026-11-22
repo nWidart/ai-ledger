@@ -77,6 +77,22 @@ describe("the fake ECharts runtime", () => {
     chart.zoomTo(5, 14);
     chart.setOption({}, { replaceMerge: ["dataZoom"] });
     expect(chart.shown).toEqual({ from: 0, to: 29 });
+
+    // A slider of seven points at least widens a narrower window as ECharts 6.1 does, and no drag makes one.
+    chart.setOption({ dataZoom: [{ type: "slider", minValueSpan: 6 }] });
+    const held = (p: Record<string, number>) => { chart.dispatchAction({ type: "dataZoom", ...p }, { silent: true }); return chart.shown; };
+    expect([
+      held({ startValue: 10, endValue: 15 }), held({ startValue: 10, endValue: 12 }), held({ startValue: 0, endValue: 2 }),
+      held({ startValue: 24, endValue: 26 }), held({ startValue: 27, endValue: 29 }), held({ start: 40, end: 50 }),
+    ]).toEqual([{ from: 10, to: 16 }, { from: 10, to: 16 }, { from: 0, to: 6 }, { from: 23, to: 29 }, { from: 23, to: 29 }, { from: 12, to: 18 }]);
+    chart.setOption({ dataZoom: [{ startValue: 10, endValue: 12 }] });
+    expect(chart.shown).toEqual({ from: 10, to: 16 });
+    expect(() => chart.zoomTo(14, 19)).toThrow("under 7 points");
+    // On an axis no longer than the span, ECharts shows every point.
+    const short = await chartOf(6, { dataZoom: [{ type: "slider", minValueSpan: 6 }] });
+    short.dispatchAction({ type: "dataZoom", startValue: 1, endValue: 3 });
+    expect(short.shown).toEqual({ from: 0, to: 5 });
+    expect(() => short.zoomTo(1, 3)).toThrow("under 6 points");
   });
 
   // Each step below keeps the items ECharts 6.1 keeps for the same calls (its getOption() in jsdom with the SVG renderer),

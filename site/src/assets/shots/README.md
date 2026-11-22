@@ -28,7 +28,7 @@ Only the shots a page shows are kept: a shot no page references is deleted, and 
 | `context-fills` | "What fills context": by tool and by MCP server. | Context |
 | `context-cost` | "Cost": what context costs. | Context |
 | `errors-summary` | The summary figures at the top. | Errors |
-| `errors-chart` | "Errors by type": failed tool calls over time. | Errors |
+| `errors-chart` | "Errors by type": the error rate line over stacked failed calls per day, with the zoom slider under the date labels. | Errors |
 | `errors-types` | "Error types": the table of types, counts and change. | Errors |
 | `errors-detail` | "Where to start": error types with a ready-made fix, and the fastest rising. | Errors, First tour, Kill repeated tool failures |
 | `limits-windows` | The four open plan windows: Claude Code and Codex, weekly and 5-hour, each with its pace cone chart and its headroom, pace and top project footer. | Limits, First tour, Stop hitting plan limits |

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CustomSeriesRenderItemAPI, CustomSeriesRenderItemParams } from "./echarts";
 import { dayAxis, peakLabelAt } from "../chart";
 import {
-  baseOption, categoryAxis, FRAME_AXES, labelAnchor, lineDots, lineSeries, pointLabel, selectionMark, SLIDER_ROOM, sliderTrend, trackAxes, trackLayout,
+  axisTitle, baseOption, categoryAxis, FRAME_AXES, labelAnchor, labelWidth, lineDots, lineSeries, pointLabel, selectionMark, SLIDER_ROOM, sliderTrend, trackAxes, trackLayout,
   tracksOption, valueAxis, zoomSlider, type OptionEnv,
 } from "./option";
 import { sliderShadowOf } from "./testing";
@@ -81,6 +81,59 @@ describe("valueAxis", () => {
   });
 });
 
+describe("axisTitle", () => {
+  it("names a track: left-aligned at its top in the secondary ink at weight 500, in full where it fits the plot", () => {
+    expect(axisTitle(env(), "Rate", 275)).toEqual({
+      name: "Rate", nameLocation: "end", nameGap: 7,
+      nameTextStyle: { align: "left", color: "ink-secondary", fontSize: 11, fontWeight: 500 },
+    });
+  });
+
+  it("doubles the gap and the font size at text scale 2", () => {
+    const one = axisTitle(env(), "Rate", 275), two = axisTitle(env({ textScale: 2 }), "Rate", 275);
+    expect(two.nameGap).toBe(2 * (one.nameGap as number));
+    expect(two.nameTextStyle!.fontSize).toBe(2 * (one.nameTextStyle!.fontSize as number));
+  });
+
+  it("cuts a title wider than the plot with an ellipsis by its width at weight 500, and drops it where no ellipsis fits", () => {
+    stubCanvas(); // weight 500: 4.5px a character at 11px
+    const title = "Error rate, % of tool calls";
+    expect(axisTitle(env(), title, 100).name).toBe("Error rate, % of tool…"); // 22 characters, 99px; at weight 400 it would keep 25
+    expect(axisTitle(env({ textScale: 2 }), title, 200).name).toBe("Error rate, % of tool…"); // twice the size in twice the room
+    expect(axisTitle(env(), title, 4).name).toBe("");
+    // By grapheme: an emoji of four UTF-16 units and a combining mark are kept whole or left out whole.
+    expect(axisTitle(env(), "ab👍🏽cd", 18).name).toBe("ab…");
+    expect(axisTitle(env(), "Cafés", 25).name).toBe("Caf…");
+    expect(axisTitle(env(), "👍🏽", 10).name).toBe("…");
+  });
+});
+
+// A canvas whose text is 5px a character at 11px in weight 600 or more, 4.5px at 500 and 4px below, and a record of the
+// fonts measured.
+const fonts: string[] = [];
+const stubCanvas = () => {
+  const ctx = {
+    font: "",
+    measureText(t: string) {
+      fonts.push(this.font);
+      const [, weight, px] = /^(\d+) (\d+(?:\.\d+)?)px/.exec(this.font)!;
+      return { width: t.length * (+weight! >= 600 ? 5 : +weight! >= 500 ? 4.5 : 4) * +px! / 11 };
+    },
+  };
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+};
+
+describe("labelWidth", () => {
+  it("measures in the chart's font at its size, wider for weight 600 than for the default 400", () => {
+    fonts.length = 0;
+    stubCanvas();
+    expect(labelWidth(env(), "0123456789")).toBe(40);
+    expect(labelWidth(env(), "0123456789", 600)).toBe(50);
+    expect(labelWidth(env({ textScale: 2 }), "0123456789")).toBe(80);
+    expect(fonts).toEqual([400, 600, 400].map((w, i) => `${w} ${i === 2 ? 22 : 11}px ${baseOption(env()).textStyle.fontFamily}`));
+  });
+});
+
 describe("pointLabel", () => {
   // Draw the label through renderItem with a stubbed coordinate system laid out as dayAxis lays out the same plot.
   const draw = (s: number, i: number) => {
@@ -126,9 +179,8 @@ describe("pointLabel", () => {
   // The label measured in its drawn font: a canvas whose text is 5px a character at 11px (the long label below is 160px,
   // as "Peak 66 sessions · Week of Nov 2" is 170px in Chromium), drawn over 11 weekly bars in a 343px box's 275px plot.
   it("measures the text in its font, keeps it inside the plot at every bar, and draws none in a plot narrower than it", () => {
-    const fonts: string[] = [];
-    const ctx = { font: "", measureText(t: string) { fonts.push(this.font); return { width: t.length * 5 * parseFloat(/(\d+)px/.exec(this.font)![1]!) / 11 }; } };
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+    fonts.length = 0;
+    stubCanvas();
     const long = "Peak 66 sessions · Week of Nov 2", plot = { x: 52, y: 20, width: 275, height: 120 }, band = plot.width / 11;
     const drawAt = (s: number, i: number) => {
       const series = pointLabel(env({ textScale: s }), { index: i, value: 5, text: long });

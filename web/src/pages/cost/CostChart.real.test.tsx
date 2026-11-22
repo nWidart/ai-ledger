@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
 import { setOrder } from "../../colors";
+import { colorOf, colorTokens, probeColors } from "../../components/echart/realTesting";
 import { dayRange } from "../../format";
 import { renderApp } from "../../testing";
 import { CostChart } from "./CostChart";
@@ -12,14 +13,6 @@ import type { Stack } from "./cost";
 // that the option is one ECharts accepts and draws: SVG paths in the stacking's colors, a stack switch that leaves no path
 // of the old stacking, and an unmount that takes the drawing with it.
 vi.unmock("../../components/echart/load");
-
-// jsdom resolves no var(), so every token would compute to black. The color probe answers each token with an rgb() of its
-// own, which the drawing's fills can be told apart by.
-const rgb = new Map<string, string>();
-const resolved = (token: string) => {
-  if (!rgb.has(token)) rgb.set(token, `rgb(${rgb.size + 1}, 100, 200)`);
-  return rgb.get(token)!;
-};
 
 const days = dayRange("2026-10-16", "2026-11-04");
 const row = usage.daily[0]!;
@@ -36,7 +29,7 @@ const chart = (stack: Stack) => <CostChart d={d} metric="cost" onMetric={() => {
 const plot = () => document.querySelector<HTMLElement>(".echart-plot")!;
 /** The fills of the drawn paths, as the token each one resolved from. */
 const fills = () => {
-  const names = new Map([...rgb].map(([token, c]) => [c, token]));
+  const names = colorTokens();
   return new Set([...plot().querySelectorAll("svg path")].map(p => names.get(p.getAttribute("fill") ?? "")).filter(Boolean));
 };
 /** Waits for the next drawing: ECharts paints on an animation frame. */
@@ -48,11 +41,7 @@ const drawnWith = async (want: string[], gone: string[] = []) => waitFor(() => {
 
 beforeEach(() => {
   setOrder(["A", "B"]);
-  const real = window.getComputedStyle.bind(window);
-  vi.spyOn(window, "getComputedStyle").mockImplementation((el: Element, pseudo?: string | null) => {
-    if (!(el instanceof HTMLElement) || el.dataset.chartProbe === undefined) return real(el, pseudo);
-    return { color: resolved(/;color:(.*)$/.exec(el.getAttribute("style") ?? "")![1]!) } as CSSStyleDeclaration;
-  });
+  probeColors();
 });
 afterEach(() => setOrder([]));
 
@@ -85,14 +74,14 @@ it("keeps the day read in its kinds' colors, and draws nothing new over it but t
   const paints = () => [...plot().querySelectorAll("svg path")].filter(p => !p.closest("clipPath"))
     .flatMap(p => [p.getAttribute("fill"), p.getAttribute("stroke")]).filter((c): c is string => !!c && c !== "none");
   // The paths filled with a token's color: the segments, each in its kind's color.
-  const segments = () => { const tokens = new Set(rgb.values()); return [...plot().querySelectorAll("svg path")].filter(p => tokens.has(p.getAttribute("fill") ?? "")).length; };
+  const segments = () => { const tokens = colorTokens(); return [...plot().querySelectorAll("svg path")].filter(p => tokens.has(p.getAttribute("fill") ?? "")).length; };
   const before = { segments: segments(), paints: new Set(paints()) };
   const group = screen.getByRole("group", { name: /per day/ });
   act(() => group.focus());
   // Day 18 of 20: under the 7-day average, and not today's hatched bar.
   fireEvent.keyDown(group, { key: "End" });
   fireEvent.keyDown(group, { key: "ArrowLeft" });
-  const text = rgb.get("var(--text-primary)")!.replaceAll(" ", "");
+  const text = colorOf("var(--text-primary)").replaceAll(" ", "");
   await waitFor(() => expect(paints()).toContain(text)); // the band: the text ink at 6%
   await new Promise(settled => setTimeout(settled, 100)); // a highlight is drawn on a later frame than the band
   expect(segments()).toBe(before.segments);

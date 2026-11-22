@@ -17,23 +17,34 @@ export interface StackRect { j: number; x: number; y: number; width: number; hei
  * its left edge `x` and its width `w`. A zero value has no rectangle. A positive segment keeps at least 1px, so a thin share
  * is never drawn zero tall while its tooltip gives it, and every segment but the first has a 2px gap below it: its slot is at
  * least 3px. The others shrink to keep the bar its height, so no segment paints over another. When the minimums add up to
- * more than the bar's height, every segment keeps its minimum and the bar rises above `top`: five segments on a 2px bar
- * make a 13px bar. The top segment gets a 3px top radius when it is taller than 4px.
+ * more than the bar's height, the bar keeps its height, or 1px when it is shorter, so a bar is never taller than one of a
+ * larger total: the gaps shrink first, every segment keeping 1px, and on a bar shorter than 1px per segment there are no
+ * gaps and the segments share it equally. Five segments on an 8px bar are 1px each over .75px gaps. The top segment gets a
+ * 3px top radius when it is taller than 4px.
  */
 export function stackRects(values: readonly number[], y0: number, top: number, x: number, w: number): StackRect[] {
-  const segs = values.flatMap((v, j) => (v > 0 ? [{ v, j }] : []));
-  const slots = stackHeights(segs.map(s => s.v), y0 - top, segs.map((_, n) => (n ? 3 : 1)));
+  const segs = values.flatMap((v, j) => (v > 0 ? [{ v, j }] : [])), count = segs.length, h = y0 - top;
+  let slots: number[], gap = 2;
+  if (3 * count - 2 <= h) slots = stackHeights(segs.map(s => s.v), h, segs.map((_, k) => (k ? 3 : 1)));
+  else {
+    const tall = Math.max(h, 1);
+    gap = count > 1 ? Math.min(2, Math.max(0, (tall - count) / (count - 1))) : 0;
+    const seg = (tall - gap * (count - 1)) / count;
+    slots = segs.map((_, k) => (k ? seg + gap : seg));
+  }
   let base = y0;
   return segs.map((s, n) => {
-    const y = base - slots[n]!, height = slots[n]! - (n ? 2 : 0);
+    const y = base - slots[n]!, height = slots[n]! - (n ? gap : 0);
     base = y;
     return { j: s.j, x, y, width: w, height, r: n === segs.length - 1 && height > 4 ? [3, 3, 0, 0] : 0 };
   });
 }
 
 export interface StackSeriesInput {
-  /** The stack's kinds, bottom first: `k` names the segment, `c` is its CSS color, such as "var(--proj-2)". */
-  kinds: readonly { k: string; c: string }[];
+  /** The stack's kinds, bottom first: `k` names the segment, `c` is its CSS color, such as "var(--proj-2)", and `o`, when
+   *  given, its fill's opacity from 0 to 1 (a fainter segment, whose forced-colors edge stays whole); left out, the
+   *  segment is drawn opaque. A hatched day's stripes keep their own opacity. */
+  kinds: readonly { k: string; c: string; o?: number }[];
   /** Per day, the drawn value of each kind, in `kinds` order. */
   values: readonly (readonly number[])[];
   /** Whether day i is drawn hatched, as a day still in progress. */
@@ -66,7 +77,8 @@ export function stackSeries({ kinds, values, hatched, env, width = barWidth, id 
     if (!rects.length) return null;
     const shape = ({ x, y, width, height, r }: StackRect) => ({ x, y, width, height, r });
     const edge = env.forced ? { stroke: env.ink.text, lineWidth: .75 } : {};
-    const children = rects.map(s => ({ type: "rect" as const, name: kinds[s.j]!.k, shape: shape(s), style: { fill: colors[s.j], ...edge } }));
+    // A fainter kind's fill alone is faint: its forced-colors edge stays whole, so the segment keeps its outline.
+    const children = rects.map(s => ({ type: "rect" as const, name: kinds[s.j]!.k, shape: shape(s), style: { fill: colors[s.j], ...edge, ...(kinds[s.j]!.o == null ? {} : { fillOpacity: kinds[s.j]!.o }) } }));
     if (hatched(i)) {
       // `style.decal` takes a decal object here; ECharts turns it into the pattern zrender's type names.
       for (const s of rects) children.push({ type: "rect", name: `${kinds[s.j]!.k}-hatch`, shape: shape(s), style: { fill: "none", opacity: .6, decal } as never });

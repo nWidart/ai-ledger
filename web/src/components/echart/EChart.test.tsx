@@ -254,7 +254,8 @@ describe("EChart reading", () => {
     expect(key("ArrowDown")).toBe(true);
     key("ArrowRight");
     expect(prevented(box())).toEqual([]);
-    expect(readout()).toBe("Mon: $1.00"); // Alt+Escape did not close it, Ctrl+Enter did not activate it
+    expect(key(" ")).toBe(true); // a chart that did not ask for Space leaves it to the page
+    expect(readout()).toBe("Mon: $1.00"); // Alt+Escape did not close it, Ctrl+Enter did not activate it, nor did Space
   });
 
   it("reads nothing in a chart with no points", async () => {
@@ -266,32 +267,48 @@ describe("EChart reading", () => {
 
   it("activates the point being read on Enter, and only with a reading open", async () => {
     const onActivate = vi.fn<(i: number) => void>();
-    render(show({ onActivate }));
+    render(show({ onActivate, keys: { space: true } }));
     await drawn();
     expect(key("Enter")).toBe(true);
+    expect(key(" ")).toBe(false); // Space is the chart's with nothing read too: the page does not scroll under it
     expect(onActivate).not.toHaveBeenCalled();
     key("ArrowRight");
     key("ArrowRight");
     expect(key("Enter")).toBe(false);
     expect(onActivate.mock.calls).toEqual([[1]]);
     expect(readout()).toBe(""); // the reading ends with the selection, as it does today
+
+    // Space, in a chart that takes it, does what Enter does; with a modifier it is the browser's (Shift+Space scrolls up).
+    key("ArrowRight");
+    const mods = [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { shiftKey: true }] as const;
+    expect(prevented(box(), mods.map(m => ({ key: " ", ...m })))).toEqual([]);
+    expect(onActivate.mock.calls).toEqual([[1]]);
+    expect(readout()).toBe("Mon: $1.00");
+    expect(key(" ")).toBe(false);
+    expect(onActivate.mock.calls).toEqual([[1], [0]]);
+    expect(readout()).toBe("");
   });
 
   it("leaves Enter alone in a chart that selects nothing", async () => {
-    render(show());
+    render(show({ keys: { space: true } }));
     await drawn();
     key("ArrowRight");
     expect(key("Enter")).toBe(true);
+    expect(key(" ")).toBe(true); // Space too, though the chart asked for it: nothing to activate
     expect(readout()).toBe("Mon: $1.00");
   });
 
   it("keeps the reading when the chart declines the activation, by Enter or by a click", async () => {
     // Tue has nothing to open: the handler says so, and the reading stays for the next key.
     const onActivate = vi.fn<(i: number) => boolean | void>(i => i !== 1);
-    render(show({ onActivate }));
+    render(show({ onActivate, keys: { space: true } }));
     const chart = await drawn();
     key("ArrowRight");
     key("ArrowRight");
+    expect(key(" ")).toBe(false); // Space goes the same way: the reading stays, so the key acts on Tue again
+    expect(onActivate.mock.calls).toEqual([[1]]);
+    expect(readout()).toBe("Tue: $2.00");
+    onActivate.mockClear();
     expect(key("Enter")).toBe(false); // still the chart's key
     expect(onActivate.mock.calls).toEqual([[1]]);
     expect(readout()).toBe("Tue: $2.00");
@@ -1173,8 +1190,6 @@ describe("EChart zoom", () => {
     rerender(viewed({ status: SELECTED }));
     expect(readout()).toBe(SELECTED); // alone, with the reading still open
     expect(chart.band).toBe(0);
-    key("Escape");
-    expect(readout()).toBe("");
   });
 
   it("keeps a status through a redraw that would drop a zoom sentence, and leaves a zoom sentence when the status empties", async () => {
@@ -1465,7 +1480,7 @@ describe("EChart status", () => {
     expect(said()).toBe(2);
   });
 
-  it("takes the region from an open reading, which stays open, and the end of that reading empties the region", async () => {
+  it("takes the region from an open reading, which stays open, and keeps it when that reading ends", async () => {
     const { rerender } = render(show({ view: "v", status: "" }));
     const chart = await drawn();
     key("ArrowRight");
@@ -1477,11 +1492,20 @@ describe("EChart status", () => {
     key("ArrowRight"); // the next key reads again
     expect(readout()).toBe("Wed: $3.00");
 
-    rerender(show({ view: "v", status: CLEARED }));
-    expect(readout()).toBe(CLEARED);
-    key("Escape");
-    expect(readout()).toBe("");
-    expect(tooltip()).toBeNull();
+    // The end of the reading drops only the reading's own sentence: Escape, blur or the pointer leaving.
+    const ends: [string, () => void, () => void][] = [
+      ["Escape", () => key("ArrowRight"), () => key("Escape")],
+      ["blur", () => key("ArrowRight"), () => fireEvent.blur(box())],
+      ["the pointer leaving", () => chart.fire("mousemove", chart.pointAt(1)), () => chart.fire("globalout")],
+    ];
+    for (const [n, [what, open, end]] of ends.entries()) {
+      const status = n % 2 ? SELECTED : CLEARED;
+      open();
+      rerender(show({ view: "v", status }));
+      const said = spoken();
+      end();
+      expect([what, readout(), tooltip(), said()]).toEqual([what, status, null, 0]);
+    }
   });
 
   it("keeps a status when the point of an open reading is gone", async () => {

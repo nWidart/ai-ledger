@@ -82,6 +82,8 @@ function withAlpha(color: string, a: number): string {
 }
 
 // One set of media query lists for every mounted chart, made when the first one subscribes and dropped with the last.
+// The page's web fonts are watched too: they swap in after a first drawing (index.html loads them with display=swap),
+// and every text a chart measures (labelWidth, axisTitle's cut) was measured in the fallback font until then.
 const subs = new Set<() => void>();
 let lists: MediaQueryList[] = [];
 const onChange = () => { epoch++; subs.forEach(f => f()); };
@@ -91,12 +93,14 @@ function subscribe(f: () => void) {
     epoch++;
     lists = QUERIES.map(q => matchMedia(q));
     lists.forEach(l => l.addEventListener("change", onChange));
+    document.fonts?.addEventListener("loadingdone", onChange);
   }
   subs.add(f);
   return () => {
     subs.delete(f);
     if (subs.size) return;
     lists.forEach(l => l.removeEventListener("change", onChange));
+    document.fonts?.removeEventListener("loadingdone", onChange);
     lists = [];
   };
 }

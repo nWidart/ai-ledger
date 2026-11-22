@@ -4,8 +4,9 @@
 // - Escape closes a tooltip the pointer opened while the focus is on another control;
 // - each week's sessions are drawn over its bar, as many as fit: every count at 1440px, fewer at a 320px window, none
 //   overlapping, each over its own week (26 weeks, from the store's weeks repeated back);
-// - a week of few sessions is drawn at half the width of the others, in the legend's colors, with the legend's key for it
-//   (the store has none: one week's sessions are cut to 3);
+// - a week of under 5 sessions is drawn at half the width of a week of 5 or more, in the legend's colors, with the legend's
+//   key for it (one week's sessions are cut to 3; the seed's judgment cut moves with the clock, so the counts are read
+//   from the payload);
 // - in a 343px box, the edges and the labels of checks.mjs;
 // - newer figures keep the week read and say nothing; the bars grow once, and not on a theme change or a refresh; under
 //   reduced motion they do not grow.
@@ -95,11 +96,15 @@ export async function judgments(h) {
       const x = centre(got.g, i), at = got.bars.filter(b => b.l <= x && b.r >= x);
       return { w: at[0] ? Math.round(at[0].w * 10) / 10 : 0, fills: [...new Set(at.map(b => b.fill))] };
     };
-    const others = [...Array(N).keys()].filter(i => i !== F).map(width), mine = width(F);
-    const full = others[0].w;
-    line(`week ${F + 1} of 3 sessions is drawn at half the others' width, in the legend's colors, with its key`,
-      others.every(o => Math.abs(o.w - full) <= .5) && Math.abs(mine.w - full / 2) <= .5 && mine.fills.length === 3 && mine.fills.every(f => got.keys.includes(f)) && got.few,
-      `${mine.w}px of ${full}px, parts ${mine.fills.map(f => `rgb(${f})`).join(", ")}; "Under 5 sessions" key ${got.few ? "shown" : "missing"}`);
+    // The counts as the page got them: the seed's judgment cut moves with the clock, so another week can be of few too.
+    const n = few(structuredClone(ins)).trend.map(w => w.n);
+    const ws = n.map((_, i) => width(i)), mine = ws[F];
+    const fulls = n.flatMap((k, i) => (k >= 5 ? [i] : [])), halves = n.flatMap((k, i) => (k > 0 && k < 5 ? [i] : []));
+    const full = ws[fulls[0]]?.w ?? 0;
+    line(`week ${F + 1} of 3 sessions, and every week of under 5, is drawn at half the width of a week of 5 or more, in the legend's colors, with its key`,
+      full > 0 && fulls.every(i => Math.abs(ws[i].w - full) <= .5) && halves.includes(F) && halves.every(i => Math.abs(ws[i].w - full / 2) <= .5)
+        && mine.fills.length === 3 && mine.fills.every(f => got.keys.includes(f)) && got.few,
+      `${fulls.length} weeks of 5 or more at ${fulls.map(i => ws[i].w).join(", ")}px; weeks ${halves.map(i => i + 1).join(", ")} of under 5 at ${halves.map(i => ws[i].w).join(", ")}px; week ${F + 1}'s parts ${mine.fills.map(f => `rgb(${f})`).join(", ")}; "Under 5 sessions" key ${got.few ? "shown" : "missing"}`);
     await c.shot(page, "few");
     await page.done();
   }

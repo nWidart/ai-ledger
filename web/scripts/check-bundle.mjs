@@ -11,14 +11,15 @@ const LIMITS = {
   index: 130, // catches a static import of ECharts into the entry (121.7 kB since main's shared tables)
   CostPage: 20,
   ActivityPage: 28,
-  // The chart code Cost's and Activity's charts share. Vite names a shared chunk after its first module, so the name
-  // (`zoomReset`) can change when modules move: the check then fails on "found 0" rather than skipping the chunk.
+  ErrorsPage: 26,
+  // The chart code the charts of Cost, Activity and Errors share. Vite names a shared chunk after its first module, so
+  // the name (`zoomReset`) can change when modules move: the check then fails on "found 0" rather than skipping the chunk.
   zoomReset: 9,
-  echarts: 195, // the lazy ECharts chunk, which Cost's and Activity's charts load
+  echarts: 195, // the lazy ECharts chunk, which the charts of Cost, Activity and Errors load
 };
 // The page chunks and the shared chunk, each of which must match exactly one file.
-const SINGLE = ["index", "CostPage", "ActivityPage", "zoomReset"];
-// How many `echarts-*.js` chunks the build must hold: one, which the charts of Cost and Activity load.
+const SINGLE = ["index", "CostPage", "ActivityPage", "ErrorsPage", "zoomReset"];
+// How many `echarts-*.js` chunks the build must hold: one, which the charts of Cost, Activity and Errors load.
 const ECHARTS_CHUNKS = 1;
 
 const files = readdirSync(assets).filter((f) => f.endsWith(".js"));
