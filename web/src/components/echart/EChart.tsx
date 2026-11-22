@@ -637,7 +637,7 @@ export function EChart({
       place(at);
     } else if (banded.current) chart.dispatchAction({ type: "updateAxisPointer", currTrigger: "leave" });
     banded.current = at != null;
-  }, [chart, at, option, env, shown]);
+  }, [chart, at, option, env, shown, zoom, drawing.keys]); // each of the draw effect's, but `shows`: a new view ends any reading
 
   // Last, so that on unmount every other cleanup still has a live chart. The load is asynchronous: StrictMode's first
   // mount is gone before it resolves and makes no chart.

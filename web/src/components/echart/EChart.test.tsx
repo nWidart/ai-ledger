@@ -858,6 +858,11 @@ describe("EChart zoom", () => {
     expect(readout()).toBe("Showing all 30 days.");
     key("+");
     expect(chart.shown).toEqual({ from: 15, to: 29 });
+    key("End");
+    key("-");
+    const actions = bands(chart).length;
+    rerender(zoomed({ onZoom, zoom: false })); // every point shows already: only the drawing changes
+    expect(bands(chart).slice(actions)).toEqual(["at 29"]); // the redraw dropped the band: back on its point
   });
 
   it("reports each step of a slider drag, and says the days shown once, when the drag ends", async () => {
@@ -1384,9 +1389,13 @@ describe("EChart zoom", () => {
     const more = [...MONTH.slice(0, 5), "Oct 5, late", ...MONTH.slice(5)];
     rerender(keyed(more));
     expect([chart.band, chart.shown]).toEqual([23, { from: 16, to: 30 }]);
-    rerender(keyed(more.slice(1)));
+    const option = fresh(30), left = more.slice(1);
+    rerender(keyed(left, { option }));
     expect([chart.band, chart.shown]).toEqual([22, { from: 15, to: 29 }]);
     expect(tooltip()!.textContent).toBe("Oct 23 tip");
+    const actions = bands(chart).length;
+    rerender(keyed(["Oct 1", ...left.slice(1)], { option })); // other keys outside the window, with the same option function
+    expect(bands(chart).slice(actions)).toEqual(["at 22"]); // the redraw dropped the band: back on its point
   });
 
   it("ends a reading whose day leaves, without asking for its words, and leaves a status the region holds", async () => {
