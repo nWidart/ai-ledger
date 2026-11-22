@@ -93,7 +93,9 @@ export interface EChartProps {
   zoom?: boolean;
   /** The points shown changed, by a key, the slider, `reset()`, a new view, or a redraw that left the zoom no slider or
    *  no room, or a redraw that moved the points shown to other indexes: null when every point shows. A redraw of the
-   *  same view that keeps the points shown at their indexes is not a change.
+   *  same view that keeps the points shown at their indexes is not a change. Turn `zoom` off in the render whose option
+   *  draws no slider: with it on, a redraw that moves the points shown and drops the slider tells of the moved window,
+   *  then of null, since the wrapper learns that the slider is gone only from the drawing.
    *  A control that leaves with the zoom (a "Show all" button) can lose the focus here with no one pressing it: the
    *  caller moves it to the box (`focus()`), as its own press does. */
   onZoom?: (shown: Shown | null) => void;
