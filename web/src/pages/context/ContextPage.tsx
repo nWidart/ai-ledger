@@ -74,11 +74,11 @@ export function ContextPage() {
   // The tab is part of the view, as a filter is: changing it replaces the history entry.
   const tab: ContextTab = search.tab ?? "overhead";
   const setTab = (t: ContextTab) => setSearch({ tab: t === "overhead" ? null : t }, { push: false });
+  // The key of the view on screen, from the payload, not the URL: a chart keeps its reading while the same view reloads.
+  const view = d ? [d.project, d.range, d.automated, d.source].join("|") : "";
   // A link to a section from before the tabs (#pressure, #d-breaks) opens the tab that holds it, keeping the fragment so a reload
   // opens it again, then scrolls to it, without moving focus (a direct load does not). Once the page has figures, and again
   // whenever only the fragment changes.
-  // The key of the view on screen, from the payload, not the URL: a chart keeps its reading while the same view reloads.
-  const view = d ? [d.project, d.range, d.automated, d.source].join("|") : "";
   const loaded = !!d;
   useEffect(() => {
     if (!loaded) return;

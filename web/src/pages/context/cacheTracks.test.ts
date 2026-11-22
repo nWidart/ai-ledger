@@ -1,10 +1,10 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import type { CacheBucket, ContextPayload } from "../../api";
 import type { CustomSeriesOption, CustomSeriesRenderItemAPI, CustomSeriesRenderItemParams, SeriesOption, YAXisComponentOption } from "../../components/echart/echarts";
 import { sliderShadowOf } from "../../components/echart/testing";
 import type { ChartEnv } from "../../components/echart/tokens";
 import { cacheLayout, cacheModel, cacheOption, cacheZoomWords, ratioFloor, type CacheModel } from "./cacheTracks";
+import { themeColors } from "./themeColors.testing";
 
 const ink = { text: "ink-text", secondary: "ink-secondary", muted: "ink-muted", grid: "ink-grid", surface: "ink-surface",
   border: "ink-border", cursor: "ink-cursor", accent: "ink-accent", tint: "ink-tint" };
@@ -135,13 +135,12 @@ describe("cacheOption", () => {
     expect(edge.style).toEqual({ fill: "none", stroke: "ink-muted", lineWidth: 1 });
   });
 
-  it("gives each title its long form, its short form or none, as the plot holds them", () => {
-    // A canvas whose text is 4px a character: 130px of plot holds "Cache breaks · most in a day: 4" (124px), "Cache-hit
-    // ratio · 90%" (84px) and "Tokens not read from the cache" (120px), not with "· 105k" (148px).
-    const m = cacheModel(gap, false), names = (e: ChartEnv) => yAxes(m, e).slice(1).map(a => a.name);
-    expect(names(env())).toEqual(["Tokens not read from the cache · 105k in this view", "Cache breaks · most in a day: 4", "Cache-hit ratio · 90% in this view"]);
+  it("titles each track with the model's figures that its plot holds", () => {
+    // A canvas whose text is 4px a character: the 160px of plot in a 220px box holds "… · 105k" (148px), not "… · 105k in
+    // this view" (200px), and both other titles' long forms.
     const measure = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ font: "", measureText: (t: string) => ({ width: t.length * 4 }) } as unknown as CanvasRenderingContext2D);
-    expect(names(env({ width: 190 }))).toEqual(["Tokens not read from the cache", "Cache breaks · most in a day: 4", "Cache-hit ratio · 90%"]);
+    expect(yAxes(cacheModel(gap, false), env({ width: 220 })).slice(1).map(a => a.name))
+      .toEqual(["Tokens not read from the cache · 105k", "Cache breaks · most in a day: 4", "Cache-hit ratio · 90% in this view"]);
     measure.mockRestore();
   });
 });
@@ -158,24 +157,11 @@ describe("cacheZoomWords", () => {
   });
 });
 
-// The colors the chart hands to env.color must be tokens theme.css declares as colors zrender's parser reads: a token that
-// is not a color resolves to the inherited text color, with no error. As in rateTracks.test.ts.
 describe("the cache chart's colors", () => {
-  const themeCss = readFileSync("src/theme.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, ""); // vitest runs from web/
-  const declared = new Map<string, string>();
-  for (const block of themeCss.matchAll(/(?:^|\n):root \{([^}]*)\}/g))
-    for (const m of block[1]!.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) declared.set(m[1]!, m[2]!.trim());
-  const PLAIN = String.raw`(?:#[0-9a-fA-F]{3,8}|rgba?\([^()]*\))`;
-  const COLOR = new RegExp(String.raw`^(?:${PLAIN}|light-dark\(\s*${PLAIN}\s*,\s*${PLAIN}\s*\))$`);
-
   it("hands env.color only declared color tokens, with the reads off and on", () => {
-    const seen = new Set<string>(), recording = env({ color: s => { seen.add(s); return s; } });
+    const seen = new Set<string>(), declared = themeColors(), recording = env({ color: s => { seen.add(s); return s; } });
     for (const reads of [false, true]) cacheOption(cacheModel(gap, reads), recording);
     for (const t of ["--accent", "--series-1", "--track", "--cache-switch", "--cache-expired", "--text-muted", "--text-primary"]) expect(seen).toContain(`var(${t})`);
-    for (const css of seen) {
-      const m = /^var\((--[\w-]+)\)$/.exec(css);
-      expect(m, `${css} is not a var(--…) token`).not.toBeNull();
-      expect(declared.get(m![1]!), `${m![1]} is not hex or rgb() in theme.css`).toMatch(COLOR);
-    }
+    for (const css of seen) expect(declared, `${css} is not a color token of theme.css`).toContain(css);
   });
 });

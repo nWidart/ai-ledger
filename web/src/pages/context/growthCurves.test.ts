@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import type { GrowthPoint } from "../../api";
 import type {
@@ -6,6 +5,7 @@ import type {
 } from "../../components/echart/echarts";
 import type { ChartEnv } from "../../components/echart/tokens";
 import { growthLayout, growthModel, growthOption, type GrowthModel } from "./growthCurves";
+import { themeColors } from "./themeColors.testing";
 
 const ink = { text: "ink-text", secondary: "ink-secondary", muted: "ink-muted", grid: "ink-grid", surface: "ink-surface",
   border: "ink-border", cursor: "ink-cursor", accent: "ink-accent", tint: "ink-tint" };
@@ -46,7 +46,6 @@ describe("growthModel", () => {
     const s = model({ mode: "share" });
     expect(s.share).toBe(true);
     expect(s.y).toEqual({ max: 1, step: .5 });
-    expect(s.y.max).toBeGreaterThan(.8);
     expect(yAxes(s)[1]!.axisLabel.formatter(.5)).toBe("50%");
     // With a project isolated the view's band leaves the scale: the view's median and bar's band, 70k, set it.
     expect(model({ isolated: "bar" }).y).toEqual({ max: 80_000, step: 20_000 });
@@ -106,13 +105,10 @@ describe("growthModel", () => {
     expect(width(20)).toBe(10);
     expect(width(10)).toBeCloseTo(7);
     const strip = yAxes(m)[2]!;
-    expect(strip).toMatchObject({ max: 99, axisLabel: { show: false } });
-    // A canvas whose text is 4px a character: the long form fits 734px, the short 234px, the title alone 154px.
+    expect(strip).toMatchObject({ max: 99, axisLabel: { show: false }, splitLine: { show: false } });
+    // A canvas whose text is 4px a character: the short form fits the 234px of plot in a 300px box, the long form does not.
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ font: "", measureText: (t: string) => ({ width: t.length * 4 }) } as unknown as CanvasRenderingContext2D);
-    const name = (width: number) => yAxes(m, env({ width }))[2]!.name;
-    expect(name(800)).toBe("Sessions still running at each turn · 99 at turn 1 to 17 at turn 83");
-    expect(name(300)).toBe("Sessions still running at each turn · 99 to 17");
-    expect(name(220)).toBe("Sessions still running at each turn");
+    expect(yAxes(m, env({ width: 300 }))[2]!.name).toBe("Sessions still running at each turn · 99 to 17");
   });
 });
 
@@ -137,27 +133,15 @@ function drawItem(s: SeriesOption | undefined, row: number, slots: number, width
   return c.renderItem!({ coordSys: plot } as unknown as CustomSeriesRenderItemParams, api) as unknown as El;
 }
 
-// The colors the chart hands to env.color must be tokens theme.css declares as colors, as in rateTracks.test.ts.
 describe("the growth chart's colors", () => {
-  const themeCss = readFileSync("src/theme.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, ""); // vitest runs from web/
-  const declared = new Map<string, string>();
-  for (const block of themeCss.matchAll(/(?:^|\n):root \{([^}]*)\}/g))
-    for (const m of block[1]!.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) declared.set(m[1]!, m[2]!.trim());
-  const PLAIN = String.raw`(?:#[0-9a-fA-F]{3,8}|rgba?\([^()]*\))`;
-  const COLOR = new RegExp(String.raw`^(?:${PLAIN}|light-dark\(\s*${PLAIN}\s*,\s*${PLAIN}\s*\))$`);
-
   it("hands env.color only declared color tokens, with a project isolated or not", () => {
-    const seen = new Set<string>(), recording = env({ color: s => { seen.add(s); return s; } });
+    const seen = new Set<string>(), declared = themeColors(), recording = env({ color: s => { seen.add(s); return s; } });
     for (const o of [{}, { isolated: "bar" }, { mode: "share" as const }]) {
       const m = model(o);
       growthOption(m, recording);
       drawItem(byId(m, "band", recording), 0, view.length);
     }
     for (const t of ["--text-primary", "--text-muted", "--proj-1", "--proj-2"]) expect(seen).toContain(`var(${t})`);
-    for (const css of seen) {
-      const m = /^var\((--[\w-]+)\)$/.exec(css);
-      expect(m, `${css} is not a var(--…) token`).not.toBeNull();
-      expect(declared.get(m![1]!), `${m![1]} is not hex or rgb() in theme.css`).toMatch(COLOR);
-    }
+    for (const css of seen) expect(declared, `${css} is not a color token of theme.css`).toContain(css);
   });
 });

@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { CustomSeriesOption, SeriesOption } from "../../components/echart/echarts";
 import type { ChartEnv } from "../../components/echart/tokens";
 import { dayLabel } from "../../format";
 import { weeksLayout, weeksModel, weeksOption, type WeeksModel } from "./startWeeks";
+import { themeColors } from "./themeColors.testing";
 
 const ink = { text: "ink-text", secondary: "ink-secondary", muted: "ink-muted", grid: "ink-grid", surface: "ink-surface",
   border: "ink-border", cursor: "ink-cursor", accent: "ink-accent", tint: "ink-tint" };
@@ -90,27 +90,12 @@ describe("weeksOption", () => {
   });
 });
 
-// The colors the option hands to env.color must be tokens theme.css declares as colors zrender's parser reads: a token that
-// is not a color resolves to the inherited text color, with no error (foundation, decision 4). As in rateTracks.test.ts.
 describe("the weekly start chart's colors", () => {
-  const strip = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
-  const themeCss = strip(readFileSync("src/theme.css", "utf8")); // vitest runs from web/
-  const declared = new Map<string, string>();
-  for (const block of themeCss.matchAll(/(?:^|\n):root \{([^}]*)\}/g))
-    for (const m of block[1]!.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) declared.set(m[1]!, m[2]!.trim());
-  const PLAIN = String.raw`(?:#[0-9a-fA-F]{3,8}|rgba?\([^()]*\))`;
-  const COLOR = new RegExp(String.raw`^(?:${PLAIN}|light-dark\(\s*${PLAIN}\s*,\s*${PLAIN}\s*\))$`);
-
   it("hands env.color only declared color tokens", () => {
-    const seen = new Set<string>();
+    const seen = new Set<string>(), declared = themeColors();
     const recording = env({ color: s => { seen.add(s); return s; } });
     for (const t of [trend, low]) weeksOption(weeksModel(t), recording);
     expect(seen.size).toBeGreaterThan(0);
-    for (const css of seen) {
-      const m = /^var\((--[\w-]+)\)$/.exec(css);
-      expect(m, `${css} is not a var(--…) token`).not.toBeNull();
-      expect(declared.has(m![1]!), `${m![1]} is not declared in theme.css`).toBe(true);
-      expect(declared.get(m![1]!), `${m![1]} is not hex or rgb()`).toMatch(COLOR);
-    }
+    for (const css of seen) expect(declared, `${css} is not a color token of theme.css`).toContain(css);
   });
 });

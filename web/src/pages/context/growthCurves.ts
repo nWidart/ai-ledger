@@ -123,7 +123,7 @@ export function growthOption(m: GrowthModel, env: ChartEnv): EChartsOption {
   const stripAxis = valueAxis(env, { max: m.strip.top, step: m.strip.top, format: v => num(v) });
   const y = [
     valueAxis(env, { ...m.y, format: m.share ? v => pct(v) : v => short(v) }),
-    { ...stripAxis, axisLabel: { ...stripAxis.axisLabel, show: false }, ...axisTitle(env, fitTitle(env, m.strip.title, m.strip.figures, plot), plot) },
+    { ...stripAxis, axisLabel: { ...stripAxis.axisLabel, show: false }, splitLine: { show: false }, ...axisTitle(env, fitTitle(env, m.strip.title, m.strip.figures, plot), plot) },
   ];
   const tracks = tracksOption(env, { layout, labels: m.labels, format: k => k, y });
   // The frame's labels: turn 1 and the round turns. tracksOption shows the last turn besides, right-aligned.

@@ -157,11 +157,30 @@ export function quadAtPixel(fit: MapFit, x: number, y: number): Quad | null {
   return quadAt(x >= fit.x30 ? START_LARGE_TOKENS : 0, y <= fit.y80 ? NEAR_LIMIT : 0);
 }
 
-/** The wash of the selected quadrant, the 30k and 80% lines, their labels and the four names, under the dots (z 1). One
- *  item, drawn at the fit's pixels. Every text has a 3px halo in the surface's color. */
+/** The selected quadrant's wash, under the axes' grid lines (z -1, the axes at 0) as the grid lines show through it: one item,
+ *  drawn at the fit's pixels. In forced colors a 2px frame in the highlight color, inset by half its line, and no fill. */
+function wash(fit: MapFit, env: OptionEnv, q: (typeof QUADS)[number]): CustomSeriesOption {
+  const { plot, x30, y80 } = fit, right = plot.x + plot.width, bottom = plot.y + plot.height;
+  const r = { x: q.heavy ? x30 : plot.x, y: q.full ? plot.y : y80, width: q.heavy ? right - x30 : x30 - plot.x, height: q.full ? y80 - plot.y : bottom - y80 };
+  const fill = env.color("var(--surface-2)");
+  return {
+    type: "custom",
+    id: "wash",
+    data: [[fit.model.domain[0], 0]],
+    encode: { x: 0, y: 1 },
+    silent: true,
+    z: -1,
+    renderItem: () => (env.forced
+      ? { type: "rect", emphasisDisabled: true, shape: { x: r.x + 1, y: r.y + 1, width: r.width - 2, height: r.height - 2 }, style: { fill: "none", stroke: env.ink.accent, lineWidth: 2 } }
+      : { type: "rect", emphasisDisabled: true, shape: r, style: { fill } }),
+  } as CustomSeriesOption;
+}
+
+/** The 30k and 80% lines, their labels and the four names, under the dots (z 1). One item, drawn at the fit's pixels. Every
+ *  text has a 3px halo in the surface's color. */
 function guides(fit: MapFit, env: OptionEnv, quad: Quad | null): CustomSeriesOption {
   const { plot, x30, y80 } = fit, right = plot.x + plot.width, bottom = plot.y + plot.height;
-  const { fontFamily } = baseOption(env).textStyle, size = LABEL * env.textScale, wash = env.color("var(--surface-2)");
+  const { fontFamily } = baseOption(env).textStyle, size = LABEL * env.textScale;
   const text = (t: string, at: TextPlace, o: { fill: string; size?: number; weight?: number; lineHeight?: number }) => ({
     type: "text", emphasisDisabled: true,
     style: { text: t, ...at, fontFamily, fontSize: o.size ?? size, fontWeight: o.weight ?? 400, lineHeight: o.lineHeight, fill: o.fill, stroke: env.ink.surface, lineWidth: 3 },
@@ -178,14 +197,6 @@ function guides(fit: MapFit, env: OptionEnv, quad: Quad | null): CustomSeriesOpt
     z: 1,
     renderItem: () => {
       const children: object[] = [];
-      const q = QUADS.find(x => x.id === quad);
-      if (q) {
-        const r = { x: q.heavy ? x30 : plot.x, y: q.full ? plot.y : y80, width: q.heavy ? right - x30 : x30 - plot.x, height: q.full ? y80 - plot.y : bottom - y80 };
-        // Forced colors: a 2px frame in the highlight color, inset by half its line, and no fill.
-        children.push(env.forced
-          ? { type: "rect", emphasisDisabled: true, shape: { x: r.x + 1, y: r.y + 1, width: r.width - 2, height: r.height - 2 }, style: { fill: "none", stroke: env.ink.accent, lineWidth: 2 } }
-          : { type: "rect", emphasisDisabled: true, shape: r, style: { fill: wash } });
-      }
       children.push(line(x30, plot.y, x30, bottom), line(plot.x, y80, right, y80),
         text("30k start", fit.startLabel, { fill: env.ink.secondary }), text(NEAR_TEXT, fit.nearLabel, { fill: env.ink.secondary }));
       for (const n of QUADS) {
@@ -235,10 +246,11 @@ function dots(fit: MapFit, env: OptionEnv, quad: Quad | null, color: (project: S
 }
 
 /** The map's ECharts option: one grid at the fit's plot, a log x axis labelled at the model's ticks, a y axis from 0 to 100% in
- *  fifths, the guides and the dots. Never animated: a dot sliding in would read as a session changing. quad: the selected
+ *  fifths, the selected quadrant's wash, the guides and the dots. Never animated: a dot sliding in would read as a session changing. quad: the selected
  *  quadrant, or null; color: a project's CSS color (`useColors`). */
 export function mapOption(fit: MapFit, env: OptionEnv, { quad, color }: { quad: Quad | null; color: (project: SessionPoint["project"]) => string }): EChartsOption {
   const { model, plot } = fit, s = env.textScale, title = { color: env.ink.secondary, fontSize: TITLE * s };
+  const selected = QUADS.filter(q => q.id === quad);
   return {
     ...baseOption(env),
     animation: false,
@@ -257,6 +269,6 @@ export function mapOption(fit: MapFit, env: OptionEnv, { quad, color }: { quad: 
       ...valueAxis(env, { max: 1, step: .2, format: v => `${Math.round(v * 100)}%` }),
       name: fit.yTitle, nameLocation: "middle", nameGap: 34 * s, nameMoveOverlap: false, nameTextStyle: title,
     },
-    series: [guides(fit, env, quad), dots(fit, env, quad, color)],
+    series: [...selected.map(q => wash(fit, env, q)), guides(fit, env, quad), dots(fit, env, quad, color)],
   };
 }

@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { SessionPoint } from "../../api";
 import { color, setOrder } from "../../colors";
@@ -6,6 +5,7 @@ import type { CustomSeriesOption, CustomSeriesRenderItemAPI, CustomSeriesRenderI
 import type { OptionEnv } from "../../components/echart/option";
 import type { Quad } from "./context";
 import { dotAt, fitLines, logFraction, mapFit, mapModel, mapOption, quadAtPixel, startDomain, startTicks, type MapFit } from "./mapDots";
+import { themeColors } from "./themeColors.testing";
 
 const pt = (id: string, o: Partial<SessionPoint> = {}): SessionPoint =>
   ({ session_id: id, project: "foo", source: "claude", first_ts: "2026-11-04T10:00:00.000Z", start: 10_000, peak: 50_000, window: 200_000, turns: 8, compactions: 0, title: null, ...o });
@@ -91,6 +91,7 @@ describe("dotAt and quadAtPixel", () => {
     expect(b.x - a.x).toBeGreaterThan(6);
     expect(dotAt(two, a.x + (b.x - a.x) / 3, a.y)).toBe(0);
     expect(dotAt(two, b.x - (b.x - a.x) / 3, a.y)).toBe(1);
+    expect(dotAt(two, (a.x + b.x) / 2, a.y)).toBe(1); // a tie: the newer
   });
 
   it("reads the quadrant under each corner of the plot, and none outside it", () => {
@@ -106,14 +107,15 @@ describe("dotAt and quadAtPixel", () => {
 // renderItem with a stubbed API that places a value as the fit does.
 interface El { type: string; shape: Record<string, number>; style: Record<string, unknown> }
 const seriesOf = (o: ReturnType<typeof mapOption>, id: string) => (o.series as SeriesOption[]).find(s => s.id === id) as CustomSeriesOption;
+/** The item's children, or the item when it has none. */
 function draw(f: MapFit, s: CustomSeriesOption, row: number): El[] {
   const data = (s.data as number[][])[row]!, { plot } = f;
   const api = {
     value: (d: number) => data[d]!,
     coord: ([v, share]: number[]) => [plot.x + logFraction(v!, f.model.domain) * plot.width, plot.y + plot.height * (1 - share!)],
   } as unknown as CustomSeriesRenderItemAPI;
-  const el = s.renderItem!({ coordSys: plot } as unknown as CustomSeriesRenderItemParams, api) as unknown as { children: El[] };
-  return el.children;
+  const el = s.renderItem!({ coordSys: plot } as unknown as CustomSeriesRenderItemParams, api) as unknown as El & { children?: El[] };
+  return el.children ?? [el];
 }
 const option = (f: MapFit, quad: Quad | null, e = env()) => mapOption(f, e, { quad, color });
 
@@ -143,7 +145,8 @@ describe("mapOption", () => {
   });
 
   it("frames the selected quadrant and edges the dots and rings in the text color in forced colors", () => {
-    const f = fit(), wash = (e: OptionEnv) => draw(f, seriesOf(option(f, "both", e), "guides"), 0)[0]!;
+    const f = fit(), wash = (e: OptionEnv) => draw(f, seriesOf(option(f, "both", e), "wash"), 0)[0]!;
+    expect(seriesOf(option(f, null), "wash")).toBeUndefined();
     expect(wash(env())).toMatchObject({ type: "rect", shape: { x: f.x30, y: f.plot.y }, style: { fill: "var(--surface-2)" } });
     expect(wash(env({ forced: true })).style).toEqual({ fill: "none", stroke: "ink-accent", lineWidth: 2 });
     const [ring, dot] = draw(f, seriesOf(option(f, null, env({ forced: true })), "dots"), 0);
@@ -151,26 +154,14 @@ describe("mapOption", () => {
   });
 });
 
-// The colors the map hands to env.color must be tokens theme.css declares as colors zrender's parser reads, as in rateTracks.test.ts.
 describe("the session map's colors", () => {
-  const themeCss = readFileSync("src/theme.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, ""); // vitest runs from web/
-  const declared = new Map<string, string>();
-  for (const block of themeCss.matchAll(/(?:^|\n):root \{([^}]*)\}/g))
-    for (const m of block[1]!.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) declared.set(m[1]!, m[2]!.trim());
-  const PLAIN = String.raw`(?:#[0-9a-fA-F]{3,8}|rgba?\([^()]*\))`;
-  const COLOR = new RegExp(String.raw`^(?:${PLAIN}|light-dark\(\s*${PLAIN}\s*,\s*${PLAIN}\s*\))$`);
-
   it("hands env.color only declared color tokens", () => {
     setOrder(["foo"]);
-    const seen = new Set<string>(), recording = env({ color: s => { seen.add(s); return s; } }), f = fit();
+    const seen = new Set<string>(), declared = themeColors(), recording = env({ color: s => { seen.add(s); return s; } }), f = fit();
     const o = option(f, "lean", recording);
-    draw(f, seriesOf(o, "guides"), 0);
+    draw(f, seriesOf(o, "wash"), 0);
     f.model.points.forEach((_, i) => draw(f, seriesOf(o, "dots"), i));
     for (const css of ["var(--surface-2)", color("foo"), "var(--proj-other)"]) expect(seen).toContain(css);
-    for (const css of seen) {
-      const m = /^var\((--[\w-]+)\)$/.exec(css);
-      expect(m, `${css} is not a var(--…) token`).not.toBeNull();
-      expect(declared.get(m![1]!), `${m![1]} is not hex or rgb() in theme.css`).toMatch(COLOR);
-    }
+    for (const css of seen) expect(declared, `${css} is not a color token of theme.css`).toContain(css);
   });
 });
