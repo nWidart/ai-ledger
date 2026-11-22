@@ -23,6 +23,8 @@ import "./quadrant.css";
 interface Reading { id: string; keyed: boolean; text: string; n: number }
 
 const unpricedChip = <> <span className="chip warn">Unpriced</span></>;
+/** The mark's radius: a ring around the dot read. */
+const MARK_R = 8;
 
 // The data table: one row per dot, costliest first; the session's name is a button, and the row opens its sheet.
 const COLUMNS: Column<Dot>[] = [
@@ -90,7 +92,13 @@ export function SessionQuadrant({ rows, totalSessions, project, view }: { rows: 
     const el = box.current, tip = tipEl.current;
     if (!el || !tip || at == null) return;
     const r = el.getBoundingClientRect(), d = fit.dots[at]!, p = pointer.current ?? { x: r.left + d.px, y: r.top + d.py };
-    const pos = tipAt(el, tip, p.x, p.y);
+    const pos = tipAt(el, tip, p.x, p.y), w = tip.offsetWidth, h = tip.offsetHeight;
+    // Beside the dot when it fits in the box on one side; in a narrow box, or beside a long name, that would cover the dot
+    // and its neighbours: then above the dot (below it at the window's top), inside the box.
+    if (pos.left < d.px + MARK_R + 4 && pos.left + w > d.px - MARK_R - 4 || pos.left < 0 || pos.left + w > r.width) {
+      pos.left = Math.max(0, Math.min(d.px - w / 2, r.width - w));
+      pos.top = r.top + d.py - MARK_R - 4 - h >= 0 ? d.py - MARK_R - 4 - h : d.py + MARK_R + 4;
+    }
     tip.style.left = `${pos.left}px`;
     tip.style.top = `${pos.top}px`;
   };
@@ -157,8 +165,9 @@ export function SessionQuadrant({ rows, totalSessions, project, view }: { rows: 
         onBlur={ev => { if (!box.current?.contains(ev.relatedTarget as Node | null)) read(null); }}>
         {note.none ? <p className="empty">{note.none}</p> : <>
           <EChart id="session-quadrant" label={groupLabel(model, project)} height={fit.height} option={option} view={view} points={0} read={() => ""} />
-          {dot && <svg className="quad-mark" aria-hidden="true" width={fit.width} height={fit.height}><circle cx={dot.px} cy={dot.py} r={8} /></svg>}
-          {tip && <div ref={tipEl} className="tip" role="tooltip">
+          {dot && <svg className="quad-mark" aria-hidden="true" width={fit.width} height={fit.height}><circle cx={dot.px} cy={dot.py} r={MARK_R} /></svg>}
+          {/* The app's stylesheet hides a .tip until its chart shows it. */}
+          {tip && <div ref={tipEl} className="tip" role="tooltip" style={{ display: "block" }}>
             <div className="tname"><b>{tip.name}</b></div>
             {tip.rows.map(([k, v]) => <div key={k} className="row"><span>{k}</span><b>{v}{k === "Est. cost" && tip.unpriced && unpricedChip}</b></div>)}
             {tip.quadrant && <div>{tip.quadrant}</div>}
