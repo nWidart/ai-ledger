@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { usageUrl, viewOf, type SessionSort, type Span, type Totals, type UsagePayload, type View } from "../../api";
+import { usageUrl, viewOf, type Day, type SessionSort, type Span, type Totals, type UsagePayload, type View } from "../../api";
 import { setOrder } from "../../colors";
 import { motion, useCountUp } from "../../components/chart";
 import { agentName, viewName } from "../../components/Filters";
@@ -13,7 +13,7 @@ import { DocsLink } from "../../components/DocsLink";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
 import { dayLabel, dur, num, pct, plural } from "../../format";
-import { judged, setSearch, usePathname, useSearchOf, useView } from "../../url";
+import { judged, setSearch, usePathname, useSearchOf, useView, type Range } from "../../url";
 import { noFacets } from "../../components/facets";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
@@ -26,6 +26,8 @@ import { firstWorkDay, flakyTools, reaches, shortTool, spanDays, type WorkMetric
 import { CHART_ID, WorkPanel } from "./WorkChart";
 import type { WorkPick } from "./workTracks";
 import { panelId, Workbench } from "./Workbench";
+import { ActivityCalendar } from "./calendar/ActivityCalendar";
+import { rangeFor } from "./calendar/calendarDays";
 import { preloadECharts } from "../../components/echart/load";
 import "./activity.css";
 
@@ -197,6 +199,10 @@ function Overview({ views }: { views: ReactNode }) {
   // The payload on screen is the previous view's while a new view loads: the chart then takes no pick, which would write
   // that view's day or week into the new one.
   const d = data, current = !!d && !previous;
+  // The range the payload counts: the server echoes the view's, one of the ranges the URL takes.
+  const shownRange = (d?.range ?? 0) as Range;
+  // The calendar's 53 weeks follow the view's filters, not its range: a change of range keeps them.
+  const cal = useApi(queries.calendar(want), { keepPrevious: true }), calCurrent = !!cal.data && !cal.previous;
   // A week in the URL that the view does not reach is dropped, once the view's own figures are in.
   useEffect(() => {
     if (d && current && search.week && !reaches(search.week, d)) setSearch({ week: null }, { push: false });
@@ -237,6 +243,16 @@ function Overview({ views }: { views: ReactNode }) {
   const pick = (p: WorkPick) => {
     setSearch({ q: null, near: null, ...(p.week ? { week: p.day, day: null } : { day: p.day, week: null }) }, { push: false });
     setSessSort([]);
+  };
+  // A calendar pick (decision 7): a day outside the range first widens it, a write of its own that drops the earlier
+  // selection and that Back undoes; then the day, as the work chart's pick writes it. The tabs, above the calendar, come
+  // into view with the focus on the selected one's panel, through the goal once the page has drawn the pick.
+  const pickDay = (day: Day) => {
+    const range = rangeFor(day, cal.data!.end, shownRange);
+    if (range !== shownRange) setSearch({ range });
+    setSearch({ q: null, near: null, day, week: null }, { push: false });
+    setSessSort([]);
+    setGoal({ tab, to: panelId(tab) });
   };
   const clear = () => setSearch({ day: null, week: null }, { push: false });
   // The panel's own clear removes its button: the focus goes to the chart, as the chip's does.
@@ -283,6 +299,10 @@ function Overview({ views }: { views: ReactNode }) {
             <TestsList tests={(dv ?? d).failed_tests} total={dv ? dv.tests_failed : d.totals.tests_failed} range={d.range} on={on} />
           </div>}
         </Workbench>
+        {cal.data ? <ActivityCalendar d={cal.data} metric={metric} range={shownRange} selected={sel}
+          onPick={current && calCurrent ? pickDay : undefined} onClear={clear} />
+          : cal.error && <section className="panel sect cal" id="calendar" aria-labelledby="calendarTitle"><h2 id="calendarTitle">Activity calendar</h2>
+            <p className="empty" role="alert">Could not load the calendar ({cal.error.message}). <button type="button" className="linkish" onClick={cal.retry}>Retry</button></p></section>}
       </>}
     </main>
   );

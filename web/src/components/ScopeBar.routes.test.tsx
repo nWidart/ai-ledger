@@ -11,6 +11,7 @@ import errors from "../__fixtures__/errors";
 import insights from "../__fixtures__/insights";
 import limits from "../__fixtures__/limits";
 import usage from "../__fixtures__/usage";
+import calendar from "../__fixtures__/calendar";
 
 // Errors' code waits for open(): the first test to show Errors holds it back; the module is then loaded for the rest.
 const chunk = vi.hoisted(() => { let open!: () => void; const gate = new Promise<void>(r => { open = r; }); return { gate, open }; });
@@ -25,7 +26,7 @@ function serve() {
     held: null as Promise<void> | null, failErrors: false, fail: null as ((q: URLSearchParams) => boolean) | null,
     hold() { let release!: () => void; api.held = new Promise<void>(r => { release = r; }); return release; },
   };
-  const bodies: Record<string, unknown> = { "/api/status": status, "/api/context": context, "/api/insights": insights, "/api/limits": limits };
+  const bodies: Record<string, unknown> = { "/api/status": status, "/api/context": context, "/api/insights": insights, "/api/limits": limits, "/api/calendar": calendar };
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     const u = new URL(url, "http://x");
     if (u.pathname === "/api/errors") { if (api.held) await api.held; return api.failErrors ? failed() : ok(errors); }

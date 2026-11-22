@@ -11,16 +11,25 @@ import sessions from "../../__fixtures__/sessions";
 import session from "../../__fixtures__/session";
 import tool from "../../__fixtures__/tool";
 import palette from "../../__fixtures__/palette";
+import calendar from "../../__fixtures__/calendar";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
-import { mockApi } from "../../components/sheets/testing";
-import { drawn } from "../../components/echart/testing";
+import { mockApi as mockRoutes } from "../../components/sheets/testing";
+import { fakeECharts } from "../../components/echart/testing";
 import { ActivityPage } from "./ActivityPage";
 import { setSearch } from "../../url";
 import { hookCommand, workDays } from "./work";
 import { dur, when } from "../../format";
 import { ingested, prevented, refreshed, renderApp, renderPage } from "../../testing";
 
+// Every page here also asks for its calendar: the fixture answers it unless a test routes it.
+const mockApi = (routes: Parameters<typeof mockRoutes>[0]) => mockRoutes({ "/api/calendar": () => calendar, ...routes });
+/** The work chart's fake, once drawn: the calendar below it draws a chart too. */
+const drawn = () => waitFor(() => {
+  const chart = fakeECharts.live.find(c => c.dom.closest("#work") && c.options.length);
+  if (!chart) throw new Error("the work chart has not drawn yet");
+  return chart;
+});
 const at = (hash = "?range=30") => history.replaceState(null, "", "/usage" + hash);
 const serve = (d: UsagePayload) => mockApi({ "/api/usage": () => d, "/api/sessions": () => sessions, "/api/session": () => session });
 const attention = () => within(document.getElementById("attention")!);
@@ -382,7 +391,7 @@ describe("workbench tabs", () => {
     act(() => first.focus());
     expect(prevented(first)).toEqual([]);
     expect(document.activeElement).toBe(first);
-    const chart = screen.getByRole("group", { name: /^Commits/ });
+    const chart = screen.getByRole("group", { name: /^Commits(?! per day as a calendar)/ });
     expect(prevented(chart)).toEqual([]);
     expect(screen.queryByRole("tooltip")).toBeNull();
     // A modified Escape keeps an open reading, on the chart and anywhere else on the page.
@@ -406,6 +415,55 @@ describe("work panel", () => {
     await loaded();
     const order = ["interrupted", "attention", "work", "vitals", "workbench"].map(id => document.getElementById(id)!);
     order.slice(1).forEach((el, i) => expect(order[i]!.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy());
+  });
+});
+
+describe("activity calendar", () => {
+  // The fixture's 53 weeks end on Thursday, Nov 5, 2026; jsdom's 800px box shows them all at a 14px pitch from 30px left and
+  // 18px down (ActivityCalendar.test.tsx). Nov 4 is in its last column, Oct 1 five columns before.
+  const cell = (col: number, row: number) => ({ clientX: 30 + col * 14 + 5, clientY: 18 + row * 14 + 5 });
+  /** A click as a browser makes it: the pointer reads the day, then the press focuses the calendar and clicks. */
+  const click = (col: number, row: number) => {
+    const g = screen.getByRole("group", { name: /^Commits per day as a calendar/ });
+    fireEvent.mouseMove(g, cell(col, row));
+    act(() => g.focus());
+    fireEvent.click(g, cell(col, row));
+  };
+  const live = () => document.querySelector("#calendar .cal-live")!.textContent;
+
+  it("follows the tabs, selects a day, widens the range for a day outside it, and takes no pick while its figures are another view's", async () => {
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 800, bottom: 116, width: 800, height: 116, x: 0, y: 0, toJSON: () => ({}) });
+    const codex = held<typeof calendar>();
+    mockApi({ "/api/usage": q => ({ ...usage, range: Number(q.get("range")) }), "/api/sessions": () => sessions, "/api/day": q => noDay(q.get("day")!),
+      "/api/calendar": q => (q.get("source") ? codex.p : calendar) });
+    at("?range=7");
+    renderApp(<ActivityPage />);
+    await loaded();
+    const workbench = document.getElementById("workbench")!, section = await screen.findByRole("region", { name: "Activity calendar" });
+    expect(workbench.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    click(52, 2);
+    expect(location.search).toBe("?range=7&day=2026-11-04");
+    expect(live()).toBe("Nov 4, 2026 selected; the tabs show its figures.");
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("tabpanel")));
+    expect(live()).toBe("Nov 4, 2026 selected; the tabs show its figures.");
+
+    // Outside the last 7 days: two writes, the range pushed and then the day, so the day survives the range's write.
+    const n = history.length;
+    click(47, 3);
+    expect(location.search).toBe("?range=90&day=2026-10-01");
+    expect(history.length).toBe(n + 1);
+    expect(live()).toBe("Oct 1, 2026 selected; the range is now the last 90 days, and the tabs show its figures.");
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("tabpanel")));
+    expect(live()).toBe("Oct 1, 2026 selected; the range is now the last 90 days, and the tabs show its figures.");
+    act(() => history.back());
+    await waitFor(() => expect(location.search).toBe("?range=7&day=2026-11-04"));
+
+    // Another source's calendar is loading: the one on screen is the earlier view's, and takes no pick.
+    act(() => setSearch({ source: "codex" }));
+    await waitFor(() => expect(document.querySelector(".pending")!.textContent).toBe(""));
+    click(52, 3);
+    expect(location.search).toBe("?range=7&source=codex");
   });
 });
 
@@ -727,7 +785,7 @@ describe("ActivityPage", () => {
     await userEvent.click(failed);
     expect(order("tools").at(-1)).toBe("Edit");
     // Only the page and the Sessions tab it opened on asked the server; the sorts asked nothing.
-    expect(fetched().filter(u => !String(u).startsWith("/api/usage") && u !== "/api/sessions?range=30")).toEqual([]);
+    expect(fetched().filter(u => !/^\/api\/(usage|calendar)/.test(String(u)) && u !== "/api/sessions?range=30")).toEqual([]);
   });
 
   it("restores the sessions filters from the hash and writes them without new history entries", async () => {
@@ -881,7 +939,7 @@ describe("ActivityPage", () => {
     fake.fire("click", fake.pointAt(1));
     expect(location.search).toBe("?range=30");
     await act(async () => { wait.resolve(usage); await wait.p; });
-    await waitFor(() => expect(screen.getByRole("group", { name: /^Commits per day/ })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("group", { name: /^Commits per day(?! as a calendar)/ })).toBeTruthy());
   });
 
   it("drops a week the view does not reach, and a day that is not a Monday", async () => {
@@ -919,7 +977,7 @@ describe("ActivityPage", () => {
     act(() => btn.focus());
     await userEvent.keyboard("{Enter}");
     expect(location.search).toBe("?range=30");
-    expect(document.activeElement).toBe(screen.getByRole("group", { name: /^Commits per day/ }));
+    expect(document.activeElement).toBe(screen.getByRole("group", { name: /^Commits per day(?! as a calendar)/ }));
   });
 
   it("drops the chart's selection sentence when the tab note or an attention action clears the selection, and says the next selection as new", async () => {
@@ -927,7 +985,7 @@ describe("ActivityPage", () => {
     at("?range=30");
     renderApp(<ActivityPage />);
     await loaded();
-    const chart = screen.getByRole("group", { name: /^Commits per day/ }), sr = () => document.querySelector("#work div.sr[aria-live]")!.textContent;
+    const chart = screen.getByRole("group", { name: /^Commits per day(?! as a calendar)/ }), sr = () => document.querySelector("#work div.sr[aria-live]")!.textContent;
     const select = () => { act(() => chart.focus()); fireEvent.keyDown(chart, { key: "Home" }); fireEvent.keyDown(chart, { key: "Enter" }); };
     const SELECTED = "Nov 4, 2026 selected; the tabs below show its figures.";
     select();
@@ -1128,7 +1186,7 @@ describe("ActivityPage", () => {
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&day=2026-11-04"));
     // The bars follow the chosen count.
     await userEvent.click(within(screen.getByRole("group", { name: "Chart metric" })).getByRole("button", { name: "Prompts" }));
-    expect(screen.getByRole("group", { name: /^Prompts per day/ })).toBeTruthy();
+    expect(screen.getByRole("group", { name: /^Prompts per day(?! as a calendar)/ })).toBeTruthy();
   });
 
   it("opens a tool sheet from the tools drawer, and Escape returns focus to the row", async () => {
@@ -1439,7 +1497,7 @@ describe("Sessions sort by several columns", () => {
     await twoKeys();
     // A sort chosen after the action applies within it.
     await waitFor(() => expect(lastSessionsUrl()).toBe("/api/sessions?range=30&near=1&sort=-errors%2C-cost"));
-    const chart = screen.getByRole("group", { name: /^Commits/ });
+    const chart = screen.getByRole("group", { name: /^Commits(?! per day as a calendar)/ });
     act(() => chart.focus());
     fireEvent.keyDown(chart, { key: "End" });
     fireEvent.keyDown(chart, { key: "ArrowLeft" });
@@ -1700,7 +1758,7 @@ describe("Sessions selection", () => {
     await userEvent.click(box("#s1"));
     await userEvent.click(box("#s3"));
     expect(status()).toBe("2 selected.");
-    const chart = screen.getByRole("group", { name: /^Commits/ });
+    const chart = screen.getByRole("group", { name: /^Commits(?! per day as a calendar)/ });
     act(() => chart.focus());
     fireEvent.keyDown(chart, { key: "End" });
     fireEvent.keyDown(chart, { key: "Enter" });
