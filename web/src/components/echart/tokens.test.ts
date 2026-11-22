@@ -223,6 +223,25 @@ describe("useChartEnv", () => {
     }
   });
 
+  it("gives a new env when web fonts finish loading, so the texts are measured in them", () => {
+    // The page's fonts swap in after the first drawing: a text measured before (labelWidth, axisTitle's cut) is measured
+    // in the fallback font.
+    fakeMedia();
+    const fonts = new EventTarget();
+    Object.defineProperty(document, "fonts", { value: fonts, configurable: true });
+    try {
+      const { result, unmount } = renderHook(() => useChartEnv(600, 200));
+      const first = result.current;
+      act(() => { fonts.dispatchEvent(new Event("loadingdone")); });
+      expect(result.current).not.toBe(first);
+      const off = vi.spyOn(fonts, "removeEventListener");
+      unmount();
+      expect(off).toHaveBeenCalledWith("loadingdone", expect.any(Function));
+    } finally {
+      delete (document as { fonts?: unknown }).fonts;
+    }
+  });
+
   it("removes its media listeners when the last chart unmounts", () => {
     const media = fakeMedia();
     const a = renderHook(() => useChartEnv(600, 200));

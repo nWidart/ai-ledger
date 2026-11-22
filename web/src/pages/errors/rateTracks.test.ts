@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ErrorsPayload } from "../../api";
 import type { CustomSeriesOption, CustomSeriesRenderItemAPI, CustomSeriesRenderItemParams, LineSeriesOption, SeriesOption, YAXisComponentOption } from "../../components/echart/echarts";
+import { axisTitle } from "../../components/echart/option";
 import type { ChartEnv } from "../../components/echart/tokens";
 import { dayRange } from "../../format";
 import { filtered, makeModel, viewTypes, type Fixes, type View } from "./model";
@@ -47,7 +48,7 @@ const weekly = payload(dayRange("2026-06-29", "2026-11-15").map((d): Row => [d, 
 
 const ids = (o: ReturnType<typeof rateOption>) => (o.series as SeriesOption[]).map(s => s.id);
 const byId = (m: RateModel, id: string, e = env()) => (rateOption(m, e).series as SeriesOption[]).find(s => s.id === id);
-const yAxes = (m: RateModel, e = env()) => rateOption(m, e).yAxis as (YAXisComponentOption & { max: number; interval: number; name: string; nameTruncate: { maxWidth: number }; axisLabel: { formatter: (v: number) => string } })[];
+const yAxes = (m: RateModel, e = env()) => rateOption(m, e).yAxis as (YAXisComponentOption & { max: number; interval: number; name: string; axisLabel: { formatter: (v: number) => string } })[];
 
 // renderItem with a stubbed API: points `from` to `to` shown across the plot, the others placed by extrapolation, as
 // ECharts places them; y is px up from the plot's bottom, one per unit.
@@ -196,9 +197,11 @@ describe("rateOption", () => {
 
   it("titles each track, cut at the plot's width", () => {
     const [, r, b] = yAxes(model(quiet));
-    expect([r!.name, b!.name, r!.nameTruncate.maxWidth]).toEqual(["Error rate, % of tool calls", "Failed calls per day, by type", 738]);
+    expect([r!.name, b!.name]).toEqual(["Error rate, % of tool calls", "Failed calls per day, by type"]);
     expect(yAxes(model(quiet, { cat: "x", gran: "week" })).slice(1).map(a => a.name)).toEqual(["Type x rate, % of tool calls", "Failed calls per week, by type"]);
-    expect(yAxes(model(quiet), env(PHONE))[1]!.nameTruncate.maxWidth).toBe(343 - 104 - 20);
+    const e = env(PHONE), cut = axisTitle(e, "Error rate, % of tool calls", 343 - 104 - 20).name;
+    expect(cut).toMatch(/…$/);
+    expect(yAxes(model(quiet), e)[1]!.name).toBe(cut);
   });
 });
 

@@ -60,17 +60,33 @@ export const valueAxis = (env: OptionEnv, { max, step, format }: { max: number; 
   axisLabel: { color: env.ink.muted, fontSize: size(env), margin: 6 * env.textScale, formatter: (v: number) => format(v) },
 });
 
+/** The title's weight: `axisTitle` draws and measures it at this one. */
+const TITLE_WEIGHT = 500;
+/** `text`, or its longest start with "…" that is at most `maxWidth` px wide as drawn; "" where not even "…" fits. */
+function cutTitle(env: OptionEnv, text: string, maxWidth: number): string {
+  const fits = (t: string) => labelWidth(env, t, TITLE_WEIGHT) <= maxWidth;
+  if (fits(text)) return text;
+  for (let n = text.length - 1; n > 0; n--) {
+    const t = `${text.slice(0, n).trimEnd()}…`;
+    if (fits(t)) return t;
+  }
+  return fits("…") ? "…" : "";
+}
+
 /** The part of a value axis that names it as a track's title, to spread into the axis `valueAxis` gives: the name drawn
  *  left-aligned at the grid's left, its text box ending 7px (times the text scale) over the grid's top, in the secondary
  *  ink at weight 500, cut with an ellipsis where it passes `maxWidth` px and drawn not at all where not even the
- *  ellipsis fits (measured on ECharts 6). `maxWidth` is the plot's width: the box's less the layout's left and right.
- *  `labelWidth(env, text, 500)` is the title's own width. */
-export const axisTitle = (env: OptionEnv, text: string, maxWidth: number): Pick<ValueAxis, "name" | "nameLocation" | "nameGap" | "nameTextStyle" | "nameTruncate"> => ({
-  name: text,
+ *  ellipsis fits. `maxWidth` is the plot's width: the box's less the layout's left and right.
+ *  The cut is made here, by the measure of the text as drawn (`labelWidth` at weight 500), and made again on the
+ *  redraw the environment brings when the page's web fonts have loaded (`useChartEnv`). ECharts' own `nameTruncate`
+ *  measures once, as it first lays the title out: in Chromium that was before IBM Plex Sans had loaded, in the fallback
+ *  font ("Bash exit code other…" 213.6px then, 222.3px as drawn at 22px), so a cut title ended 3 to 10px past a 219px
+ *  plot. Its cut is an estimate besides: zrender's truncateText measures at most twice. */
+export const axisTitle = (env: OptionEnv, text: string, maxWidth: number): Pick<ValueAxis, "name" | "nameLocation" | "nameGap" | "nameTextStyle"> => ({
+  name: cutTitle(env, text, maxWidth),
   nameLocation: "end",
   nameGap: 7 * env.textScale,
-  nameTextStyle: { align: "left", color: env.ink.secondary, fontSize: size(env), fontWeight: 500 },
-  nameTruncate: { maxWidth, ellipsis: "…" },
+  nameTextStyle: { align: "left", color: env.ink.secondary, fontSize: size(env), fontWeight: TITLE_WEIGHT },
 });
 
 /** Where a label `width` px wide over a band goes, or null when the plot is narrower than the label. First by the rule of

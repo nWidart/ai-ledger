@@ -82,23 +82,30 @@ describe("valueAxis", () => {
 });
 
 describe("axisTitle", () => {
-  it("names a track: left-aligned at its top in the secondary ink at weight 500, cut at the plot's width", () => {
+  it("names a track: left-aligned at its top in the secondary ink at weight 500, in full where it fits the plot", () => {
     expect(axisTitle(env(), "Rate", 275)).toEqual({
       name: "Rate", nameLocation: "end", nameGap: 7,
       nameTextStyle: { align: "left", color: "ink-secondary", fontSize: 11, fontWeight: 500 },
-      nameTruncate: { maxWidth: 275, ellipsis: "…" },
     });
   });
 
-  it("doubles the gap and the font size at text scale 2, and keeps the width it is given", () => {
+  it("doubles the gap and the font size at text scale 2", () => {
     const one = axisTitle(env(), "Rate", 275), two = axisTitle(env({ textScale: 2 }), "Rate", 275);
     expect(two.nameGap).toBe(2 * (one.nameGap as number));
     expect(two.nameTextStyle!.fontSize).toBe(2 * (one.nameTextStyle!.fontSize as number));
-    expect(two.nameTruncate!.maxWidth).toBe(275);
+  });
+
+  it("cuts a title wider than the plot with an ellipsis by its width at weight 500, and drops it where no ellipsis fits", () => {
+    stubCanvas(); // weight 500: 4.5px a character at 11px
+    const title = "Error rate, % of tool calls";
+    expect(axisTitle(env(), title, 100).name).toBe("Error rate, % of tool…"); // 22 characters, 99px; at weight 400 it would keep 25
+    expect(axisTitle(env({ textScale: 2 }), title, 200).name).toBe("Error rate, % of tool…"); // twice the size in twice the room
+    expect(axisTitle(env(), title, 4).name).toBe("");
   });
 });
 
-// A canvas whose text is 5px a character at 11px in weight 600 or more and 4px below it, and a record of the fonts measured.
+// A canvas whose text is 5px a character at 11px in weight 600 or more, 4.5px at 500 and 4px below, and a record of the
+// fonts measured.
 const fonts: string[] = [];
 const stubCanvas = () => {
   const ctx = {
@@ -106,7 +113,7 @@ const stubCanvas = () => {
     measureText(t: string) {
       fonts.push(this.font);
       const [, weight, px] = /^(\d+) (\d+(?:\.\d+)?)px/.exec(this.font)!;
-      return { width: t.length * (+weight! >= 600 ? 5 : 4) * +px! / 11 };
+      return { width: t.length * (+weight! >= 600 ? 5 : +weight! >= 500 ? 4.5 : 4) * +px! / 11 };
     },
   };
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
