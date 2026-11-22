@@ -8,7 +8,7 @@ import { FEWER, fold, loadList, STALE, type LoadCategory, type LoadItem, type Lo
 import "./OverheadList.css";
 
 /** Opens the sheet of an MCP server (by its call key) or a skill; the page passes openToolSheet. */
-type OverheadOpener = (kind: "mcp" | "skill", name: string) => void;
+export type OverheadOpener =(kind: "mcp" | "skill", name: string) => void;
 
 /** Read between a row's parts, not shown: the parts sit in their own columns. */
 const SEP = <span className="sr">, </span>;

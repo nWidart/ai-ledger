@@ -5,10 +5,9 @@ import type { ReactNode } from "react";
 import { big, plural, when } from "../../format";
 import type { ContextOverhead } from "../../api";
 import { subjectAttrs } from "../../components/menu/subject";
-import { openToolSheet } from "../../components/sheets/session";
 import { share, windowLabel } from "../context/context";
 import "./ContextGrid.css";
-import { OverheadList } from "./OverheadList";
+import { OverheadList, type OverheadOpener } from "./OverheadList";
 import { GRID_CELLS, gridOverhead, overheadParts, PART_TONES, type ContextGridModel, type GridOverhead, type GridRow, type GridTone } from "./project";
 
 const COLS = 20;
@@ -53,7 +52,7 @@ const Measured = ({ o }: { o: GridOverhead }) => (
 
 /** The snapshot alone, when there is no typical session to draw it in (no request in the view, or no share of the window known):
  *  when it was measured, each overhead category's tokens, and the list of what loads before the first prompt. */
-function Snapshot({ snapshot }: { snapshot: ContextOverhead }) {
+function Snapshot({ snapshot, onOpen }: { snapshot: ContextOverhead; onOpen?: OverheadOpener }) {
   const o = gridOverhead(snapshot, null), w = snapshot.window;
   return (
     <div className="ctx-grid">
@@ -70,7 +69,7 @@ function Snapshot({ snapshot }: { snapshot: ContextOverhead }) {
             </li>
           ))}
         </ul>
-        <OverheadList snapshot={snapshot} onOpen={openToolSheet} />
+        <OverheadList snapshot={snapshot} onOpen={onOpen} />
       </div>
     </div>
   );
@@ -81,9 +80,12 @@ function Snapshot({ snapshot }: { snapshot: ContextOverhead }) {
 export interface Compact { title: ReactNode; name: string; project?: string | null }
 
 /** The grid of a typical session, or the snapshot alone (snapshot) when there is no grid to draw, so a saved measurement always shows.
- *  compact: the cells over three figures (start, peak, free) and no legend, as one of several grids. */
-export function ContextGrid({ model, snapshot, compact }: { model: ContextGridModel | null; snapshot?: ContextOverhead | null; compact?: Compact }) {
-  if (!model) return snapshot ? <Snapshot snapshot={snapshot} /> : null;
+ *  compact: the cells over three figures (start, peak, free) and no legend, as one of several grids. onOpen: what a name in the
+ *  snapshot's list opens (openToolSheet); without it, no name is a button. */
+export function ContextGrid({ model, snapshot, compact, onOpen }: {
+  model: ContextGridModel | null; snapshot?: ContextOverhead | null; compact?: Compact; onOpen?: OverheadOpener;
+}) {
+  if (!model) return snapshot ? <Snapshot snapshot={snapshot} onOpen={onOpen} /> : null;
   const { rows, window, sessions, overhead: o } = model;
   const tones = rows.flatMap(r => Array<GridTone>(r.cells).fill(r.tone));
   if (compact) {
@@ -125,7 +127,7 @@ export function ContextGrid({ model, snapshot, compact }: { model: ContextGridMo
           ))}
         </ul>
         {o?.overflow && <p className="cg-note cg-over muted">The measured overhead is larger than the median start: the configuration grew or the model differs.</p>}
-        {snapshot && <OverheadList snapshot={snapshot} onOpen={openToolSheet} />}
+        {snapshot && <OverheadList snapshot={snapshot} onOpen={onOpen} />}
       </div>
     </div>
   );

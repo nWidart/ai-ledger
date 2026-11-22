@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { ContextOverhead, ContextPayload } from "../../api";
@@ -61,14 +61,23 @@ describe("window grids", () => {
       items: [{ seq: 1, kind: "skill", name: "ship", detail: "userSettings", server: null, tokens: 300 }] };
     const one = (project: string) => view(1, { project, starting: { ...fixture.starting, window: 200_000, window_share: .1, median: 20_000 },
       growth: { ...fixture.growth, peak: { sessions: 20, median: 80_000, window_share: .4 } }, overhead });
+    history.replaceState(null, "", "/context?project=p0");
     const { rerender } = renderApp(<Grids d={one("p0")} />);
     // The list of what loads before the first prompt, closed, in the grid's side column.
-    const summary = screen.getByText(`What loads before your first prompt · ${big(4000)} tokens`);
+    const title = `What loads before your first prompt · ${big(4000)} tokens`, list = () => screen.getByText(title).closest("details")!;
+    const summary = screen.getByText(title), ship = () => screen.queryByRole("button", { name: "ship" });
     expect([summary.closest("details")!.open, summary.closest(".cg-side")?.querySelector(".cg-legend") != null]).toEqual([false, true]);
     await userEvent.click(summary);
-    // Another project's list draws folded again, though the page keeps the grid mounted while the next payload loads.
+    expect(ship()).not.toBeNull();
+    // Another project selected while its payload loads (or after it failed): the page keeps the last payload, its list closed and
+    // no name a button, since a sheet would open for the selected project.
+    act(() => { history.pushState(null, "", "/context?project=p1"); });
+    expect(list().open).toBe(false);
+    await userEvent.click(screen.getByText(title));
+    expect(ship()).toBeNull();
+    // Its payload in: its own list, closed again, the names buttons.
     rerender(<Grids d={one("p1")} />);
-    expect(screen.getByText(`What loads before your first prompt · ${big(4000)} tokens`).closest("details")!.open).toBe(false);
+    expect([list().open, ship() != null]).toEqual([false, true]);
     const img = screen.getByRole("img", { name: /^Context window of a typical session/ });
     // The snapshot splits the starting cells (the Skills category's and the rest), so the start is those two.
     expect([cellsOf(img, "p0") + cellsOf(img, "rest"), cellsOf(img, "added"), cellsOf(img, "free")]).toEqual([20, 60, 120]);

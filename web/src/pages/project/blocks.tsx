@@ -10,7 +10,7 @@ import { DocsLink } from "../../components/DocsLink";
 import { judged } from "../../url";
 import { Ledger, LedgerRow } from "../../components/Ledger";
 import { ChangeDetail, Facts, ModelLedger, TopSessions } from "../../components/sheets/ProjectSheet";
-import { appLink, errorsHref, judgmentsHref, openSessionSheet } from "../../components/sheets/session";
+import { appLink, errorsHref, judgmentsHref, openSessionSheet, openToolSheet } from "../../components/sheets/session";
 import { big, dur, num, pct, plural, usd } from "../../format";
 import type { ApiState } from "../../useApi";
 import { share } from "../context/context";
@@ -219,7 +219,7 @@ export function ContextBlock({ context, usage, scope }: { context: ApiState<Cont
     <Block id="context" title="Context" page="Context" href={"/context" + scope.search} state={context} also={[usage]}>
       {/* Keyed by the project: another project's list and Measure now start afresh, even when its Context comes from the cache. */}
       {c => <Fragment key={scope.project}>
-        <ContextGrid model={contextGrid(c)} snapshot={c.overhead} />
+        <ContextGrid model={contextGrid(c)} snapshot={c.overhead} onOpen={openToolSheet} />
         <Facts facts={[
         [c.starting.median == null ? "n/a" : big(c.starting.median), "median starting context, tokens"],
         [c.starting.window_share == null ? "n/a" : share(c.starting.window_share), "of the window at the start"],

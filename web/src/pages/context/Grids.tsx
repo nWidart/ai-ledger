@@ -3,7 +3,9 @@
 import type { ContextPayload } from "../../api";
 import { HowMeasured } from "../../components/HowMeasured";
 import { ProjectName } from "../../components/ProjectDot";
+import { openToolSheet } from "../../components/sheets/session";
 import { num, plural } from "../../format";
+import { useView } from "../../url";
 import { ContextGrid, GridDefs } from "../project/ContextGrid";
 import { contextGrid, typicalGrid, type ContextGridModel } from "../project/project";
 
@@ -22,6 +24,9 @@ export function projectGrids(d: D): { grids: { project: string | null; model: Co
 }
 
 export function Grids({ d }: { d: D }) {
+  // While another project's payload loads or fails, d is still the last one: its list starts closed (the key holds the selected
+  // project and the payload's), and no name opens a sheet, which would be scoped to the selected project.
+  const [{ project }] = useView(), current = d.project === project;
   const one = !!d.project;
   const { grids, total } = projectGrids(d);
   const single = one ? contextGrid(d) : null;
@@ -35,7 +40,7 @@ export function Grids({ d }: { d: D }) {
         <HowMeasured what="window grids" docs="concepts/windows#the-context-window">Each cell is half a percent of the project's most common window. The start is the median share of the window the
           first turn takes; the peak is the median share at the session's fullest. Both come from the same sessions: those with a measured start, a
           known window and a peak. Projects are ranked by how many such sessions they have.</HowMeasured></div>
-      {one ? <ContextGrid key={d.project} model={single} snapshot={d.overhead} />
+      {one ? <ContextGrid key={`${project}\n${d.project}`} model={single} snapshot={d.overhead} onOpen={current ? openToolSheet : undefined} />
         : <div className="grid-multiples"><GridDefs />
           {grids.map(g => <ContextGrid key={g.project ?? ""} model={g.model}
             compact={{ title: g.project == null ? <span className="muted">(no project)</span> : <ProjectName project={g.project}>{g.project}</ProjectName>, name: g.project ?? "(no project)", project: g.project }} />)}
