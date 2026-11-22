@@ -2130,6 +2130,7 @@ describe("type table: sort and filter", () => {
     expect(box().value).toBe("git");
     expect(document.getElementById("typeCount")!.textContent).toBe("0 of 0 types");
     expect(document.querySelector("#catBody .empty")!.textContent).toMatch(/^No tool calls in this range\./);
+    expect(document.getElementById("legend")).toBeNull(); // no errors to key, with or without calls
     await userEvent.click(within(document.getElementById("catBody")!).getByRole("button", { name: "Clear filter" }));
     // With no text left the field goes with the rows (focus falls back to the chart), and comes back with them.
     expect(screen.queryByRole("searchbox", { name: /filter types/i })).toBeNull();

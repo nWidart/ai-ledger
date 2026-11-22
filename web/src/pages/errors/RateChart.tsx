@@ -75,7 +75,7 @@ export const RateChart = memo(function RateChart() {
     ...(other ? [{ id: "other", header: "Other types", align: "num", cell: (r: TableRow) => fmt(r.p.other) } as const] : []),
   ], [m, v, vt, cat, per, other]);
 
-  const empty = rm.bare === "empty", noErrors = rm.bare != null && !empty;
+  const empty = rm.bare === "empty", noErrors = rm.bare != null;
   const keys = `Use the left and right arrow keys to read each point, Enter or Space to select the ${per} for the table and examples${zoom ? ", and plus and minus to zoom" : ""}.`;
   const label = `Errors by type and error rate. ${keys}${v.at ? ` Selected: ${bucketLabel(m, v)}.` : ""}`;
   return (
