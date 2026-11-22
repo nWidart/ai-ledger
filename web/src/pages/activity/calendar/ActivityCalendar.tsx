@@ -9,8 +9,8 @@ import { modified } from "../../../components/keys";
 import { Table, type Column } from "../../../components/table/Table";
 import { dayLabel, num, plural } from "../../../format";
 import type { Range } from "../../../url";
-import { METRICS, monday, type WorkMetric } from "../work";
-import { calendarFit, calendarModel, calendarOption, rangeFor, type CalendarDay, type CalendarSelection, type CalendarStep } from "./calendarDays";
+import { METRICS, monday, plus, type WorkMetric } from "../work";
+import { calendarFit, calendarModel, calendarOption, rangeFor, WEEKDAYS, type CalendarDay, type CalendarSelection, type CalendarStep } from "./calendarDays";
 import { cellAt, moveDay } from "./gridReading";
 import "./calendar.css";
 
@@ -30,15 +30,12 @@ export interface ActivityCalendarProps {
   status?: ReactNode;
 }
 
-const at = (k: Day) => new Date(k + "T00:00:00Z");
-const weekday = (k: Day, weekday: "long" | "short") => at(k).toLocaleDateString(undefined, { weekday, timeZone: "UTC" });
-/** "Tuesday, Nov 4, 2026". */
-const dayName = (k: Day) => `${weekday(k, "long")}, ${dayLabel(k, true)}`;
+/** "Wednesday, Nov 4, 2026". */
+const dayName = (k: Day) =>
+  `${new Date(k + "T00:00:00Z").toLocaleDateString(undefined, { weekday: "long", timeZone: "UTC" })}, ${dayLabel(k, true)}`;
 const rangeName = (r: Range) => (r ? `the last ${r} days` : "all time");
 /** A step's numbers in the key: "1–2", "9+", or one number when the step holds one value. */
 const stepText = (s: CalendarStep) => (s.to == null ? `${num(s.from)}+` : s.to === s.from ? num(s.from) : `${num(s.from)}–${num(s.to)}`);
-/** The weekdays from Monday, in the reader's language: Jan 1, 2024 is a Monday. */
-const WEEKDAYS = Array.from({ length: 7 }, (_, i) => weekday(`2024-01-0${i + 1}`, "short"));
 const CLEARED = "Selection cleared; the tabs show the whole range.";
 
 /** The day being read, whether a key read it, and its sentence as last said. */
@@ -208,7 +205,7 @@ export function ActivityCalendar({ d, metric, range, selected, onPick, onClear, 
   // The data table: a row per week shown, a column per weekday, and the week's total.
   const rows = useMemo(() => {
     const out = Array.from({ length: m.weeks }, (_, col): WeekRow =>
-      ({ monday: new Date(at(m.from).getTime() + col * 7 * 864e5).toISOString().slice(0, 10), days: Array<CalendarDay | undefined>(7) }));
+      ({ monday: plus(m.from, col * 7), days: Array<CalendarDay | undefined>(7) }));
     for (const c of m.days) out[c.col]!.days[c.row] = c;
     return out;
   }, [m]);

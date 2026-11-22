@@ -5,7 +5,10 @@ import type { CustomSeriesOption, CustomSeriesRenderItemAPI, CustomSeriesRenderI
 import type { ChartEnv } from "../../../components/echart/tokens";
 import { dayRange } from "../../../format";
 import type { Range } from "../../../url";
-import { calendarFit, calendarModel, calendarOption, calendarSteps, rangeFor, type CalendarDays, type CalendarModel } from "./calendarDays";
+import { calendarFit, calendarModel, calendarOption, rangeFor } from "./calendarDays";
+
+type CalendarDays = Parameters<typeof calendarModel>[0];
+type CalendarModel = ReturnType<typeof calendarModel>;
 
 const ink = { text: "ink-text", secondary: "ink-secondary", muted: "ink-muted", grid: "ink-grid", surface: "ink-surface",
   border: "ink-border", cursor: "ink-cursor", accent: "ink-accent", tint: "ink-tint" };
@@ -23,6 +26,10 @@ const FIT = calendarFit(343, 1);
 const model = (over: Partial<CalendarDays> = {}, sel: Parameters<typeof calendarModel>[3] = null, weeks = FIT.weeks) =>
   calendarModel({ ...d, ...over }, "commits", weeks, sel);
 const dayOf = (m: CalendarModel, day: string) => m.days.find(c => c.day === day);
+/** Days of commits from Sep 1, one per value. */
+const valued = (values: readonly number[]) => dayRange("2026-09-01", "2026-11-18").slice(0, values.length).map((day, i) => row(day, values[i]!));
+// 38 values rising to 21, then 30 and 44: 40 days with work, in four steps.
+const forty = [...Array.from({ length: 38 }, (_, i) => Math.ceil((i + 1) * 21 / 38)), 30, 44];
 
 const seriesOf = (o: ReturnType<typeof calendarOption>, id: string) => (o.series as CustomSeriesOption[]).find(s => s.id === id);
 interface Drawn { type: string; shape: { x: number; y: number; width: number; height: number }; style: { fill: string; stroke?: string; lineWidth?: number } }
@@ -58,9 +65,7 @@ describe("calendarFit", () => {
   });
 });
 
-describe("calendarSteps", () => {
-  // 38 values rising to 21, then 30 and 44: 40 days with work.
-  const forty = [...Array.from({ length: 38 }, (_, i) => Math.ceil((i + 1) * 21 / 38)), 30, 44];
+describe("the calendar's steps", () => {
   it.each([
     ["the design's ten values", [1, 1, 1, 2, 2, 3, 5, 8, 13, 40], [[1, 2, 1], [3, 8, 3], [9, 40, 4]]],
     ["every day 1", [1, 1, 1, 1], [[1, 1, 3]]],
@@ -68,7 +73,7 @@ describe("calendarSteps", () => {
     ["40 days, an open step over the 95th percentile", forty, [[1, 12, 1], [13, 18, 2], [19, 21, 3], [22, null, 4]]],
     ["none above 0", [0, 0], []],
   ] as const)("cuts %s", (_, values, want) => {
-    expect(calendarSteps([...values].reverse())).toEqual(want.map(([from, to, shade]) => ({ from, to, shade })));
+    expect(model({ days: valued([...values].reverse()) }).steps).toEqual(want.map(([from, to, shade]) => ({ from, to, shade })));
   });
 });
 
@@ -153,10 +158,8 @@ describe("calendarOption", () => {
   });
 
   it("draws shades as squares of growing side in the text ink under forced colors, and none of the measure as an edge", () => {
-    // Four steps: Sep 1 to Oct 10, the forty values of calendarSteps.
-    const values = [...Array.from({ length: 38 }, (_, i) => Math.ceil((i + 1) * 21 / 38)), 30, 44];
-    const days = dayRange("2026-09-01", "2026-10-10").map((day, i) => row(day, values[i]!));
-    const m = model({ days }), drawn = cells(m, env({ forced: true }));
+    // Four steps: Sep 1 to Oct 10.
+    const m = model({ days: valued(forty) }), drawn = cells(m, env({ forced: true }));
     const byShade = [1, 2, 3, 4].map(s => drawn[m.days.findIndex(c => c.shade === s)]!);
     expect(byShade.map(r => r.shape.width)).toEqual([3, 5, 8, 10]);
     for (const [i, r] of byShade.entries()) {
@@ -205,7 +208,7 @@ describe("the calendar's colors", () => {
   it("hands env.color only declared color tokens", () => {
     const seen = new Set<string>();
     const values = [1, 1, 1, 2, 2, 3, 5, 8, 13, 40, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 60];
-    const m = model({ days: dayRange("2026-09-01", "2026-09-21").map((day, i) => row(day, values[i]!)) }, { day: "2026-09-07", days: 7 });
+    const m = model({ days: valued(values) },{ day: "2026-09-07", days: 7 });
     cells(m, env({ color: s => { seen.add(s); return s; } }));
     expect([...seen].sort()).toEqual(["var(--heat-1)", "var(--heat-2)", "var(--heat-3)", "var(--heat-4)"]);
     for (const css of seen) {

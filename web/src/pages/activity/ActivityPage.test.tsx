@@ -444,18 +444,16 @@ describe("activity calendar", () => {
 
     click(52, 2);
     expect(location.search).toBe("?range=7&day=2026-11-04");
-    expect(live()).toBe("Nov 4, 2026 selected; the tabs show its figures.");
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("tabpanel")));
-    expect(live()).toBe("Nov 4, 2026 selected; the tabs show its figures.");
 
-    // Outside the last 7 days: two writes, the range pushed and then the day, so the day survives the range's write.
+    // Outside the last 7 days: two writes, the range pushed and then the day, so the day survives the range's write, and
+    // so does the status the pick said (ActivityCalendar.test.tsx owns its words).
     const n = history.length;
     click(47, 3);
     expect(location.search).toBe("?range=90&day=2026-10-01");
     expect(history.length).toBe(n + 1);
-    expect(live()).toBe("Oct 1, 2026 selected; the range is now the last 90 days, and the tabs show its figures.");
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("tabpanel")));
-    expect(live()).toBe("Oct 1, 2026 selected; the range is now the last 90 days, and the tabs show its figures.");
+    expect(live()).toMatch(/^Oct 1, 2026 selected/);
     act(() => history.back());
     await waitFor(() => expect(location.search).toBe("?range=7&day=2026-11-04"));
 
@@ -474,7 +472,7 @@ describe("activity calendar", () => {
     mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": q => noDay(q.get("day")!),
       "/api/calendar": q => (q.get("source") ? codex() : first.p) });
     at("?range=30");
-    renderApp(<ActivityPage />);
+    const { client } = renderApp(<ActivityPage />);
     await loaded();
     const section = screen.getByRole("region", { name: "Activity calendar" });
     expect(section.textContent).toContain("Loading the calendar…");
@@ -489,11 +487,6 @@ describe("activity calendar", () => {
     click(52, 2);
     expect(location.search).toBe("?range=30&source=codex");
 
-    // Retry fails again: the same alert says it once more.
-    await userEvent.click(region().getByRole("button", { name: "Retry" }));
-    await waitFor(() => expect(alert.textContent).toMatch(/^Could not load the calendar \(HTTP 404\)/));
-    expect(region().getByRole("alert")).toBe(alert);
-
     // While Retry runs, its button stays, busy, with the focus; the answer brings the calendar of these filters, which picks.
     codex = () => again.p;
     const retry = region().getByRole("button", { name: "Retry" });
@@ -507,6 +500,29 @@ describe("activity calendar", () => {
     expect(document.activeElement).toBe(screen.getByRole("group", { name: /^Commits per day as a calendar/ }));
     click(52, 2);
     expect(location.search).toBe("?range=30&source=codex&day=2026-11-04");
+
+    // An ingest's request fails; Retry asks again and fails again: the same alert says it once more.
+    codex = () => undefined;
+    ingested(client);
+    const failed = await region().findByRole("alert");
+    const asked = () => fetched().filter(u => String(u).startsWith("/api/calendar?source=codex")).length, n = asked();
+    await userEvent.click(region().getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(asked()).toBe(n + 1));
+    await waitFor(() => expect(failed.textContent).toBe("Could not load the calendar (HTTP 404). Still showing the last one loaded."));
+    expect(region().getByRole("alert")).toBe(failed);
+
+    // The focus leaves; an ingest asks again. Only the user's Retry reads "Retrying…": the line stays as it was, and the
+    // answer clears it with the focus left where the user put it.
+    act(() => (document.activeElement as HTMLElement).blur());
+    const late = held<typeof calendar>();
+    codex = () => late.p;
+    ingested(client);
+    await waitFor(() => expect(asked()).toBe(n + 2));
+    expect(region().getByRole("button", { name: "Retry" }).getAttribute("aria-disabled")).toBeNull();
+    expect(failed.textContent).toBe("Could not load the calendar (HTTP 404). Still showing the last one loaded.");
+    await act(async () => { late.resolve(calendar); await late.p; });
+    await waitFor(() => expect(region().queryByRole("alert")).toBeNull());
+    expect(document.activeElement).toBe(document.body);
   });
 });
 

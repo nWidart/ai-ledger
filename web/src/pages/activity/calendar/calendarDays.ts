@@ -8,7 +8,7 @@ import { baseOption } from "../../../components/echart/option";
 import type { ChartEnv } from "../../../components/echart/tokens";
 import { dayRange } from "../../../format";
 import { RANGES, type Range } from "../../../url";
-import { busy, monday, type WorkMetric } from "../work";
+import { busy, monday, plus, type WorkMetric } from "../work";
 
 /** The weeks the server sends: the current one and the 52 before it. */
 const WEEKS = 53;
@@ -34,8 +34,7 @@ export interface CalendarFit {
 }
 
 /** The fit of decision 2: all 53 weeks at a pitch of up to 20px when they fit at the smallest pitch, else as many weeks as
- *  fit at the smallest. The smallest grows with the text, so two weekday labels two rows apart never touch; the cells
- *  keep their size otherwise. The block is never wider than the plot, so a phone shows fewer weeks and never scrolls. */
+ *  fit at the smallest. The smallest grows with the text, so two weekday labels two rows apart never touch. The block is never wider than the plot, so a phone shows fewer weeks and never scrolls. */
 export function calendarFit(width: number, textScale: number): CalendarFit {
   const left = 30 * textScale, top = 18 * textScale, room = width - left - EDGE + 2; // the plot, and the last week's gap
   const smallest = Math.max(12, Math.ceil(.6 * 11 * textScale)), fit = Math.floor(room / WEEKS);
@@ -53,7 +52,7 @@ const SHADES: readonly (readonly Exclude<Shade, 0>[])[] = [[3], [2, 4], [1, 3, 4
 
 /** The scale of decision 5, from the values above 0: the upper bounds are the distinct nearest-rank cuts at 50, 80 and 95%,
  *  with an open step over the last when the largest value is above it. None without a value above 0. */
-export function calendarSteps(values: readonly number[]): CalendarStep[] {
+function calendarSteps(values: readonly number[]): CalendarStep[] {
   const s = values.filter(v => v > 0).sort((a, b) => a - b), n = s.length;
   if (!n) return [];
   const bounds = [...new Set([50, 80, 95].map(p => s[Math.ceil(n * p / 100) - 1]!))]; // n × p is exact, n × .95 is not
@@ -63,7 +62,7 @@ export function calendarSteps(values: readonly number[]): CalendarStep[] {
 
 /** What the model reads of the calendar's payload: its 53 weeks from `start` (a Monday) to `end` (today), the first day
  *  recorded under the same filters (over all time, or null), and a row per day with work. */
-export interface CalendarDays { start: Day; end: Day; first: Day | null; days: readonly DailyWorkRow[] }
+interface CalendarDays { start: Day; end: Day; first: Day | null; days: readonly DailyWorkRow[] }
 /** The page's selection: a day, or a week by its Monday. */
 export interface CalendarSelection { day: Day; days: 1 | 7 }
 
@@ -84,7 +83,7 @@ export interface CalendarDay {
   shade: Shade;
 }
 
-export interface CalendarModel {
+interface CalendarModel {
   metric: WorkMetric;
   /** The Monday of the first week shown. */
   from: Day;
@@ -105,7 +104,6 @@ export interface CalendarModel {
 }
 
 const at = (k: Day) => Date.parse(k + "T00:00:00Z");
-const shift = (k: Day, n: number): Day => new Date(at(k) + n * 864e5).toISOString().slice(0, 10);
 /** The days from a to b. */
 const between = (a: Day, b: Day) => Math.round((at(b) - at(a)) / 864e5);
 const none = (day: Day): DailyWorkRow => ({ day, sessions: 0, prompts: 0, commits: 0, calls: 0, failed_calls: 0 });
@@ -113,7 +111,7 @@ const none = (day: Day): DailyWorkRow => ({ day, sessions: 0, prompts: 0, commit
 /** The newest `weeks` weeks of the payload, shaded by `metric`, with the selection's place. */
 export function calendarModel(d: CalendarDays, metric: WorkMetric, weeks: number, selected: CalendarSelection | null): CalendarModel {
   const last = monday(d.end), shown = Math.min(weeks, between(monday(d.start), last) / 7 + 1);
-  const from = shift(last, -7 * (shown - 1)), steps = calendarSteps(d.days.map(r => r[metric]));
+  const from = plus(last, -7 * (shown - 1)), steps = calendarSteps(d.days.map(r => r[metric]));
   const have = new Map(d.days.map(r => [r.day, r]));
   const begin = d.first && d.first > from ? d.first : from;
   const days = !d.first || begin > d.end ? [] : dayRange(begin, d.end).map((day): CalendarDay => {
@@ -148,7 +146,9 @@ function textWidth(text: string, font: string, size: number): number {
   return measure.measureText(text).width;
 }
 const monthName = (k: Day) => new Date(at(k)).toLocaleDateString(undefined, { month: "short", timeZone: "UTC" });
-const weekdayName = (row: number) => new Date(Date.UTC(2024, 0, 1 + row)).toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" });
+/** The weekdays' short names from Monday, in the reader's language: Jan 1, 2024 is a Monday. */
+export const WEEKDAYS = Array.from({ length: 7 }, (_, row) =>
+  new Date(Date.UTC(2024, 0, 1 + row)).toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" }));
 
 type Shape = { type: "rect"; emphasisDisabled: true; shape: { x: number; y: number; width: number; height: number }; style: { fill: string; stroke?: string; lineWidth?: number } };
 const rect = (x: number, y: number, side: number, style: Shape["style"], height = side): Shape =>
@@ -172,10 +172,10 @@ function labels(m: CalendarModel, fit: CalendarFit, env: ChartEnv) {
   const { fontFamily, fontSize } = baseOption(env).textStyle, s = env.textScale;
   const text = (t: string, x: number, y: number, align: "left" | "right", verticalAlign: "middle" | "bottom") =>
     ({ type: "text" as const, style: { text: t, x, y, align, verticalAlign, fontFamily, fontSize, fill: env.ink.muted } });
-  const days = [0, 2, 4].map(row => text(weekdayName(row), fit.left - 6 * s, fit.top + row * fit.pitch + fit.cell / 2, "right", "middle"));
+  const days = [0, 2, 4].map(row => text(WEEKDAYS[row]!, fit.left - 6 * s, fit.top + row * fit.pitch + fit.cell / 2, "right", "middle"));
   const starts: { x: number; name: string }[] = [];
   for (let col = 0; col < m.weeks; col++) {
-    const name = monthName(shift(m.from, 7 * col));
+    const name = monthName(plus(m.from, 7 * col));
     if (name !== starts.at(-1)?.name || !col) starts.push({ x: fit.left + col * fit.pitch, name });
   }
   const months = starts.filter((l, i) => (starts[i + 1]?.x ?? Infinity) - l.x >= 28 * s && l.x + textWidth(l.name, fontFamily, fontSize) <= fit.width)

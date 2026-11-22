@@ -208,15 +208,21 @@ function Overview({ views }: { views: ReactNode }) {
   const [calFail, setCalFail] = useState<{ key: string; error: Error } | null>(null);
   if (cal.error) { if (cal.error !== calFail?.error) setCalFail({ key: calKey, error: cal.error }); }
   else if (calFail && (calFail.key !== calKey || !cal.loading)) setCalFail(null);
-  const calRetrying = !!calFail && !cal.error, calRetried = useRef(false);
-  const retryCal = () => { calRetried.current = true; cal.retry(); };
-  // A Retry that brings the calendar removes its button: the focus, left on nothing, goes to the calendar.
+  // The failure the user's own Retry asks again for: only that request reads "Retrying…" and empties the alert. A refetch of
+  // the page's (an ingest) changes neither: failing again, it says nothing new; answering, it clears the line.
+  const [calRetry, setCalRetry] = useState<Error | null>(null);
+  const calRetrying = !!calFail && calFail.error === calRetry && !cal.error;
+  const retryCal = () => { setCalRetry(calFail!.error); cal.retry(); };
+  // A Retry that brings the calendar removes its button. Only when that button held the focus as it went, its own request
+  // running, does the focus, left on nothing, go to the calendar; in every other case it stays where the user put it. The
+  // ref's cleanup runs before React removes the button, while the focus is still on it.
+  const retryHeld = useRef(false);
+  const retryRef = (el: HTMLButtonElement) => () => { retryHeld.current = calRetrying && document.activeElement === el; };
   useLayoutEffect(() => {
-    if (calFail || !calRetried.current) return;
-    calRetried.current = false;
-    const el = document.activeElement;
-    if (!el || el === document.body) document.getElementById("activity-calendar")?.focus();
-  }, [calFail]);
+    if (calFail || !retryHeld.current) return;
+    retryHeld.current = false;
+    if (calCurrent) document.getElementById("activity-calendar")?.focus();
+  }, [calFail, calCurrent]);
   // A week in the URL that the view does not reach is dropped, once the view's own figures are in.
   useEffect(() => {
     if (d && current && search.week && !reaches(search.week, d)) setSearch({ week: null }, { push: false });
@@ -286,7 +292,7 @@ function Overview({ views }: { views: ReactNode }) {
   // runs, so another failure is said once; the button stays, busy, so the focus stays on it.
   const calFailed = calFail && <p className="empty"><span role="alert">{calRetrying ? "" : `Could not load the calendar (${calFail.error.message}).`
     + (!cal.data ? "" : cal.previous ? " Still showing the calendar of the earlier filters; it cannot be selected." : " Still showing the last one loaded.")}</span>{" "}
-    <button type="button" className="linkish" aria-disabled={calRetrying || undefined} onClick={calRetrying ? undefined : retryCal}>{calRetrying ? "Retrying…" : "Retry"}</button></p>;
+    <button ref={retryRef} type="button" className="linkish" aria-disabled={calRetrying || undefined} onClick={calRetrying ? undefined : retryCal}>{calRetrying ? "Retrying…" : "Retry"}</button></p>;
 
   return (
     <main id="content" className={cls} ref={wrap} aria-busy={loading || undefined}>
