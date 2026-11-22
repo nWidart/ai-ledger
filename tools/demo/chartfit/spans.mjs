@@ -409,6 +409,51 @@ export async function spans(h) {
     await page.done();
   }
 
+  // ---------- a key's tooltip: above the call when the window has room, else below ----------
+  {
+    const page = await open("key tooltip");
+    const clocks = await clocksOf(page), first = LANES[0][0];
+    /** With top, the sheet scrolled so the chart's box is at the top of its visible area, under its sticky head; then the
+     *  main thread's first call read by a key afresh. The focus moves with no scroll: the sheet's scroll-padding (80px, for
+     *  the head) would move the box down again. */
+    const readAt = async top => {
+      if (top) await ev(page, () => {
+        const d = document.querySelector("dialog.sheet[open]"), b = document.querySelector("dialog.sheet[open] .spans-box");
+        d.scrollTop += b.getBoundingClientRect().top - d.querySelector(".sheet-head").getBoundingClientRect().bottom;
+      });
+      await ev(page, () => document.querySelector("dialog.sheet[open] #session-spans").focus({ preventScroll: true }));
+      // Escape only with a reading open: with nothing read it closes the sheet.
+      if ((await state(page)).tip) {
+        await page.keyboard.press("Escape");
+        await until(() => state(page), x => !x.tip);
+      }
+      await page.keyboard.press("ArrowRight");
+      const s = await until(() => state(page), x => !!x.tip && !!x.mark && names(first, x.live, clocks));
+      const more = await ev(page, () => {
+        const r = document.querySelector("dialog.sheet[open] .spans .chart-table > button").getBoundingClientRect();
+        const head = document.querySelector("dialog.sheet[open] .sheet-head").getBoundingClientRect();
+        return { button: { l: r.left, t: r.top, r: r.right, b: r.bottom }, view: innerHeight, sheetTop: head.bottom };
+      });
+      return { ...s, ...more };
+    };
+    // The box fully in view where the sheet opens to it (its foot, the sheet's end below): room above the call.
+    const mid = await readAt(false);
+    const inView = mid.box.t >= 0 && mid.box.b <= mid.view;
+    line(`a key's reading of the main thread's first call with the chart's box in view: the tooltip is shown above the call, inside the window, clear of the call's mark and of "Show data table"`,
+      inView && !!mid.tip && mid.tip.b <= mid.mark.t + .5 && mid.tip.t >= 0 && mid.tip.b <= mid.view && overlap(mid.tip, mid.mark).area <= .5 && overlap(mid.tip, mid.button).area <= .5,
+      mid.tip ? `box ${px(mid.box.t)}..${px(mid.box.b)} of ${mid.view}px; tooltip ${px(mid.tip.t)}..${px(mid.tip.b)} (${px(mid.tip.h)}px), the mark ${px(mid.mark.t)}..${px(mid.mark.b)}, the button at ${px(mid.button.t)}; overlaps ${px(overlap(mid.tip, mid.mark).area)} and ${px(overlap(mid.tip, mid.button).area)}px²` : "no tooltip");
+    // The box at the very top of the sheet's visible area: no room above the call, the tooltip goes below it. The table
+    // opened with every row and the sheet's folded blocks opened give the sheet the room below to scroll the box up there.
+    await page.locator("dialog.sheet[open] .spans .chart-table > button").click();
+    await page.getByRole("button", { name: /^Show all \d+ calls$/ }).click();
+    await ev(page, () => document.querySelectorAll("dialog.sheet[open] details").forEach(d => { d.open = true; }));
+    const top = await readAt(true);
+    line("…and with the chart's box at the very top of the sheet's visible area, the tooltip goes below the call, clear of its mark, inside the window",
+      !!top.tip && Math.abs(top.box.t - top.sheetTop) <= 2 && top.tip.t >= top.mark.b - .5 && top.tip.b <= top.view && overlap(top.tip, top.mark).area <= .5,
+      top.tip ? `box top ${px(top.box.t)}, the sheet's sticky head ending at ${px(top.sheetTop)}; tooltip ${px(top.tip.t)}..${px(top.tip.b)}, the mark ${px(top.mark.t)}..${px(top.mark.b)}` : "no tooltip");
+    await page.done();
+  }
+
   // ---------- Escape in the sheet ----------
   {
     const page = await open("escape");
