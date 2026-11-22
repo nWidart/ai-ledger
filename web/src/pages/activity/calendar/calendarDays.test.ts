@@ -21,7 +21,7 @@ const d: CalendarDays = {
   start: "2025-11-17", end: "2026-11-18", first: "2026-09-01",
   days: [row("2026-09-01", 3), row("2026-09-02", 0, 3), row("2026-10-06", 31), row("2026-11-16", 2), row("2026-11-18", 1)],
 };
-// The 26 weeks a 343px box shows: from Monday, May 25.
+// A 343px box fits 26 weeks; a store recorded for 12 shows the floor of 13, from Monday, Aug 24.
 const FIT = calendarFit(343, 1);
 const model = (over: Partial<CalendarDays> = {}, sel: Parameters<typeof calendarModel>[3] = null, weeks = FIT.weeks) =>
   calendarModel({ ...d, ...over }, "commits", weeks, sel);
@@ -52,6 +52,7 @@ describe("calendarFit", () => {
     [309, 1, 23, 12, 10, 102],
     [343, 2, 20, 14, 12, 134],
     [1174, 2, 53, 20, 17, 175],
+    [240, 2, 12, 14, 12, 134],
   ])("lays %ipx at a text scale of %i in %i weeks of %ipx, %ipx cells, %ipx high", (width, s, weeks, pitch, cell, height) => {
     expect(calendarFit(width, s)).toMatchObject({ weeks, pitch, cell, height, left: 30 * s, top: 18 * s });
   });
@@ -80,17 +81,17 @@ describe("the calendar's steps", () => {
 describe("calendarModel", () => {
   it("holds the readable days of the weeks shown, each in its cell, step and shade", () => {
     const m = model();
-    expect([m.from, m.weeks]).toEqual(["2026-05-25", 26]);
+    expect([m.from, m.weeks]).toEqual(["2026-08-24", 13]);
     // From the first recorded day to today: nothing before Sep 1 or after Nov 18.
     expect(m.days.map(c => c.day)).toEqual(dayRange("2026-09-01", "2026-11-18"));
     expect(m.steps).toEqual([{ from: 1, to: 2, shade: 2 }, { from: 3, to: 31, shade: 4 }]);
-    expect(dayOf(m, "2026-09-01")).toMatchObject({ col: 14, row: 1, value: 3, step: 2, shade: 4, busy: true });
+    expect(dayOf(m, "2026-09-01")).toMatchObject({ col: 1, row: 1, value: 3, step: 2, shade: 4, busy: true });
     // Work and no commit: step 0, its figures kept.
-    expect(dayOf(m, "2026-09-02")).toMatchObject({ col: 14, row: 2, value: 0, step: 0, shade: 0, busy: true, work: { prompts: 3 } });
+    expect(dayOf(m, "2026-09-02")).toMatchObject({ col: 1, row: 2, value: 0, step: 0, shade: 0, busy: true, work: { prompts: 3 } });
     expect(dayOf(m, "2026-09-03")).toMatchObject({ step: 0, busy: false, work: row("2026-09-03", 0, 0, 0) });
     // A Monday is row 0; today is in the newest week, the last column.
-    expect(dayOf(m, "2026-11-16")).toMatchObject({ col: 25, row: 0, step: 1, shade: 2 });
-    expect(m.days.at(-1)).toMatchObject({ day: "2026-11-18", col: 25, row: 2 });
+    expect(dayOf(m, "2026-11-16")).toMatchObject({ col: 12, row: 0, step: 1, shade: 2 });
+    expect(m.days.at(-1)).toMatchObject({ day: "2026-11-18", col: 12, row: 2 });
     expect([m.peak?.day, m.peak?.value, m.active]).toEqual(["2026-10-06", 31, 4]);
   });
 
@@ -104,10 +105,25 @@ describe("calendarModel", () => {
   });
 
   it.each([
-    ["a day", { day: "2026-10-06", days: 1 }, { col: 19, row: 1, rows: 1 }],
-    ["a week", { day: "2026-09-07", days: 7 }, { col: 15, row: 0, rows: 7 }],
-    ["the current week, to today", { day: "2026-11-16", days: 7 }, { col: 25, row: 0, rows: 3 }],
-    ["the week recording started, from its first day", { day: "2026-08-31", days: 7 }, { col: 14, row: 1, rows: 6 }],
+    // the first recorded day, box, text scale, weeks shown, first Monday shown, first cell's column, readable days
+    ["11 weeks old on a desktop: two columns before it", "2026-09-08", 1174, 1, 13, "2026-08-24", 2, 72],
+    ["11 weeks old where 12 fit", "2026-09-08", 240, 2, 12, "2026-08-31", 1, 72],
+    ["30 weeks old on a phone", "2026-04-28", 343, 1, 26, "2026-05-25", 0, 178],
+    ["older than a year", "2025-01-01", 1174, 1, 53, "2025-11-17", 0, 367],
+    ["begun this week", "2026-11-18", 1174, 1, 13, "2026-08-24", 12, 1],
+    ["never recorded", null, 1174, 1, 53, "2025-11-17", undefined, 0],
+  ] as const)("shows the weeks of a store %s", (_, first, width, s, weeks, from, col, n) => {
+    const m = calendarModel({ ...d, first, days: first ? d.days.filter(r => r.day >= first) : [] }, "commits", calendarFit(width, s).weeks, null);
+    expect([m.weeks, m.from, m.days[0]?.col, m.days.length]).toEqual([weeks, from, col, n]);
+    // The newest cell, today, is in the last column shown.
+    if (n) expect(m.days.at(-1)).toMatchObject({ day: d.end, col: weeks - 1 });
+  });
+
+  it.each([
+    ["a day", { day: "2026-10-06", days: 1 }, { col: 6, row: 1, rows: 1 }],
+    ["a week", { day: "2026-09-07", days: 7 }, { col: 2, row: 0, rows: 7 }],
+    ["the current week, to today", { day: "2026-11-16", days: 7 }, { col: 12, row: 0, rows: 3 }],
+    ["the week recording started, from its first day", { day: "2026-08-31", days: 7 }, { col: 1, row: 1, rows: 6 }],
     ["a day before recording", { day: "2026-08-31", days: 1 }, null],
     ["a day before the weeks shown", { day: "2026-03-03", days: 1 }, null],
   ] as const)("places the selection of %s", (_, sel, want) => {
@@ -118,8 +134,8 @@ describe("calendarModel", () => {
     const v = model().view;
     expect(model({ days: [...d.days, row("2026-11-17", 9)] }, { day: "2026-10-06", days: 1 }).view).toBe(v);
     expect(calendarModel(d, "prompts", FIT.weeks, null).view).not.toBe(v);
-    expect(model({}, null, 25).view).not.toBe(v);
-    expect(model({ end: "2026-11-23" }).view).not.toBe(v); // the same 26 weeks a week later
+    expect(model({}, null, 12).view).not.toBe(v); // fewer than the 13 fit
+    expect(model({ end: "2026-11-23" }).view).not.toBe(v); // the same 13 weeks a week later
   });
 });
 
@@ -151,9 +167,9 @@ describe("calendarOption", () => {
     const m = model(), drawn = cells(m);
     expect(drawn).toHaveLength(m.days.length);
     const at = (day: string) => drawn[m.days.findIndex(c => c.day === day)]!;
-    // Sep 1: column 14, row 1, in a 12px pitch from (30, 18).
-    expect(at("2026-09-01")).toMatchObject({ type: "rect", shape: { x: 198, y: 30, width: 10, height: 10 }, style: { fill: "var(--heat-4)" } });
-    expect(at("2026-11-16")).toMatchObject({ shape: { x: 330, y: 18 }, style: { fill: "var(--heat-2)" } });
+    // Sep 1: column 1, row 1, in a 12px pitch from (30, 18).
+    expect(at("2026-09-01")).toMatchObject({ type: "rect", shape: { x: 42, y: 30, width: 10, height: 10 }, style: { fill: "var(--heat-4)" } });
+    expect(at("2026-11-16")).toMatchObject({ shape: { x: 174, y: 18 }, style: { fill: "var(--heat-2)" } });
     expect(at("2026-09-02").style).toEqual({ fill: "ink-grid" });
   });
 
@@ -174,17 +190,18 @@ describe("calendarOption", () => {
   });
 
   it.each([
-    ["a day", { day: "2026-10-06", days: 1 }, false, { x: 258.75, y: 30.75, width: 8.5, height: 8.5 }, 1.5],
-    ["a week, under forced colors", { day: "2026-09-07", days: 7 }, true, { x: 211, y: 19, width: 8, height: 80 }, 2],
+    ["a day", { day: "2026-10-06", days: 1 }, false, { x: 102.75, y: 30.75, width: 8.5, height: 8.5 }, 1.5],
+    ["a week, under forced colors", { day: "2026-09-07", days: 7 }, true, { x: 55, y: 19, width: 8, height: 80 }, 2],
   ] as const)("frames the cells of %s in the accent, unfilled", (_, sel, forced, shape, lineWidth) => {
     const [frame] = draw(seriesOf(calendarOption(model({}, sel), FIT, env({ forced }), true), "selected"));
     expect(frame).toEqual({ type: "rect", emphasisDisabled: true, shape, style: { fill: "none", stroke: "ink-accent", lineWidth } });
   });
 
   it.each([
-    ["the cut first month", {}, ["Jun", "Jul", "Aug", "Sep", "Oct", "Nov"]],
-    // The newest week starts June: its name would end past the box.
-    ["a month in the last column", { start: "2025-06-02", end: "2026-06-03" }, ["Dec", "Jan", "Feb", "Mar", "Apr", "May"]],
+    // Aug holds the first two columns: Sep's name starts 24px after it.
+    ["the cut first month", {}, ["Sep", "Oct", "Nov"]],
+    // 26 weeks recorded; the newest starts June: its name would end past the box.
+    ["a month in the last column", { start: "2025-06-02", end: "2026-06-03", first: "2025-06-02" }, ["Dec", "Jan", "Feb", "Mar", "Apr", "May"]],
   ])("names the weekdays and the months, leaving out %s", (_, over, months) => {
     const labels = texts(model(over));
     expect(labels.map(l => l.text)).toEqual(["Mon", "Wed", "Fri", ...months]);

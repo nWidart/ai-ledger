@@ -419,8 +419,8 @@ describe("work panel", () => {
 });
 
 describe("activity calendar", () => {
-  // The fixture's 53 weeks end on Thursday, Nov 5, 2026; jsdom's 800px box shows them all at a 14px pitch from 30px left and
-  // 18px down (ActivityCalendar.test.tsx). Nov 4 is in its last column, Oct 1 five columns before.
+  // The fixture's 53 weeks end on Thursday, Nov 5, 2026, recorded from Oct 1: jsdom's 800px box shows the newest 13 at a 14px
+  // pitch from 30px left and 18px down (ActivityCalendar.test.tsx). Nov 4 is in its last column, Oct 1 five columns before.
   const cell = (col: number, row: number) => ({ clientX: 30 + col * 14 + 5, clientY: 18 + row * 14 + 5 });
   /** A click as a browser makes it: the pointer reads the day, then the press focuses the calendar and clicks. */
   const click = (col: number, row: number) => {
@@ -442,14 +442,14 @@ describe("activity calendar", () => {
     const workbench = document.getElementById("workbench")!, section = await screen.findByRole("region", { name: "Activity calendar" });
     expect(workbench.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    click(52, 2);
+    click(12, 2);
     expect(location.search).toBe("?range=7&day=2026-11-04");
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("tabpanel")));
 
     // Outside the last 7 days: two writes, the range pushed and then the day, so the day survives the range's write, and
     // so does the status the pick said (ActivityCalendar.test.tsx owns its words).
     const n = history.length;
-    click(47, 3);
+    click(7, 3);
     expect(location.search).toBe("?range=90&day=2026-10-01");
     expect(history.length).toBe(n + 1);
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("tabpanel")));
@@ -460,7 +460,7 @@ describe("activity calendar", () => {
     // Another source's calendar is loading: the one on screen is the earlier view's, and takes no pick.
     act(() => setSearch({ source: "codex" }));
     await waitFor(() => expect(document.querySelector(".pending")!.textContent).toBe(""));
-    click(52, 3);
+    click(12, 3);
     expect(location.search).toBe("?range=7&source=codex");
   });
 
@@ -484,7 +484,7 @@ describe("activity calendar", () => {
     const region = () => within(screen.getByRole("region", { name: "Activity calendar" }));
     const alert = await region().findByRole("alert");
     await waitFor(() => expect(alert.textContent).toBe("Could not load the calendar (HTTP 404). Still showing the calendar of the earlier filters; it cannot be selected."));
-    click(52, 2);
+    click(12, 2);
     expect(location.search).toBe("?range=30&source=codex");
 
     // While Retry runs, its button stays, busy, with the focus; the answer brings the calendar of these filters, which picks.
@@ -498,7 +498,7 @@ describe("activity calendar", () => {
     await act(async () => { again.resolve(calendar); await again.p; });
     await waitFor(() => expect(region().queryByRole("alert")).toBeNull());
     expect(document.activeElement).toBe(screen.getByRole("group", { name: /^Commits per day as a calendar/ }));
-    click(52, 2);
+    click(12, 2);
     expect(location.search).toBe("?range=30&source=codex&day=2026-11-04");
 
     // An ingest's request fails; Retry empties the alert while it runs, then fails again: the same alert says it once more.

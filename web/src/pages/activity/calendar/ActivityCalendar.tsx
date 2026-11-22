@@ -46,7 +46,7 @@ const SILENT: Said = { text: "", of: null };
 /** A row of the data table: a week shown, its days from Monday (none for a day with no cell). */
 interface WeekRow { monday: Day; days: (CalendarDay | undefined)[] }
 
-/** The last 53 weeks of work as a calendar, a column per week and a row per weekday, each day shaded by the work chart's
+/** The weeks of work recorded, up to the last 53, as a calendar, a column per week and a row per weekday, each day shaded by the work chart's
  *  measure (graph-activity-calendar, decisions 4 to 8, 10 and 11). The layout, the scale and the drawing are calendarDays.ts';
  *  <EChart> draws them and reads nothing (`points={0}`): the reading is this component's, in two directions (gridReading.ts),
  *  with its own tooltip, ring and live region, on `div.cal-box` around the wrapper's box. */
@@ -141,7 +141,7 @@ export function ActivityCalendar({ d, metric, range, selected, onPick, onClear, 
   // The days are in order from the first readable one, so a cell's index is its place less the first day's.
   const first = m.days[0], skip = first ? first.col * 7 + first.row : 0;
   const under = (e: MouseEvent) => {
-    const r = box.current!.getBoundingClientRect(), p = cellAt(fit, e.clientX - r.left, e.clientY - r.top);
+    const r = box.current!.getBoundingClientRect(), p = cellAt({ ...fit, weeks: m.weeks }, e.clientX - r.left, e.clientY - r.top);
     const i = p ? p.col * 7 + p.row - skip : -1;
     return i >= 0 ? m.days[i] ?? null : null;
   };

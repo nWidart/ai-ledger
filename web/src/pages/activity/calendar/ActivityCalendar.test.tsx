@@ -31,7 +31,8 @@ const live = () => document.querySelector("#calendar .cal-live")!.textContent;
 const tip = () => screen.queryByRole("tooltip");
 const press = (key: string) => fireEvent.keyDown(group(), { key });
 const focus = () => act(() => group().focus());
-// jsdom lays nothing out: its fallback width of 800px gives all 53 weeks at a 14px pitch, from 30px left and 18px down.
+// jsdom lays nothing out: its fallback width of 800px fits 53 weeks at a 14px pitch, from 30px left and 18px down. Recorded
+// for 12 weeks, the store shows 13, from Monday, Aug 24.
 const pixel = (col: number, row: number) => ({ clientX: 30 + col * 14 + 5, clientY: 18 + row * 14 + 5 });
 
 beforeEach(() => {
@@ -40,18 +41,19 @@ beforeEach(() => {
 
 it("names the span, the busiest day and the keys, and the hint and the key name the measure and the steps", () => {
   const { redraw } = calendar();
-  expect(group().getAttribute("aria-label")).toBe("Commits per day as a calendar, 53 weeks from Nov 17, 2025 to Nov 18, 2026, in columns from Monday to Sunday. "
+  expect(group().getAttribute("aria-label")).toBe("Commits per day as a calendar, 13 weeks from Aug 24, 2026 to Nov 18, 2026, in columns from Monday to Sunday. "
     + "10 days with commits, the most 40 on Wednesday, Nov 18, 2026. Use the arrow keys to read a day: left and right move a week, up and down a day, "
     + "Home and End go to the first and last day. Enter selects the day and Escape clears the selection.");
-  expect(document.querySelector("#calendar .hint")!.textContent).toMatch(/^Commits per day, last 53 weeks\./);
+  expect(document.querySelector("#calendar .hint")!.textContent).toMatch(/^Commits per day, last 13 weeks\./);
   expect([...document.querySelectorAll("#calendar .legend .key")].map(k => k.textContent)).toEqual(["No commits", "1–2", "3–8", "9–40", "Recording starts Sep 1, 2026"]);
-  // Recorded from the first Monday shown: the line still shows.
+  // Recorded from the payload's first Monday: all 53 weeks, and the line still shows.
   redraw({ ...d, first: "2025-11-17" });
+  expect(document.querySelector("#calendar .hint")!.textContent).toMatch(/^Commits per day, last 53 weeks\./);
   expect(document.querySelector("#calendar .legend .key:last-child")!.textContent).toBe("Recording starts Nov 17, 2025");
 });
 
 it("says when no day has the measure, when only weeks not shown have it, and when no day is recorded", () => {
-  // A phone's box: 26 weeks, from May 25, 2026.
+  // A phone's box: 26 weeks fit.
   vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(343);
   const { redraw } = calendar({ d: { ...d, days: d.days.map(r => ({ ...r, commits: 0 })) } });
   expect(group().getAttribute("aria-label")).toMatch(/from Monday to Sunday\. No commits yet\. Use the arrow keys/);
@@ -71,7 +73,7 @@ it("reads today with Left, with its sentence, its tooltip and the ring on its ce
   expect(live()).toBe(TODAY);
   expect([...tip()!.children].map(r => r.textContent)).toEqual(["Wednesday, Nov 18, 2026", "Commits40", "Prompts41", "Sessions2"]);
   const ring = document.querySelector<HTMLElement>("#calendar .cal-cursor")!.style; // the last column, Wednesday's row
-  expect([ring.left, ring.top, ring.width]).toEqual(["758px", "46px", "12px"]);
+  expect([ring.left, ring.top, ring.width]).toEqual(["198px", "46px", "12px"]);
   press("ArrowUp");
   expect(live()).toBe("Tuesday, Nov 17, 2026: no activity.");
   press("ArrowLeft");
@@ -86,12 +88,12 @@ it("reads today with Left, with its sentence, its tooltip and the ring on its ce
 
 it("reads the day under the pointer and ends the reading when it leaves, or on Escape from elsewhere", () => {
   calendar();
-  fireEvent.mouseMove(group(), pixel(51, 3));
+  fireEvent.mouseMove(group(), pixel(11, 3));
   expect(live()).toBe("Thursday, Nov 12, 2026: 5 commits, 5 prompts, 1 session.");
   fireEvent.mouseLeave(group().parentElement!);
   expect(tip()).toBeNull();
   expect(live()).toBe("");
-  fireEvent.mouseMove(group(), pixel(51, 3));
+  fireEvent.mouseMove(group(), pixel(11, 3));
   fireEvent.keyDown(document.body, { key: "Escape" });
   expect(tip()).toBeNull();
 });
@@ -143,6 +145,7 @@ it("lists each week shown in the data table, with a dash for a day with no cell"
   await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
   const table = within(screen.getByRole("table", { name: "Commits per day, by week" }));
   expect(table.getAllByRole("columnheader").map(h => h.textContent)).toEqual(["Week", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Total"]);
+  expect(table.getAllByRole("rowheader")).toHaveLength(13);
   const cells = (name: string) => [...table.getByRole("rowheader", { name }).parentElement!.querySelectorAll("td")].map(c => c.textContent);
   expect(cells("Week of Aug 31, 2026")).toEqual(["–", "1", "1", "1", "0", "0", "0", "3"]);
   expect(cells("Week of Nov 16, 2026, so far")).toEqual(["13", "0", "40", "–", "–", "–", "–", "53"]);

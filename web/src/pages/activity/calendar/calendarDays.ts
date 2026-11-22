@@ -12,6 +12,8 @@ import { busy, monday, plus, type WorkMetric } from "../work";
 
 /** The weeks the server sends: the current one and the 52 before it. */
 const WEEKS = 53;
+/** The fewest weeks shown when they fit (decision 2): a quarter, so a store a week old is not a sliver. */
+const FLOOR = 13;
 /** The right and bottom margins, in px at every text size. */
 const EDGE = 2;
 
@@ -87,7 +89,8 @@ interface CalendarModel {
   metric: WorkMetric;
   /** The Monday of the first week shown. */
   from: Day;
-  /** The weeks shown: the fit's, or fewer when the payload holds fewer. */
+  /** The weeks shown (decision 2): from the first recorded day's week to this week, at least 13, at most the fit's and the
+   *  payload's. With no recorded day, the fit's or the payload's, the fewer. */
   weeks: number;
   /** The readable days, oldest first: from the later of `from` and the first recorded day, to today. */
   days: CalendarDay[];
@@ -108,9 +111,12 @@ const at = (k: Day) => Date.parse(k + "T00:00:00Z");
 const between = (a: Day, b: Day) => Math.round((at(b) - at(a)) / 864e5);
 const none = (day: Day): DailyWorkRow => ({ day, sessions: 0, prompts: 0, commits: 0, calls: 0, failed_calls: 0 });
 
-/** The newest `weeks` weeks of the payload, shaded by `metric`, with the selection's place. */
+/** The newest weeks of the payload that hold its recorded days, at least 13 and at most the `weeks` that fit, shaded by
+ *  `metric`, with the selection's place. */
 export function calendarModel(d: CalendarDays, metric: WorkMetric, weeks: number, selected: CalendarSelection | null): CalendarModel {
-  const last = monday(d.end), shown = Math.min(weeks, between(monday(d.start), last) / 7 + 1);
+  const last = monday(d.end), sent = between(monday(d.start), last) / 7 + 1;
+  const recorded = d.first ? Math.max(FLOOR, between(monday(d.first), last) / 7 + 1) : sent;
+  const shown = Math.min(weeks, sent, recorded);
   const from = plus(last, -7 * (shown - 1)), steps = calendarSteps(d.days.map(r => r[metric]));
   const have = new Map(d.days.map(r => [r.day, r]));
   const begin = d.first && d.first > from ? d.first : from;

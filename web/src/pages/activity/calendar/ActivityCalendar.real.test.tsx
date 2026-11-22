@@ -22,8 +22,8 @@ const resolved = (token: string) => {
 const tokenOf = (c: string | null) => (c === "none" ? c : [...rgb].find(([, v]) => v === c)?.[0]);
 
 const row = (day: Day, commits: number): DailyWorkRow => ({ day, sessions: 1, prompts: commits, commits, calls: 0, failed_calls: 0 });
-// 53 weeks to Wednesday, Nov 18, 2026, recorded from Tuesday, Sep 1: a 343px box shows the newest 26 weeks, from May 25,
-// so the cells start in the 15th column. Five days of commits cut at 5, 8 and 40, three shades.
+// 53 weeks to Wednesday, Nov 18, 2026, recorded from Tuesday, Sep 1: a 343px box fits 26 weeks, and the 12 recorded show
+// as the newest 13, from Aug 24, so the cells start in the 2nd column. Five days of commits cut at 5, 8 and 40, three shades.
 const d: CalendarPayload = {
   project: "", automated: false, source: "", start: "2025-11-17", end: "2026-11-18", first: "2026-09-01",
   days: [row("2026-09-01", 1), row("2026-10-06", 2), row("2026-11-10", 8), row("2026-11-12", 5), row("2026-11-18", 40)],
@@ -67,25 +67,25 @@ it("draws a cell per readable day and the selection, redraws newer figures with 
   // Sep 1 to Nov 18: 79 readable days. The first import of ECharts in a cold worker can take over a second.
   await waitFor(() => expect(filled()).toHaveLength(79), { timeout: 5000 });
 
-  // The first cell, Tuesday Sep 1, in the 15th column; the last, today, in the 26th: 10px squares on a 12px pitch from 30px
+  // The first cell, Tuesday Sep 1, in the 2nd column; the last, today, in the 13th: 10px squares on a 12px pitch from 30px
   // left and 18px down.
-  expect(filled()[0]).toMatchObject({ x: 198, y: 30, w: 10, h: 10 });
-  expect(filled().at(-1)).toMatchObject({ x: 330, y: 42, w: 10, h: 10 });
+  expect(filled()[0]).toMatchObject({ x: 42, y: 30, w: 10, h: 10 });
+  expect(filled().at(-1)).toMatchObject({ x: 174, y: 42, w: 10, h: 10 });
   // The labels series draws: the weekday and month names are svg text.
   const texts = [...plot().querySelectorAll("svg text")].map(t => t.textContent);
   expect(texts).toEqual(expect.arrayContaining(["Mon", "Oct"]));
 
-  // Thursday Nov 12 selected: one unfilled frame in the accent, inside its cell at (318, 54).
+  // Thursday Nov 12 selected: one unfilled frame in the accent, inside its cell at (162, 54).
   const frame = paths().filter(p => p.stroke);
   expect(frame).toHaveLength(1);
   expect(frame[0]).toMatchObject({ fill: "none", stroke: "var(--accent)" });
   const f = frame[0]!;
-  expect([f.x >= 318, f.y >= 54, f.x + f.w <= 328, f.y + f.h <= 64]).toEqual([true, true, true, true]);
+  expect([f.x >= 162, f.y >= 54, f.x + f.w <= 172, f.y + f.h <= 64]).toEqual([true, true, true, true]);
 
   // Newer figures: idle Tuesday Nov 17 has 3 commits. Its cell takes its shade, and no path of the old drawing is left behind.
   rerender(calendar({ ...d, days: [...d.days.slice(0, -1), row("2026-11-17", 3), d.days.at(-1)!] }));
-  await waitFor(() => expect(at(330, 30)[0]?.fill).toBe("var(--heat-1)"));
-  expect(at(330, 30)).toHaveLength(1);
+  await waitFor(() => expect(at(174, 30)[0]?.fill).toBe("var(--heat-1)"));
+  expect(at(174, 30)).toHaveLength(1);
   expect(paths()).toHaveLength(79 + 1);
 
   const drawing = plot();
@@ -100,6 +100,6 @@ it("draws a step as a square of the text color under forced colors, and an empty
   await waitFor(() => expect(paths().length).toBeGreaterThan(79), { timeout: 5000 });
 
   // Wednesday Sep 2 has none: an unfilled square edged in GrayText. Today, the darkest step, fills its cell in CanvasText.
-  expect(at(198.5, 42.5)).toMatchObject([{ fill: "none", stroke: "GrayText" }]);
-  expect(at(330, 42)).toMatchObject([{ fill: "CanvasText" }]);
+  expect(at(42.5, 42.5)).toMatchObject([{ fill: "none", stroke: "GrayText" }]);
+  expect(at(174, 42)).toMatchObject([{ fill: "CanvasText" }]);
 });
