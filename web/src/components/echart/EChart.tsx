@@ -67,8 +67,8 @@ export interface EChartProps {
   keys?: { space?: boolean };
   /** A sentence the live region says once, when this changes to a new text that is not empty: what the last activation
    *  or Escape did ("… selected"). It takes the region as a zoom sentence does. A reading replaces it, and the end of
-   *  that reading does not say it again. It is not said on mount, nor for a new view. An empty text drops a status the
-   *  region holds. */
+   *  that reading does not say it again. The end of a reading open when it came leaves it in the region. It is not said
+   *  on mount, nor for a new view. An empty text drops a status the region holds. */
   status?: string;
   /** Escape on the focused box while nothing is read. Return true when it did something: the key is then prevented.
    *  Escape from anywhere else never calls it, and Escape with a reading open only ends the reading. */
@@ -232,13 +232,15 @@ export function EChart({
     if (status) setSaid({ status, reading: null, zoom: null });
     else if (said?.status != null) setSaid(null);
   }
-  /** A new reading, or none: the live region says it in place of what it held. `keyed`: a key made it. Ending no reading
-   *  changes nothing, so a pointer that moves over the slider leaves the sentence the slider's drag set. */
+  /** A new reading, or none: the live region says it in place of what it held. `keyed`: a key made it. Ending a reading
+   *  drops only its own sentence: a status or a zoom sentence that took the region while it was open stays (a chart that
+   *  keeps the reading after an activation has its status arrive then). Ending no reading changes nothing, so a pointer
+   *  that moves over the slider leaves the sentence the slider's drag set. */
   const readAt = (i: number | null, keyed = false) => {
     if (i == null) {
       if (!reading) return;
       setReading(null);
-      return setSaid(null);
+      return setSaid(was => (was?.reading != null ? null : was));
     }
     const text = read(i);
     setReading({ i, keyed, text });

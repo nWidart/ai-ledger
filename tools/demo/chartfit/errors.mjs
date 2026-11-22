@@ -555,22 +555,31 @@ export async function errors(h) {
       line(`cleared by ${how === "chip" ? "the chip by the type table" : "Back"}: the chart says nothing, and drops the sentence it held`, !out.said.length && !STATUS.test(out.region),
         `said ${JSON.stringify(out.said)}, region "${out.region.split(":")[0]}"`);
     }
-    // A click and the pointer leaving at once: the sentence must reach the region and stay there.
+    // A click, then the pointer leaving at once, 400ms or 1.5s later: the sentence must reach the region and stay there.
     {
-      await away(page);
-      await ev(page, () => window.errfit.listen());
-      await page.mouse.click(centre(t.g, K), (t.bars.t + t.bars.b) / 2);
-      await page.mouse.move(2, 2);
-      await until(() => sel(page), s => s.url.includes(`at=${DAYS[K]}`));
-      await sleep(800);
-      const log = await ev(page, () => window.errfit.heard());
-      const i = log.findIndex(x => x.text === selectedSay(DAYS[K]));
-      const kept = i < 0 ? 0 : (log[i + 1]?.t ?? performance.now()) - log[i].t;
-      const now = await ev(page, () => window.errfit.region());
-      line("a click and the pointer leaving at once: the selected sentence is said once and the region still holds it", log.filter(x => x.text === selectedSay(DAYS[K])).length === 1 && now === selectedSay(DAYS[K]),
-        `region after: ${JSON.stringify(log.map(x => x.text.split(":")[0]))}; the sentence held ${i < 0 ? "never" : `${Math.round(kept)}ms`}; now "${now.split(":")[0]}"`);
-      if ((await sel(page)).chip) await page.locator("#atClr").click();
-      await until(() => sel(page), s => !s.url.includes("at="));
+      const got = [];
+      for (const wait of [0, 400, 1500]) {
+        await away(page);
+        // Back may have scrolled the page: the chart is measured where it is now.
+        await page.locator(ROOT).scrollIntoViewIfNeeded();
+        const tk = await tracks(page);
+        await ev(page, () => window.errfit.listen());
+        await page.mouse.click(centre(tk.g, K), (tk.bars.t + tk.bars.b) / 2);
+        if (wait) await sleep(wait);
+        await page.mouse.move(2, 2);
+        await until(() => sel(page), s => s.url.includes(`at=${DAYS[K]}`));
+        await sleep(800);
+        const log = await ev(page, () => window.errfit.heard());
+        const i = log.findIndex(x => x.text === selectedSay(DAYS[K]));
+        const kept = i < 0 ? 0 : (log[i + 1]?.t ?? performance.now()) - log[i].t;
+        const now = await ev(page, () => window.errfit.region());
+        const url = await ev(page, () => location.search);
+        got.push({ wait, ok: url.includes(`at=${DAYS[K]}`) && log.filter(x => x.text === selectedSay(DAYS[K])).length === 1 && now === selectedSay(DAYS[K]),
+          at: `left after ${wait}ms: ${url}, region ${JSON.stringify(log.map(x => x.text.split(":")[0]))}, the sentence held ${i < 0 ? "never" : `${Math.round(kept)}ms`}, now "${now.split(":")[0]}"` });
+        if ((await sel(page)).chip) await page.locator("#atClr").click();
+        await until(() => sel(page), s => !s.url.includes("at="));
+      }
+      line("a click, then the pointer leaving at once, 400ms or 1.5s later: the selected sentence is said once and the region still holds it", got.every(x => x.ok), got.map(x => x.at).join("; "));
     }
     // Escape ends the reading and keeps the selection.
     {

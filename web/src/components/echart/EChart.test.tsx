@@ -1190,8 +1190,6 @@ describe("EChart zoom", () => {
     rerender(viewed({ status: SELECTED }));
     expect(readout()).toBe(SELECTED); // alone, with the reading still open
     expect(chart.band).toBe(0);
-    key("Escape");
-    expect(readout()).toBe("");
   });
 
   it("keeps a status through a redraw that would drop a zoom sentence, and leaves a zoom sentence when the status empties", async () => {
@@ -1482,7 +1480,7 @@ describe("EChart status", () => {
     expect(said()).toBe(2);
   });
 
-  it("takes the region from an open reading, which stays open, and the end of that reading empties the region", async () => {
+  it("takes the region from an open reading, which stays open, and keeps it when that reading ends", async () => {
     const { rerender } = render(show({ view: "v", status: "" }));
     const chart = await drawn();
     key("ArrowRight");
@@ -1494,11 +1492,20 @@ describe("EChart status", () => {
     key("ArrowRight"); // the next key reads again
     expect(readout()).toBe("Wed: $3.00");
 
-    rerender(show({ view: "v", status: CLEARED }));
-    expect(readout()).toBe(CLEARED);
-    key("Escape");
-    expect(readout()).toBe("");
-    expect(tooltip()).toBeNull();
+    // The end of the reading drops only the reading's own sentence: Escape, blur or the pointer leaving.
+    const ends: [string, () => void, () => void][] = [
+      ["Escape", () => key("ArrowRight"), () => key("Escape")],
+      ["blur", () => key("ArrowRight"), () => fireEvent.blur(box())],
+      ["the pointer leaving", () => chart.fire("mousemove", chart.pointAt(1)), () => chart.fire("globalout")],
+    ];
+    for (const [n, [what, open, end]] of ends.entries()) {
+      const status = n % 2 ? SELECTED : CLEARED;
+      open();
+      rerender(show({ view: "v", status }));
+      const said = spoken();
+      end();
+      expect([what, readout(), tooltip(), said()]).toEqual([what, status, null, 0]);
+    }
   });
 
   it("keeps a status when the point of an open reading is gone", async () => {
