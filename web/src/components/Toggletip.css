@@ -15,5 +15,7 @@
 /* A paragraph inside a popup: a span, as the popup sits in a hint line and holds phrasing content only. */
 .tt-pop .tt-p { display: block; }
 .tt-pop .tt-p + .tt-p { margin-top: 6px; }
+/* The button and its popup's host in one inline box, so a flex parent with a gap counts them as one item. */
+.tt-wrap { display: inline; }
 /* The popup's place in the DOM, right after its button; Base UI positions the popup itself. */
 .tt-host { display: contents; }

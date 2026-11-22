@@ -1,10 +1,11 @@
-import { useMemo, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { LivePulse } from "../../api";
+import { useWidth } from "../../components/chart";
 import { modified } from "../../components/keys";
 import { plural } from "../../format";
 import { pulseMinutes, pulseSummary, tokensShort, type PulseMinute } from "./live";
 
-const W = 160, H = 28, LINE_TOP = 2, LINE_BOTTOM = 17, TICK_TOP = 20;
+const H = 40, LINE_TOP = 3, LINE_BOTTOM = 28, TICK_TOP = 32;
 const HM = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
 
 /** One minute in words, for the readout: "10:04 to 10:05: context 52k, 3 calls, 1 failed". */
@@ -13,9 +14,11 @@ export const readMinute = (m: PulseMinute) =>
 
 /** The session's last 10 minutes: its context as a step line, scaled from its lowest to its highest level so growth
  *  shows in a large window, and a tick per finished call along the foot: an upright line for a success, a ✕ for a
- *  failure, apart in shape as well as color. Read by pointer or keyboard one minute at a time, as Context's charts are. */
+ *  failure, apart in shape as well as color. Drawn at its box's width in pixels, so the ticks keep their shape at any width.
+ *  Read by pointer or keyboard one minute at a time, as Context's charts are. */
 export function Pulse({ p }: { p: LivePulse }) {
   const [at, setAt] = useState<number | null>(null);
+  const box = useRef<HTMLSpanElement>(null), W = useWidth(box, 160);
   const minutes = useMemo(() => pulseMinutes(p), [p]);
   const start = Date.parse(p.start), span = Math.max(1, Date.parse(p.end) - start);
   const x = (ts: string) => Math.min(W, Math.max(0, ((Date.parse(ts) - start) / span) * W));
@@ -40,7 +43,7 @@ export function Pulse({ p }: { p: LivePulse }) {
   };
   const cur = at == null ? null : minutes[at]!, bw = W / minutes.length;
   return <span className="pulse">
-    <span className="chart" tabIndex={0} role="group" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}
+    <span className="chart" ref={box} tabIndex={0} role="group" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}
       onPointerMove={ev => setAt(near(ev))} onPointerLeave={() => setAt(null)}>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
         {cur && <rect className="cur" x={at! * bw} y={0} width={bw} height={H} />}

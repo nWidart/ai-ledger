@@ -440,8 +440,6 @@ export interface LivePulse {
 }
 export interface LiveSession extends LiveFigures, LiveTitle {
   session_id: string; project: string | null; source: Source; branch: string | null; last_ts: Ts | null; now: Ts;
-  /** The directory the session runs in, when its lines say. */
-  cwd: string | null;
   /** Pass back as after= to get newer events, with those of the minute before sent again. */
   cursor: string | null; truncated: boolean; state: LiveState;
   events: LiveEvent[];
@@ -449,7 +447,6 @@ export interface LiveSession extends LiveFigures, LiveTitle {
   lanes: Record<string, { cost: number | null; model: string | null }>;
   compactions: { ts: Ts | null; pre: number | null }[];
   pulse: LivePulse;
-  limits: { label: string; used_percent: number; observed_at: Ts | null; resets_at: Ts | null }[];
 }
 
 export interface IngestStats { files: number; lines: number; inserted: number; seconds: number; usage_files?: number; usage_skipped?: number }

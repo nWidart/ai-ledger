@@ -8,7 +8,6 @@ export default {
  "project": "graft",
  "source": "codex",
  "branch": null,
- "cwd": "/nowhere/graft",
  "last_ts": "2026-11-10T10:00:27.000Z",
  "now": "2026-11-10T10:01:00.000Z",
  "cursor": "2026-11-10T10:00:27.000Z",
@@ -70,7 +69,6 @@ export default {
   ],
   "ticks": []
  },
- "limits": [],
  "cost": null,
  "requests": 1,
  "model": null,

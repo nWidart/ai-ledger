@@ -9,7 +9,7 @@ import re
 import shlex
 from datetime import datetime, timedelta, timezone
 
-from . import limits, metrics, store, titles
+from . import metrics, store, titles
 from .categorize import SHELL_TOOLS
 
 ACTIVE = timedelta(minutes=10)  # a session with a line this recent is listed
@@ -568,7 +568,7 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
     prices = metrics.load_prices() if prices is None else prices
     if after and parse_ts(after) is None:
         raise ValueError(f"bad cursor: {after}")
-    info = metrics.rows(cur, "SELECT session_id, project, cwd, source, git_branch, last_ts FROM sessions WHERE session_id = ?", [sid])
+    info = metrics.rows(cur, "SELECT session_id, project, source, git_branch, last_ts FROM sessions WHERE session_id = ?", [sid])
     if not info:
         return None
     s = info[0]
@@ -618,12 +618,12 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
     # The state and the window from the session's newest lines, as the active list reads them: a catch-up's rows can
     # hold no turn start, and a first load's are a different set.
     now_events = assemble(recent(cur, [sid]).get(sid, []), copied)[0]
-    return dict(session_id=sid, **title_of(titles.titles(cur, [sid], prompts=text), sid), project=s["project"], source=s["source"], branch=s["git_branch"], cwd=s["cwd"], last_ts=iso(last),
+    return dict(session_id=sid, **title_of(titles.titles(cur, [sid], prompts=text), sid), project=s["project"], source=s["source"], branch=s["git_branch"], last_ts=iso(last),
                 now=iso(now), cursor=cursor, truncated=more,
                 state=state(now_events, now, s["source"], last, sid in closed(cur, [sid])),
                 events=[public(e, text) for e in events], lanes=lanes(cur, sid, prices),
                 window=window_of(f["model"], now_events, prices), compactions=compactions(cur, sid),
-                pulse=pulse(cur, sid, now), limits=plan_limits(cur, s["source"], now), **f)
+                pulse=pulse(cur, sid, now), **f)
 
 
 def open_before(cur, sid, source, before, cut, copied):
@@ -796,13 +796,3 @@ def pulse(cur, sid, now):
         WHERE session_id = ? AND end_ts > ? AND end_ts <= ? ORDER BY end_ts""", [sid, start, naive]).fetchall()
     return dict(start=iso(aware(start)), end=iso(now), context=[dict(ts=iso(aware(ts)), tokens=n or 0) for ts, n in context],
                 ticks=[dict(ts=iso(aware(ts)), failed=bool(bad)) for ts, bad in ticks])
-
-
-def plan_limits(cur, source, now):
-    """The newest use of each open plan limit of the session's source."""
-    naive = now.astimezone(timezone.utc).replace(tzinfo=None)
-    rows = cur.execute("""SELECT provider, limit_id, scope, window_minutes, arg_max(used_percent, observed_at), max(observed_at),
-            arg_max(resets_at, observed_at) FROM limit_snapshots WHERE resets_at > ? GROUP BY 1, 2, 3, 4 ORDER BY 4, 2, 3""",
-                       [naive]).fetchall()
-    return [dict(label=limits.label(p, lid, sc, m), used_percent=used, observed_at=metrics.iso(seen), resets_at=metrics.iso(reset))
-            for p, lid, sc, m, used, seen, reset in rows if limits.source_of(p) == source]

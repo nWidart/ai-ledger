@@ -8,7 +8,6 @@ export default {
  "project": "foo",
  "source": "claude",
  "branch": "main",
- "cwd": "/nowhere/foo",
  "last_ts": "2026-11-10T10:00:22.000Z",
  "now": "2026-11-10T10:01:00.000Z",
  "cursor": "2026-11-10T10:00:22.000Z",
@@ -246,7 +245,6 @@ export default {
    }
   ]
  },
- "limits": [],
  "cost": 0.0116,
  "requests": 7,
  "model": "claude-opus-5-5",

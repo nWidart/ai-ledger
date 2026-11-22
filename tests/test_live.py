@@ -527,7 +527,6 @@ class SessionTest(LiveCase):
         self.assertEqual(got["requests"], 2)
         self.assertEqual(got["pulse"]["context"], [dict(ts=at(30), tokens=160), dict(ts=at(50), tokens=55000)])  # what each read, no output
         self.assertGreater(got["cache_read"], 0.9)
-        self.assertEqual(got["cwd"], S["cwd"])
 
     def test_pulse(self):
         sub = dict(S, isSidechain=True, agentId="a7")

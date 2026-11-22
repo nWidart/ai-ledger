@@ -10,7 +10,7 @@ import { DocsLink } from "../../components/DocsLink";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { ApiError } from "../../useApi";
 import { NEAR_FULL, Strip } from "./Strip";
-import { groupSessions, latestText, needsYou, NO_FILTERS, stateNow, type LaneChoices } from "./live";
+import { groupSessions, needsYou, NO_FILTERS, stateNow, type LaneChoices } from "./live";
 import { Stream } from "./Stream";
 import { useLive, useNow } from "./useLive";
 import { nameOf, Pinned, StateNote, Wall } from "./Wall";
@@ -41,7 +41,9 @@ export function LivePage() {
   const selected = h.session || first;
   // The Wall's pins, oldest first. The Wall shows no stream session, so none is fetched there.
   const pins = mode === "wall" ? pinsOf(search.pin) : [];
-  const { list, session, conn, held, listError, sessionError, pinned } = useLive(view, mode === "wall" ? "" : selected, text, paused, pins);
+  // Full text is the Stream view's: the Wall asks for none, though the box stays on for the return to Stream.
+  const full = text && mode === "stream";
+  const { list, session, conn, held, listError, sessionError, pinned } = useLive(view, mode === "wall" ? "" : selected, full, paused, pins);
   const now = useNow(paused);
   const sessions = list?.sessions ?? [];
   const newest = sessions[0]?.session_id ?? "", listed = sessions.some(s => s.session_id === first);
@@ -105,23 +107,19 @@ export function LivePage() {
     [...around.querySelectorAll<HTMLElement>("[data-session]")].find(b => b.dataset.session === focused!.dataset.session)?.focus();
   });
   const bare = !list && !listError;
+  // A rail entry: two lines of fixed height. Its name (title, else project) and its errors; then its state, never cut, the
+  // project under a title, which gives way first, and the context. Its accessible name says the same in words.
   const entry = (s: LiveListSession) => {
     const share = s.context != null && s.window ? s.context / s.window : null;
     return <li key={s.session_id}>
       <button type="button" data-session={s.session_id} {...subjectAttrs("session", s.session_id)} aria-current={s.session_id === selected ? "true" : undefined} onClick={() => pick(s.session_id)}>
-        {s.title ? <>
-          <span className="ttl" title={s.title}>{s.title}</span><span className="cost">{usd(s.cost)}</span>
-          <span className="sub"><ProjectName project={s.project} /> · <StateNote st={stateNow(s.state, now)} now={now} /> · {SOURCE_LABELS[s.source]}</span>
-        </> : <>
-          <ProjectName project={s.project} /><span className="cost">{usd(s.cost)}</span>
-          <span className="sub"><StateNote st={stateNow(s.state, now)} now={now} /> · {SOURCE_LABELS[s.source]}{s.branch ? <> · <code>{s.branch}</code></> : null}</span>
-        </>}
-        <span className="third">
-          {share != null && <span className="ctx"><span className={"meter" + (share > NEAR_FULL ? " warn" : "")} aria-hidden="true"><i style={{ width: `${Math.min(100, share * 100)}%` }} /></span>
-            <span className="sr">context </span>{pct(share)}</span>}
-          <code className="act">{latestText(s.latest)}</code>
-          {s.errors > 0 && <span className="errs bad"><span aria-hidden="true">✕ {s.errors}</span><span className="sr">{plural(s.errors, "error")}</span></span>}
-        </span>
+        {s.title ? <span className="ttl" title={s.title}>{s.title}</span> : <ProjectName project={s.project} />}
+        {s.errors > 0 && <span className="errs bad"><span aria-hidden="true">✕{s.errors}</span><span className="sr">, {plural(s.errors, "error")}</span></span>}
+        {/* The spaces of the accessible name are text between the parts: a part's own edge spaces drop out of it. */}
+        <span className="sr">,</span>{" "}
+        <span className="sub"><StateNote st={stateNow(s.state, now)} now={now} />
+          {s.title && <><span className="sep" aria-hidden="true">·</span><span className="sr">, project</span>{" "}<ProjectName project={s.project} /></>}</span>
+        {share != null && <span className={"ctx" + (share > NEAR_FULL ? " warn" : "")}><span className="sr">, context</span>{" "}{pct(share)}</span>}
       </button></li>;
   };
   return (
@@ -135,13 +133,9 @@ export function LivePage() {
         <span className="spacer" />
         <p className={"conn" + (conn === "reconnecting" ? " lost" : "")} role="status" aria-live="polite">{status}</p>
         {mode === "stream" && <label className="chk"><input type="checkbox" checked={follow} onChange={e => setFollow(e.target.checked)} /> Follow</label>}
-        <label className={"chk ft" + (text ? " on" : "")}><input ref={fullText} type="checkbox" checked={text} onChange={e => { setText(e.target.checked); setWarned(false); }} /> Full text</label>
+        {mode === "stream" && <label className={"chk ft" + (text ? " on" : "")}><input ref={fullText} type="checkbox" checked={text} onChange={e => { setText(e.target.checked); setWarned(false); }} /> Full text</label>}
         <button type="button" onClick={() => setPaused(p => !p)} aria-pressed={paused}>{paused ? "Resume" : "Pause"}</button>
-        {/* Over the page, under the bar: it takes no room, so nothing moves when it opens or goes. Dismiss hands the focus
-            back to Full text, which the note belongs to. */}
-        {text && !warned && <div className="banner ft-warn" role="note"><b>Full text on.</b> Prompts, replies and tool output show as written, secrets included.
-          The app only listens on 127.0.0.1; turn this off before sharing your screen.{" "}
-          <button type="button" className="linkish" onClick={() => { setWarned(true); fullText.current?.focus(); }}>Dismiss</button></div>}
+        {full && !warned && <FullTextWarning gone={setWarned} dismiss={() => { setWarned(true); fullText.current?.focus(); }} />}
       </div>
       {error && <div className="banner" role="alert"><b>Could not load.</b> {error.message}{" "}<DocsLink docs="reference/troubleshooting">Troubleshooting</DocsLink></div>}
       {/* With a session in the URL the stream's own panel says it is loading; the placeholder is for the bare page. */}
@@ -150,7 +144,7 @@ export function LivePage() {
       {list && !sessions.length && (mode === "wall" ? !pins.length : !h.session) && <Empty newest={list.newest} href={sheetHref} />}
       {mode === "wall" && (sessions.length > 0 || pins.length > 0) && <div className={"wallgrid" + (pins.length ? " pinned" : "")}>
         <Wall sessions={sessions} now={now} pins={pins} toggle={togglePin} />
-        {pinned.map(p => <Pinned key={p.id} id={p.id} name={label(p.id)} s={p.session} error={p.error} now={now} text={text}
+        {pinned.map(p => <Pinned key={p.id} id={p.id} name={label(p.id)} s={p.session} error={p.error} now={now}
           choices={choices} setChoices={setChoices} sheet={sheetHref(p.id)} open={() => openPin(p.id)} unpin={() => togglePin(p.id, true)} />)}
       </div>}
       {mode === "wall" && <span className="sr" role="status">{pinNote}</span>}
@@ -175,8 +169,8 @@ export function LivePage() {
               {shown.model && <span className="chip">{shown.model}</span>}
               <a href={sheetHref(shown.session_id)} {...sessionLink(shown.session_id)}>Session sheet</a>
             </div>
-            <Strip s={shown} st={stateNow(shown.state, now)} now={now} failedOnly={filters.errors} setFailedOnly={errors => setFilters({ ...filters, errors })} full />
-            <Stream key={shown.session_id} s={shown} now={now} text={text} follow={follow} setFollow={setFollow} filters={filters} setFilters={setFilters}
+            <Strip s={shown} st={stateNow(shown.state, now)} now={now} />
+            <Stream key={shown.session_id} s={shown} now={now} text={full} follow={follow} setFollow={setFollow} filters={filters} setFilters={setFilters}
               choices={choices} setChoices={setChoices} sheet={sheetHref(shown.session_id)} />
           </> : missing ? <p className="muted loading">Session not found. It may be from another store, or its id is mistyped.{" "}
             <a href="/live" onClick={e => { e.preventDefault(); set({ session: null }); }}>Show the active sessions</a></p>
@@ -186,6 +180,27 @@ export function LivePage() {
       </div>}
     </main>
   );
+}
+
+/** How long the Full text warning shows while it is neither hovered nor holds the focus. */
+const WARN_MS = 6000;
+
+/** The Full text warning, over the page under the bar: it takes no room, so nothing moves when it opens or goes. It goes
+ *  by itself after WARN_MS, a time that stops while it is hovered or holds the focus, so it never takes the focus with it
+ *  (gone). Dismiss hands the focus back to Full text, which the note belongs to. */
+function FullTextWarning({ gone, dismiss }: { gone: (warned: boolean) => void; dismiss: () => void }) {
+  const [hover, setHover] = useState(false), [focus, setFocus] = useState(false), held = hover || focus;
+  const left = useRef(WARN_MS);
+  useEffect(() => {
+    if (held) return;
+    const from = Date.now(), t = setTimeout(() => gone(true), left.current);
+    return () => { clearTimeout(t); left.current -= Date.now() - from; };
+  }, [held, gone]);
+  return <div className="banner ft-warn" role="note" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+    onFocus={() => setFocus(true)} onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setFocus(false); }}>
+    <b>Full text on.</b> Prompts, replies and tool output show as written, secrets included.
+    The app only listens on 127.0.0.1; turn this off before sharing your screen.{" "}
+    <button type="button" className="linkish" onClick={dismiss}>Dismiss</button></div>;
 }
 
 function Empty({ newest, href }: { newest: { session_id: string; project: string | null; last_ts: string | null } | null; href: (id: string) => string }) {

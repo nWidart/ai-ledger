@@ -1,8 +1,9 @@
-import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { LiveEvent, LiveSession, LiveToolEvent, Ts } from "../../api";
 import { big, plural, usd } from "../../format";
 import { sessionLink } from "../../components/sheets/session";
-import { elapsed, isRow, isTool, labelOf, likelyWaiting, passes, since, streamRows, type LaneChoices, type LiveLane, type StreamFilters } from "./live";
+import { elapsed, isRow, isTool, labelOf, likelyWaiting, passes, shortName, since, streamRows, type LaneChoices, type LiveLane, type StreamFilters } from "./live";
+import { Markdown } from "./Markdown";
 
 const CLOCK = { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false } as const;
 // One formatter each, built once: a formatter is costly to make and every row asks for one.
@@ -17,8 +18,6 @@ const time = (ts: string | null | undefined, today: string) => {
   if (Number.isNaN(d.getTime())) return "";
   return d.toDateString() !== today ? DATED_FMT.format(d) : CLOCK_FMT.format(d);
 };
-/** An MCP tool (mcp__server__tool) by its tool part; the full name shows on hover. */
-const shortName = (tool: string) => (tool.startsWith("mcp__") && tool.split("__").slice(2).join("__")) || tool;
 
 type Mark = RefObject<HTMLDivElement | null> | undefined;
 type Toggle = (k: string) => void;
@@ -53,7 +52,7 @@ function ToolRow({ e, now, today, text, open, toggle }: { e: LiveToolEvent; now:
 function Said({ e, text }: { e: Extract<LiveEvent, { k: "prompt" | "reply" }>; text: boolean }) {
   return <div className={e.k}>
     <div className="lbl">{e.k === "prompt" ? "Prompt" : "Reply"}</div>
-    {text && e.text != null ? <div className="body">{e.text}</div> : <div className="redacted">{plural(e.words, "word")}{text ? "" : " · turn on Full text to read it"}</div>}
+    {text && e.text != null ? <Markdown text={e.text} /> : <div className="redacted">{plural(e.words, "word")}{text ? "" : " · turn on Full text to read it"}</div>}
   </div>;
 }
 
@@ -61,7 +60,8 @@ function Said({ e, text }: { e: Extract<LiveEvent, { k: "prompt" | "reply" }>; t
  *  gets undefined, and its props stay the same from one tick to the next. */
 const clockOf = (e: LiveEvent, now: number | undefined) => (e.k === "tool" && e.end == null ? now : undefined);
 
-/** One row of the stream: a main-thread event, or a lane's call. Memoized: a tick re-renders only the rows that run. */
+/** One row of the stream: a main-thread event, or a lane's call. Memoized: a tick re-renders only the rows that run, and
+ *  a prompt's or a reply's Markdown is parsed again only when its row's props change. */
 const Ev = memo(function Ev({ e, today, now, text, open, toggle, mark }: {
   e: LiveEvent; today: string; now: number | undefined; text: boolean; open: boolean; toggle: Toggle; mark: Mark;
 }) {
@@ -88,6 +88,8 @@ const NEWS_MS = 5000;
 const PAD = 8;
 /** How far a box can scroll: another reach means the box or what it draws changed size. */
 const reachOf = (el: HTMLElement) => el.scrollHeight - el.clientHeight;
+/** Follow: how near its foot, in px, a box counts as at its foot (a zoomed page scrolls by fractions of a px). */
+const FOOT = 2;
 
 /** A lane as drawn: hidden by the filters, folded or not, its tool rows the filters leave, and those it shows (the last
  *  LAST when cut). ticks: something in it shows a running duration, so it needs `now`. */
@@ -114,9 +116,10 @@ const Lane = memo(function Lane({ lane, fig, v, now, today, text, open, toggle, 
 });
 
 /** The selected session's events, newest at the bottom, under the filters' bar. Follow keeps the newest event in view,
- *  wherever it stands; scrolling or opening a row turns it off, and Jump to latest turns it back on. A finished lane is
- *  folded and a running one shows its last LAST rows, until the user chooses otherwise. The filters leave rows out of
- *  what is drawn: a lane with no row left is hidden, and the Errors filter opens the lanes it finds rows in. */
+ *  wherever it stands; scrolling or opening a row turns it off, and Jump to latest, or the user scrolling down to the
+ *  stream's foot, turns it back on. A finished lane is folded and a running one shows its last LAST rows, until the user
+ *  chooses otherwise. The filters leave rows out of what is drawn: a lane with no row left is hidden, and Failed calls
+ *  only opens the lanes it finds rows in. */
 export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters, choices: c, setChoices, sheet }: {
   s: LiveSession; now: number; text: boolean; follow: boolean; setFollow: (on: boolean) => void;
   filters: StreamFilters; setFilters: (f: StreamFilters) => void; choices: LaneChoices; setChoices: (c: LaneChoices) => void;
@@ -124,7 +127,7 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
   sheet: string;
 }) {
   const box = useRef<HTMLDivElement>(null), drawn = useRef<HTMLDivElement>(null), newest = useRef<HTMLDivElement>(null);
-  const hint = useId(); // two pinned streams share the page
+  // Where the box last stood, and its reach there: where place put it, or where the last scroll event found it.
   const put = useRef({ top: 0, reach: 0 });
   const [open, setOpen] = useState(() => new Set<string>());
   // The events held when Follow last turned off, by key, whichever way it turned off (a scroll, an opened row, the Follow
@@ -210,12 +213,16 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
     ro.observe(drawn.current!);
     return () => ro.disconnect();
   }, [place]);
-  // A scroll is the user's when it moves the box from where the page last put it while the box keeps the reach it had
-  // there. With another reach, the box or its rows changed size and the browser moved the box, to keep it in bounds or
-  // on the row it showed: place sets it right, before the scroll event or after it.
+  // A scroll is the user's when it moves the box from where it last stood while the box keeps the reach it had there.
+  // With another reach, the box or its rows changed size and the browser moved the box, to keep it in bounds or on the
+  // row it showed: with Follow on, place sets it right, before the scroll event or after it. The user's scroll turns
+  // Follow off, or, with Follow off, back on when it goes down to the foot. Turning Follow off at the foot leaves it
+  // off: only a later scroll down that reaches the foot turns it on.
   const onScroll = () => {
-    const el = box.current!, { top, reach } = put.current;
-    if (follow && reachOf(el) === reach && Math.abs(el.scrollTop - top) > 1) setFollow(false);
+    const el = box.current!, { top, reach } = put.current, now = { top: el.scrollTop, reach: reachOf(el) };
+    put.current = now;
+    if (now.reach !== reach) return;
+    if (follow ? Math.abs(now.top - top) > 1 : now.top > top && now.reach - now.top <= FOOT) setFollow(!follow);
   };
   // One polite status, shown beside Jump to latest, for the rows that came while Follow is off (the stream itself is a log that
   // stays silent). It takes the count at once, then at most once every NEWS_MS: a count that changes sooner waits for the rest
@@ -230,8 +237,7 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
   const said = fresh && told ? plural(told, "new event") : "";
   return <>
     <div className="stream-filters" role="group" aria-label="Stream filters">
-      <button type="button" aria-pressed={f.errors} aria-describedby={hint} onClick={() => setFilters({ ...f, errors: !f.errors })}>{plural(s.errors, "error")}</button>
-      <span id={hint} className="muted">show failed calls only</span>
+      <label className="chk"><input type="checkbox" checked={f.errors} onChange={e => setFilters({ ...f, errors: e.target.checked })} /> Failed calls only{s.errors > 0 ? ` (${s.errors})` : ""}</label>
       <label className="chk"><input type="checkbox" checked={f.main} onChange={e => setFilters({ ...f, main: e.target.checked })} /> Main thread only</label>
       <label className="chk"><input type="checkbox" checked={f.quiet} onChange={e => setFilters({ ...f, quiet: e.target.checked })} /> Hide read-only</label>
       {hidden > 0 && <span className="hid muted">{plural(hidden, "row")} hidden</span>}

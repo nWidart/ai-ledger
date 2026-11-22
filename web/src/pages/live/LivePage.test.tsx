@@ -675,6 +675,15 @@ describe("LivePage", () => {
     fireEvent.scroll(box);
     expect(follow()).toBe(false);
     expect(resize({ rows: 3000 }, true)).toEqual([false, false]); // Follow is off: a resize moves nothing
+    const scrollTo = async (top: number) => { box.scrollTop = top; fireEvent.scroll(box); await settle(); };
+    await scrollTo(l.top - 100);
+    await scrollTo(l.rows - l.room - 2); // the user scrolls down to the foot, near enough: Follow is back on
+    expect([follow(), l.top === l.rows - l.room]).toEqual([true, true]);
+    await userEvent.click(check("Follow")); // off at the foot, and it stays off
+    await scrollTo(l.top);
+    expect(follow()).toBe(false);
+    await scrollTo(l.top - 300);
+    expect(resize({ rows: 2000 }, true)).toEqual([false, true]); // the box clamped to its foot: not the user's scroll
   });
 
   it("follows the newest event into a lane in the middle of the stream, without its own scroll turning Follow off", async () => {
@@ -754,7 +763,7 @@ describe("LivePage", () => {
     show("?session=s1", { session: () => s });
     await stream();
     const { drawn, inView } = layOut(".ev", 60);
-    await userEvent.click(within(bar()).getByRole("button"));
+    await userEvent.click(within(bar()).getByRole("checkbox", { name: /^Failed calls only/ }));
     expect([check("Follow").checked, inView(toolRow("Grepg30").closest(".ev")!), drawn().length]).toEqual([true, true, 5]);
   });
 
@@ -1058,9 +1067,8 @@ describe("LivePage", () => {
     expect([urls().length, waiting()]).toEqual([4, 0]);
   });
 
-  it("shows the status strip: an inferred approval wait with its reason behind a toggletip, the context, the figures and the limits", async () => {
-    const limits = [{ label: "5h", used_percent: 86, observed_at: null, resets_at: "2026-11-10T14:00:00.000Z" }, { label: "7d", used_percent: 31, observed_at: null, resets_at: null }];
-    show("?session=s1", { session: () => ({ ...s1, limits }) });
+  it("shows the status strip: an inferred approval wait with its reason behind a toggletip, the context, the figures and the pulse", async () => {
+    show("?session=s1");
     await stream();
     const panel = strip();
     expect(within(panel).getByText("approval?").closest(".state")!.textContent).toBe("approval? (inferred)");
@@ -1069,72 +1077,14 @@ describe("LivePage", () => {
     expect(within(panel).getByText(/transcripts record no permission prompt/)).toBeTruthy();
     expect(within(panel).getByText(/likely waiting for your approval/)).toBeTruthy(); // the state's detail
     expect(within(panel).getByRole("meter", { name: "Context used" }).className).toBe("meter");
-    expect(within(panel).getByText("Errors").nextElementSibling!.textContent).toBe("1");
+    const errors = within(panel).getByText("Errors").nextElementSibling!;
+    expect([errors.tagName, errors.className, errors.textContent]).toEqual(["B", "bad", "1"]); // a figure, not a button
     const fig = (k: string) => within(panel).getByText(k).parentElement!.textContent;
     expect([fig("Cost"), fig("Tools"), fig("Cache read")]).toEqual([`Cost ${usd(s1.cost)}`, `Tools ${s1.tools}`, `Cache read ${pct(s1.cache_read)}?`]); // ? is its toggletip
+    expect(fig("Context")).toBe("Context 160 / 1.0M · 0% · 1 compaction, at 180.0k tokens"); // where it compacted, for a screen reader
     expect(within(panel).getByRole("button", { name: "About cache read" })).toBeTruthy();
-    const [h5, d7] = [fig("5h"), fig("7d")];
-    expect(h5).toBe("5h 86% near?"); // near the limit in words, the reset behind its toggletip
-    expect(within(panel).getByText("5h").parentElement!.className).toBe("it lim warn");
-    expect(d7).toBe("7d 31%"); // no reset known: no toggletip
-    const reset = within(panel).getByRole("button", { name: "About the 5h limit" });
-    reset.focus();
-    await userEvent.keyboard("{Enter}"); // the keyboard reaches the reset time
-    expect(within(panel).getByText(/^The 5h limit resets /)).toBeTruthy();
-    await userEvent.keyboard("{Escape}");
-    expect(within(panel).getByText(s1.cwd!).closest("code")!.className).toBe("cwd");
     expect(within(panel).getByRole("group", { name: /^Last 10 minutes: / })).toBeTruthy(); // the pulse
     expect(screen.queryByRole("complementary")).toBeNull(); // no agent panel any more
-  });
-
-  it("copies the resume command from the strip, and says whether it worked", async () => {
-    const writeText = vi.fn(() => Promise.resolve());
-    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
-    show();
-    await stream();
-    await userEvent.click(within(strip()).getByRole("button", { name: "Copy resume" }));
-    expect(writeText).toHaveBeenCalledWith(`cd '${s1.cwd}' && claude --resume s1`);
-    await waitFor(() => expect(within(strip()).getByText("Resume command copied to clipboard.")).toBeTruthy());
-    expect(within(strip()).getByRole("button", { name: "Copied" })).toBeTruthy();
-    writeText.mockImplementation(() => Promise.reject(new Error("denied")));
-    await userEvent.click(within(strip()).getByRole("button", { name: "Copied" }));
-    await waitFor(() => expect(within(strip()).getByText("Could not copy to clipboard.")).toBeTruthy());
-    vi.unstubAllGlobals();
-  });
-
-  it("says Copied only in the strip of the session copied, and only for the last attempt", async () => {
-    let done: (() => void)[] = [];
-    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: vi.fn(() => Promise.resolve()) } });
-    show();
-    await stream();
-    await userEvent.click(await entry("jobdesk")); // load s2, so it shows from the cache later
-    await waitFor(() => expect(headed()).toBe("jobdesk"));
-    await userEvent.click(await entry("foo"));
-    await waitFor(() => expect(headed()).toBe("foo"));
-    const copied = () => [within(strip()).queryByRole("button", { name: "Copied" }), within(strip()).queryByText("Resume command copied to clipboard.")];
-    await userEvent.click(within(strip()).getByRole("button", { name: "Copy resume" }));
-    await waitFor(() => expect(copied()[0]).toBeTruthy()); // foo's
-    await userEvent.click(await entry("jobdesk")); // within the 2 s
-    await waitFor(() => expect(headed()).toBe("jobdesk"));
-    expect(copied()).toEqual([null, null]); // jobdesk's strip says nothing of it
-    // A copy still under way when another session opens: its result is not said there either.
-    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: vi.fn(() => new Promise<void>(r => { done.push(r); })) } });
-    await userEvent.click(await entry("foo"));
-    await waitFor(() => expect(headed()).toBe("foo"));
-    await userEvent.click(within(strip()).getByRole("button", { name: "Copy resume" }));
-    await userEvent.click(await entry("jobdesk"));
-    await waitFor(() => expect(headed()).toBe("jobdesk"));
-    await act(async () => { done.forEach(r => r()); done = []; });
-    expect(copied()).toEqual([null, null]);
-    // Two attempts on one session: only the last one's result is said.
-    const writeText = vi.fn().mockReturnValueOnce(new Promise<void>((_, no) => { done.push(() => no(new Error("late"))); })).mockResolvedValueOnce(undefined);
-    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
-    await userEvent.click(within(strip()).getByRole("button", { name: "Copy resume" }));
-    await userEvent.click(within(strip()).getByRole("button", { name: "Copy resume" }));
-    await waitFor(() => expect(within(strip()).getByRole("button", { name: "Copied" })).toBeTruthy());
-    await act(async () => { done.forEach(r => r()); });
-    expect(within(strip()).getByRole("button", { name: "Copied" })).toBeTruthy(); // the first one's late failure says nothing
-    vi.unstubAllGlobals();
   });
 
   it("shows the pulse of the last 10 minutes: its minutes, its ticks and a readout by keyboard", async () => {
@@ -1181,22 +1131,20 @@ describe("LivePage", () => {
     show("?session=s1", { session: () => ({ ...s1, pulse: flat }) });
     await stream();
     const d = within(strip()).getByRole("group", { name: /^Last 10 minutes: / }).querySelector("path.l")!.getAttribute("d")!;
-    expect([...d.matchAll(/[,V]([\d.]+)/g)].map(m => m[1])).toEqual(["9.5", "9.5", "9.5"]); // one height, mid-box
+    expect([...d.matchAll(/[,V]([\d.]+)/g)].map(m => m[1])).toEqual(["15.5", "15.5", "15.5"]); // one height, mid-box
   });
 
-  it("filters the stream to failed rows from the Errors count, in the stream's bar and in the status strip", async () => {
+  it("filters the stream to failed rows with Failed calls only, which counts them", async () => {
     show();
     await stream();
-    const panel = strip();
-    const inBar = within(bar()).getByRole("button", { name: "1 error" }), inPanel = within(panel).getByRole("button", { name: "1 error" });
-    const pressed = () => [inBar, inPanel].map(b => b.getAttribute("aria-pressed"));
-    expect([drawn(), pressed(), hidden()]).toEqual([["Read", "Agent", "Bash", "Bash"], ["false", "false"], null]);
-    await userEvent.click(inBar);
-    expect([drawn(), pressed(), hidden()]).toEqual([["Bash"], ["true", "true"], "9 rows hidden"]);
+    const only = check("Failed calls only (1)");
+    expect([drawn(), only.checked, hidden()]).toEqual([["Read", "Agent", "Bash", "Bash"], false, null]);
+    await userEvent.click(only);
+    expect([drawn(), only.checked, hidden()]).toEqual([["Bash"], true, "9 rows hidden"]);
     expect(toolRow("Bash").className).toContain("failed");
     expect([screen.queryByText(/11 words/), screen.queryByText(/context compacted/), screen.queryAllByRole("button", { name: /^Agent find/ })]).toEqual([null, null, []]);
-    await userEvent.click(inPanel); // either count clears it
-    expect([drawn(), pressed(), hidden()]).toEqual([["Read", "Agent", "Bash", "Bash"], ["false", "false"], null]);
+    await userEvent.click(only);
+    expect([drawn(), only.checked, hidden()]).toEqual([["Read", "Agent", "Bash", "Bash"], false, null]);
     expect(screen.getByText(/11 words/)).toBeTruthy();
   });
 
@@ -1224,7 +1172,7 @@ describe("LivePage", () => {
     await waitFor(() => expect([read.quiet, drawn()]).toEqual([true, ["Read", "Agent", "Bash", "Bash", "Read"]]));
     await userEvent.click(check("Hide read-only"));
     expect([drawn(), toolRow("Read").className, hidden()]).toEqual([["Agent", "Bash", "Bash", "Read"], "tool failed", "4 rows hidden"]); // the Read that passed and the lane's three
-    await userEvent.click(within(bar()).getByRole("button", { name: "2 errors" }));
+    await userEvent.click(check("Failed calls only (2)"));
     expect(drawn()).toEqual(["Bash", "Read"]);
   });
 
@@ -1235,7 +1183,7 @@ describe("LivePage", () => {
     await stream();
     const panel = strip(), figures = panel.textContent;
     expect(greps()).toEqual([]);
-    await userEvent.click(within(bar()).getByRole("button", { name: "1 error" }));
+    await userEvent.click(check("Failed calls only (1)"));
     expect([drawn(), greps(), hidden()]).toEqual([["Grep"], ["g1"], "12 rows hidden"]); // the filter opens the folded lane
     expect(laneHead().querySelector(".muted")!.textContent).toBe("6 tools · 1 error · 5.0s · claude-opus-5-5 · $0.01");
     await userEvent.click(check("Main thread only"));
@@ -1247,10 +1195,10 @@ describe("LivePage", () => {
     expect(drawn()).toEqual([]);
   });
 
-  it("says there is no failed call when the Errors filter finds none", async () => {
+  it("says there is no failed call when Failed calls only finds none", async () => {
     show("?session=s1", { session: () => ({ ...s1, errors: 0, events: s1.events.map(e => (e.k === "tool" ? { ...e, failed: false } : e)) }) });
     await stream();
-    await userEvent.click(within(bar()).getByRole("button", { name: "0 errors" }));
+    await userEvent.click(check("Failed calls only")); // no count when there is none
     expect([drawn(), hidden()]).toEqual([[], "10 rows hidden"]);
     expect(screen.getByText("No failed calls in the events held.")).toBeTruthy();
   });
@@ -1260,16 +1208,17 @@ describe("LivePage", () => {
     await screen.findByRole("group", { name: "Stream filters" });
     await userEvent.click(check("Main thread only"));
     await userEvent.click(check("Hide read-only"));
-    await userEvent.click(within(bar()).getByRole("button", { name: /error/ }));
-    const on = () => [check("Main thread only").checked, check("Hide read-only").checked, within(bar()).getByRole("button", { name: /error/ }).getAttribute("aria-pressed")];
+    const failed = () => within(bar()).getByRole("checkbox", { name: /^Failed calls only/ }) as HTMLInputElement;
+    await userEvent.click(failed());
+    const on = () => [check("Main thread only").checked, check("Hide read-only").checked, failed().checked];
     const foo = within(await rail()).getAllByRole("button").find(b => b.querySelector(".pname")!.textContent === "foo")!;
     await userEvent.click(foo);
     await waitFor(() => expect(screen.getByRole("region", { name: "Session" }).querySelector(".stream-head .pname")!.textContent).toBe("foo"));
-    expect([on(), drawn()]).toEqual([[true, true, "true"], ["Bash"]]);
+    expect([on(), drawn()]).toEqual([[true, true, true], ["Bash"]]);
     r.unmount();
     show();
     await stream();
-    expect([on(), hidden()]).toEqual([[false, false, "false"], null]);
+    expect([on(), hidden()]).toEqual([[false, false, false], null]);
   });
 
   it("warns on a context above 80% and shows tokens only for an unknown window", async () => {
@@ -1278,11 +1227,11 @@ describe("LivePage", () => {
     await stream();
     expect(screen.getByRole("meter", { name: "Context used" }).className).toBe("meter warn");
     r.unmount();
-    s = { ...s1, context: 55_000, window: null };
+    s = { ...s1, context: 55_000, window: null, compactions: [] };
     show("?session=s1", { session: () => s });
     await stream();
     expect(screen.queryByRole("meter", { name: "Context used" })).toBeNull();
-    expect(screen.getByText(/window not known/)).toBeTruthy();
+    expect(within(strip()).getByText("Context").parentElement!.textContent).toBe("Context 55.0k tokens · window not known for claude-opus-5-5"); // no compaction: none said
   });
 
   it("keeps open rows when Full text turns on, and shows their output once it arrives", async () => {
@@ -1305,6 +1254,18 @@ describe("LivePage", () => {
     expect(alert.textContent).toBe("Could not load. HTTP 404" + TROUBLESHOOTING);
     expect(within(alert).getByRole("link", { name: TROUBLESHOOTING.trim() }).getAttribute("href")).toBe("https://nwidart.github.io/ai-ledger/reference/troubleshooting/");
     expect([toolRow("Bash", 0).getAttribute("aria-expanded"), screen.queryByText(/Session not found/)]).toEqual(["true", null]);
+  });
+
+  it("shows a reply's full text as Markdown, with raw HTML as text and links only to the web and mail", async () => {
+    const md = "**Done**: see [the docs](https://example.com/docs) <b>raw</b> [run](javascript:alert(1)) ![shot](https://example.com/s.png)";
+    show("?session=s1", { session: q => (q.get("text") ? { ...s1text, events: s1text.events.map(e => (e.k === "reply" ? { ...e, text: md } : e)) } : s1) });
+    await stream();
+    await userEvent.click(check("Full text"));
+    const body = (await screen.findByText("Done")).closest(".body")!;
+    expect([body.querySelector("strong")!.textContent, body.querySelector("b, img"), within(body as HTMLElement).queryByRole("link", { name: "run" })]).toEqual(["Done", null, null]);
+    expect(body.textContent).toContain("<b>raw</b> run shot");
+    const links = within(body as HTMLElement).getAllByRole("link").map(a => [a.textContent, a.getAttribute("href"), a.getAttribute("target"), a.getAttribute("rel")]);
+    expect(links).toEqual([["the docs", "https://example.com/docs", "_blank", "noreferrer noopener"], ["shot", "https://example.com/s.png", "_blank", "noreferrer noopener"]]);
   });
 
   it("takes the text off the screen at once when Full text turns off, with the events held before it", async () => {
@@ -1482,10 +1443,21 @@ describe("LivePage", () => {
     expect(within(el).getByRole("button", { name: tileName("notes") }).className).toBe("panel tile st-ended");
   });
 
-  it("hides Follow on the wall", async () => {
-    show("?view=wall");
-    await wall();
-    expect(screen.queryByRole("checkbox", { name: "Follow" })).toBeNull();
+  it("hides Follow and Full text on the wall, which asks for no full text even with it on in the stream", async () => {
+    const { calls } = show("?session=s1&pin=s2");
+    await stream();
+    await userEvent.click(check("Full text"));
+    await waitFor(() => expect(calls()).toContain("/api/live?text=1"));
+    const n = calls().length;
+    await userEvent.click(screen.getByRole("button", { name: "Wall" }));
+    await within(await screen.findByRole("region", { name: "Pinned: jobdesk" })).findByLabelText("Session events");
+    FakeSource.last!.notify(null);
+    await settle();
+    expect([screen.queryByRole("checkbox", { name: "Follow" }), screen.queryByRole("checkbox", { name: "Full text" }), screen.queryByRole("note")]).toEqual([null, null, null]);
+    expect(calls().slice(n).filter(u => u.includes("text="))).toEqual([]);
+    expect(calls().slice(n)).toContain("/api/live");
+    await userEvent.click(screen.getByRole("button", { name: "Stream" }));
+    expect(check("Full text").checked).toBe(true); // kept for the return to Stream
   });
 
   it("names a tile by its pin action and gives a screen reader all it shows, pinned or not", async () => {
@@ -1495,11 +1467,13 @@ describe("LivePage", () => {
     const tile = within(el).getByRole("button", { name: tileName("Fast ingest pass while Live is open") });
     expect([tile.getAttribute("aria-label"), tile.getAttribute("aria-description"), tile.getAttribute("aria-pressed")]).toEqual([null, null, "false"]);
     const now = Date.parse(list.now), state = stateText(stateNow(s.state, now), now).label;
-    const parts = [`Project ${s.project}`, state, "Latest: Bash: git push origin feat/live-page", `Context ${pct(s.context! / s.window!)}`,
-      `${s.tools} tools`, "1 error", usd(s.cost), `Branch ${s.branch}`, "Claude Code", s.model!];
+    const parts = [state, "1 error", `Project ${s.project}`, s.model!.replace(/^claude-/, ""), `Context ${pct(s.context! / s.window!)}`];
     const inOrder = new RegExp(parts.map(p => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*"));
     expect(within(el).getByRole("button", { name: inOrder })).toBe(tile);
-    expect(within(el).queryByRole("button", { name: /▸|⤷/ })).toBeNull(); // glyphs stay out of the names
+    // What the tile no longer shows, it does not say: the latest action, tools, cost, branch and source.
+    expect(tile.querySelector(".sr")!.textContent).not.toMatch(/Latest|tools|\$|Branch|Claude Code|claude-/);
+    expect([tile.querySelector(".top .errs")!.textContent, tile.querySelector(".meta .mdl")!.textContent]).toEqual(["✕1", s.model!.replace(/^claude-/, "")]);
+    expect(within(el).queryByRole("button", { name: /✕/ })).toBeNull(); // glyphs stay out of the names
     // Without a title the project names the tile, so the name does not say it again.
     expect(within(el).getByRole("button", { name: tileName("dotfiles") })).toBeTruthy();
     expect(within(el).queryByRole("button", { name: /^Pin dotfiles\. Project/ })).toBeNull();
@@ -1514,8 +1488,7 @@ describe("LivePage", () => {
     expect(tiles.length).toBe(list.sessions.length);
     const foo = within(el).getByRole("button", { name: tileName("Fast ingest pass while Live is open") });
     expect(foo.querySelector(".ttl")!.getAttribute("title")).toBe("Fast ingest pass while Live is open");
-    expect(within(el).getByRole("button", { name: tileName("dotfiles") }).querySelector(".ttl")).toBeNull();
-    expect(foo.textContent).toContain("git push origin feat/live-page");
+    expect(within(el).getByRole("button", { name: tileName("dotfiles") }).querySelector(".ttl .pname")).toBeTruthy(); // the project in the title's place
     expect(foo.textContent).toContain("1 error"); // one, singular
     expect(foo.textContent).not.toContain("1 errors");
     await settle();
@@ -1568,14 +1541,11 @@ describe("LivePage", () => {
     expect(decodeURIComponent(location.search)).toBe("?view=wall&pin=s3,s1,bad id"); // read as it is, written anew on the next pin
   });
 
-  it("says an unknown pin is not found, keeps it removable, and survives Full text whatever its id", async () => {
+  it("says an unknown pin is not found and keeps it removable, whatever its id", async () => {
     show("?view=wall&pin=constructor", { session: () => undefined }); // an id an object would answer with its own
     const pin = await screen.findByRole("region", { name: "Pinned: session" });
     expect(await within(pin).findByText(/^Session not found\./)).toBeTruthy();
     expect(within(pin).queryByText(/HTTP 404/)).toBeNull();
-    await userEvent.click(check("Full text"));
-    await settle();
-    expect(within(screen.getByRole("region", { name: "Pinned: session" })).getByText(/^Session not found\./)).toBeTruthy();
     await userEvent.click(within(pin).getByRole("button", { name: "Unpin session" }));
     expect(location.search).toBe("?view=wall");
     // No tile and no other pin to go to: the first tile takes the focus.
@@ -1700,20 +1670,19 @@ describe("LivePage", () => {
     expect([FakeSource.made, FakeSource.last, source.closed]).toEqual([made, source, false]);
   });
 
-  it("shows each rail entry's context, latest action and errors on a third line", async () => {
+  it("shows each rail entry's errors only when there are any, and its context as text, and names it with both", async () => {
     show();
     await stream();
     const r = await rail();
-    const third = (id: string) => within(r).getAllByRole("button").find(b => b.dataset.session === id)!.querySelector(".third")!;
-    const foo = third("s1");
-    expect(foo.querySelector(".act")!.textContent).toBe("Bash · git push origin feat/live-page");
-    expect(foo.querySelector(".errs")!.textContent).toBe("✕ 11 error"); // ✕ 1 shown, "1 error" for a screen reader
-    expect(foo.querySelector(".errs [aria-hidden]")!.textContent).toBe("✕ 1");
-    expect(foo.querySelector(".ctx")!.textContent).toBe("context 0%");
-    expect(third("0a0f7777-0000-7000-8000-000000000007").querySelector(".ctx")!.textContent).toBe("context 8%");
-    expect(third("s2").querySelector(".errs")).toBeNull(); // none to count
-    expect(third("s4").querySelector(".ctx")).toBeNull(); // no known window
-    expect(third("s2").querySelector(".act")!.textContent).toBe("▸ prompt");
+    const card = (id: string) => within(r).getAllByRole("button").find(b => b.dataset.session === id)!;
+    const foo = card("s1");
+    expect(foo.querySelector(".errs [aria-hidden]")!.textContent).toBe("✕1"); // "1 error" for a screen reader
+    expect(foo.querySelector(".ctx")!.textContent).toBe(", context 0%");
+    expect(within(r).getByRole("button", { name: /^Fast ingest pass while Live is open, 1 error, approval\?.+, project foo, context 0%$/ })).toBe(foo);
+    expect([...foo.querySelectorAll(".cost, .meter, .act, code")]).toEqual([]); // no cost, meter, latest action or branch
+    expect(card("0a0f7777-0000-7000-8000-000000000007").querySelector(".ctx")!.textContent).toBe(", context 8%");
+    expect(card("s2").querySelector(".errs")).toBeNull(); // none to count
+    expect(card("s4").querySelector(".ctx")).toBeNull(); // no known window
   });
 
   it("opens the Full text warning over the page, so the stream keeps its place, dismisses it in place, and has Full text off after a reload", async () => {
@@ -1737,6 +1706,26 @@ describe("LivePage", () => {
     show();
     await stream();
     expect([check("Full text").checked, screen.queryByRole("note")]).toEqual([false, null]);
+  });
+
+  it("lets the Full text warning go by itself after 6 s, a time held while it is hovered or holds the focus, moving no focus", async () => {
+    fakeClock("2026-11-10T10:00:25.000Z");
+    show();
+    await tick(10);
+    fireEvent.click(check("Full text"));
+    const note = screen.getByRole("note");
+    await tick(4000);
+    fireEvent.mouseEnter(note);
+    await tick(10_000); // hovered: held at 2 s left
+    fireEvent.mouseLeave(note);
+    act(() => within(note).getByRole("button", { name: "Dismiss" }).focus());
+    await tick(10_000); // focused: held
+    expect(screen.getByRole("note")).toBe(note);
+    act(() => check("Full text").focus());
+    await tick(1900);
+    expect(screen.getByRole("note")).toBe(note);
+    await tick(100);
+    expect([screen.queryByRole("note"), document.activeElement, check("Full text").checked]).toEqual([null, check("Full text"), true]);
   });
 });
 
