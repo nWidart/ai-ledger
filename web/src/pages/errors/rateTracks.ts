@@ -67,8 +67,11 @@ export interface RateModel {
   span: number[];
   /** Why the chart draws nothing: no tool call, or no error; null when it draws. */
   bare: "empty" | "noErrors" | null;
-  /** The view's identity (decision 8): what the user chose, the first point and each fold. */
+  /** The view's identity: what the user chose, the granularity included (a day and a week can share a key). Not the first
+   *  point, nor a fold: the keys keep the reading and the zoom on their points when those move (echart-point-keys). */
   view: string;
+  /** Each point's key, its first bucket, a folded stretch's too: `chartData()`'s `keys`, the chart's `pointKeys`. */
+  keys: string[];
 }
 
 /** The chart's figures for a view, its filtered data, its types and the applied fixes. */
@@ -119,7 +122,7 @@ export function rateModel(m: Model, v: View, f: Filtered, vt: ViewTypes, fixes: 
     selected: at < 0 ? null : at, zoom: !bare && pts.length >= ZOOM_FROM,
     span: pts.map(p => (p.to ? Math.round((+toDate(p.to) - +toDate(p.k)) / DAY / per) + 1 : 1)),
     bare,
-    view: [v.range, v.gran, v.project, v.source, v.sub, v.noise, pts[0]?.k, ...pts.flatMap(p => (p.to ? [`${p.k}-${p.to}`] : []))].join("|"),
+    view: [v.range, v.gran, v.project, v.source, v.sub, v.noise].join("|"), keys,
   };
 }
 

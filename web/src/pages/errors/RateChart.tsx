@@ -98,7 +98,7 @@ export const RateChart = memo(function RateChart() {
           onKeyDown={e => { if (e.key === " " && !modified(e)) e.preventDefault(); }}>
           <div className="empty">{empty ? "No tool calls in this range." : `No failed tool calls in this range, out of ${fmt(sumCalls(v, f.calls))}.`}</div></div>
           : <EChart ref={box} id="chart" label={label} describedBy="chartHint" height={rateLayout(rm, scale).height} option={option} view={rm.view}
-            points={pts.length} tip={tip} read={read} keys={{ space: true }} onActivate={activate} status={status.of === drawnAt ? status.text : ""}
+            points={pts.length} pointKeys={rm.keys} tip={tip} read={read} keys={{ space: true }} onActivate={activate} status={status.of === drawnAt ? status.text : ""}
             zoom={zoom} onZoom={onZoom} readZoom={readZoom} />}
       </div>
       {!rm.bare && table()}
