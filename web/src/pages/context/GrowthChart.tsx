@@ -65,7 +65,11 @@ export function GrowthChart({ curve, projects, share, view }: { curve: GrowthPoi
     if (sel != null && !projects.some(p => projectKey(p) === sel && (next === "share" ? p.share_curve : p.curve).length)) setSel(null);
   };
   const last = cv[cv.length - 1]!, first = cv[0]!;
-  const read = (i: number) => (isShare ? readShare : readTurn)(cv[i]!);
+  // The turn's sentence, then each drawn project's median at that turn (with one isolated, its band too).
+  const read = (i: number) => [(isShare ? readShare : readTurn)(cv[i]!), ...model.projects.flatMap(q => {
+    const c = q.points[i];
+    return c ? [`${noProject(q)} ${fmt(c.median)}` + (only ? ` (25th to 75th percentile ${fmt(c.p25)} to ${fmt(c.p75)})` : "")] : [];
+  })].join("; ");
   const tip = (i: number) => {
     const p = cv[i]!;
     return <>

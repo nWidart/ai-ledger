@@ -41,12 +41,12 @@ describe("GrowthChart", () => {
     const { rerender } = renderApp(<GrowthChart view="v" curve={view} projects={[foo, bar]} />);
     act(() => chart().focus());
     key("ArrowRight");
-    expect(sr()).toBe(readTurn(view[0]!));
+    expect(sr()).toBe(`${readTurn(view[0]!)}; foo 36k; bar 18k`);
     expect(within(screen.getByRole("tooltip")).getByText("Turn 1")).toBeTruthy();
     expect(tipRows()).toEqual(["Median30k", "25th to 75th percentile21k to 42k", "Sessions9", "foo36k", "bar18k"]);
     // bar's curve stops after turn 3: its row goes.
     key("End");
-    expect(sr()).toBe("Turn 5: median 70k tokens (25th to 75th percentile 49k to 98k), 9 sessions");
+    expect(sr()).toBe("Turn 5: median 70k tokens (25th to 75th percentile 49k to 98k), 9 sessions; foo 84k");
     expect(tipRows().at(-1)).toBe("foo84k");
     // A newer payload of the same view, one more turn and turn 5's figures changed: the reading stays on turn 5, with them.
     rerender(<GrowthChart view="v" curve={[...view.slice(0, 4), pt(5, 80_000), pt(6, 90_000)]} projects={[foo, bar]} />);
@@ -57,7 +57,7 @@ describe("GrowthChart", () => {
     expect(sr()).toBe("");
     expect(document.activeElement).toBe(chart());
     key("Home");
-    expect(sr()).toBe(readTurn(view[0]!));
+    expect(sr()).toBe(`${readTurn(view[0]!)}; foo 36k; bar 18k`);
     fireEvent.blur(chart());
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
@@ -115,7 +115,7 @@ describe("GrowthChart", () => {
     expect(chart().getAttribute("aria-label")).toContain("The dashed line marks 80% of the window");
     act(() => chart().focus());
     key("End");
-    expect(sr()).toBe(readShare(shareView[3]!));
+    expect(sr()).toBe(`${readShare(shareView[3]!)}; foo 55%`);
     expect(sr()).toContain("median 50% of the window");
     expect(tipRows()).toEqual(["Median50%", "25th to 75th percentile35% to 65%", "Sessions7", "foo55%"]);
     await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
@@ -138,6 +138,7 @@ describe("GrowthChart", () => {
     key("Home");
     expect(tipRows()).toHaveLength(4);
     expect(tipRows().at(-1)).toMatch(/^foo36k \(/);
+    expect(sr()).toBe(`${readTurn(view[0]!)}; foo 36k (25th to 75th percentile 21k to 42k)`);
     await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
     expect(within(screen.getByRole("table")).getAllByRole("columnheader").at(-1)!.textContent).toBe("foo");
     await userEvent.click(fooKey);
