@@ -13,6 +13,8 @@ import cost from "../../../assets/shots/project-cost.png";
 import costLight from "../../../assets/shots/project-cost-light.png";
 import sessions from "../../../assets/shots/project-sessions.png";
 import sessionsLight from "../../../assets/shots/project-sessions-light.png";
+import quadrant from "../../../assets/shots/project-quadrant.png";
+import quadrantLight from "../../../assets/shots/project-quadrant-light.png";
 import errors from "../../../assets/shots/project-errors.png";
 import errorsLight from "../../../assets/shots/project-errors-light.png";
 import context from "../../../assets/shots/project-context.png";
@@ -158,6 +160,8 @@ See [Windows](/ai-ledger/concepts/windows/) for how limit windows work.
 **Controls** The heading link **Open in Activity** opens Activity for the project. Selecting a row opens its session sheet over the page, and the URL names the session.
 
 ### Sessions by cost and tool calls
+
+<ThemedImage dark={quadrant} light={quadrantLight} alt="The Project page's Sessions by cost and tool calls block: about ninety sessions as dots, estimated cost across and tool calls up on log scales, filled dots for sessions that made a commit and hollow dots for the rest, two dashed lines at the median cost and tool calls, a name in each corner, and the four quadrants listed with their counts under the plot." />
 
 **Shows** one dot for each session of the project in the view: its estimated cost across and its tool calls up, both on log scales. The hint above the plot says so, and that "done" counts tool calls, not results. A table, "Sessions on the plot", lists the same sessions under **Show data table**.
 

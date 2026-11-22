@@ -330,7 +330,7 @@ const SHOT_PAGES = {
   insights: { url: "/usage?range=30&view=judgments", panels: [
     ["vitals", "#vitals"], ["outcomes", "#outcomes"], ["friction", "#friction"], ["log", "#log"]] },
   project: { url: "/project?range=30&project=atlas-api", panels: [
-    ["layout", "#content", { max: 1500 }], ["activity", "#activity"], ["cost", "#cost"], ["sessions", "#sessions"], ["errors", "#errors"],
+    ["layout", "#content", { max: 1500 }], ["activity", "#activity"], ["cost", "#cost"], ["sessions", "#sessions"], ["quadrant", "#quadrant"], ["errors", "#errors"],
     ["context", "#context"], ["insights", "#insights"], ["limits", "#limits"]] },
 };
 
