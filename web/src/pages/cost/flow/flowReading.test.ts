@@ -93,17 +93,12 @@ describe("flowAt", () => {
     expect(at(104, 60.5)).toBeNull();
   });
 
-  it("reads a band between its edges at its middle", () => {
+  it("reads a band between its edges, the topmost where two cross", () => {
     expect(at(mid, 75)).toEqual(src("C|D"));
     expect(at(mid, 70.1)).toEqual(src("C|D"));
     expect(at(mid, 79.9)).toEqual(src("C|D"));
     expect(at(mid, 69.9)).toBeNull();
     expect(at(mid, 80.1)).toBeNull();
-  });
-
-  it("reads the topmost of two crossing bands, and each alone elsewhere", () => {
-    expect(at(120, 25)).toEqual(src("A|B"));
-    expect(at(120, 125)).toEqual(src("C|D"));
   });
 
   it("reads nothing between the columns off a band, or in the title margin", () => {

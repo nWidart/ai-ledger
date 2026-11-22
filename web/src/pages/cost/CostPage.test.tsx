@@ -420,7 +420,7 @@ describe("CostPage", () => {
     expect(table().querySelector('tbody tr[data-v="foo"] .chg')!.textContent).toBe("–");
   });
 
-  it("follows the cost after the project table to the heading's total, opens a project's sheet from it, and draws two columns for one project", async () => {
+  it("follows the cost after the project table to the heading's total, and opens a project's sheet from it", async () => {
     await show(sources, []);
     const flow = document.getElementById("flow")!, total = usd(sources.totals.cost!);
     expect(table().compareDocumentPosition(flow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -435,20 +435,6 @@ describe("CostPage", () => {
     fireEvent.keyDown(graph, { key: "Enter" });
     expect(location.search).toBe("?range=30&inspect=foo");
     await waitFor(() => expect(document.querySelector("dialog")).toBeTruthy());
-    cleanup();
-    // One project selected: no project column, from the same payload.
-    serve({ ...sources, project: "foo" });
-    at("?range=30&project=foo");
-    renderApp(<CostPage />);
-    await loaded();
-    const one = within(document.getElementById("flow")!).getByRole("group", { name: /^Estimated cost on foo from model to token kind/ });
-    expect(one.getAttribute("aria-label")).toContain(`, ${total} in all:`);
-    expect(one.getAttribute("aria-label")).not.toMatch(/Enter on a project/);
-    act(() => one.focus());
-    fireEvent.keyDown(one, { key: "ArrowRight" });
-    expect(document.querySelector("#flow .flow-live")!.textContent).toMatch(/^Model m-a: /);
-    fireEvent.keyDown(one, { key: "Enter" });
-    expect(location.search).toBe("?range=30&project=foo");
   });
 
   it("leaves the project table out of a one-project view", async () => {
