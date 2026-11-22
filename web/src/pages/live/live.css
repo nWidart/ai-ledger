@@ -175,8 +175,10 @@
 .pg-live .strip .now { padding: 1px 8px; border-radius: 999px; background: var(--surface-2); white-space: normal; }
 .pg-live .strip .now.warn { background: var(--warning-soft); }
 .pg-live .strip .now.ended { background: none; outline: 1px dashed var(--text-muted); outline-offset: -1px; }
-/* The detail (a long tool name) wraps inside the pill, so a phone's strip stays inside the page. */
-.pg-live .strip .now { max-width: 100%; }
+/* A long state wraps its detail under the state, in a box that keeps the pill's look on one line, so a phone's strip stays
+   inside the page and short; the state itself is cut before it passes the strip. */
+.pg-live .strip .now { max-width: 100%; flex-wrap: wrap; row-gap: 1px; border-radius: 10px; }
+.pg-live .strip .now .state { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .pg-live .strip .now .det { min-width: 0; font-size: .75rem; overflow-wrap: anywhere; }
 .pg-live .strip .inf.tt { font-weight: 400; color: var(--text-muted); font-size: inherit; }
 .pg-live .strip .ctx .meter { width: 100%; height: 8px; margin: 0; }

@@ -47,7 +47,7 @@ export function Wall({ sessions, now, pins, toggle }: { sessions: LiveListSessio
         <button type="button" data-session={s.session_id} {...subjectAttrs("session", s.session_id)} className={"panel tile st-" + st.kind + (pinned ? " pinned" : "")}
           onClick={() => toggle(s.session_id)} aria-pressed={pinned}>
           <span className="sr">{`Pin ${nameOf(s)}. ${tileText(s, st, now)}`}</span>
-          <span className="top" aria-hidden="true"><StateTag st={st} now={now} plain />
+          <span className="top" title={`${stateText(st, now).label}: ${stateWhy(st, now)}`} aria-hidden="true"><StateTag st={st} now={now} plain />
             {s.errors > 0 && <span className="errs bad">✕{s.errors}</span>}{pinned && <span className="pin-mark">Pinned</span>}</span>
           <span className="ttl" title={s.title ?? undefined} aria-hidden="true">{s.title ?? <ProjectName project={s.project} />}</span>
           <span className="meta" aria-hidden="true">{s.title && <ProjectName project={s.project} />}{s.title && s.model && <span className="sep">·</span>}

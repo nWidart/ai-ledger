@@ -26,6 +26,7 @@ const list = fixture("live.ts"), claude = fixture("live-session.ts"), codex = fi
 // The MCP tool a session runs, by the longest name the real app showed: too long for a rail entry, which must cut it.
 const mcp = list.sessions.find(s => s.state.kind === "tool" && s.state.tool?.startsWith("mcp__"));
 mcp.state = { ...mcp.state, tool: "mcp__t3-code__t3_environment_preferences_update" };
+mcp.errors = 3; // and errors, so its tile's top row holds the state, the badge and Pinned at once
 /** The active list, with or without query string; not /api/live/session or /api/live/events. */
 const LIST = /\/api\/live(\?|$)/;
 const shift = (ts, sec) => ts && new Date(Date.parse(ts) - sec * 1000).toISOString();
@@ -216,6 +217,10 @@ try {
       const lm = await measure(long);
       console.log(`${at}, s6 strip (long tool): page ${lm.scrollWidth}px wide in ${lm.clientWidth}px`);
       if (lm.hscroll) fails.push(`the strip of a session running a long tool scrolls the page sideways at ${at}`);
+      const pill = await long.evaluate(() => Math.round(document.querySelector(".pg-live .strip .now").getBoundingClientRect().height));
+      console.log(`${at}, s6 strip (long tool): state ${pill}px high, first event ends at ${lm.firstEvent.bottom}px`);
+      if (pill > 80) fails.push(`the long tool's state is ${pill}px high at ${at}: its detail does not wrap under it`);
+      if (lm.firstEvent.bottom > height) fails.push(`the long tool's strip pushes the first event off the first screen at ${at}`);
     }
   }
 
