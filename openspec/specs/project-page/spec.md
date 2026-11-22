@@ -65,6 +65,136 @@ The page SHALL list the project's eight most expensive sessions in the view with
 - **WHEN** the user selects a session in the list
 - **THEN** its session sheet opens over the Project page and the URL names the session
 
+### Requirement: Show the project's sessions by cost and tool calls
+The page SHALL show a block "Sessions by cost and tool calls": one dot per session of the project in the view with a known cost, its estimated cost across and its tool calls up, both on log scales. The range, source and automated filters SHALL apply to it, as to every usage block. The block SHALL link to Activity filtered to the project. Its tick labels and axis names SHALL lie inside the block, none over another, however many digits the labels have.
+
+#### Scenario: A project's sessions
+- **WHEN** the user views `foo` for the last 30 days and `foo` has 93 sessions with a known cost
+- **THEN** the block shows 93 dots, each at its session's estimated cost and tool calls
+
+#### Scenario: Sessions from three agents
+- **WHEN** the view holds Claude Code, Codex and Grok sessions of `foo`
+- **THEN** each of them is a dot at its own cost and tool calls
+
+#### Scenario: A source filter
+- **WHEN** the user picks Codex in the source filter
+- **THEN** the block shows Codex sessions only
+
+#### Scenario: Wide labels
+- **WHEN** one session of the view made 120,000 tool calls and another cost $1,500
+- **THEN** the margins widen so that every tick label and both axis names lie inside the block, apart
+
+### Requirement: Mark the sessions that made a commit
+On the session plot, a dot SHALL be filled when the session made a commit and hollow when it made none, so that a commit is told by shape and not by color alone.
+
+#### Scenario: A commit
+- **WHEN** a session made two commits and another made none
+- **THEN** the first is a filled dot and the second a hollow one
+
+### Requirement: Split the session plot at the medians
+With three dots or more, two dashed lines SHALL cross the session plot at the median cost and the median tool calls of the sessions shown. A session above the median cost SHALL count as costly and one at or below it as cheap; one above the median of tool calls as much done and one at or below it as little done.
+
+#### Scenario: Four quadrants
+- **WHEN** the shown sessions' median cost is $1.42 and their median tool calls 23
+- **THEN** a session at $4.20 and 12 tool calls counts as costly with little done
+
+#### Scenario: A session on a line
+- **WHEN** a session's cost is the median cost
+- **THEN** it counts as cheap
+
+### Requirement: Name the session plot's quadrants
+The four quadrants SHALL be named "Cheap, much done" (top left), "Costly, much done" (top right), "Cheap, little done" (bottom left) and "Costly, little done" (bottom right). A list under the plot SHALL give each name with its count. A name SHALL be drawn in its quadrant's corner only when the quadrant has room for it both across and up.
+
+#### Scenario: Counts
+- **WHEN** 8 of the shown sessions are costly with little done
+- **THEN** the list under the plot reads "Costly, little done" with 8
+
+#### Scenario: A name with no room
+- **WHEN** a quadrant is too narrow for its name at the text size in use
+- **THEN** its name is not drawn on the plot, and the list under the plot still names it with its count
+
+#### Scenario: A median on the plot's edge
+- **WHEN** three sessions cost $1, $2 and $3 and made no tool call, so the median of tool calls lies on the plot's bottom edge
+- **THEN** only the two upper names are drawn, and the list under the plot names all four
+
+### Requirement: Show few sessions without a split
+With one or two dots, the block SHALL draw them with no median lines, no quadrant names and no quadrant list, and SHALL say that the sessions are too few to split at a median. With sessions but none of known cost, it SHALL say that none can be placed and draw no plot.
+
+#### Scenario: Two sessions
+- **WHEN** the view holds two sessions of `foo` with a known cost
+- **THEN** the block shows two dots and says "2 sessions: too few to split at a median."
+
+#### Scenario: No known cost
+- **WHEN** every session of the view is on unpriced models
+- **THEN** the block says no session in this view has a known cost, and shows no plot
+
+### Requirement: Say which sessions the session plot leaves out
+When the view holds more sessions than the usage payload lists, the block SHALL say that it shows the newest, and, with a split, that the medians are theirs; with no dot, that none of the newest has a known cost. Under a plot it SHALL count the sessions it leaves out for an unknown cost. A session below $0 SHALL have no dot either, and the same line SHALL count it. A session with a cost and some unpriced requests SHALL be a dot at its known cost, read as "at least" that cost.
+
+#### Scenario: More than 300 sessions
+- **WHEN** the view holds 412 sessions of `foo`
+- **THEN** the block says it shows the newest 300 of 412 sessions in this view, with their medians
+
+#### Scenario: A cut view with nothing plottable
+- **WHEN** the view holds 412 sessions of `foo` and none of the newest 300 has a known cost
+- **THEN** the block says it shows the newest 300 of 412 sessions, with no word of medians, and that no session in the newest 300 has a known cost
+
+#### Scenario: Unknown costs
+- **WHEN** two sessions of the view are on unpriced models alone
+- **THEN** the block says two sessions with no known cost are left out
+
+#### Scenario: A cost below $0
+- **WHEN** a custom price list gives one session of the view a cost below $0
+- **THEN** that session has no dot, and the block says one session with a negative cost is left out
+
+### Requirement: Show a zero on the session plot's log axes
+A session at $0, or with no tool call, SHALL be drawn in a lane at the start of that axis, labelled "$0" on the cost axis and "0" on the tool-call axis. The lane SHALL lie under the power of ten at or below the axis's lowest value and span at most one decade. The lane SHALL be drawn only when a shown session needs it; an axis with no positive value SHALL take a fallback decade with a lane.
+
+#### Scenario: No tool call
+- **WHEN** a session of the view made no tool call
+- **THEN** its dot sits in the lane at the bottom of the plot, labelled 0, and its reading says "no tool call"
+
+#### Scenario: A session at no cost
+- **WHEN** a session of the view has an estimated cost of 0
+- **THEN** its dot sits in the lane at the left of the plot, labelled "$0", and its reading says "$0"
+
+#### Scenario: No session at zero
+- **WHEN** every shown session has a cost above $0 and at least one tool call
+- **THEN** neither axis has a lane
+
+### Requirement: Read the session plot from the cheapest session to the costliest
+The session plot SHALL be read by keyboard from the cheapest session to the costliest, a tie fewest tool calls first: Right and Left to the next and previous dot, Home and End to the ends; Up and Down SHALL scroll the page. The pointer SHALL read the nearest dot within 12px. A reading SHALL say the session's name (its title, or its short id without one), start, estimated cost, tool calls, commits and, with three dots or more, its quadrant. Its tooltip SHALL count the other sessions within 4px.
+
+#### Scenario: First key
+- **WHEN** the user focuses the session plot and presses Right, in an en-US browser
+- **THEN** the cheapest session is read, for example "Fix the flaky invoice export test, started Nov 2, 09:05 AM: $0.85, 41 tool calls, 2 commits. Cheap, much done."
+
+#### Scenario: Sessions in one place
+- **WHEN** three sessions sit within 4px of each other and the pointer reads one of them
+- **THEN** its tooltip says "and 2 more sessions here", and the arrow keys read each of the three in turn
+
+### Requirement: Write a session's cost on the session plot
+A session's cost SHALL read as the app writes a cost, with "$0" for a true zero. A positive cost that rounds to $0.00 SHALL read "under $0.01" in the sentence and "<$0.01" in the tooltip and the table; with unpriced requests it SHALL read "more than $0". A cost tick under a millionth of a dollar, or from a quadrillion, SHALL read in powers of ten.
+
+#### Scenario: A cost under a cent
+- **WHEN** the session read cost $0.003 and all its requests are priced
+- **THEN** its sentence says "under $0.01" and its tooltip "<$0.01"
+
+#### Scenario: A cost too small to write in decimals
+- **WHEN** a custom price list gives a session a cost of about $1e-126
+- **THEN** its dot and the cost axis are drawn, the axis's lowest tick reads "$1e-126", and its tooltip says "<$0.01"
+
+### Requirement: Open a session from the session plot
+Enter on the dot read, or a click on a dot, SHALL open the session's sheet over the page, as a row of the Sessions block does. When the sheet closes and the focus is back on the plot, Right and Left SHALL go on from that dot. The plot's data table, "Sessions on the plot", SHALL list every dot with the same figures and quadrant, and a row SHALL open its session's sheet.
+
+#### Scenario: Open a session
+- **WHEN** the user reads a dot and presses Enter
+- **THEN** its session sheet opens over the Project page and the URL names the session
+
+#### Scenario: The data table
+- **WHEN** the user opens the plot's data table and selects a row
+- **THEN** that session's sheet opens over the Project page
+
 ### Requirement: Show the project's errors
 The page SHALL show the project's failed tool calls and error rate, and its five most frequent error types with their count, rate and change against the previous period, each equal to the figure the Errors page shows by default for the project, range and source. A type SHALL link to Errors on that type, and the block SHALL link to Errors filtered to the project. The block SHALL say that it counts automated sessions when the page leaves them out.
 
@@ -148,7 +278,7 @@ The page SHALL show its heading, filters and every block without waiting for any
 
 #### Scenario: Usage fails
 - **WHEN** the usage request fails and the others succeed
-- **THEN** Activity, Cost and Sessions show errors with Retry, and Errors, Context and Plan limits show their figures
+- **THEN** Activity, Cost, Sessions and the session plot show errors with Retry, and Errors, Context and Plan limits show their figures
 
 #### Scenario: Slow block
 - **WHEN** the errors request has not answered
@@ -159,7 +289,7 @@ The page SHALL show its heading, filters and every block without waiting for any
 - **THEN** the Errors block says there are no errors in this view
 
 ### Requirement: Say when the view has no use
-The page SHALL say there is no use in the view only when the usage request has answered with no request for the project. That message SHALL sit above the blocks and SHALL NOT hide them: Activity, Cost and Sessions SHALL say they have no request in the view, and every other block SHALL show its own figures, empty state or error. With a snapshot, the Context block SHALL still show what it measured and offer Measure now, even with no grid to draw.
+The page SHALL say there is no use in the view only when the usage request has answered with no request for the project. That message SHALL sit above the blocks and SHALL NOT hide them: Activity, Cost, Sessions and the session plot SHALL say they have no request in the view, and every other block SHALL show its own figures, empty state or error. With a snapshot, the Context block SHALL still show what it measured and offer Measure now, even with no grid to draw.
 
 #### Scenario: Snapshot without a grid
 - **WHEN** `foo` has a context snapshot and no session in the view, so the start's share of the window is unknown
@@ -167,7 +297,7 @@ The page SHALL say there is no use in the view only when the usage request has a
 
 #### Scenario: No use with a snapshot
 - **WHEN** the usage request answers with no request for `foo` and `foo` has a context snapshot
-- **THEN** the page says there is no use of `foo` in the view, Activity, Cost and Sessions say they have no request, and the Context block shows the snapshot and offers Measure now
+- **THEN** the page says there is no use of `foo` in the view, Activity, Cost, Sessions and the session plot say they have no request, and the Context block shows the snapshot and offers Measure now
 
 #### Scenario: No use with a failed request
 - **WHEN** the usage request answers with no request for `foo` and the errors request fails
@@ -178,14 +308,14 @@ The per-block states SHALL take the place of the app's page placeholder for data
 
 #### Scenario: Slow usage request
 - **WHEN** the usage request has not answered and the others have
-- **THEN** Activity, Cost, Sessions and Context are `aria-busy`, Errors and Session judgments are not, the page's content area is not, and no loading line is announced
+- **THEN** Activity, Cost, Sessions, the session plot and Context are `aria-busy`, Errors and Session judgments are not, the page's content area is not, and no loading line is announced
 
 ### Requirement: Keep and refresh each block's figures on its own
 A block that shows figures SHALL keep them while its request refreshes and while a range, source or automated-filter change loads. A request a block reads, its own or one it reads a line from, that takes over 150 ms SHALL dim that block only. Picking another project SHALL drop the figures, so no block shows one project's figures under another's name. After Refresh, a filter change or a failed request, only blocks whose data changed SHALL fade in.
 
 #### Scenario: Slow refresh
 - **WHEN** the usage request refreshes and takes over 150 ms
-- **THEN** Activity, Cost, Sessions and Context keep their figures dimmed until it answers, and the other blocks are not dimmed
+- **THEN** Activity, Cost, Sessions, the session plot and Context keep their figures dimmed until it answers, and the other blocks are not dimmed
 
 #### Scenario: Range change
 - **WHEN** the user changes the range from 30 to 7 days and the usage request for 7 days takes over 150 ms
@@ -197,7 +327,7 @@ A block that shows figures SHALL keep them while its request refreshes and while
 
 #### Scenario: Refresh changes one payload
 - **WHEN** a Refresh brings new usage figures and the same errors and insights
-- **THEN** Activity, Cost and Sessions fade in, and Errors and Session judgments do not
+- **THEN** Activity, Cost, Sessions and the session plot fade in, and Errors and Session judgments do not
 
 ### Requirement: Say how the Live request stands in Activity
 While the Live request is on the way, the Activity block SHALL say it is checking for active sessions, in a line that is not a live region. When the Live request fails, the block SHALL say the sessions active now could not load, with a Retry control, and keep its figures. Neither state SHALL read as no active session. Retry SHALL leave focus on the line while the request runs.
@@ -303,11 +433,11 @@ With a project filter set, the filter row SHALL show a button next to the projec
 - **THEN** Activity opens with no project filter and the same range and source
 
 ### Requirement: Lay out the blocks in two columns
-On wide screens the Project page SHALL show its blocks in two columns: Activity, Cost and Context on the left, and Errors, Plan limits, Sessions and Session judgments on the right, each in that order. On narrow screens it SHALL show them in one column in the same order, left column first. The heading SHALL span the page above the columns, under the scope bar. A block SHALL NOT repeat the project sheet's summary figures, except the Cost block's estimated cost.
+On wide screens the Project page SHALL show its blocks in two columns: Activity, Cost and Context on the left, and Errors, Plan limits, Sessions, Sessions by cost and tool calls, and Session judgments on the right, each in that order. On narrow screens it SHALL show them in one column in the same order, left column first. The heading SHALL span the page above the columns, under the scope bar. A block SHALL NOT repeat the project sheet's summary figures, except the Cost block's estimated cost.
 
 #### Scenario: Wide screen
 - **WHEN** the user opens the Project page on a screen wider than 60em
-- **THEN** Activity, Cost and Context are in the left column and Errors, Plan limits, Sessions and Session judgments in the right
+- **THEN** Activity, Cost and Context are in the left column and Errors, Plan limits, Sessions, Sessions by cost and tool calls, and Session judgments in the right
 
 #### Scenario: Narrow screen
 - **WHEN** the user opens the Project page on a phone

@@ -671,7 +671,7 @@ A drawer's title SHALL be a real heading in the page outline, and its toggle SHA
 - **THEN** the drawer's title is listed as a heading
 
 ### Requirement: Label an interactive chart as a group
-The box of a chart that the user reads by keyboard, on Cost, Activity and Errors, SHALL be a `role="group"` with a label that says what the chart shows and how to read it, and SHALL NOT be `role="img"` or `role="application"`. Its live region for the keyboard reading SHALL stay. The drawing inside the box SHALL be hidden from assistive technology, which reads the label, the live region and the data table instead; the chart SHALL NOT expose a description generated from its series.
+The box of a chart that the user reads by keyboard, on Cost, Activity, Errors and Project, SHALL be a `role="group"` with a label that says what the chart shows and how to read it, and SHALL NOT be `role="img"` or `role="application"`. Its live region for the keyboard reading SHALL stay. The drawing inside the box SHALL be hidden from assistive technology, which reads the label, the live region and the data table instead; the chart SHALL NOT expose a description generated from its series.
 
 #### Scenario: Roles
 - **WHEN** a screen reader reaches the Cost chart
@@ -682,7 +682,7 @@ The box of a chart that the user reads by keyboard, on Cost, Activity and Errors
 - **THEN** it reads the label and the day being read, and none of the chart's drawn text or shapes
 
 ### Requirement: Dismiss a chart tooltip with Escape
-Escape SHALL dismiss the open tooltip of the Cost, cost flow, Activity work, outcome trend and Errors rate charts, whether the pointer or the keyboard reading opened it, without closing a sheet or the palette and without changing the selected bucket.
+Escape SHALL dismiss the open tooltip of the Cost, cost flow, Activity work, outcome trend, Errors rate and session plot charts, whether the pointer or the keyboard reading opened it, without closing a sheet or the palette and without changing the selected bucket.
 
 #### Scenario: Escape on a hovered bar
 - **WHEN** the tooltip of a Cost bar is open and the user presses Escape
@@ -1574,7 +1574,7 @@ A page whose load failed, in its failure message or its "Could not load" banner,
 - **THEN** the no-session note goes away
 
 ### Requirement: Keep a chart's space while it loads
-A chart whose drawing code loads after the page SHALL hold its final height from its first render, so nothing under it moves when it draws. Its label, keyboard reading, live readout and data table SHALL work before it has drawn. The Cost daily chart, the cost flow, the Activity work chart, the outcome trend, the Errors rate chart and the Activity calendar are such charts.
+A chart whose drawing code loads after the page SHALL hold its final height from its first render, so nothing under it moves when it draws. Its label, keyboard reading, live readout and data table SHALL work before it has drawn. The Cost daily chart, the cost flow, the Activity work chart, the outcome trend, the Errors rate chart, the Activity calendar and the session plot are such charts.
 
 #### Scenario: First visit to Cost
 - **WHEN** the user opens Cost for the first time and the chart's drawing code has not loaded yet
@@ -1623,7 +1623,7 @@ A drawn chart SHALL take its colors from the theme's color tokens, and SHALL red
 - **THEN** that project's segments in the chart are the same color
 
 ### Requirement: Use system colors in a drawn chart under forced colors
-In a forced-colors mode, a chart drawn by the shared chart component SHALL draw its text, grid lines, reading mark and zoom control in system colors. Each colored bar segment SHALL keep its series color, since the color is the data, with an edge in the system text color. A chart of nodes and bands has its own rule. A chart not yet drawn by the shared chart component keeps its own forced-colors rules. The chart SHALL switch when forced colors turns on or off, without a reload.
+In a forced-colors mode, a chart drawn by the shared chart component SHALL draw its text, grid lines, reading mark and zoom control in system colors. Each colored bar segment SHALL keep its series color, since the color is the data, with an edge in the system text color. A chart of nodes and bands, or of dots, has its own rule. A chart not yet drawn by the shared chart component keeps its own forced-colors rules. The chart SHALL switch when forced colors turns on or off, without a reload.
 
 #### Scenario: Cost chart in high contrast
 - **WHEN** forced colors is on and the Cost chart is drawn
@@ -1773,6 +1773,39 @@ In a forced-colors mode, a drawn chart of nodes and bands SHALL draw its nodes f
 #### Scenario: Turning forced colors off
 - **WHEN** the user turns forced colors off while the cost flow is shown
 - **THEN** the bands take their source nodes' colors again, without a reload
+
+### Requirement: Read a drawn scatter dot by dot
+A drawn chart of dots on two value or log axes SHALL be read by keyboard through every dot in one stated order, and by pointer at the nearest dot, not at a band of the x axis. The dot read SHALL be marked by a ring on the dot itself, and a key's tooltip SHALL sit beside that dot, or above or below it when there is no room beside. Its keyboard reading, tooltip and live sentence SHALL work before the chart has drawn.
+
+#### Scenario: Two dots at one cost
+- **WHEN** two sessions on the session plot have the same cost and different tool calls, and the pointer is over the upper one
+- **THEN** the upper session is read, not the lower one
+
+#### Scenario: Reading before the chart has drawn
+- **WHEN** the session plot's drawing code has not loaded yet and the user focuses it and presses Right
+- **THEN** the cheapest session is read, with its tooltip and its sentence
+
+### Requirement: Draw dots in the system text color under forced colors
+In a forced-colors mode, a drawn chart of dots SHALL draw each dot in the system text color, a hollow one with a page-colored center in a text-colored ring, and the ring around the dot read in the system highlight color. Its labels and guide lines SHALL be in system colors. The chart SHALL switch when forced colors turns on or off, without a reload.
+
+#### Scenario: Forced colors
+- **WHEN** forced colors is on and the user reads a dot
+- **THEN** its ring is in the system highlight color
+
+#### Scenario: Session plot in high contrast
+- **WHEN** forced colors is on and the session plot is drawn
+- **THEN** a filled dot is in the system text color, and a hollow dot has a page-colored center in a text-colored ring
+
+### Requirement: Give a zero its own lane on a log axis
+A drawn chart with a log axis SHALL draw a value of 0 in a lane at the start of that axis, labelled "0" ("$0" for a cost), below the power of ten at or below the smallest value the axis shows, and SHALL NOT drop the value or draw it at the smallest tick. The lane SHALL span at most one decade, so no other tick falls in it. The lane SHALL be drawn only when a value of 0 is shown. Where the axis is too short for both, the lane's label MAY give way to the next tick's label.
+
+#### Scenario: A zero among positive values
+- **WHEN** the session plot shows sessions with 1 to 85 tool calls and one with none
+- **THEN** the session with none sits below the 1 tick, in a lane labelled 0
+
+#### Scenario: Large text
+- **WHEN** the root font size is 32px, the session plot's box is 343px wide and both axes have a lane
+- **THEN** the tool-call lane's label 0 and that axis's first tick label are both shown, apart, and no label overlaps another
 
 ### Requirement: Answer a proxy's host by name
 `ai-ledger serve` SHALL take `--proxy-host HOST[:PORT]`, repeatable. Every route and method SHALL accept a `Host` header equal to one of those values, ignoring case, as it accepts `127.0.0.1:<port>`. A value that is not a host name with an optional port SHALL be refused at start. Without the option, every other host SHALL keep getting `403 forbidden host`. The app SHALL keep listening on `127.0.0.1` only.
