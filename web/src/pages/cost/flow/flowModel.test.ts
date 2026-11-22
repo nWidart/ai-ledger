@@ -79,6 +79,15 @@ describe("flowModel", () => {
     expect(m.rows.kinds.find(r => r.value === 6)).toMatchObject({ from: "(no model name)", to: "Reported" });
   });
 
+  it("keeps apart two bands and two table rows whose names would join to the same id", () => {
+    // app to v1|m:v2 and app|m:v1 to v2: both p:app|m:v1|m:v2 if the node ids were joined as they are.
+    const m = flowModel(view([["app", "v1|m:v2", 2], ["app|m:v1", "v2", 1]]));
+    expect(m.bands.filter(b => b.from.startsWith("p:")).map(b => [b.from, b.to, b.value])).toEqual([["p:app", "m:v1|m:v2", 2], ["p:app|m:v1", "m:v2", 1]]);
+    expect(new Set(m.bands.map(b => b.id)).size).toBe(m.bands.length);
+    const rows = [...m.rows.pairs, ...m.rows.kinds];
+    expect(new Set(rows.map(r => r.id)).size).toBe(rows.length);
+  });
+
   it("adds every column up to the priced cost, and every node's bands in up to its bands out", () => {
     const m = flowModel(rich), total = rich.cost_flow.pairs.reduce((s, p) => s + p.cost, 0);
     expect(m.total).toBeCloseTo(total, 9);

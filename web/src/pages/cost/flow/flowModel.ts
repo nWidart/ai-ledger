@@ -34,7 +34,8 @@ export interface FlowNode {
   /** Other's names, costliest first. */
   members?: { label: string; value: number }[];
 }
-export interface FlowBand { id: `${string}|${string}`; from: string; to: string; value: number }
+/** id: its source's and its target's ids, joined as `key()` joins them. */
+export interface FlowBand { id: string; from: string; to: string; value: number }
 export interface FlowColumn { key: FlowColumnKey; title: string; nodes: FlowNode[] }
 /** A flow before folding, between two names as the nodes say them: a row of the data table. */
 export interface FlowRow { id: string; from: string; to: string; value: number }
@@ -84,6 +85,9 @@ function fold(names: { key: string; label: string; value: number }[], total: num
 }
 
 const add = (m: Map<string, number>, k: string, v: number) => m.set(k, (m.get(k) ?? 0) + v);
+/** The id of a band or a table row: its ends' ids joined by "|", each with "\" and "|" escaped, since a project's or a
+ *  model's name can hold both. Two different pairs of ends never give one id. */
+const key = (from: string, to: string) => [from, to].map(s => s.replace(/[\\|]/g, "\\$&")).join("|");
 
 /** The flow of a view: its columns of nodes, each by cost with Other and Reported last, and its bands, in dollars. */
 export function flowModel(d: FlowInput): FlowGraph {
@@ -107,7 +111,7 @@ export function flowModel(d: FlowInput): FlowGraph {
   const bands = new Map<string, FlowBand>(), rows: FlowGraph["rows"] = { pairs: [], kinds: [] };
   const flow = (from: string, to: string, v: number) => {
     if (!(v > 0)) return;
-    const id = `${from}|${to}` as const, b = bands.get(id);
+    const id = key(from, to), b = bands.get(id);
     if (b) b.value += v;
     else bands.set(id, { id, from, to, value: v });
   };
@@ -126,7 +130,7 @@ export function flowModel(d: FlowInput): FlowGraph {
     ] });
     for (const p of pairs) flow(projectId.get(p.project ?? "")!, modelId.get(modelKey(p.model))!, p.cost);
     // The table lists the $0.00 pairs too.
-    rows.pairs = d.cost_flow.pairs.map(p => ({ id: `p|${p.project ?? ""}|${modelKey(p.model)}`, from: p.project || "(no project)", to: short(p.model), value: p.cost }));
+    rows.pairs = d.cost_flow.pairs.map(p => ({ id: key("p:" + (p.project ?? ""), modelKey(p.model)), from: p.project || "(no project)", to: short(p.model), value: p.cost }));
   }
   const mc = columns.length, kc = mc + 1;
   columns.push({ key: "model", title: TITLE.model, nodes: [
@@ -143,7 +147,7 @@ export function flowModel(d: FlowInput): FlowGraph {
     const kind = (k: string, label: string, v: number) => {
       flow(id, k, v);
       add(kindCost, k, v);
-      rows.kinds.push({ id: `${modelKey(m.model)}|${k}`, from: short(m.model), to: label, value: v });
+      rows.kinds.push({ id: key(modelKey(m.model), k), from: short(m.model), to: label, value: v });
     };
     for (const k of KINDS) { const v = k.of(m); est += v; if (v > 0) kind(k.id, k.label, v); }
     const reported = m.cost - est;
