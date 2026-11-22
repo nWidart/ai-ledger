@@ -8,9 +8,9 @@ const assets = fileURLToPath(new URL("../../src/ai_ledger/web/assets/", import.m
 
 // Limits in kB (1 kB = 1000 bytes) of gzip -9.
 const LIMITS = {
-  index: 130, // catches a static import of ECharts into the entry (121.7 kB since main's shared tables)
+  index: 130, // catches a static import of ECharts into the entry (109.9 kB with Errors' rate chart on ECharts and the activity calendar)
   CostPage: 20,
-  ActivityPage: 31, // 28.1 kB with the activity calendar's section (its loading and failure states), plus 2.9 kB of room
+  ActivityPage: 31, // 28.3 kB with the activity calendar's section (its loading and failure states), plus 2.7 kB of room
   ErrorsPage: 26,
   // The chart code the charts of Cost, Activity and Errors share. Vite names a shared chunk after its first module, so
   // the name (`zoomReset`) can change when modules move: the check then fails on "found 0" rather than skipping the chunk.
