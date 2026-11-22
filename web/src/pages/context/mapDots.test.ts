@@ -149,6 +149,7 @@ describe("mapOption", () => {
     expect(seriesOf(option(f, null), "wash")).toBeUndefined();
     expect(wash(env())).toMatchObject({ type: "rect", shape: { x: f.x30, y: f.plot.y }, style: { fill: "var(--surface-2)" } });
     expect(wash(env({ forced: true })).style).toEqual({ fill: "none", stroke: "ink-accent", lineWidth: 2 });
+    expect([seriesOf(option(f, "both"), "wash").z, seriesOf(option(f, "both", env({ forced: true })), "wash").z]).toEqual([-1, 1]);
     const [ring, dot] = draw(f, seriesOf(option(f, null, env({ forced: true })), "dots"), 0);
     expect([ring!.style.stroke, dot!.style.stroke, dot!.style.fill]).toEqual(["ink-text", "ink-text", color("foo")]);
   });

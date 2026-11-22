@@ -158,7 +158,8 @@ export function quadAtPixel(fit: MapFit, x: number, y: number): Quad | null {
 }
 
 /** The selected quadrant's wash, under the axes' grid lines (z -1, the axes at 0) as the grid lines show through it: one item,
- *  drawn at the fit's pixels. In forced colors a 2px frame in the highlight color, inset by half its line, and no fill. */
+ *  drawn at the fit's pixels. In forced colors a 2px frame in the highlight color, inset by half its line, and no fill, over
+ *  the grid lines and under the dots (z 1). */
 function wash(fit: MapFit, env: OptionEnv, q: (typeof QUADS)[number]): CustomSeriesOption {
   const { plot, x30, y80 } = fit, right = plot.x + plot.width, bottom = plot.y + plot.height;
   const r = { x: q.heavy ? x30 : plot.x, y: q.full ? plot.y : y80, width: q.heavy ? right - x30 : x30 - plot.x, height: q.full ? y80 - plot.y : bottom - y80 };
@@ -169,7 +170,8 @@ function wash(fit: MapFit, env: OptionEnv, q: (typeof QUADS)[number]): CustomSer
     data: [[fit.model.domain[0], 0]],
     encode: { x: 0, y: 1 },
     silent: true,
-    z: -1,
+    // The frame has no fill, so over the grid lines it hides nothing; under them they would cover half of two of its edges.
+    z: env.forced ? 1 : -1,
     renderItem: () => (env.forced
       ? { type: "rect", emphasisDisabled: true, shape: { x: r.x + 1, y: r.y + 1, width: r.width - 2, height: r.height - 2 }, style: { fill: "none", stroke: env.ink.accent, lineWidth: 2 } }
       : { type: "rect", emphasisDisabled: true, shape: r, style: { fill } }),
