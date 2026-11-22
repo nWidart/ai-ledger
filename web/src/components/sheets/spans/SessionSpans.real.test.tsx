@@ -23,7 +23,7 @@ const T0 = Date.parse("2026-11-04T14:00:00.000Z");
 const at = (min: number) => new Date(T0 + min * 60e3).toISOString();
 /** A call on the main thread from start to end, in minutes after T0. */
 const call = (id: string, start: number, end: number | null, o: Partial<Call> = {}): Call => ({
-  id, tool: "Bash", start_ts: at(start), end_ts: end == null ? null : at(end), is_error: false,
+  id, tool: "Bash", start_ts: at(start), end_ts: end == null ? null : at(end), is_error: (end == null ? null : false) as boolean,
   category: null, subagent: false, is_commit: false, lane: 0, input: "", ...o,
 });
 // Main thread: an ok bar, a failed wide one, a failed narrow one, a call with no result, a call that runs past the axis's

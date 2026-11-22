@@ -18,7 +18,7 @@ export const SUB_LANES = 6;
 export const ROW = 10, BAR = 8;
 const PAD = 4, LABEL = 14, LANE_GAP = 6, AXIS = 16;
 
-/** ok and failed: a timed call; open: no result; still: no duration, no start, or an end that cannot be read. */
+/** ok and failed: a timed call; open: no result; still: no duration, no start, or a result with no end that can be read. */
 export type SpanKind = "ok" | "failed" | "open" | "still";
 
 export interface Span {
@@ -108,8 +108,9 @@ export function spansLayout(tl: TimelineModel | null, calls: readonly SpanCall[]
     const start = c.start_ts ? at : null, end = time(c.end_ts);
     const sub = !c.subagent ? 0 : Number.isInteger(c.lane) && c.lane! >= 1 ? c.lane : null;
     const timed = start != null && end != null && end > start;
-    // open: no end at all; an end that cannot be read is a result with no duration.
-    const kind: SpanKind = !timed ? (start != null && !c.end_ts ? "open" : "still") : c.is_error ? "failed" : "ok";
+    // open: no result, so no end and no is_error (every source sets both from the result). An end that is missing or
+    // cannot be read beside a known outcome is a result with no duration: a failure there keeps its failure tick.
+    const kind: SpanKind = !timed ? (start != null && !c.end_ts && c.is_error == null ? "open" : "still") : c.is_error ? "failed" : "ok";
     const xs = spanX(tl, width, at), xe = timed ? spanX(tl, width, end!) : xs;
     placed.push({
       at, until: timed ? end! : at, group: sub === 0 ? "main" : sub == null ? "apart" : `sub-${sub}`,

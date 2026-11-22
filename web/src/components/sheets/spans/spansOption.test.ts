@@ -20,7 +20,7 @@ let n = 0;
 /** A call from start to end, in minutes after T0. */
 const call = (start: number | null, end: number | null, o: Partial<SpanCall> = {}): SpanCall => ({
   id: `c${++n}`, tool: "Bash", start_ts: start == null ? null : at(start), end_ts: end == null ? null : at(end),
-  is_error: false, subagent: false, lane: 0, input: "", ...o,
+  is_error: end == null ? null : false, subagent: false, lane: 0, input: "", ...o,
 });
 // One of each shape, a squeezed gap from 3 to 42, and the clipped call's end past the axis's end.
 const ok = call(0, 1), hollow = call(.5, 1.5, { is_error: true }), tick = call(2, 2.01, { is_error: true }), open = call(2.5, null),

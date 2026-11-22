@@ -11,7 +11,7 @@ let n = 0;
 /** A call from start to end, in minutes after T0. */
 const call = (start: number | null, end: number | null, o: Partial<SpanCall> = {}): SpanCall => ({
   id: `c${String(++n).padStart(3, "0")}`, tool: "Bash", start_ts: start == null ? null : at(start), end_ts: end == null ? null : at(end),
-  is_error: false, subagent: false, lane: 0, input: "", ...o,
+  is_error: end == null ? null : false, subagent: false, lane: 0, input: "", ...o,
 });
 const sub = (lane: number | null, start: number, end: number | null, o: Partial<SpanCall> = {}) => call(start, end, { subagent: true, lane, ...o });
 const layout = (calls: SpanCall[], compaction_ts: string[] = []) => {

@@ -18,7 +18,7 @@ const at = (min: number) => new Date(T0 + min * 60e3).toISOString();
 const clock = (min: number) => new Date(T0 + min * 60e3).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 /** A call from start to end, in minutes after T0, on the main thread. */
 const call = (id: string, tool: string | null, start: number | null, end: number | null, o: Partial<Call> = {}): Call => ({
-  id, tool: tool as string, start_ts: start == null ? null : at(start), end_ts: end == null ? null : at(end), is_error: false,
+  id, tool: tool as string, start_ts: start == null ? null : at(start), end_ts: end == null ? null : at(end), is_error: (end == null ? null : false) as boolean,
   category: null, subagent: false, is_commit: false, lane: 0, input: "", ...o,
 });
 const SUB = { subagent: true, lane: 1 };

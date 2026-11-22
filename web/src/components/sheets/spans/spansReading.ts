@@ -116,7 +116,7 @@ export function tipRows(l: SpansLayout, id: string): { tool: string; input: stri
   const rows = [thread(s), when(l, s)[1]];
   if (s.ms != null) rows.push(length(s.ms));
   // The outcome of every call with a result: an open call has none.
-  if (s.kind !== "open" || s.failed) rows.push(s.failed ? "Failed" : "Succeeded");
+  if (s.kind !== "open") rows.push(s.failed ? "Failed" : "Succeeded");
   if (n) rows.push(`and ${plural(n, "other call")} at the same time`);
   return { tool: s.tool, input: s.input || null, rows };
 }

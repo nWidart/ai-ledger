@@ -10,7 +10,7 @@ let n = 0;
 /** A call from start to end, in minutes after T0. */
 const call = (start: number | null, end: number | null, o: Partial<SpanCall> = {}): SpanCall => ({
   id: `c${String(++n).padStart(3, "0")}`, tool: "Bash", start_ts: start == null ? null : at(start), end_ts: end == null ? null : at(end),
-  is_error: false, subagent: false, lane: 0, input: "", ...o,
+  is_error: end == null ? null : false, subagent: false, lane: 0, input: "", ...o,
 });
 const sub = (lane: number | null, start: number, end: number) => call(start, end, { subagent: true, lane });
 /** The fixture session with these calls only: the axis is their times. */
@@ -73,6 +73,9 @@ describe("spansLayout", () => {
     ["a failed call with no duration", call(1, 1, { is_error: true }), "still", true],
     ["a call that ends before it starts", call(1, .5), "still", false],
     ["a call whose end cannot be read", call(1, null, { end_ts: "2026-13-45T99:00:00" }), "still", false],
+    // A result with no time (Grok's agentTimestampMs absent): is_error says there is a result.
+    ["a failed call with no end", call(1, null, { is_error: true }), "still", true],
+    ["a succeeded call with no end", call(1, null, { is_error: false }), "still", false],
   ])("draws %s from x(start) − 0.5, at least 1px wide", (_, c, kind, failed) => {
     const calls = [call(0, .1), c, call(10, 11)], { tl, l } = layout(calls), s = span(l, c);
     expect([s.kind, s.failed]).toEqual([kind, failed]);
