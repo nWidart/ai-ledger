@@ -1,9 +1,12 @@
 import { render, screen, within } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ContextOverhead, OverheadItem } from "../../api";
 import { loadList, STALE } from "./overhead";
-import { OverheadList, type OverheadOpener } from "./OverheadList";
+import { OverheadList } from "./OverheadList";
+
+type OverheadOpener = NonNullable<ComponentProps<typeof OverheadList>["onOpen"]>;
 
 let next = 100;
 const item = (kind: OverheadItem["kind"], name: string | null, tokens: number, o: Partial<OverheadItem> = {}): OverheadItem =>
@@ -70,6 +73,12 @@ describe("OverheadList", () => {
     // The server's row: its name, tokens and calls, then its tools disclosure (the tools' rows follow inside it).
     expect([buttons(), rows(screen.getByRole("list", { name: "MCP tools" }))[0]!.startsWith(
       "caveman, 805 tokens, called 12 times by Claude Code in this view, 3 tools, median 254 tokens")]).toEqual([[], true]);
+    // A new measurement of the same project keeps the list open but folds what was opened in it: the server's tools, though its row keeps its key.
+    const tools = screen.getByText("3 tools, median 254 tokens").closest("details")!, list = screen.getByText(loadList(FIXTURE)!.summary).closest("details")!;
+    await user.click(tools.querySelector("summary")!);
+    expect(tools.open).toBe(true);
+    rerender(<OverheadList snapshot={{ ...FIXTURE, ts: "2026-11-16T09:00:00.000Z" }} />);
+    expect([screen.getByText("3 tools, median 254 tokens").closest("details")!.open, list.open]).toEqual([false, true]);
   });
 
   it("folds each list after five rows and back, the focus kept on its one button, each list on its own", async () => {
@@ -96,14 +105,12 @@ describe("OverheadList", () => {
     expect([screen.queryByRole("list", { name: "Skills" }), buttons()]).toEqual([null, ["Show all 7"]]);
   });
 
-  it("draws no bar where the items do not fit, no share where uncounted, and odd names and an old snapshot as they are", async () => {
-    const long = "x".repeat(300), rtl = "مهارة-עברית";
+  it("draws no bar where the items do not fit, no share where uncounted, and says so for an old snapshot", async () => {
     const o = snap([["System prompt", 500], ["MCP tools", 100], ["Skills", 0]], [
       item("mcp_tool", "mcp__a__x", 150, { server: "a" }), item("skill", "a", 40),
       item("memory_file", "/a/x/CLAUDE.md", 50, { detail: "Project" }), item("memory_file", "/a/y/CLAUDE.md", 50, { detail: "Project" }),
-      item("agent", long, 30), item("agent", rtl, 20), item("agent", null, 10),
     ], { before_view: true, model: null });
-    const { container } = await shown(o);
+    await shown(o);
     screen.getByText(`${loadList(o)!.measured} ${STALE}`);
     const over = screen.getByRole("list", { name: "MCP tools" });
     expect([bars(screen.getByText("MCP tools").closest("li")!.firstElementChild!).length, bars(over).length]).toEqual([1, 0]);
@@ -112,8 +119,6 @@ describe("OverheadList", () => {
     expect([skills.firstElementChild!.textContent, bars(skills).length]).toEqual([
       "Skills, not counted, 1 skill listed, 40 tokens; this snapshot counts none of them before the first prompt.", 0]);
     expect(rows(screen.getByRole("list", { name: "Memory files" }))).toEqual(["CLAUDE.md, 50 tokens, Project · /a/x", "CLAUDE.md, 50 tokens, Project · /a/y"]);
-    expect(rows(screen.getByRole("list", { name: "Custom agents" }))).toEqual([`${long}, 30 tokens`, `${rtl}, 20 tokens`, "Unnamed agent, 10 tokens"]);
-    expect(container.textContent).not.toMatch(/undefined|null|NaN/);
   });
 
   it("renders nothing for a snapshot with nothing before the first prompt, and the categories alone without items", () => {

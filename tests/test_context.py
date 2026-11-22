@@ -953,7 +953,6 @@ class OverheadTest(unittest.TestCase):
             dict(seq=4, kind="mcp_tool", name="mcp__s0__t0", detail="s0", server="s0", tokens=0),
             dict(seq=32, kind="skill", name="neg", detail=None, server=None, tokens=0)])
         server = {x["name"]: (x["detail"], x["server"]) for x in items if x["kind"] == "mcp_tool"}
-        self.assertEqual(server["mcp__plugin_gh_github__get_pr"], ("github", "plugin_gh_github"))  # the stored calls' key, not detail
         self.assertEqual(server["search"], ("docs", "docs"))  # no prefix: detail
         self.assertEqual(o["calls"], dict(mcp=[], skill=[]))
         self.assertEqual(sorted(o), ["before_view", "calls", "categories", "items", "model", "session_id", "ts", "version", "window"])

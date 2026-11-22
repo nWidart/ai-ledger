@@ -31,7 +31,7 @@ None.
 ## Impact
 
 - **Server.** `src/ai_ledger/context.py`: `overhead()` reads every item and the call counts, and `payload()` runs in one read transaction. `src/ai_ledger/store.py`: the rule that names an MCP tool's server (`mcp__<server>__<tool>`) becomes a function, `mcp_server_of()`, that the parser and `overhead()` share. No stored data changes, and no `rebuild` is needed.
-- **Web.** `web/src/api.ts` (the `ContextOverhead` type), a new pure model `web/src/pages/project/overhead.ts`, a new component `OverheadList.tsx` with its `OverheadList.css`, and `ContextGrid.tsx` (its `TopItems` goes). `project.ts` drops `top` from `GridOverhead`. `Grids.tsx` and `blocks.tsx` do not change: both already pass the snapshot to `ContextGrid`.
+- **Web.** `web/src/api.ts` (the `ContextOverhead` type), a new pure model `web/src/pages/project/overhead.ts`, a new component `OverheadList.tsx` with its `OverheadList.css`, and `ContextGrid.tsx` (its `TopItems` goes). `project.ts` drops `top` from `GridOverhead`. `blocks.tsx` does not change, and `Grids.tsx` changes by one line (`key={d.project}` on the one full grid, so another project's list draws folded): both already pass the snapshot to `ContextGrid`.
 - **Bundle.** `ContextGrid-*.js` is 3.7 kB gzip today with no limit. The plan expects about 6 kB and adds an 8 kB limit to `web/scripts/check-bundle.mjs` once `echart-context` has merged.
 - **Payload.** With 300 skills and 60 MCP tools, `overhead` grows from 1.1 KB to 37.3 KB of JSON (3.2 KB gzipped; the app does not compress responses), and the payload takes about 6 ms more (design decision 2).
 - **Tests.** The context payload's Python tests, a model test, a component test, and one assertion block on each page's existing grid test. About 300 net test lines.

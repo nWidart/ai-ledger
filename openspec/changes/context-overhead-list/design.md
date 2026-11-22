@@ -274,7 +274,7 @@ The call text: "not called by Claude Code in this view", "called once by Claude 
 
 ### 11. Forced colors, dark and motion
 
-- **Forced colors.** `@media (forced-colors: active) { .ol-bar { forced-color-adjust: none; background: CanvasText; } .ol-items .ol-bar { background: GrayText; } .ol-track { border: 1px solid GrayText; } }`. A bar is told by its length and its track's border, not by a hue. Buttons and summaries take the system's colors.
+- **Forced colors.** `@media (forced-colors: active) { .ol-bar, .ol-items .ol-bar { forced-color-adjust: none; background: CanvasText; } .ol-track { border: 1px solid CanvasText; } }`. Every bar, category or item, is the system text color; it is told by its length and its track's border, not by a hue. Buttons and summaries take the system's colors.
 - **Dark.** `--series-1`, `--surface-1` and `--text-muted` carry both schemes; the item tint is mixed from them.
 - **Reduced motion, and in every mode.** Nothing animates: no transition on the bars, and `<details>` opens at once.
 
@@ -300,7 +300,7 @@ The call text: "not called by Claude Code in this view", "called once by Claude 
 
 - **Project page.** In the Context block, the grid's side column, after the legend (or after "Measured overhead" in the snapshot-alone mode), where "Largest overhead items" was (decision 1). Measure now stays under the block's figures, below the grid; a measurement refetches the payload and the list shows the new snapshot.
 - **Context page.** On Overhead and pressure, with one project selected, in the one full grid (`Grids.tsx` → `ContextGrid`). With no project selected there is no full grid and no list, as today.
-- `Grids.tsx` and `blocks.tsx` do not change; neither does `ContextPage.tsx` or `sections.tsx`.
+- `Grids.tsx` changes by one line: the one full `ContextGrid` takes `key={d.project}`, so selecting another project mounts a new grid and its list draws folded again (decision 1: closed, for screen sharing). The Context page keeps the previous payload while the next loads, so without the key the grid stays mounted and the open list would carry over to the other project. A new snapshot of the same project keeps the grid and the open list (decision 12). `blocks.tsx`, `ContextPage.tsx` and `sections.tsx` do not change.
 
 ### 14. Bundle
 

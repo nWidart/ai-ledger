@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { ContextOverhead, ContextPayload } from "../../api";
@@ -59,14 +59,16 @@ describe("window grids", () => {
     const overhead: ContextOverhead = { ts: "2026-11-10T09:30:00Z", session_id: "m1", model: "claude-opus-4-1", version: "2.1.0", window: 200_000, before_view: false,
       categories: [{ name: "Skills", tokens: 4000, state: "used" }], calls: { mcp: [], skill: [{ name: "ship", calls: 2 }] },
       items: [{ seq: 1, kind: "skill", name: "ship", detail: "userSettings", server: null, tokens: 300 }] };
-    renderApp(<Grids d={view(1, { project: "p0", starting: { ...fixture.starting, window: 200_000, window_share: .1, median: 20_000 },
-      growth: { ...fixture.growth, peak: { sessions: 20, median: 80_000, window_share: .4 } }, overhead })} />);
+    const one = (project: string) => view(1, { project, starting: { ...fixture.starting, window: 200_000, window_share: .1, median: 20_000 },
+      growth: { ...fixture.growth, peak: { sessions: 20, median: 80_000, window_share: .4 } }, overhead });
+    const { rerender } = renderApp(<Grids d={one("p0")} />);
     // The list of what loads before the first prompt, closed, in the grid's side column.
     const summary = screen.getByText(`What loads before your first prompt · ${big(4000)} tokens`);
     expect([summary.closest("details")!.open, summary.closest(".cg-side")?.querySelector(".cg-legend") != null]).toEqual([false, true]);
     await userEvent.click(summary);
-    await userEvent.click(screen.getByRole("button", { name: "ship" }));
-    await waitFor(() => expect(new URLSearchParams(location.search).get("skill")).toBe("ship"));
+    // Another project's list draws folded again, though the page keeps the grid mounted while the next payload loads.
+    rerender(<Grids d={one("p1")} />);
+    expect(screen.getByText(`What loads before your first prompt · ${big(4000)} tokens`).closest("details")!.open).toBe(false);
     const img = screen.getByRole("img", { name: /^Context window of a typical session/ });
     // The snapshot splits the starting cells (the Skills category's and the rest), so the start is those two.
     expect([cellsOf(img, "p0") + cellsOf(img, "rest"), cellsOf(img, "added"), cellsOf(img, "free")]).toEqual([20, 60, 120]);

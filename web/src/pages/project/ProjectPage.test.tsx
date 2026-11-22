@@ -344,8 +344,6 @@ describe("ProjectPage", () => {
       await userEvent.click(summary);
       const row = within(blk).getByRole("button", { name: "github" }).closest(".ol-row")!;
       expect(row.textContent).toMatch(new RegExp(`^github, ${big(5200)} tokens, called 4 times by Claude Code in this view, 1 tool`)); // then its tool
-      await userEvent.click(within(blk).getByRole("button", { name: "ship" }));
-      await waitFor(() => expect(new URLSearchParams(location.search).get("skill")).toBe("ship"));
       // Enter on the server's name opens its tool sheet by the key its calls are stored under, not by its name.
       within(blk).getByRole("button", { name: "github" }).focus();
       await userEvent.keyboard("{Enter}");

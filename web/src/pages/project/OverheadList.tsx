@@ -8,7 +8,7 @@ import { FEWER, fold, loadList, STALE, type LoadCategory, type LoadItem, type Lo
 import "./OverheadList.css";
 
 /** Opens the sheet of an MCP server (by its call key) or a skill; the page passes openToolSheet. */
-export type OverheadOpener = (kind: "mcp" | "skill", name: string) => void;
+type OverheadOpener = (kind: "mcp" | "skill", name: string) => void;
 
 /** Read between a row's parts, not shown: the parts sit in their own columns. */
 const SEP = <span className="sr">, </span>;
@@ -101,7 +101,7 @@ export function OverheadList({ snapshot, onOpen }: { snapshot: ContextOverhead; 
     <details className="ol">
       <summary id={id("title")}>{l.summary}</summary>
       <p className="ol-measured">{l.measured}{l.stale && ` ${STALE}`}</p>
-      <ol className="ol-cats" aria-labelledby={id("title")}>{l.categories.map(category)}</ol>
+      <ol key={of} className="ol-cats" aria-labelledby={id("title")}>{l.categories.map(category)}</ol>
     </details>
   );
 }

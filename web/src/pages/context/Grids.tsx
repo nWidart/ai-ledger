@@ -35,7 +35,7 @@ export function Grids({ d }: { d: D }) {
         <HowMeasured what="window grids" docs="concepts/windows#the-context-window">Each cell is half a percent of the project's most common window. The start is the median share of the window the
           first turn takes; the peak is the median share at the session's fullest. Both come from the same sessions: those with a measured start, a
           known window and a peak. Projects are ranked by how many such sessions they have.</HowMeasured></div>
-      {one ? <ContextGrid model={single} snapshot={d.overhead} />
+      {one ? <ContextGrid key={d.project} model={single} snapshot={d.overhead} />
         : <div className="grid-multiples"><GridDefs />
           {grids.map(g => <ContextGrid key={g.project ?? ""} model={g.model}
             compact={{ title: g.project == null ? <span className="muted">(no project)</span> : <ProjectName project={g.project}>{g.project}</ProjectName>, name: g.project ?? "(no project)", project: g.project }} />)}

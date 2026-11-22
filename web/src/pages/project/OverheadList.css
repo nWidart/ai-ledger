@@ -31,6 +31,5 @@
 /* Forced colors: a bar is told by its length inside a bordered track, not by a hue. */
 @media (forced-colors: active) {
   .ol-track { border: 1px solid CanvasText; }
-  .ol-bar { forced-color-adjust: none; background: CanvasText; }
-  .ol-items .ol-bar { background: GrayText; }
+  .ol-bar, .ol-items .ol-bar { forced-color-adjust: none; background: CanvasText; }
 }

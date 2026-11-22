@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ContextOverhead, OverheadItem } from "../../api";
 import { when } from "../../format";
-import { calledText, fold, loadList, type LoadList } from "./overhead";
+import { fold, loadList } from "./overhead";
 
+type LoadList = NonNullable<ReturnType<typeof loadList>>;
 type Cat = ContextOverhead["categories"][number];
 type Calls = Partial<ContextOverhead["calls"]>;
 const snap = (cats: [string, number, Cat["state"]?][], items: OverheadItem[] = [], calls: Calls = {}, over: Partial<ContextOverhead> = {}): ContextOverhead => ({
@@ -125,12 +126,15 @@ describe("loadList", () => {
       item("mcp_tool", "search", 200, { seq: 3, detail: "docs", server: "docs" }),
       item("mcp_tool", null, 50, { seq: 4 }),
       item("mcp_tool", "orphan", 50, { seq: 5, detail: "", server: "" }),
-    ], { mcp: [{ server: "plugin_gh_github", calls: 1 }, { server: "github", calls: 99 }, { server: "absent", calls: 5 }] }))!;
+      // A user's server that reads "github" too: both add their call key. Its calls are counted by that key.
+      item("mcp_tool", "mcp__github__search", 150, { seq: 6, detail: "github", server: "github" }),
+    ], { mcp: [{ server: "plugin_gh_github", calls: 1 }, { server: "github", calls: 1234567 }, { server: "absent", calls: 5 }] }))!;
     expect(cat(l, "MCP tools").items.map(x => [x.key, x.label, x.tokens, x.sub, x.open, x.calls, x.toolsLine, x.tools.map(t => [t.key, t.label])])).toEqual([
-      ["s1", "github", 400, "called once by Claude Code in this view", { kind: "mcp", name: "plugin_gh_github" }, 1, "2 tools, median 200 tokens", [["i1", "create_issue"], ["i2", "list_prs"]]],
+      ["s1", "github (plugin_gh_github)", 400, "called once by Claude Code in this view", { kind: "mcp", name: "plugin_gh_github" }, 1, "2 tools, median 200 tokens", [["i1", "create_issue"], ["i2", "list_prs"]]],
       ["s3", "docs", 200, "not called by Claude Code in this view", { kind: "mcp", name: "docs" }, 0, "1 tool", [["i3", "search"]]],
+      ["s6", "github (github)", 150, "called 1,234,567 times by Claude Code in this view", { kind: "mcp", name: "github" }, 1234567, "1 tool", [["i6", "search"]]],
       ["s5", "Unknown server", 100, "The snapshot names no server, so its calls cannot be counted.", null, null, "2 tools, median 50 tokens", [["i5", "orphan"], ["i4", "Unnamed tool"]]]]);
-    expect(cat(l, "MCP tools").line).toBe("3 servers, 5 tools, median 200 tokens a server; 1.3k tokens not listed by item");
+    expect(cat(l, "MCP tools").line).toBe("4 servers, 6 tools, median 175 tokens a server; 1.2k tokens not listed by item");
   });
 
   it("keys items by seq, ranks ties by name then seq, and keeps every name as it is", () => {
@@ -142,7 +146,7 @@ describe("loadList", () => {
       item("memory_file", "C:\\w\\AGENTS.md", 40, { seq: 10 }), item("memory_file", "CLAUDE.md", 30, { seq: 11, detail: "Local" }),
       item("memory_file", "/CLAUDE.md", 20, { seq: 12 }), item("memory_file", null, 10, { seq: 13, detail: "User" }),
       item("agent", long, 30, { seq: 14 }), item("agent", rtl, 20, { seq: 15, detail: "" }), item("agent", null, 10, { seq: 16 }),
-    ], { skill: [{ name: "toString", calls: 7 }, { name: "a", calls: 2 }, { name: "a", calls: 1 }] }))!;
+    ], { skill: [{ name: "toString", calls: 7 }, { name: "a", calls: 3 }] }))!;
     expect(cat(l, "Skills").items.map(x => [x.key, x.label, x.tokens, x.sub, x.open?.name ?? null, x.calls])).toEqual([
       ["i4", "constructor", 20, "not called by Claude Code in this view", "constructor", 0],
       ["i3", "a", 10, "called 3 times by Claude Code in this view", "a", 3],
@@ -182,12 +186,6 @@ describe("loadList", () => {
     expect(loadList(odd[0]!)).toBeNull();
     expect(loadList(odd[3]!)!.measured).toBe("Measured. Ranked by tokens; each share is of the 5.");
     expect(cat(loadList(odd[4]!)!, "MCP tools").items[0]!.sub).toBe("called 1,000,000,000,000 times by Claude Code in this view");
-  });
-});
-
-describe("calledText", () => {
-  it.each([[0, "not called"], [1, "called once"], [12, "called 12 times"], [1234567, "called 1,234,567 times"]])("%i", (n, s) => {
-    expect(calledText(n)).toBe(`${s} by Claude Code in this view`);
   });
 });
 

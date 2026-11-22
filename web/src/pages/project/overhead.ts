@@ -7,11 +7,11 @@ import { share } from "../context/context";
 import { overheadParts } from "./project";
 
 /** A list of more than FOLD + 1 rows shows its first FOLD and folds the rest into one row. */
-export const FOLD = 5;
+const FOLD = 5;
 export const FEWER = "Show fewer";
 export const STALE = "That was before this view's first day: the configuration may have changed since.";
 
-export type ItemKind = "server" | "memory_file" | "agent" | "skill";
+type ItemKind = "server" | "memory_file" | "agent" | "skill";
 /** A server's tool. key: "i" + its seq. */
 export interface LoadTool { key: string; label: string; tokens: number; bar: number | null; figure: string }
 export interface LoadItem {
@@ -48,7 +48,7 @@ export interface LoadCategory {
   items: LoadItem[];
 }
 /** summary: the disclosure's text. measured: the heading line. stale: the snapshot is older than the view (say STALE). */
-export interface LoadList { total: number; summary: string; categories: LoadCategory[]; measured: string; stale: boolean }
+interface LoadList { total: number; summary: string; categories: LoadCategory[]; measured: string; stale: boolean }
 
 /** Each item kind's category, by Claude Code's label, and its words. */
 const KINDS = [
@@ -75,7 +75,7 @@ const rank = <T extends { tokens: number; name: string | null; seq: number }>(a:
 const shareText = (x: number): string => (x > 0 && x < .0005 ? `<${share(.001)}` : x < 1 && x >= .995 ? `>${share(.99)}` : share(x));
 
 /** Claude Code's calls, as the row writes them. */
-export function calledText(n: number): string {
+function calledText(n: number): string {
   return `${n === 0 ? "not called" : n === 1 ? "called once" : `called ${plural(n, "time")}`} by Claude Code in this view`;
 }
 
@@ -92,8 +92,8 @@ export function loadList(o: ContextOverhead): LoadList | null {
   const items = o.items.map(x => ({ kind: x.kind, seq: x.seq, name: text(x.name), detail: text(x.detail), server: text(x.server), tokens: count(x.tokens) }));
   if (!parts.length && !items.length) return null;
   const calls = { mcp: new Map<string, number>(), skill: new Map<string, number>() };
-  for (const c of o.calls.mcp) calls.mcp.set(c.server, (calls.mcp.get(c.server) ?? 0) + count(c.calls));
-  for (const c of o.calls.skill) calls.skill.set(c.name, (calls.skill.get(c.name) ?? 0) + count(c.calls));
+  for (const c of o.calls.mcp) calls.mcp.set(c.server, count(c.calls));
+  for (const c of o.calls.skill) calls.skill.set(c.name, count(c.calls));
   const of = (k: Kind): Item[] => items.filter(x => x.kind === k.kind).sort(rank);
   const owner = new Map(KINDS.map(k => [k, parts.findIndex(p => p.name === k.category)]));
 
@@ -147,9 +147,11 @@ function itemRows(k: Kind, xs: Item[], scale: number | null, calls: { mcp: Map<s
   // A server: its tools' sum, named by their first detail, else its key; ranked as items are, "Unknown server" last among equals.
   const ranked = [...servers].map(([server, tools]) => ({ server, tools, tokens: sum(tools), seq: tools[0]!.seq,
     name: server == null ? null : tools.find(t => t.detail)?.detail ?? server })).sort(rank);
+  // Servers that read alike (a plugin's and a user's, both "github") add their call key to tell them apart.
+  const alike = (name: string | null) => name != null && ranked.filter(r => r.name === name).length > 1;
   return ranked.map(({ server, tools, tokens, seq, name }) => {
     const prefix = `mcp__${server}__`, n = server == null ? null : calls.mcp.get(server) ?? 0;
-    return { ...row({ seq, tokens, name, detail: null, server }, name ?? "Unknown server"), key: `s${seq}`, calls: n,
+    return { ...row({ seq, tokens, name, detail: null, server }, name == null ? "Unknown server" : alike(name) ? `${name} (${server})` : name), key: `s${seq}`, calls: n,
       open: server == null ? null : { kind: "mcp" as const, name: server },
       sub: n == null ? "The snapshot names no server, so its calls cannot be counted." : calledText(n),
       toolsLine: `${plural(tools.length, "tool")}${medianOf(tools)}`,
