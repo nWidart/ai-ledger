@@ -15,6 +15,8 @@ import attention from "../../../assets/shots/activity-attention.png";
 import attentionLight from "../../../assets/shots/activity-attention-light.png";
 import vitals from "../../../assets/shots/activity-vitals.png";
 import vitalsLight from "../../../assets/shots/activity-vitals-light.png";
+import calendar from "../../../assets/shots/activity-calendar.png";
+import calendarLight from "../../../assets/shots/activity-calendar-light.png";
 import work from "../../../assets/shots/activity-work.png";
 import workLight from "../../../assets/shots/activity-work-light.png";
 
@@ -41,7 +43,7 @@ A selected day or week is cleared in the same step as any change of project, ran
 
 ## Layout
 
-The page reads top to bottom: the view switch, the heading with the prompts interrupted line, Needs attention, the work chart, Work health, then the [tabs](#tabs) that hold the tables. At 1440×900 the work chart and the tab list fit in the first screen. The page has no section index and no drawers.
+The page reads top to bottom: the view switch, the heading with the prompts interrupted line, Needs attention, the work chart, Work health, then the [tabs](#tabs) that hold the tables, then the [Activity calendar](#activity-calendar). At 1440×900 the work chart and the tab list fit in the first screen. The page has no section index and no drawers.
 
 ## Panels
 
@@ -228,6 +230,40 @@ Two lists side by side, each headed with its count, each showing its five newest
 **Failed test runs** are the test and build runs that failed. The count is every failed run in the view.
 
 **Columns** Session (opens the session sheet), When, Project, Command, and an "Open in Errors" link to the failure on Errors.
+
+## Activity calendar
+
+<ThemedImage dark={calendar} light={calendarLight} alt="Activity's calendar over the last 13 weeks: a heading, a key of four shades with their commit counts and the day recording starts, month and weekday labels, and a grid of 13 week columns from the left edge. The first two columns hold no cells; the days since recording started are shaded by commits." />
+
+**Shows** the weeks since recording started, up to the last 53, as a grid under the tabs: a column per week, a row per weekday from Monday, a cell per day. It answers "when do I work with agents, and which days stand out?". It follows the project, source and Include automated sessions, not the time range: changing the range leaves the calendar as it is.
+
+**Figures**
+
+- A cell is one day. The span runs from the Monday of the first recorded day's week to today, and covers at least 13 weeks and at most 53. A store recorded for 11 weeks shows 13 weeks, the first two with no cells. Recording that started more than a year ago shows the 53 weeks from the Monday 52 weeks before this week's Monday.
+- The shade is the work chart's measure, Commits, Prompts or Sessions. The calendar has no switch: change the measure on the work chart. The heading line and the key name it.
+- A wide window has room for all 53 weeks. A narrower one shows at most the newest weeks that fit, 26 in a 343px box, and never scrolls sideways. The cells keep the size the window gives them, and the grid starts at the left edge, so a short history leaves room on the right. A larger browser text size widens the label margins, which can make the cells a little smaller. A cell is never smaller than 10px. When not all 53 weeks fit, a much larger text size makes the cells grow so the weekday labels never touch: at twice the text size a 343px box shows 20 weeks of 12px cells instead of 26 weeks of 10px cells.
+- The shade is a step. Steps are cut at the median, the 80th and the 95th percentile of the days with any of the measure, over all 53 weeks, so a day has the same shade at every width. Agent work comes in bursts, so the darkest step holds about one active day in twenty. There are up to four steps, and fewer when the days have few distinct values.
+- The key above the grid gives each step's numbers, such as "1–2", "3–8", "9+". A step that holds one value shows that number.
+- A day with none of the measure is an empty cell. A day before the first recorded day under the same filters has no cell. When that first day is inside the weeks shown, the key ends with "Recording starts Sep 8, 2026". A day after today, which a machine whose clock runs ahead can record, has no cell and does not count in the steps.
+- Weekday labels (Mon, Wed, Fri) sit left of the grid and month names above it, both in the browser's language. When that language's short weekday names are wider than the margin, the margin widens to hold them, which can leave room for a week or two fewer. A month name that would touch the next one, or run past the box, is left out.
+- With none of the measure in the weeks shown but some in the year, the label reads "No commits in the last 26 weeks."; with none at all, "No commits yet."
+- Under forced colors a shade is a size: a square in the system text color that grows with the step, and an empty day is an unfilled square. The key's swatches follow.
+
+**Controls**
+
+- Point at a cell, or focus the calendar and use the arrow keys, to read a day in a tooltip: the weekday and date, then its commits, prompts and sessions, whatever the measure, with the shade's swatch on the chosen one. An idle day reads "No activity". A screen reader hears the same as one sentence, such as "Wednesday, Nov 4, 2026: 12 commits, 40 prompts, 6 sessions." With three or more steps, the sentence for a day in the darkest step ends with "Among the busiest days for commits."; the tooltip does not say it.
+- Left and Right move a week, Up and Down a day, Home and End go to the first and last day. With nothing read, Right and Down read the first day and Left and Up the last. The keys stop at the ends. Up and Down do not scroll the page. See [Keyboard and screen reader](/ai-ledger/everywhere/keyboard-screen-reader/).
+- Select a day with a click, a tap, or Enter on the day read. Only a day with activity can be selected; Enter on an idle day does nothing and keeps the reading.
+- A selection works as on the work chart: `day=` in the URL, every tab narrowed to that day, the session search, near-limit filter and Sessions sort dropped. The work chart's chip names the day, and a chart by day frames its bar. A selected week from the work chart is framed as one column. A selection the calendar shows no cell for draws no frame.
+- After a pick the page scrolls to the tabs and moves the focus to the selected tab's panel, which names the day and offers "Show the whole range".
+- Escape ends a reading. With nothing read, Escape clears the selection. Escape closes a tooltip the pointer opened even when the focus is elsewhere.
+- After a change of filters or range, a pick does nothing until the page's new figures arrive, and after a change of filters, until the new calendar arrives too. A refresh or an ingest keeps picks on while newer figures load, and newer figures keep the day you read.
+- Before its first figures arrive, the section reads "Loading the calendar…".
+- If the calendar cannot load, its section reads "Could not load the calendar" with the reason and a **Retry** button. A calendar already on screen stays: after a change of filters the line adds "Still showing the calendar of the earlier filters; it cannot be selected.", and after a failed refresh "Still showing the last one loaded.", which can still be selected. While Retry runs, the button reads "Retrying…" and keeps the focus. If the calendar arrives while the button still has the focus, the focus moves to the calendar. If you change the filters before it arrives, the Retry is cancelled and the focus returns to the page. A refresh or an ingest asks again quietly: the line stays as it is, and goes when the calendar arrives. The focus stays where it is, unless it is on the Retry button: the button goes with the line, and the focus returns to the page.
+
+**The range.** The tabs count only the days in the range, so a pick outside it first widens it. The page sets the smallest of 7, 14, 30 or 90 days that holds the day, or All. The range counts back from the last day of the page's figures, the day they loaded, even when the calendar, kept through a change of range, still ends the day before. Only a day with activity says so: its tooltip adds "Outside the last 30 days. Selecting it sets the range to the last 90 days.", and its sentence "Outside the last 30 days; selecting it sets the range to the last 90 days." After the pick, a screen reader hears "Oct 1, 2026 selected; the range is now the last 90 days, and the tabs show its figures." A day inside the range says "Nov 4, 2026 selected; the tabs show its figures." Back restores the earlier range. Escape on a selection says "Selection cleared; the tabs show the whole range."
+
+**Show data table** opens a named table under the grid, such as "Commits per day, by week": a row per week shown, "Week of Nov 2, 2026" (", so far" for the week that holds the last day of the page's figures), a column per weekday from Mon to Sun, and Total. A day with no cell shows a dash. It follows the measure and is closed on every page load.
 
 ## Sheets
 

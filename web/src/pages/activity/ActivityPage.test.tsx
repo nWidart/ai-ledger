@@ -11,16 +11,25 @@ import sessions from "../../__fixtures__/sessions";
 import session from "../../__fixtures__/session";
 import tool from "../../__fixtures__/tool";
 import palette from "../../__fixtures__/palette";
+import calendar from "../../__fixtures__/calendar";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
-import { mockApi } from "../../components/sheets/testing";
-import { drawn } from "../../components/echart/testing";
+import { mockApi as mockRoutes } from "../../components/sheets/testing";
+import { fakeECharts } from "../../components/echart/testing";
 import { ActivityPage } from "./ActivityPage";
 import { setSearch } from "../../url";
 import { hookCommand, workDays } from "./work";
 import { dur, when } from "../../format";
 import { ingested, prevented, refreshed, renderApp, renderPage } from "../../testing";
 
+// Every page here also asks for its calendar: the fixture answers it unless a test routes it.
+const mockApi = (routes: Parameters<typeof mockRoutes>[0]) => mockRoutes({ "/api/calendar": () => calendar, ...routes });
+/** The work chart's fake, once drawn: the calendar below it draws a chart too. */
+const drawn = () => waitFor(() => {
+  const chart = fakeECharts.live.find(c => c.dom.closest("#work") && c.options.length);
+  if (!chart) throw new Error("the work chart has not drawn yet");
+  return chart;
+});
 const at = (hash = "?range=30") => history.replaceState(null, "", "/usage" + hash);
 const serve = (d: UsagePayload) => mockApi({ "/api/usage": () => d, "/api/sessions": () => sessions, "/api/session": () => session });
 const attention = () => within(document.getElementById("attention")!);
@@ -382,7 +391,7 @@ describe("workbench tabs", () => {
     act(() => first.focus());
     expect(prevented(first)).toEqual([]);
     expect(document.activeElement).toBe(first);
-    const chart = screen.getByRole("group", { name: /^Commits/ });
+    const chart = screen.getByRole("group", { name: /^Commits(?! per day as a calendar)/ });
     expect(prevented(chart)).toEqual([]);
     expect(screen.queryByRole("tooltip")).toBeNull();
     // A modified Escape keeps an open reading, on the chart and anywhere else on the page.
@@ -406,6 +415,150 @@ describe("work panel", () => {
     await loaded();
     const order = ["interrupted", "attention", "work", "vitals", "workbench"].map(id => document.getElementById(id)!);
     order.slice(1).forEach((el, i) => expect(order[i]!.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy());
+  });
+});
+
+describe("activity calendar", () => {
+  // The fixture's 53 weeks end on Thursday, Nov 5, 2026, recorded from Oct 1: jsdom's 800px box shows the newest 13 at a 14px
+  // pitch from 30px left and 18px down (ActivityCalendar.test.tsx). Nov 4 is in its last column, Oct 1 five columns before.
+  const cell = (col: number, row: number) => ({ clientX: 30 + col * 14 + 5, clientY: 18 + row * 14 + 5 });
+  /** A click as a browser makes it: the pointer reads the day, then the press focuses the calendar and clicks. */
+  const click = (col: number, row: number) => {
+    const g = screen.getByRole("group", { name: /^Commits per day as a calendar/ });
+    fireEvent.mouseMove(g, cell(col, row));
+    act(() => g.focus());
+    fireEvent.click(g, cell(col, row));
+  };
+  const live = () => document.querySelector("#calendar .cal-live")!.textContent;
+
+  it("follows the tabs, selects a day, widens the range for a day outside it, and takes no pick while its figures are another view's", async () => {
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 800, bottom: 116, width: 800, height: 116, x: 0, y: 0, toJSON: () => ({}) });
+    const codex = held<typeof calendar>();
+    mockApi({ "/api/usage": q => ({ ...usage, range: Number(q.get("range")) }), "/api/sessions": () => sessions, "/api/day": q => noDay(q.get("day")!),
+      "/api/calendar": q => (q.get("source") ? codex.p : calendar) });
+    at("?range=7");
+    renderApp(<ActivityPage />);
+    await loaded();
+    const workbench = document.getElementById("workbench")!, section = await screen.findByRole("region", { name: "Activity calendar" });
+    expect(workbench.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    click(12, 2);
+    expect(location.search).toBe("?range=7&day=2026-11-04");
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("tabpanel")));
+
+    // Outside the last 7 days: two writes, the range pushed and then the day, so the day survives the range's write, and
+    // so does the status the pick said (ActivityCalendar.test.tsx owns its words).
+    const n = history.length;
+    click(7, 3);
+    expect(location.search).toBe("?range=90&day=2026-10-01");
+    expect(history.length).toBe(n + 1);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("tabpanel")));
+    expect(live()).toMatch(/^Oct 1, 2026 selected/);
+    act(() => history.back());
+    await waitFor(() => expect(location.search).toBe("?range=7&day=2026-11-04"));
+
+    // Another source's calendar is loading: the one on screen is the earlier view's, and takes no pick.
+    act(() => setSearch({ source: "codex" }));
+    await waitFor(() => expect(document.querySelector(".pending")!.textContent).toBe(""));
+    click(12, 3);
+    expect(location.search).toBe("?range=7&source=codex");
+  });
+
+  it("counts a pick's range back from the figures' last day, not the calendar's", async () => {
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 800, bottom: 116, width: 800, height: 116, x: 0, y: 0, toJSON: () => ({}) });
+    // Overnight: the figures end on Friday, Nov 6, the calendar kept from the day before on Nov 5. Friday, Oct 30 is in the
+    // calendar's last 7 days, not in the figures' range, which the server clips to Oct 31 – Nov 6.
+    const older = { ...calendar, days: [...calendar.days, { day: "2026-10-30", sessions: 1, prompts: 1, commits: 1, calls: 0, failed_calls: 0 }] };
+    mockApi({ "/api/usage": () => ({ ...usage, range: 7, end: "2026-11-06" }), "/api/sessions": () => sessions, "/api/day": q => noDay(q.get("day")!),
+      "/api/calendar": () => older });
+    at("?range=7");
+    renderApp(<ActivityPage />);
+    await loaded();
+    await screen.findByRole("region", { name: "Activity calendar" });
+    click(11, 4);
+    expect(location.search).toBe("?range=14&day=2026-10-30");
+    expect(live()).toBe("Oct 30, 2026 selected; the range is now the last 14 days, and the tabs show its figures.");
+  });
+
+  it("shows its heading before its figures, says a failed request with Retry over the kept calendar, and keeps the focus on Retry while it runs", async () => {
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 800, bottom: 116, width: 800, height: 116, x: 0, y: 0, toJSON: () => ({}) });
+    const first = held<typeof calendar>(), again = held<typeof calendar>();
+    // Codex's calendar fails (no answer: 404) until a test holds it in flight.
+    let codex: () => unknown = () => undefined;
+    mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": q => noDay(q.get("day")!),
+      "/api/calendar": q => (q.get("source") ? codex() : first.p) });
+    at("?range=30");
+    const { client } = renderApp(<ActivityPage />);
+    await loaded();
+    const section = screen.getByRole("region", { name: "Activity calendar" });
+    expect(section.textContent).toContain("Loading the calendar…");
+    await act(async () => { first.resolve(calendar); await first.p; });
+    await screen.findByRole("group", { name: /^Commits per day as a calendar/ });
+
+    // Another source's calendar fails: the section says so over the kept calendar, which takes no pick.
+    act(() => setSearch({ source: "codex" }));
+    const region = () => within(screen.getByRole("region", { name: "Activity calendar" }));
+    const alert = await region().findByRole("alert");
+    await waitFor(() => expect(alert.textContent).toBe("Could not load the calendar (HTTP 404). Still showing the calendar of the earlier filters; it cannot be selected."));
+    click(12, 2);
+    expect(location.search).toBe("?range=30&source=codex");
+
+    // While Retry runs, its button stays, busy, with the focus; the answer brings the calendar of these filters, which picks.
+    codex = () => again.p;
+    const retry = region().getByRole("button", { name: "Retry" });
+    await userEvent.click(retry);
+    expect(retry.isConnected && retry.textContent).toBe("Retrying…");
+    expect(retry.getAttribute("aria-disabled")).toBe("true");
+    expect(document.activeElement).toBe(retry);
+    expect(alert.textContent).toBe("");
+    await act(async () => { again.resolve(calendar); await again.p; });
+    await waitFor(() => expect(region().queryByRole("alert")).toBeNull());
+    expect(document.activeElement).toBe(screen.getByRole("group", { name: /^Commits per day as a calendar/ }));
+    click(12, 2);
+    expect(location.search).toBe("?range=30&source=codex&day=2026-11-04");
+
+    // An ingest's request fails; Retry empties the alert while it runs, then fails again: the same alert says it once more.
+    codex = () => undefined;
+    ingested(client);
+    const failed = await region().findByRole("alert");
+    const asked = () => fetched().filter(u => String(u).startsWith("/api/calendar?source=codex")).length, n = asked();
+    let refail!: (e: Error) => void;
+    const refailed = new Promise<never>((_, reject) => { refail = reject; });
+    codex = () => refailed;
+    await userEvent.click(region().getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(asked()).toBe(n + 1));
+    expect(failed.textContent).toBe("");
+    codex = () => undefined;
+    await act(async () => { refail(new Error("HTTP 404")); await refailed.catch(() => {}); });
+    await waitFor(() => expect(failed.textContent).toBe("Could not load the calendar (HTTP 404). Still showing the last one loaded."));
+    expect(region().getByRole("alert")).toBe(failed);
+
+    // The focus leaves; an ingest asks again. Only the user's Retry reads "Retrying…": the line stays as it was, and the
+    // answer clears it with the focus left where the user put it.
+    act(() => (document.activeElement as HTMLElement).blur());
+    const late = held<typeof calendar>();
+    codex = () => late.p;
+    ingested(client);
+    await waitFor(() => expect(asked()).toBe(n + 2));
+    expect(region().getByRole("button", { name: "Retry" }).getAttribute("aria-disabled")).toBeNull();
+    expect(failed.textContent).toBe("Could not load the calendar (HTTP 404). Still showing the last one loaded.");
+    await act(async () => { late.resolve(calendar); await late.p; });
+    await waitFor(() => expect(region().queryByRole("alert")).toBeNull());
+    expect(document.activeElement).toBe(document.body);
+
+    // Grok's calendar fails; Retry runs with the focus; Back returns to Codex's calendar, cached. The Retry was cancelled,
+    // not answered: the focus does not go to the calendar.
+    codex = () => undefined;
+    act(() => setSearch({ source: "grok" }));
+    await region().findByRole("alert");
+    const cancelled = held<typeof calendar>();
+    codex = () => cancelled.p;
+    const pressed = region().getByRole("button", { name: "Retry" });
+    await userEvent.click(pressed);
+    expect(document.activeElement === pressed && pressed.textContent).toBe("Retrying…");
+    act(() => history.back());
+    await waitFor(() => expect(region().queryByRole("alert")).toBeNull());
+    expect(document.activeElement).not.toBe(screen.getByRole("group", { name: /^Commits per day as a calendar/ }));
   });
 });
 
@@ -726,8 +879,8 @@ describe("ActivityPage", () => {
     expect(failed.closest("th")!.getAttribute("aria-sort")).toBe("descending");
     await userEvent.click(failed);
     expect(order("tools").at(-1)).toBe("Edit");
-    // Only the page and the Sessions tab it opened on asked the server; the sorts asked nothing.
-    expect(fetched().filter(u => !String(u).startsWith("/api/usage") && u !== "/api/sessions?range=30")).toEqual([]);
+    // Only the page, its calendar and the Sessions tab it opened on asked the server; the sorts asked nothing.
+    expect(fetched().filter(u => !String(u).startsWith("/api/usage") && u !== "/api/calendar?" && u !== "/api/sessions?range=30")).toEqual([]);
   });
 
   it("restores the sessions filters from the hash and writes them without new history entries", async () => {
@@ -881,7 +1034,7 @@ describe("ActivityPage", () => {
     fake.fire("click", fake.pointAt(1));
     expect(location.search).toBe("?range=30");
     await act(async () => { wait.resolve(usage); await wait.p; });
-    await waitFor(() => expect(screen.getByRole("group", { name: /^Commits per day/ })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("group", { name: /^Commits per day(?! as a calendar)/ })).toBeTruthy());
   });
 
   it("drops a week the view does not reach, and a day that is not a Monday", async () => {
@@ -919,7 +1072,7 @@ describe("ActivityPage", () => {
     act(() => btn.focus());
     await userEvent.keyboard("{Enter}");
     expect(location.search).toBe("?range=30");
-    expect(document.activeElement).toBe(screen.getByRole("group", { name: /^Commits per day/ }));
+    expect(document.activeElement).toBe(screen.getByRole("group", { name: /^Commits per day(?! as a calendar)/ }));
   });
 
   it("drops the chart's selection sentence when the tab note or an attention action clears the selection, and says the next selection as new", async () => {
@@ -927,7 +1080,7 @@ describe("ActivityPage", () => {
     at("?range=30");
     renderApp(<ActivityPage />);
     await loaded();
-    const chart = screen.getByRole("group", { name: /^Commits per day/ }), sr = () => document.querySelector("#work div.sr[aria-live]")!.textContent;
+    const chart = screen.getByRole("group", { name: /^Commits per day(?! as a calendar)/ }), sr = () => document.querySelector("#work div.sr[aria-live]")!.textContent;
     const select = () => { act(() => chart.focus()); fireEvent.keyDown(chart, { key: "Home" }); fireEvent.keyDown(chart, { key: "Enter" }); };
     const SELECTED = "Nov 4, 2026 selected; the tabs below show its figures.";
     select();
@@ -1128,7 +1281,7 @@ describe("ActivityPage", () => {
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&day=2026-11-04"));
     // The bars follow the chosen count.
     await userEvent.click(within(screen.getByRole("group", { name: "Chart metric" })).getByRole("button", { name: "Prompts" }));
-    expect(screen.getByRole("group", { name: /^Prompts per day/ })).toBeTruthy();
+    expect(screen.getByRole("group", { name: /^Prompts per day(?! as a calendar)/ })).toBeTruthy();
   });
 
   it("opens a tool sheet from the tools drawer, and Escape returns focus to the row", async () => {
@@ -1439,7 +1592,7 @@ describe("Sessions sort by several columns", () => {
     await twoKeys();
     // A sort chosen after the action applies within it.
     await waitFor(() => expect(lastSessionsUrl()).toBe("/api/sessions?range=30&near=1&sort=-errors%2C-cost"));
-    const chart = screen.getByRole("group", { name: /^Commits/ });
+    const chart = screen.getByRole("group", { name: /^Commits(?! per day as a calendar)/ });
     act(() => chart.focus());
     fireEvent.keyDown(chart, { key: "End" });
     fireEvent.keyDown(chart, { key: "ArrowLeft" });
@@ -1700,7 +1853,7 @@ describe("Sessions selection", () => {
     await userEvent.click(box("#s1"));
     await userEvent.click(box("#s3"));
     expect(status()).toBe("2 selected.");
-    const chart = screen.getByRole("group", { name: /^Commits/ });
+    const chart = screen.getByRole("group", { name: /^Commits(?! per day as a calendar)/ });
     act(() => chart.focus());
     fireEvent.keyDown(chart, { key: "End" });
     fireEvent.keyDown(chart, { key: "Enter" });

@@ -7,6 +7,9 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Activity:
+  - A calendar of the weeks since recording started (13 to 53) under the tabs, a cell per day shaded by the work chart's measure and read with the arrow keys. Select a day to narrow the tabs; a day outside the range widens it first.
+  - `/api/calendar` serves its days.
 - Errors' rate chart zooms in views of 14 points or more, with a slider or the plus and minus keys.
 
 ### Changed
