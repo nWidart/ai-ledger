@@ -2,6 +2,15 @@
 .session-map .smcount { margin: 0 0 6px; font-size: .8125rem; color: var(--text-primary); }
 .session-map .hit { cursor: pointer; }
 .session-map .tip .tname { max-width: 18rem; overflow-wrap: anywhere; }
+/* The box around the chart (components/echart) is the origin of every pixel of the fit: the chart sits at its top left, the
+   ring and the tooltip over it. */
+.session-map .map-box { position: relative; }
+/* A hand over the plot, where a click opens a session or selects a quadrant. zrender writes its own cursor inline on the
+   element it draws in, on every pointer move: only an important rule wins over it. */
+.session-map .map-box.hand, .session-map .map-box.hand * { cursor: pointer !important; }
+/* The ring around the dot read, over the drawing: it needs no redraw of the dots, and takes no pointer. */
+.session-map .map-mark { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.session-map .map-mark circle { fill: none; stroke: var(--text-primary); stroke-width: 1.5; }
 /* Quadrants: their names in the plot's corners, the selected one washed, the sessions outside it dimmed */
 .session-map .quad-label { fill: var(--text-muted); pointer-events: none; }
 .session-map .quad-label.on { fill: var(--text-primary); }
@@ -22,7 +31,7 @@
 .session-map .qsess { display: flex; flex-wrap: wrap; gap: 2px 12px; width: 100%; text-align: left; font-size: .78125rem; padding: 4px 6px; }
 .session-map .qname { font-weight: 600; }
 @media (forced-colors: active) {
-  .session-map .quad-on { fill: none; stroke: Highlight; stroke-width: 2; }
+  .session-map .map-mark circle { stroke: Highlight; }
   /* The pressed quadrant is filled in Highlight, so it reads apart from the others with or without the focus ring. */
   .session-map .quads button[aria-pressed="true"] { forced-color-adjust: none; background: Highlight; border-color: Highlight; }
   .session-map .quads button[aria-pressed="true"], .session-map .quads button[aria-pressed="true"] :is(b, .n, .what) { color: HighlightText; }
