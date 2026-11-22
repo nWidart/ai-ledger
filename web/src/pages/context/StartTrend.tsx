@@ -33,8 +33,9 @@ const readWeek = (w: Week) =>
  *  the pointer, the tooltip and the live sentence. view: the page's key. */
 export function StartTrend({ trend, view }: { trend: Trend; view: string }) {
   const m = useMemo(() => weeksModel(trend), [trend]);
-  // One function per set of figures: a new one is drawn.
-  const option = useCallback((env: ChartEnv) => weeksOption(m, env), [m]);
+  // One function per set of figures and text size: a new one is drawn, laid out at the scale the box has.
+  const scale = textScale();
+  const option = useCallback((env: ChartEnv) => weeksOption(m, { ...env, textScale: scale }), [m, scale]);
   if (!m.slots.length) return null;
   const first = trend[0]!, last = trend.at(-1)!;
   const label = (trend.length > 1
@@ -66,7 +67,7 @@ export function StartTrend({ trend, view }: { trend: Trend; view: string }) {
         <span className="key muted">hollow dot: fewer than {TREND_MIN_SESSIONS} sessions</span>
       </div>
       {/* Each slot's week is its key: a week that joins before the first keeps the reading on its week. */}
-      <EChart label={label} height={weeksLayout(textScale()).height} option={option} view={view} pointKeys={m.slots} points={m.slots.length}
+      <EChart label={label} height={weeksLayout(scale).height} option={option} view={view} pointKeys={m.slots} points={m.slots.length}
         tip={tip} read={read} />
       <ChartTable><Table name="Median starting context per week of session start" rows={trend} columns={COLUMNS} rowId={w => w.week} /></ChartTable>
     </div>

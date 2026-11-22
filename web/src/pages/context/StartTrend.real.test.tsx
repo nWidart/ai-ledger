@@ -58,6 +58,12 @@ it("draws the band's runs and span, the median in parts, the dots, the 30k line 
   const cursor = () => paths().filter(p => tokenOf(p.getAttribute("fill")) === "var(--text-primary)" && p.getAttribute("fill-opacity") === "0.06");
   await waitFor(() => expect(cursor()).toHaveLength(1));
   expect(box(cursor()[0]!.getAttribute("d")!).cx).toBeCloseTo((parts[0]![4]! + parts[1]![0]!) / 2, 1);
+  // The text doubles; a key redraws the chart in the same box, so at the scale that box was laid out for.
+  document.documentElement.style.fontSize = "32px";
+  fireEvent.keyDown(group, { key: "ArrowLeft" });
+  await waitFor(() => expect(box(cursor()[0]!.getAttribute("d")!).cx).toBeCloseTo(parts[0]![4]!, 1));
+  expect(Number(median().getAttribute("d")!.match(/M(-?[\d.]+) /)![1])).toBeCloseTo(parts[0]![0]!, 1);
+  document.documentElement.style.fontSize = "";
 
   const drawing = plot();
   unmount();
