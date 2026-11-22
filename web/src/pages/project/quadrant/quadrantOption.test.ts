@@ -1,6 +1,4 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { TOP } from "../../../colors";
 import type { CustomSeriesOption, CustomSeriesRenderItemAPI, CustomSeriesRenderItemParams } from "../../../components/echart/echarts";
 import { FORCED_INK, type ChartEnv } from "../../../components/echart/tokens";
 import { quadrantFit, quadrantModel, type QuadRow } from "./quadrant";
@@ -92,26 +90,13 @@ describe("quadrantOption", () => {
     expect([v!.style.stroke, name!.style.fill, name!.style.stroke]).toEqual(["CanvasText", "CanvasText", "Canvas"]);
     for (const a of axes(o)) expect([a.axisLabel.color, a.nameTextStyle.color, a.splitLine.lineStyle.color]).toEqual(["CanvasText", "CanvasText", "GrayText"]);
   });
-});
 
-// The colors the option hands to env.color must be tokens theme.css declares as colors zrender's parser reads: a token that
-// is not a color resolves to the inherited text color, with no error (foundation, decision 4). As in costDaily.test.ts. The
-// hue is the project's, color(): one of the TOP hues or "Other".
-describe("the quadrant's chart colors", () => {
-  const strip = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
-  const themeCss = strip(readFileSync("src/theme.css", "utf8")); // vitest runs from web/
-  const declared = new Map<string, string>();
-  for (const block of themeCss.matchAll(/(?:^|\n):root \{([^}]*)\}/g))
-    for (const m of block[1]!.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) declared.set(m[1]!, m[2]!.trim());
-  const PLAIN = String.raw`(?:#[0-9a-fA-F]{3,8}|rgba?\([^()]*\))`;
-  const COLOR = new RegExp(String.raw`^(?:${PLAIN}|light-dark\(\s*${PLAIN}\s*,\s*${PLAIN}\s*\))$`);
-
-  it.each([...Array.from({ length: TOP }, (_, i) => `var(--proj-${i + 1})`), "var(--proj-other)"])("hands env.color only the hue %s, a declared color", hue => {
+  // The option resolves only the project's hue through env.color; every other color is one of the env's inks, whose
+  // tokens tokens.test.ts checks against theme.css.
+  it("hands env.color only the hue it was given", () => {
     const seen = new Set<string>(), recording = env({ color: s => { seen.add(s); return s; } });
-    const o = quadrantOption(lanes, recording, hue);
+    const o = quadrantOption(lanes, recording, HUE);
     series(o).forEach(s => (s.data as unknown[]).forEach((_, i) => draw(s, i)));
-    expect([...seen]).toEqual([hue]);
-    const m = /^var\((--[\w-]+)\)$/.exec(hue)!;
-    expect(declared.get(m[1]!), `${m[1]} is not a declared hex or rgb() color`).toMatch(COLOR);
+    expect([...seen]).toEqual([HUE]);
   });
 });
