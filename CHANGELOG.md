@@ -19,6 +19,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Stacked bars on Cost, Activity, Judgments and Errors are never drawn taller than a bar with a larger total: a day with a few errors in several types no longer looks larger than a day with more in one.
 - Hovering a "?" no longer moves the text around it.
 - An open Live page no longer keeps the app busy on several CPU cores while many sessions run. The app keeps what it read of each transcript line, and reads only new lines on each refresh.
 

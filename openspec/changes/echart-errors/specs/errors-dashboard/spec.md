@@ -96,7 +96,7 @@ After a click, Enter or Space on a chart point, the rate chart's polite status S
 - **THEN** the chart's status says nothing
 
 ### Requirement: Keep the rate chart's marks inside the plot
-A fix marker's label SHALL sit beside its line inside the plot: right of the line, or left of it when it would pass the plot's right edge, and SHALL be left out when neither side has room. Labels of fixes marked on one bucket SHALL sit one under the other. The "no activity" label SHALL show only in a band wide enough for its text. A panel's title wider than the plot SHALL be cut with an ellipsis. Each SHALL hold in a 343px chart box and at 200% text.
+A fix marker's label SHALL sit beside its line inside the plot: right of the line, or left of it when it would pass the plot's right edge, and SHALL be left out when neither side has room or its row ends under the plot; its line stays. Labels of fixes marked on one bucket SHALL sit one under the other. The "no activity" label SHALL show only in a band wide enough for its text. A panel's title wider than the plot SHALL be cut with an ellipsis. Each SHALL hold in a 343px box and at 200% text.
 
 #### Scenario: A fix on the newest day
 - **WHEN** a fix is marked on the chart's newest day
@@ -105,6 +105,10 @@ A fix marker's label SHALL sit beside its line inside the plot: right of the lin
 #### Scenario: Two fixes on one day
 - **WHEN** two types have a fix marked on Nov 4
 - **THEN** both labels show beside Nov 4's line, one under the other
+
+#### Scenario: Twelve fixes on one day
+- **WHEN** twelve types have a fix marked on Nov 4 and the text is at 200%
+- **THEN** Nov 4 has twelve dashed lines, and no label ends under the plot
 
 #### Scenario: A narrow band
 - **WHEN** one day has no activity in a 30-day view on a phone
