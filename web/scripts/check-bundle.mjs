@@ -15,7 +15,7 @@ const LIMITS = {
   ContextPage: 26,
   SessionSpans: 9, // 6.5 kB: the session sheet's tool-call chart (layout, option, reading and table), loaded when a sheet opens
   ProjectPage: 11, // 9.3 kB: the page, its blocks and the session quadrant (model, fit, reading, option); catches a static import of ECharts
-  // The `<EChart>` wrapper (6.3 kB), which Cost, Activity, Errors, Project and the session sheet's tool-call chart load. Project draws a chart but does not zoom,
+  // The `<EChart>` wrapper (7.1 kB), which Cost, Activity, Errors, Context, Project and the session sheet's tool-call chart load. Project draws a chart but does not zoom,
   // so the build moved the wrapper out of `zoomReset` into its own shared chunk.
   EChart: 8,
   // The chart code the charts of Cost, Activity and Errors share. Vite names a shared chunk after its first module, so
