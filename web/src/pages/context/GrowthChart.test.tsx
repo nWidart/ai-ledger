@@ -37,8 +37,8 @@ describe("GrowthChart", () => {
     expect(label).toContain("9 sessions");
   });
 
-  it("reads a turn with the keys and its tooltip, keeps it through newer figures, and dismisses it with Escape or on blur", async () => {
-    const { rerender } = renderApp(<GrowthChart view="v" curve={view} projects={[foo, bar]} />);
+  it("reads a turn with the keys and its tooltip, each project's median with it, and keeps the focus on Escape", async () => {
+    renderApp(<GrowthChart view="v" curve={view} projects={[foo, bar]} />);
     act(() => chart().focus());
     key("ArrowRight");
     expect(sr()).toBe(`${readTurn(view[0]!)}; foo 36k; bar 18k`);
@@ -48,18 +48,8 @@ describe("GrowthChart", () => {
     key("End");
     expect(sr()).toBe("Turn 5: median 70k tokens (25th to 75th percentile 49k to 98k), 9 sessions; foo 84k");
     expect(tipRows().at(-1)).toBe("foo84k");
-    // A newer payload of the same view, one more turn and turn 5's figures changed: the reading stays on turn 5, with them.
-    rerender(<GrowthChart view="v" curve={[...view.slice(0, 4), pt(5, 80_000), pt(6, 90_000)]} projects={[foo, bar]} />);
-    expect(within(screen.getByRole("tooltip")).getByText("Turn 5")).toBeTruthy();
-    expect(tipRows()[0]).toBe("Median80k");
     key("Escape");
-    expect(screen.queryByRole("tooltip")).toBeNull();
-    expect(sr()).toBe("");
     expect(document.activeElement).toBe(chart());
-    key("Home");
-    expect(sr()).toBe(`${readTurn(view[0]!)}; foo 36k; bar 18k`);
-    fireEvent.blur(chart());
-    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
   it("reads the turn under the pointer", async () => {

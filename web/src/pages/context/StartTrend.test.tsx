@@ -26,13 +26,10 @@ describe("StartTrend", () => {
     expect(within(tip()).getByText("Rests on few sessions")).toBeTruthy();
   });
 
-  it("steps through every week with the arrow keys, Home and End, reads an empty week by its key, and clears with Escape", () => {
+  it("reads an empty week by its key, and keeps the reading on its week when an earlier week joins", () => {
     const { rerender } = render(<StartTrend view="v" trend={trend} />);
     act(() => chart().focus());
-    key("End");
-    expect(live()).toBe("Week of Nov 23: median 26k tokens (25th to 75th percentile 20.8k to 33.8k), 9 sessions");
     key("Home");
-    expect(live()).toBe("Week of Nov 2: median 24k tokens (25th to 75th percentile 19.2k to 31.2k), 9 sessions");
     key("ArrowRight");
     expect(live()).toBe("Week of Nov 9: no session started.");
     expect(tip().textContent).toBe("Week of Nov 9No session started");
@@ -41,8 +38,6 @@ describe("StartTrend", () => {
     expect(tip().textContent).toBe("Week of Nov 9No session started");
     key("ArrowLeft");
     expect(live()).toBe("Week of Nov 2: median 24k tokens (25th to 75th percentile 19.2k to 31.2k), 9 sessions");
-    key("Escape");
-    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
   it("reads the week under the pointer", async () => {

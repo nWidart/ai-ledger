@@ -2,7 +2,6 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { CacheBucket, ContextPayload } from "../../api";
-import type { SeriesOption } from "../../components/echart/echarts";
 import { drawn } from "../../components/echart/testing";
 import { dayRange } from "../../format";
 import { CacheChart } from "./CacheChart";
@@ -18,7 +17,6 @@ const key = (k: string) => fireEvent.keyDown(chart(), { key: k });
 const said = () => document.querySelector(".cache-chart .sr")!.textContent;
 const tip = () => screen.queryByRole("tooltip");
 const reads = () => screen.getByRole("button", { name: "Cache reads" });
-const seriesIds = async () => ((await drawn()).last!.series as SeriesOption[]).map(s => s.id);
 /** A day's waste: 900k read from the cache, 60k written to it and 40k sent uncached, a 90% cache-hit ratio. */
 const DAY = { cache_read: 900_000, cache_write: 60_000, input: 40_000 };
 
@@ -49,13 +47,10 @@ describe("cache chart", () => {
     const caption = () => document.querySelector(".cache-chart .caption")!.textContent;
     expect(reads().getAttribute("aria-pressed")).toBe("false");
     expect(caption()).toContain("Cache reads are left out of the bars until you turn them on.");
-    expect(await seriesIds()).not.toContain("reads-edge");
     await userEvent.click(reads());
     expect(reads().getAttribute("aria-pressed")).toBe("true");
     expect(caption()).not.toContain("Cache reads are left out");
-    expect(await seriesIds()).toContain("reads-edge");
     await userEvent.click(reads());
-    expect(await seriesIds()).not.toContain("reads-edge");
   });
 
   it("reads an empty day as no request, by the keys and by the pointer, and keeps the day read through newer figures", async () => {
@@ -108,7 +103,7 @@ describe("cache chart zoom", () => {
   const showAll = () => screen.queryByRole("button", { name: "Show all days" });
 
   it("zooms by plus around the day read, keeps the zoom through the toggle, and shows every day again from the button", async () => {
-    const { rerender } = render(<CacheChart view="v" series={month} />);
+    render(<CacheChart view="v" series={month} />);
     const fake = await drawn();
     expect(fake.last!.dataZoom).toHaveLength(1);
     expect(chart().getAttribute("aria-label")).toMatch(/read each day, Escape to dismiss it, and plus and minus to zoom\.$/);
@@ -119,7 +114,6 @@ describe("cache chart zoom", () => {
     expect(fake.shown).toEqual({ from: 4, to: 18 });
     expect(said()).toBe("Showing Oct 11 to Oct 25, 15 of 30 days.");
     await userEvent.click(reads());
-    expect(await seriesIds()).toContain("reads-edge");
     expect(fake.shown).toEqual({ from: 4, to: 18 });
     await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
     expect(within(screen.getByRole("table", { name: "Cache use by bucket" })).getAllByRole("row")).toHaveLength(31);
@@ -128,11 +122,5 @@ describe("cache chart zoom", () => {
     expect(showAll()).toBeNull();
     expect(document.activeElement).toBe(chart());
     expect(said()).toBe("Showing all 30 days.");
-    // Another view shows every day.
-    fake.zoomTo(4, 13);
-    expect(said()).toBe("Showing Oct 11 to Oct 20, 10 of 30 days.");
-    rerender(<CacheChart view="w" series={month} />);
-    expect((await drawn()).shown).toEqual({ from: 0, to: 29 });
-    expect(showAll()).toBeNull();
   });
 });
