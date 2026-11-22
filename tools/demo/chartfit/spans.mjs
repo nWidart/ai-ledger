@@ -11,7 +11,7 @@
 //   within 0.5px: at the 40rem sheet, after Wide and back, in a 343px box, at 32px text, at an open with the figures cached
 //   (closed and opened again, and from another page), and as the sheet's scrollbar comes and goes (the data table opened
 //   and every row shown);
-// - the clipped bar ends at the plot's right edge in a point, and the 24.5-minute bar ends where the gap does, across the
+// - the clipped bar runs past the plot's right edge into its right margin and ends in a point just before the box's edge, and the 24.5-minute bar ends where the gap does, across the
 //   break; the failed call with no end is the red 2px tick, taller than its row, and its sentence says it failed;
 // - at 16px and 32px text in a 343px box no lane label leaves the box or overlaps a bar or another label;
 // - the pointer reads a bar with the mark on it within 1px, a tick drawn over a bar reads the tick, empty space nothing;

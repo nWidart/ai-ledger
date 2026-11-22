@@ -43,7 +43,7 @@
 //                          its header), spans (the session sheet's tool calls by thread, its own checks)
 // It runs locally, not in CI. It needs the build and the pinned Playwright:
 //   uv sync;  cd web && npm ci && npm run build;  cd tools/demo && npm ci
-//   node chartfit.mjs [cost] [activity] [judgments] [errors] [calendar] [flow] [quadrant]   the pages named, every
+//   node chartfit.mjs [cost] [activity] [judgments] [errors] [calendar] [flow] [quadrant] [spans]   the pages named, every
 //                              page when none is; SHOTS=<dir> also saves screenshots of the charts there;
 //                              CHROMIUM=<path> uses that Chromium
 import { run } from "./chartfit/harness.mjs";

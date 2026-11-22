@@ -126,11 +126,15 @@ The section SHALL say the call read in a polite live region: its tool, thread, s
 - **THEN** the live region says "Bash on subagent 2, started 14:02:10, no result recorded: npm run dev."
 
 ### Requirement: Fit the tool-call tooltip and label the chart
-The tooltip SHALL sit beside the pointer, moving clear of the call's mark when it would cover it, or above or below the call a key read, wrap a long tool name or input, and stay inside the section's box. The chart's group SHALL be labelled with the session's call count, its threads, its active time, its longest call and the keys.
+The tooltip SHALL sit beside the pointer, or for a key over the call read: above the call when the window has room, else below. It SHALL never cover the call's mark, wrap a long tool name or input, and stay inside the section's box at both sides. The chart's group SHALL be labelled with the session's call count, its threads, its active time, its longest call and the keys.
 
 #### Scenario: A long input in a narrow box
 - **WHEN** the section is 343px wide and the call read has a 120-character input
-- **THEN** the tooltip wraps the input and lies inside the section
+- **THEN** the tooltip wraps the input and lies inside the section at both sides
+
+#### Scenario: A key's reading near the window's top
+- **WHEN** a key reads a call and the window has no room above it for the tooltip
+- **THEN** the tooltip sits below the call, clear of its mark
 
 ### Requirement: Offer the tool calls as a table
 Under the chart, "Show data table" SHALL open a table "Calls by duration": one row per call drawn, longest first, then the calls with no duration or no result by start, with the call's start, thread, tool, input, duration and result. It SHALL show the first 20 rows and a button that shows every row and moves the focus to the first row it added. A row SHALL open the tool's sheet. A table wider than the box SHALL scroll sideways in its own region, not the sheet.

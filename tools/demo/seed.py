@@ -376,7 +376,6 @@ store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], g_p
 store.insert(c, "session_runs", ["session_id", "start_ms", "api_ms"], g_runs)
 
 
-
 def demo_spans():
     """One Claude Code session, `demo-spans`, of fixed rows and no random stream, so every other row stays as it is. It has
     its own lists and inserts, after every pass above: the limit snapshots read `reqs` and the /context snapshots read
