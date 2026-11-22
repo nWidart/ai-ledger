@@ -243,7 +243,7 @@ Layout at the default text size: margins top 12, right 14, bottom 24, left 52, s
 | The nearest turn by x, a dashed line and a dot | The wrapper: the band over both tracks |
 | The visible line of text | A tooltip, `tip(i)`: "Turn 12", then Median, 25th to 75th percentile, Sessions, and one row per drawn project with a point at that turn (its band too when isolated). `read(i)` is today's sentence, unchanged |
 | The measure switch ends the reading | The measure is in the `view` key (decision 11) |
-| Isolating a project keeps the reading | It is not in the key: the same view is drawn again |
+| Isolating a project does not end the reading by the redraw | It is not in the key: the same view is drawn again. The reading ends when the focus leaves the chart for the legend button, by the wrapper's blur |
 | Escape and blur end the reading | The wrapper |
 | No curve: nothing | Unchanged |
 
