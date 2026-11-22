@@ -5,6 +5,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-22
+
 ### Added
 
 - Project and Context (one project): "What loads before your first prompt" ranks the snapshot's categories and every MCP server, memory file, custom agent and skill. It shows how often Claude Code called each server and skill in the view, and a name opens its sheet.
@@ -388,6 +390,7 @@ First release on PyPI.
   `$XDG_DATA_HOME/ai-ledger/` (or `~/.local/share/ai-ledger/`) elsewhere. A source checkout's `data/ai-ledger.duckdb`
   moves there on the first start.
 
+[0.8.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.8.0
 [0.7.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.7.0
 [0.6.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.6.0
 [0.5.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.5.0
