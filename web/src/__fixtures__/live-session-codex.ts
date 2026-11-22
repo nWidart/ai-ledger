@@ -3,8 +3,8 @@ import type { LiveSession } from "../api";
 
 export default {
  "session_id": "0a0f7777-0000-7000-8000-000000000007",
- "title": null,
- "title_from": null,
+ "title": "Bump the rollout parser to the new response_item shapes",
+ "title_from": "agent",
  "project": "graft",
  "source": "codex",
  "branch": null,
@@ -29,13 +29,13 @@ export default {
   },
   {
    "k": "prompt",
-   "key": "codex:0a0f7777-0000-7000-8000-000000000007:2#0",
+   "key": "codex:0a0f7777-0000-7000-8000-000000000007:3#0",
    "ts": "2026-11-10T10:00:21.000Z",
    "lane": null,
    "words": 4
   },
   {
-   "key": "codex:0a0f7777-0000-7000-8000-000000000007:3#0",
+   "key": "codex:0a0f7777-0000-7000-8000-000000000007:4#0",
    "k": "tool",
    "ts": "2026-11-10T10:00:25.000Z",
    "lane": null,
@@ -71,7 +71,7 @@ export default {
  },
  "cost": null,
  "requests": 1,
- "model": null,
+ "model": "gpt-6.2-sol",
  "context": 22000,
  "cache_read": 0.909090909,
  "tools": 0,

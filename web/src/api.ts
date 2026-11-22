@@ -401,7 +401,6 @@ export interface LiveListSession extends LiveFigures, LiveTitle {
   session_id: string; project: string | null; source: Source; branch: string | null;
   /** Its first line's time (the session's start) and its newest line's. */
   first_ts: Ts | null; last_ts: Ts | null; state: LiveState;
-  latest: { kind: "tool" | "prompt"; tool: string | null; summary: string | null; lane: string | null } | null;
 }
 /** The user automated projects file next to the store, why it was ignored, and the projects it adds. */
 export interface AutomatedFile { path: string; error: string | null; projects: string[] }

@@ -13,7 +13,7 @@ This playbook applies before every screen share, recording, screenshot or demo o
 
 Act at once when one of these holds:
 
-- [Live](/ai-ledger/pages/live/) shows the warning "**Full text on.** Prompts, replies and tool output show as written, secrets included.", or its **Full text** toggle is tinted, checked. This is the app's own warning. Dismissing the warning leaves the tint.
+- [Live](/ai-ledger/pages/live/) shows the warning "**Full text on.** Prompts, replies and tool output show as written, secrets included.", or its **Full text** toggle is tinted, checked. This is the app's own warning. The warning closes itself after 6 seconds, and dismissing it leaves the tint.
 - The project picker, or the **Search** button in the navigation, which shows the project's name while a project filter is set, names a project you cannot show, such as a client's.
 - A sheet is open beside the page: the URL holds `session=` (on any page but Live), `sheet=` (the session sheet on Live), `inspect=`, `tool=`, `mcp=` or `skill=`.
 - Live's Wall has pinned streams: the URL holds `pin=`. Each pinned stream shows its session's status strip, directory included, and its tool rows.

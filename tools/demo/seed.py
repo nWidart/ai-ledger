@@ -31,7 +31,7 @@ PROMPTS = {
     "infra-scripts": ["Write a backup script for the Postgres volume", "Add a health check to the deploy script", "Rotate the staging certificates"],
 }
 CLAUDE_MODELS = [("claude-opus-5-5", "high", 0.55), ("claude-sonnet-5-5", "medium", 0.35), ("claude-fable-5-1", "high", 0.10)]
-CODEX_MODELS = [("gpt-6.1-sol", "high", 0.7), ("gpt-6-astra", "medium", 0.3)]
+CODEX_MODELS = [("gpt-6.1-sol", "high", 0.5), ("gpt-6.2-sol", "high", 0.2), ("gpt-6-astra", "medium", 0.3)]  # gpt-6.2-sol has no price
 
 # (tool, input, error text or None) templates; errors are categorized with the app's own rules
 OK = [("Read", "src/{f}.ts"), ("Read", "src/{f}.py"), ("Edit", "src/{f}.ts"), ("Edit", "src/{f}.py"), ("Grep", "TODO|FIXME"),
@@ -160,6 +160,48 @@ for d in range(DAYS, -1, -1):
             sessions.append((sid, project, f"/home/demo/code/{project}", rnd.choice(["main", "feat/rate-limit", "fix/undo", "feat/export"]),
                              start, t, "cli", "2.4.0", compactions, peak, model, source, win if source == "codex" else None, first_compaction))
 
+# Shapes real sessions have, drawn from their own random stream so the rows above stay as they are: a title of 60 to 80
+# characters on every Claude Code and Codex session, a 30-character branch, shell commands past 200 characters with
+# absolute paths, and t3-code MCP calls whose JSON input runs to about 300 characters.
+TITLES = {
+    "atlas-api": ["Add sliding-window rate limiting to the orders endpoint and document the headers",
+                  "Fix the flaky invoice export test that fails when the run crosses midnight UTC",
+                  "Rotate the JWT signing keys without logging out every active customer session"],
+    "pixel-studio": ["Make the layer panel drag and drop keep its selection while the canvas redraws",
+                     "Smooth the canvas zoom on trackpads and stop it jumping at the 400 percent step",
+                     "Fix the undo stack so a crop followed by a resize can be undone in one step"],
+    "ledger-web": ["Add a cost per day chart with a previous-period line under the sessions table",
+                   "Fix the hydration warning on the home page caused by the relative timestamps",
+                   "Make the sessions table sortable by cost, duration and errors from its header"],
+    "docs-site": ["Write the getting started guide for a fresh clone, from install to a first page",
+                  "Fix every broken link the API reference build reports and add a check to CI"],
+    "infra-scripts": ["Write a nightly backup script for the Postgres volume with a seven-day retention",
+                      "Rotate the staging certificates and add an expiry alert two weeks ahead of it"],
+}
+LONG_BRANCH = "feat/rate-limit-sliding-window"  # 30 characters
+LONG_BASH = [
+    "cd /home/demo/code/{p} && uv run pytest tests/test_orders.py tests/test_rate_limit.py tests/test_webhooks.py -q -x --no-header -p no:cacheprovider 2>&1 | tee /home/demo/.cache/{p}/pytest-orders.log",
+    "/home/demo/code/{p}/node_modules/.bin/vitest run --reporter=verbose --coverage.enabled --coverage.reportsDirectory=/home/demo/code/{p}/coverage --outputFile=/home/demo/.cache/{p}/vitest.json /home/demo/code/{p}/src/{f}.test.ts",
+    "rg --json -n 'rateLimit|throttle|retryAfter' /home/demo/code/{p}/src /home/demo/code/{p}/tests --glob '!**/*.snap' --glob '!**/fixtures/**' | jq -r 'select(.type == \"match\") | .data.path.text' | sort -u",
+]
+DELEGATE = json.dumps(dict(target=dict(provider="codex", model="gpt-6.2-sol", options=dict(reasoningEffort="high")), isolation="worktree",
+                           task="Review the {p} change on this branch against its spec: list each missing test, each unhandled error path and each changed public name, with its file and line."))
+srnd = random.Random(13)
+titles = [(s[0], None, TITLES[s[1]][i % len(TITLES[s[1]])]) for i, s in enumerate(sessions)]
+for i, s in enumerate(sessions):
+    sid, project, start, end = s[0], s[1], s[4], s[5]
+    if project == "atlas-api" and srnd.random() < 0.3:
+        sessions[i] = s[:3] + (LONG_BRANCH,) + s[4:]
+    if s[11] != "claude" or srnd.random() >= 0.3:
+        continue
+    for k, (tool, inp) in enumerate([("Bash", srnd.choice(LONG_BASH).replace("{f}", srnd.choice(FILES))), ("mcp__t3-code__delegate_task", DELEGATE)]):
+        t = start + (end - start) * srnd.random()
+        inp = inp.replace("{p}", project)
+        test = tool in categorize.SHELL_TOOLS and categorize.runs_tests(inp)
+        tools.append((f"{sid}-long{k}", sid, tool, "t3-code" if tool.startswith("mcp__") else None, None, inp, t,
+                      min(t + timedelta(milliseconds=srnd.randint(400, 20_000)), end), False, None, None, None, False, False, test, test, None, None,
+                      srnd.randint(200, 6_000)))
+
 store.insert(c, "sessions", ["session_id", "project", "cwd", "git_branch", "first_ts", "last_ts", "entrypoint", "version",
                              "compactions", "peak_context", "peak_model", "source", "context_window", "first_compaction_ts"], sessions)
 store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "effort", "subagent", "input", "output", "thinking",
@@ -168,6 +210,7 @@ store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "mcp_server"
                                "is_error", "error", "category", "followup", "subagent", "is_commit", "is_test", "test_passed",
                                "result_file", "result_seq", "result_bytes"], tools)
 store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], prompts)
+store.insert(c, "session_titles", ["session_id", "custom", "agent"], titles)
 store.insert(c, "hooks", ["session_id", "ts", "source", "hook", "command", "duration_ms", "is_error"], hooks, tail="")
 store.insert(c, "raw_lines", ["key", "file", "line_no", "byte_offset", "type", "session_id", "uuid", "ts", "subagent", "parsed", "json"], raw)
 

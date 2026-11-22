@@ -3,7 +3,7 @@ import type { LiveSession } from "../api";
 
 export default {
  "session_id": "s1",
- "title": "Fast ingest pass while Live is open",
+ "title": "Fast ingest pass while the Live page stays open and polling",
  "title_from": "agent",
  "project": "foo",
  "source": "claude",
@@ -22,19 +22,19 @@ export default {
  "events": [
   {
    "k": "prompt",
-   "text": "Add a fast ingest pass while the Live page is open",
+   "text": "## Add a fast ingest pass while the Live page is open\n\nKeep the rail readable at a glance:\n\n- keep each **title** whole on two lines\n- never cut a `state` tag\n\nSee [the council notes](https://example.com/council) first.",
    "key": "u1#0",
    "ts": "2026-11-10T10:00:00.000Z",
    "lane": null,
-   "words": 11
+   "words": 38
   },
   {
    "k": "reply",
-   "text": "Reading the ingest loop first.",
+   "text": "### Plan\n\n1. Measure the rail at **1280 px**.\n2. Clamp titles with `line-clamp: 2`.\n\n| Part | Width | Cut |\n| --- | ---: | --- |\n| title | 220 px | no |\n| state tag | 96 px | no |\n\n```css\n.rail .ttl { line-clamp: 2; }\n```\n\nDetails in [the design doc](https://example.com/design).",
    "key": "a1#1",
    "ts": "2026-11-10T10:00:02.000Z",
    "lane": null,
-   "words": 5
+   "words": 59
   },
   {
    "key": "a1#2",
@@ -54,6 +54,26 @@ export default {
    "long": false,
    "quiet": true,
    "chars": 31,
+   "cut": false
+  },
+  {
+   "key": "a1#3",
+   "k": "tool",
+   "ts": "2026-11-10T10:00:02.000Z",
+   "lane": null,
+   "id": "t0",
+   "tool": "mcp__t3-code__delegate_task",
+   "summary": "{\"target\": {\"provider\": \"codex\", \"model\": \"gpt-6.2-sol\", \"options\": {\"reasoningEffort\": \"high\"}}, \"isolation\": \"worktree\", \"task\": \"Review the Live page fixtures in tests/test_live.py against real sessions: titles, branches, long MCP names and Markdown replies. Report each gap with the file and line",
+   "description": null,
+   "start": "2026-11-10T10:00:02.000Z",
+   "end": "2026-11-10T10:00:03.000Z",
+   "failed": false,
+   "error": null,
+   "output": "{\"taskId\": \"task_7f3a\", \"status\": \"queued\"}",
+   "agent": null,
+   "long": false,
+   "quiet": false,
+   "chars": 43,
    "cut": false
   },
   {
@@ -150,7 +170,7 @@ export default {
    "lane": null,
    "id": "t3",
    "tool": "Bash",
-   "summary": "uv run python -m unittest",
+   "summary": "cd /Users/example/Sites/projects/ai-ledger && uv run pytest tests/test_live.py tests/test_web_fixtures.py -q -x --no-header -p no:cacheprovider 2>&1 | tee /Users/example/Library/Caches/ai-ledger/pytest-live.log",
    "description": "Run the Python tests",
    "start": "2026-11-10T10:00:14.000Z",
    "end": "2026-11-10T10:00:20.000Z",
@@ -224,6 +244,10 @@ export default {
     "failed": false
    },
    {
+    "ts": "2026-11-10T10:00:03.000Z",
+    "failed": false
+   },
+   {
     "ts": "2026-11-10T10:00:06.000Z",
     "failed": false
    },
@@ -250,6 +274,6 @@ export default {
  "model": "claude-opus-5-5",
  "context": 160,
  "cache_read": 0.217391304,
- "tools": 7,
+ "tools": 8,
  "errors": 1
 } satisfies LiveSession;

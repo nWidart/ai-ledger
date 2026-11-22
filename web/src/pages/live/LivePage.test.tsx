@@ -110,6 +110,8 @@ const layOut = (sel: string, room: number) => {
   return { box, drawn, inView };
 };
 const catchUp = `/api/live/session?id=s1&after=${encodeURIComponent(s1.cursor!)}`;
+/** s1's failed shell call: a command past 200 characters, with absolute paths. */
+const TESTS_COMMAND = "cd /Users/example/Sites/projects/ai-ledger && uv run pytest tests/test_live.py tests/test_web_fixtures.py -q -x --no-header -p no:cacheprovider 2>&1 | tee /Users/example/Library/Caches/ai-ledger/pytest-live.log";
 /** From this call on, the list and the session answer only when the test says so (answer(), or answer(n) for the n
  *  asked first), each with what the app held when it was asked. sent: the requests since, as URL and abort signal;
  *  waiting: how many are unanswered. */
@@ -198,7 +200,7 @@ describe("live.ts", () => {
 describe("LivePage", () => {
   it("lists the active sessions and opens the newest when the URL names none", async () => {
     const { calls } = show("");
-    expect(groups(await rail())).toEqual(["approval? · 1 foo", "your turn · 1 sketchbook", "working · 2 graft jobdesk", "idle · 1 dotfiles", "ended · 1 notes"]);
+    expect(groups(await rail())).toEqual(["approval? · 1 foo", "your turn · 1 sketchbook", "working · 8 graft jobdesk-api site jobdesk infra ai-ledger ingest-bench mobile", "idle · 1 dotfiles", "ended · 1 notes"]);
     await waitFor(() => expect(calls()).toContain("/api/live/session?id=s2")); // the one that wrote last, wherever its group puts it
     expect(screen.getByRole("button", { current: true }).querySelector(".pname")!.textContent).toBe("jobdesk");
   });
@@ -305,8 +307,8 @@ describe("LivePage", () => {
     const rail = await screen.findByRole("region", { name: "Active sessions" });
     const entry = (project: string) => within(rail).getAllByRole("button").find(b => b.querySelector(".pname")!.textContent === project)!;
     const foo = entry("foo");
-    expect(foo.querySelector(".ttl")!.textContent).toBe("Fast ingest pass while Live is open");
-    expect(foo.querySelector(".ttl")!.getAttribute("title")).toBe("Fast ingest pass while Live is open");
+    expect(foo.querySelector(".ttl")!.textContent).toBe("Fast ingest pass while the Live page stays open and polling");
+    expect(foo.querySelector(".ttl")!.getAttribute("title")).toBe("Fast ingest pass while the Live page stays open and polling");
     expect(foo.querySelector(".sub .pname")).toBeTruthy();
     expect(foo.querySelector(".sub code")).toBeNull(); // the branch is in the stream header
     const jobdesk = entry("jobdesk"); // a first-prompt title only: not sent without Full text
@@ -327,12 +329,11 @@ describe("LivePage", () => {
   it("titles the stream with the session's title, and with the project without one", async () => {
     show();
     const main = await stream();
-    expect(within(main).getByRole("heading", { level: 2 }).textContent).toBe("Fast ingest pass while Live is open");
+    expect(within(main).getByRole("heading", { level: 2 }).textContent).toBe("Fast ingest pass while the Live page stays open and polling");
     cleanup();
-    show("?session=" + codex.session_id, { session: () => codex });
+    show("?session=" + codex.session_id, { session: () => ({ ...codex, title: null, title_from: null }) });
     const other = await stream();
     expect(await within(other).findByRole("button", { name: /^exec_command/ })).toBeTruthy();
-    expect(codex.title).toBeFalsy();
     expect(within(other).getAllByRole("heading", { level: 2 }).map(h => h.textContent)).toEqual([codex.project]);
   });
 
@@ -557,7 +558,7 @@ describe("LivePage", () => {
     await stream();
     await userEvent.click((await screen.findAllByRole("button", { name: /^Bash/ }))[0]!); // the session loads after the stream shows
     const detail = toolRow("Bash", 0).nextElementSibling!;
-    expect(detail.textContent).toContain("uv run python -m unittest");
+    expect(detail.textContent).toContain(TESTS_COMMAND);
     expect(detail.textContent).toContain("FAIL: test_hot_pass");
     expect(detail.textContent).toContain("characters · turn on Full text to read it");
     expect((screen.getByRole("checkbox", { name: "Follow" }) as HTMLInputElement).checked).toBe(false);
@@ -567,12 +568,12 @@ describe("LivePage", () => {
     show();
     await stream();
     const text = (row: HTMLElement) => [row.querySelector(".sum")!.textContent, row.getAttribute("title")];
-    expect(text(toolRow("Bash", 0))).toEqual(["Run the Python tests", "uv run python -m unittest"]);
+    expect(text(toolRow("Bash", 0))).toEqual(["Run the Python tests", TESTS_COMMAND]);
     expect(text(toolRow("Bash", 1))).toEqual(["git push origin feat/live-page", null]); // no description: the command
     expect(text(toolRow("Agent"))).toEqual(["find callers of ingest", null]); // not a shell call: its input, as before
     const terms = (row: HTMLElement) => [...row.nextElementSibling!.querySelectorAll("dt")].map(t => `${t.textContent}: ${t.nextElementSibling!.textContent}`);
     await userEvent.click(toolRow("Bash", 0));
-    expect(terms(toolRow("Bash", 0)).slice(0, 2)).toEqual(["description: Run the Python tests", "input: uv run python -m unittest"]);
+    expect(terms(toolRow("Bash", 0)).slice(0, 2)).toEqual(["description: Run the Python tests", `input: ${TESTS_COMMAND}`]);
     await userEvent.click(toolRow("Bash", 1));
     expect(terms(toolRow("Bash", 1))[0]).toBe("input: git push origin feat/live-page");
   });
@@ -805,7 +806,7 @@ describe("LivePage", () => {
     back = true;
     const n = calls().length;
     await userEvent.click(await entry("foo"));
-    expect([headed(), drawn()]).toEqual(["foo", ["Read", "Agent", "Bash", "Bash"]]);
+    expect([headed(), drawn()]).toEqual(["foo", ["Read", "delegate_task", "Agent", "Bash", "Bash"]]);
     await settle();
     expect(calls().slice(n)).toEqual([catchUp]);
   });
@@ -1044,7 +1045,7 @@ describe("LivePage", () => {
     await userEvent.click(await entry("jobdesk"));
     await waitFor(() => expect(headed()).toBe("jobdesk"));
     await userEvent.click(check("Full text"));
-    expect(await within(await rail()).findByText("Freeze the clock in the snapshot test")).toBeTruthy();
+    expect(await within(await rail()).findByText("Freeze the clock in the snapshot test so the header stops drifting")).toBeTruthy();
     FakeSource.last!.notify(null);
     await settle();
     expect(calls().slice(n)).toEqual(["/api/live/session?id=s2", "/api/live?text=1", "/api/live/session?id=s2&text=1"]); // and nothing for the notice
@@ -1138,14 +1139,14 @@ describe("LivePage", () => {
     show();
     await stream();
     const only = check("Failed calls only (1)");
-    expect([drawn(), only.checked, hidden()]).toEqual([["Read", "Agent", "Bash", "Bash"], false, null]);
+    expect([drawn(), only.checked, hidden()]).toEqual([["Read", "delegate_task", "Agent", "Bash", "Bash"], false, null]);
     await userEvent.click(only);
-    expect([drawn(), only.checked, hidden()]).toEqual([["Bash"], true, "9 rows hidden"]);
+    expect([drawn(), only.checked, hidden()]).toEqual([["Bash"], true, "10 rows hidden"]);
     expect(toolRow("Bash").className).toContain("failed");
-    expect([screen.queryByText(/11 words/), screen.queryByText(/context compacted/), screen.queryAllByRole("button", { name: /^Agent find/ })]).toEqual([null, null, []]);
+    expect([screen.queryByText(/38 words/), screen.queryByText(/context compacted/), screen.queryAllByRole("button", { name: /^Agent find/ })]).toEqual([null, null, []]);
     await userEvent.click(only);
-    expect([drawn(), only.checked, hidden()]).toEqual([["Read", "Agent", "Bash", "Bash"], false, null]);
-    expect(screen.getByText(/11 words/)).toBeTruthy();
+    expect([drawn(), only.checked, hidden()]).toEqual([["Read", "delegate_task", "Agent", "Bash", "Bash"], false, null]);
+    expect(screen.getByText(/38 words/)).toBeTruthy();
   });
 
   it("hides every lane with Main thread only, and the rows that only read with Hide read-only", async () => {
@@ -1155,13 +1156,13 @@ describe("LivePage", () => {
     show("?session=s1", { session: () => ({ ...laned(3), events: [...laned(3).events, row("Grep", true), row("Glob", true), row("Edit", false), other] }) });
     await stream();
     const lanes = () => screen.getByLabelText("Session events").querySelectorAll(".lane").length;
-    expect([lanes(), drawn()]).toEqual([2, ["Read", "Agent", "Grep", "Grep", "Grep", "Bash", "Bash", "Grep", "Glob", "Edit", "Grep"]]);
+    expect([lanes(), drawn()]).toEqual([2, ["Read", "delegate_task", "Agent", "Grep", "Grep", "Grep", "Bash", "Bash", "Grep", "Glob", "Edit", "Grep"]]);
     await userEvent.click(check("Main thread only"));
-    expect([lanes(), drawn(), hidden()]).toEqual([0, ["Read", "Agent", "Bash", "Bash", "Grep", "Glob", "Edit"], "4 rows hidden"]);
+    expect([lanes(), drawn(), hidden()]).toEqual([0, ["Read", "delegate_task", "Agent", "Bash", "Bash", "Grep", "Glob", "Edit"], "4 rows hidden"]);
     await userEvent.click(check("Main thread only"));
     await userEvent.click(check("Hide read-only"));
-    expect([lanes(), drawn(), hidden()]).toEqual([0, ["Agent", "Bash", "Bash", "Edit"], "7 rows hidden"]); // a lane with no row left is hidden
-    expect(screen.getByText(/11 words/)).toBeTruthy(); // prompts and replies stay
+    expect([lanes(), drawn(), hidden()]).toEqual([0, ["delegate_task", "Agent", "Bash", "Bash", "Edit"], "7 rows hidden"]); // a lane with no row left is hidden
+    expect(screen.getByText(/38 words/)).toBeTruthy(); // prompts and replies stay
   });
 
   it("keeps a failed row that only reads under Hide read-only, with the Errors filter and without it", async () => {
@@ -1169,9 +1170,9 @@ describe("LivePage", () => {
     const lost = { ...read, key: "lost#0", id: "lost", failed: true, error: "File does not exist." };
     show("?session=s1", { session: () => ({ ...s1, errors: 2, events: [...s1.events, lost] }) });
     await stream();
-    await waitFor(() => expect([read.quiet, drawn()]).toEqual([true, ["Read", "Agent", "Bash", "Bash", "Read"]]));
+    await waitFor(() => expect([read.quiet, drawn()]).toEqual([true, ["Read", "delegate_task", "Agent", "Bash", "Bash", "Read"]]));
     await userEvent.click(check("Hide read-only"));
-    expect([drawn(), toolRow("Read").className, hidden()]).toEqual([["Agent", "Bash", "Bash", "Read"], "tool failed", "4 rows hidden"]); // the Read that passed and the lane's three
+    expect([drawn(), toolRow("Read").className, hidden()]).toEqual([["delegate_task", "Agent", "Bash", "Bash", "Read"], "tool failed", "4 rows hidden"]); // the Read that passed and the lane's three
     await userEvent.click(check("Failed calls only (2)"));
     expect(drawn()).toEqual(["Bash", "Read"]);
   });
@@ -1184,10 +1185,10 @@ describe("LivePage", () => {
     const panel = strip(), figures = panel.textContent;
     expect(greps()).toEqual([]);
     await userEvent.click(check("Failed calls only (1)"));
-    expect([drawn(), greps(), hidden()]).toEqual([["Grep"], ["g1"], "12 rows hidden"]); // the filter opens the folded lane
+    expect([drawn(), greps(), hidden()]).toEqual([["Grep"], ["g1"], "13 rows hidden"]); // the filter opens the folded lane
     expect(laneHead().querySelector(".muted")!.textContent).toBe("6 tools · 1 error · 5.0s · claude-opus-5-5 · $0.01");
     await userEvent.click(check("Main thread only"));
-    expect([drawn(), hidden(), screen.queryByRole("button", { name: /^Agent find/ })]).toEqual([[], "13 rows hidden", null]);
+    expect([drawn(), hidden(), screen.queryByRole("button", { name: /^Agent find/ })]).toEqual([[], "14 rows hidden", null]);
     expect(screen.getByText("The filters hide every row.")).toBeTruthy();
     expect(panel.textContent).toBe(figures); // the filters change no figure
     await userEvent.click(check("Main thread only"));
@@ -1199,7 +1200,7 @@ describe("LivePage", () => {
     show("?session=s1", { session: () => ({ ...s1, errors: 0, events: s1.events.map(e => (e.k === "tool" ? { ...e, failed: false } : e)) }) });
     await stream();
     await userEvent.click(check("Failed calls only")); // no count when there is none
-    expect([drawn(), hidden()]).toEqual([[], "10 rows hidden"]);
+    expect([drawn(), hidden()]).toEqual([[], "11 rows hidden"]);
     expect(screen.getByText("No failed calls in the events held.")).toBeTruthy();
   });
 
@@ -1279,14 +1280,14 @@ describe("LivePage", () => {
     const n = calls().length;
     await userEvent.click(check("Full text"));
     expect([screen.queryByText("Add a fast ingest pass while the Live page is open"), toolRow("Bash", 0).nextElementSibling!.querySelector("pre")]).toEqual([null, null]);
-    expect([drawn(), toolRow("Bash", 0).getAttribute("aria-expanded")]).toEqual([["Read", "Agent", "Bash", "Bash"], "true"]);
+    expect([drawn(), toolRow("Bash", 0).getAttribute("aria-expanded")]).toEqual([["Read", "delegate_task", "Agent", "Bash", "Bash"], "true"]);
     await settle();
     expect(calls().slice(n)).toEqual(["/api/live", catchUp]);
   });
 
   it("takes a list loaded with Full text off the screen when Full text turns off, while the list without it loads", async () => {
     const { f } = show("");
-    const title = () => within(screen.getByRole("main")).queryByText("Freeze the clock in the snapshot test");
+    const title = () => within(screen.getByRole("main")).queryByText("Freeze the clock in the snapshot test so the header stops drifting");
     await rail();
     await userEvent.click(check("Full text"));
     await waitFor(() => expect(title()).toBeTruthy());
@@ -1424,7 +1425,7 @@ describe("LivePage", () => {
   it("counts in the rail's footer the sessions that need the user as the tab title does, apart from the working ones", async () => {
     show("", { app: true }); // one approval wait, one your turn, two thinking, one idle and one ended
     const rail = await screen.findByRole("region", { name: "Active sessions" });
-    expect(rail.querySelector(".foot")!.textContent).toMatch(/^2 sessions working · 2 waiting for you · /);
+    expect(rail.querySelector(".foot")!.textContent).toMatch(/^8 sessions working · 2 waiting for you · /);
     expect(document.title).toBe("(2) Live · AI Ledger");
   });
 
@@ -1440,7 +1441,7 @@ describe("LivePage", () => {
     cleanup();
     show("?view=wall");
     const el = await wall();
-    expect(within(el).getByRole("button", { name: tileName("notes") }).className).toBe("panel tile st-ended");
+    expect(within(el).getByRole("button", { name: tileName(ended.title!) }).className).toBe("panel tile st-ended");
   });
 
   it("hides Follow and Full text on the wall, which asks for no full text even with it on in the stream", async () => {
@@ -1462,9 +1463,9 @@ describe("LivePage", () => {
 
   it("names a tile by its pin action and gives a screen reader all it shows, pinned or not", async () => {
     show("?view=wall");
-    const el = await wall(), s = list.sessions.find(x => x.title === "Fast ingest pass while Live is open")!;
+    const el = await wall(), s = list.sessions.find(x => x.title === "Fast ingest pass while the Live page stays open and polling")!;
     // The name is computed from the tile's content, so it is the text the page draws now: no label or description overrides it.
-    const tile = within(el).getByRole("button", { name: tileName("Fast ingest pass while Live is open") });
+    const tile = within(el).getByRole("button", { name: tileName("Fast ingest pass while the Live page stays open and polling") });
     expect([tile.getAttribute("aria-label"), tile.getAttribute("aria-description"), tile.getAttribute("aria-pressed")]).toEqual([null, null, "false"]);
     const now = Date.parse(list.now), state = stateText(stateNow(s.state, now), now).label;
     const parts = [state, "1 error", `Project ${s.project}`, s.model!.replace(/^claude-/, ""), `Context ${pct(s.context! / s.window!)}`];
@@ -1475,8 +1476,8 @@ describe("LivePage", () => {
     expect([tile.querySelector(".top .errs")!.textContent, tile.querySelector(".meta .mdl")!.textContent]).toEqual(["✕1", s.model!.replace(/^claude-/, "")]);
     expect(within(el).queryByRole("button", { name: /✕/ })).toBeNull(); // glyphs stay out of the names
     // Without a title the project names the tile, so the name does not say it again.
-    expect(within(el).getByRole("button", { name: tileName("dotfiles") })).toBeTruthy();
-    expect(within(el).queryByRole("button", { name: /^Pin dotfiles\. Project/ })).toBeNull();
+    expect(within(el).getByRole("button", { name: tileName("jobdesk") })).toBeTruthy();
+    expect(within(el).queryByRole("button", { name: /^Pin jobdesk\. Project/ })).toBeNull();
     await userEvent.click(tile);
     expect([tile.getAttribute("aria-pressed"), within(el).getByRole("button", { name: inOrder })]).toEqual(["true", tile]);
   });
@@ -1486,24 +1487,24 @@ describe("LivePage", () => {
     const el = await wall();
     const tiles = within(el).getAllByRole("button");
     expect(tiles.length).toBe(list.sessions.length);
-    const foo = within(el).getByRole("button", { name: tileName("Fast ingest pass while Live is open") });
-    expect(foo.querySelector(".ttl")!.getAttribute("title")).toBe("Fast ingest pass while Live is open");
-    expect(within(el).getByRole("button", { name: tileName("dotfiles") }).querySelector(".ttl .pname")).toBeTruthy(); // the project in the title's place
+    const foo = within(el).getByRole("button", { name: tileName("Fast ingest pass while the Live page stays open and polling") });
+    expect(foo.querySelector(".ttl")!.getAttribute("title")).toBe("Fast ingest pass while the Live page stays open and polling");
+    expect(within(el).getByRole("button", { name: tileName("jobdesk") }).querySelector(".ttl .pname")).toBeTruthy(); // the project in the title's place
     expect(foo.textContent).toContain("1 error"); // one, singular
     expect(foo.textContent).not.toContain("1 errors");
     await settle();
     expect(calls().filter(u => u.startsWith("/api/live/session"))).toEqual([]); // the Wall shows no stream session
-    const graft = within(el).getByRole("button", { name: tileName("graft") });
+    const named = list.sessions.find(s => s.project === "graft")!.title!, graft = within(el).getByRole("button", { name: tileName(named) });
     expect(graft.getAttribute("aria-pressed")).toBe("false");
     await userEvent.click(graft);
     expect(location.search).toBe("?view=wall&pin=0a0f7777-0000-7000-8000-000000000007"); // the Wall stays
     expect(graft.getAttribute("aria-pressed")).toBe("true");
     expect(graft.textContent).toContain("Pinned"); // in words, not only by its frame
-    const pin = await screen.findByRole("region", { name: "Pinned: graft" });
+    const pin = await screen.findByRole("region", { name: `Pinned: ${named}` });
     expect(await within(pin).findByLabelText("Session events")).toBeTruthy();
     expect(within(pin).getByRole("group", { name: "Session status" })).toBeTruthy();
     expect(within(pin).getByRole("group", { name: "Stream filters" })).toBeTruthy();
-    expect(document.querySelector(".pg-live > .sr[role=status]")!.textContent).toBe("Pinned graft.");
+    expect(document.querySelector(".pg-live > .sr[role=status]")!.textContent).toBe(`Pinned ${named}.`);
     await userEvent.click(within(pin).getByRole("button", { name: "Open in Stream" }));
     expect(location.search).toBe("?pin=0a0f7777-0000-7000-8000-000000000007&session=0a0f7777-0000-7000-8000-000000000007"); // the pins wait for the Wall
     expect(await stream()).toBeTruthy();
@@ -1512,7 +1513,8 @@ describe("LivePage", () => {
   it("pins by keyboard, keeps two pins at most, replacing the oldest with an announcement, and unpins", async () => {
     show("?view=wall");
     const el = await wall();
-    const tile = (name: string) => within(el).getByRole("button", { name: tileName(name) });
+    const named = (project: string) => list.sessions.find(s => s.project === project)!.title ?? project, N = named("notes"), D = named("dotfiles");
+    const tile = (project: string) => within(el).getByRole("button", { name: tileName(named(project)) });
     const pinned = () => screen.queryAllByRole("region", { name: /^Pinned: / }).map(r => r.getAttribute("aria-label"));
     const note = () => document.querySelector(".pg-live > .sr[role=status]")!.textContent;
     const url = () => decodeURIComponent(location.search); // the comma is written %2C
@@ -1520,14 +1522,14 @@ describe("LivePage", () => {
     await userEvent.keyboard("{Enter}");
     tile("jobdesk").focus();
     await userEvent.keyboard(" ");
-    expect([url(), pinned()]).toEqual(["?view=wall&pin=s5,s2", ["Pinned: notes", "Pinned: jobdesk"]]);
+    expect([url(), pinned()]).toEqual(["?view=wall&pin=s5,s2", [`Pinned: ${N}`, "Pinned: jobdesk"]]);
     await userEvent.click(tile("dotfiles"));
-    expect([url(), pinned()]).toEqual(["?view=wall&pin=s2,s4", ["Pinned: jobdesk", "Pinned: dotfiles"]]);
-    expect(note()).toBe("Pinned dotfiles. Unpinned notes: 2 pins at most.");
+    expect([url(), pinned()]).toEqual(["?view=wall&pin=s2,s4", ["Pinned: jobdesk", `Pinned: ${D}`]]);
+    expect(note()).toBe(`Pinned ${D}. Unpinned ${N}: 2 pins at most.`);
     expect(tile("notes").getAttribute("aria-pressed")).toBe("false");
     // Unpin from the stream's own button: the focus goes to the session's tile, which stays on the Wall.
     await userEvent.click(within(screen.getByRole("region", { name: "Pinned: jobdesk" })).getByRole("button", { name: "Unpin jobdesk" }));
-    expect([url(), pinned(), note()]).toEqual(["?view=wall&pin=s4", ["Pinned: dotfiles"], "Unpinned jobdesk."]);
+    expect([url(), pinned(), note()]).toEqual(["?view=wall&pin=s4", [`Pinned: ${D}`], "Unpinned jobdesk."]);
     await waitFor(() => expect(document.activeElement).toBe(tile("jobdesk")));
     await userEvent.click(tile("dotfiles")); // the tile toggles its pin
     expect([url(), pinned()]).toEqual(["?view=wall", []]);
@@ -1537,7 +1539,7 @@ describe("LivePage", () => {
     show("?view=wall&pin=s3,s1,bad%20id");
     await wall();
     await waitFor(() => expect(screen.getAllByRole("region", { name: /^Pinned: / }).map(r => r.getAttribute("aria-label")))
-      .toEqual(["Pinned: Rename the theme tokens across every page, the charts and the print stylesheet", "Pinned: Fast ingest pass while Live is open"]));
+      .toEqual(["Pinned: Rename the theme tokens across every page, the charts and the print stylesheet", "Pinned: Fast ingest pass while the Live page stays open and polling"]));
     expect(decodeURIComponent(location.search)).toBe("?view=wall&pin=s3,s1,bad id"); // read as it is, written anew on the next pin
   });
 
@@ -1650,16 +1652,16 @@ describe("LivePage", () => {
     const el = await wall();
     const made = FakeSource.made, source = FakeSource.last!;
     source.open();
-    await userEvent.click(within(el).getByRole("button", { name: tileName("notes") }));
+    await userEvent.click(within(el).getByRole("button", { name: tileName(ended.title!) }));
     await userEvent.click(within(el).getByRole("button", { name: tileName("jobdesk") }));
-    const pin = await screen.findByRole("region", { name: "Pinned: notes" });
+    const pin = await screen.findByRole("region", { name: `Pinned: ${ended.title}` });
     await within(pin).findByLabelText("Session events");
     await settle();
     const before = calls().length;
     source.notify(["s5"]);
     await settle();
     expect(calls().slice(before).filter(u => u.startsWith("/api/live/session"))).toEqual([expect.stringMatching(/^\/api\/live\/session\?id=s5&after=/)]);
-    await userEvent.click(within(el).getByRole("button", { name: tileName("notes") })); // unpin
+    await userEvent.click(within(el).getByRole("button", { name: tileName(ended.title!) })); // unpin
     // A sheet over the Wall: the session sheet of a pinned stream, from its strip's Session sheet link in the Stream view.
     await userEvent.click(screen.getByRole("button", { name: "Stream" }));
     await userEvent.click(await within(await stream()).findByRole("link", { name: "Session sheet" }));
@@ -1678,7 +1680,7 @@ describe("LivePage", () => {
     const foo = card("s1");
     expect(foo.querySelector(".errs [aria-hidden]")!.textContent).toBe("✕1"); // "1 error" for a screen reader
     expect(foo.querySelector(".ctx")!.textContent).toBe(", context 0%");
-    expect(within(r).getByRole("button", { name: /^Fast ingest pass while Live is open, 1 error, approval\?.+, project foo, context 0%$/ })).toBe(foo);
+    expect(within(r).getByRole("button", { name: /^Fast ingest pass while the Live page stays open and polling, 1 error, approval\?.+, project foo, context 0%$/ })).toBe(foo);
     expect([...foo.querySelectorAll(".cost, .meter, .act, code")]).toEqual([]); // no cost, meter, latest action or branch
     expect(card("0a0f7777-0000-7000-8000-000000000007").querySelector(".ctx")!.textContent).toBe(", context 8%");
     expect(card("s2").querySelector(".errs")).toBeNull(); // none to count

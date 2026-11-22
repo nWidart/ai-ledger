@@ -15,6 +15,21 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - The wheel scrolls the page again with the pointer over the tabs on Context and Activity. The tab strip scrolled a pixel up and down and held the wheel.
+### Changed
+
+- Live is easier to read:
+  - Rail cards show two lines: the title with an errors badge, then the state, the project and the context percent.
+  - Wall tiles show the state, the title, the project and model, and a context meter. The Full text checkbox shows in Stream only.
+  - The status strip has two rows: the state with cost, tools, errors and cache read, then a wide context meter and a wide Last 10 min pulse. Plan limits, the directory and Copy resume leave it; Copy resume stays in the session sheet and the context menu, and plan limits stay on Limits.
+  - One **Failed calls only** checkbox in the filter row replaces the errors chip and the strip's Errors button.
+  - Follow turns back on when you scroll the stream to the bottom.
+  - The Full text warning closes itself after 6 seconds, and waits while you hover or focus it.
+  - With Full text on, prompts and replies render as Markdown. Raw HTML shows as text, links open in a new tab, and images show as links and are never loaded.
+- `/api/live/session` no longer returns `limits` or `cwd`.
+
+### Fixed
+
+- Hovering a "?" no longer moves the text around it.
 
 ## [0.5.0] - 2026-11-21
 

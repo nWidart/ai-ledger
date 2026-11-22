@@ -33,8 +33,8 @@ The bar beside the heading holds, in this order:
 | Control | What it does |
 | --- | --- |
 | **Stream** / **Wall** | Switches between one session in detail and every session as a tile. |
-| **Follow** | Stream view only. Keeps the newest event in view. On at load. Opening a session turns it on again. |
-| **Full text** | Shows transcript text as written. Off on every load. When you turn it on, a warning opens under the bar, over the page: "Full text on. Prompts, replies and tool output show as written, secrets included. The app only listens on 127.0.0.1; turn this off before sharing your screen." **Dismiss** closes it. The warning takes no room, so the stream does not move when it opens or closes. While Full text is on, the toggle keeps a warning tint, also after you dismiss the warning. |
+| **Follow** | Stream view only. Keeps the newest event in view. On at load. Opening a session turns it on again, and so does scrolling the stream to the bottom yourself. |
+| **Full text** | Stream view only; the Wall never shows full text. Shows transcript text as written, and renders prompts and replies as Markdown. Off on every load. When you turn it on, a warning opens under the bar, over the page: "Full text on. Prompts, replies and tool output show as written, secrets included. The app only listens on 127.0.0.1; turn this off before sharing your screen." **Dismiss** closes it, and it closes itself after 6 seconds; it waits while you hover or focus it. The warning takes no room, so the stream does not move when it opens or closes. While Full text is on, the toggle keeps a warning tint, also after you dismiss the warning. |
 | **Pause** / **Resume** | Holds new events and states until you resume. |
 
 In the bar, before **Follow**, a status says one of: "Connecting…", "Updating live", "Paused" (with the number of updates held), or "Connection lost · reconnecting…". A paused page shows no live dot, and its state dots do not pulse. After a lost connection the page retries on its own, waiting longer after each failure up to 30 seconds, and fetches what it missed when it is back.
@@ -64,9 +64,8 @@ The Stream view has two panels from left to right: the rail and the session's st
 Each entry shows:
 
 - the session's title as its main line, or the project when the session has no title;
-- its cost so far;
-- on the second line, the project (with its color), the state with its time, and the source (Claude Code, Codex or Grok). An entry with no title shows the state, the source and the git branch instead;
-- on the third line, a small context meter with the percent of the window used (left out when the window is not known), the latest action as the wall tile shows it, and `✕ N` when calls failed. A screen reader reads `✕ N` as "N errors".
+- on the first line, the session's title, or the project when the session has no title, with `✕ N` when calls failed. A screen reader reads `✕ N` as "N errors";
+- on the second line, the state with its time, then the project (when a title is shown) and the percent of the context window used (left out when the window is not known). The state never shrinks.
 
 The footer reads `N sessions working · N waiting for you · $ so far`; the "waiting for you" part shows only when at least one session waits. Working counts the working group. Waiting counts approval? and your turn. Idle and ended count as neither.
 
@@ -101,7 +100,7 @@ Under the status strip, a **Stream filters** bar holds:
 
 | Filter | Effect |
 | --- | --- |
-| Errors count (`N errors`, "show failed calls only") | Shows failed tool calls only. Select it again to clear it. The status strip's Errors figure is the same control. |
+| **Failed calls only** (with the count of failed calls) | Shows failed tool calls only. Clear it to show all rows again. |
 | **Main thread only** | Hides every subagent lane. |
 | **Hide read-only** | Hides calls that only read: `Read`, `Grep`, `Glob`, and shell calls whose every command only reads or searches. A failed call is never hidden. |
 
@@ -109,34 +108,27 @@ The filters combine, stay on when you open another session, and change only what
 
 - Select a tool row to open its detail.
 - Select a lane header to fold or unfold the lane.
-- **Follow.** With Follow on, the stream keeps the newest event in view. Scrolling up or opening a tool row turns Follow off. While Follow is off and new events arrive, **Jump to latest ↓** appears with "N new events" beside it, in a polite status. It counts the events since Follow turned off, however you turned it off. The count shows at once, then changes at most once every 5 seconds. Jump to latest turns Follow on again. With Follow on, the page announces nothing for new events.
+- **Follow.** With Follow on, the stream keeps the newest event in view. Scrolling up or opening a tool row turns Follow off. While Follow is off and new events arrive, **Jump to latest ↓** appears with "N new events" beside it, in a polite status. It counts the events since Follow turned off, however you turned it off. The count shows at once, then changes at most once every 5 seconds. Jump to latest turns Follow on again, and so does scrolling to the bottom of the stream yourself. With Follow on, the page announces nothing for new events.
 
 ### Status strip
 
-<ThemedImage dark={strip} light={stripLight} alt="Live's status strip above the stream: the state, the context meter, cost, tools, errors, cache read, plan limits, the pulse, the directory and Copy resume." />
+<ThemedImage dark={strip} light={stripLight} alt="Live's status strip above the stream: the state, cost, tools, errors and cache read above a wide context meter and the 10-minute pulse." />
 
-**Shows** the selected session's figures, in a strip at the top of the stream, under its head. Grok reports its usage once per turn, so a Grok session's tokens, cost and context change when a turn ends, not while it runs. It belongs to the stream's panel: it is not a bar across the page. It wraps onto a second line when the stream is narrow.
+**Shows** the selected session's figures, in a strip at the top of the stream, under its head. Grok reports its usage once per turn, so a Grok session's tokens, cost and context change when a turn ends, not while it runs. It belongs to the stream's panel: it is not a bar across the page. It has two rows: the state and its figures, then the context and the pulse side by side.
 
 **Figures** In order:
 
 | Item | Figures |
 | --- | --- |
 | State | The state and its detail, such as "Bash pending 45s: likely waiting for your approval". An inferred state shows **(inferred)**, a toggletip that gives the reason. |
-| Context | The context of the newest main-thread request out of the model's window, such as `55k / 1M · 6%`, with a meter and a mark at each compaction, then the compaction count. The meter turns to the warning color above 80%. With no known window, it shows tokens only and says the window is not known. |
-| **Cost**, **Tools**, **Errors** | The session's cost, tool calls and failed tool calls so far. |
+| Context | On the second row, a wide meter. The context of the newest main-thread request out of the model's window, such as `55k / 1M · 6%`, with a meter and a mark at each compaction, then the compaction count. The meter turns to the warning color above 80%. With no known window, it shows tokens only and says the window is not known. |
+| **Cost**, **Tools**, **Errors** | The session's cost, tool calls and failed tool calls so far. Errors is a plain count; **Failed calls only** in the filter row filters the stream. |
 | **Cache read** | The share of the session's prompt tokens read from the cache, with a toggletip that says so. |
-| Plan limits | One item per open plan limit of the session's source, such as `5h 42%`. Above 80% it takes the warning color and adds "near". A toggletip beside it gives the reset time, by pointer, tap or keyboard; the [Limits](/ai-ledger/pages/limits/) page shows every window in full. |
-| Pulse | The last 10 minutes (see below). |
-| Directory | The session's working directory, cut from its start so the end of the path shows. A screen reader reads the whole path. Below 721 pixels wide it takes its own line beside Copy resume. |
+| Last 10 min | The pulse, at the width of its column (see below). |
 
-The strip shows no request count or model: the model is in the stream's head, and the session sheet's Models table counts the requests of each model.
+The strip shows no plan limits, working directory, request count or model: the [Limits](/ai-ledger/pages/limits/) page shows every plan limit window, the session sheet shows the directory and the resume command with **Copy**, and the model is in the stream's head, and the session sheet's Models table counts the requests of each model.
 
 **The pulse** draws the last 10 minutes of the session. A line follows the context of each main-thread request, so it rises as the context grows and stays flat when requests only reread the cache. It is scaled from its lowest to its highest value, so small growth shows; the readout gives the numbers. Along the foot, each tool call that ended has a tick: an upright line for a success, a cross (✕) for a failure. Subagent calls count too. The pulse's name gives its summary to a screen reader, such as "Last 10 minutes: context 40k to 62k tokens, 18 tool calls, 2 failed." The range is the lowest and highest context the line plots, so a peak shows even when the context fell back; a flat line names one level. Tab to it and use Left and Right to read one minute at a time, Home and End for the first and the last, and Escape to dismiss the readout. The readout, such as "10:04 to 10:05: context 52k, 3 calls, 1 failed", shows under the pulse and is read politely. Below 721 pixels wide it shows under the strip and wraps, so it stays on the screen. Hovering it reads the minute under the pointer.
-
-**Controls**
-
-- The Errors figure toggles the Errors stream filter.
-- **Copy resume** copies the command that resumes the session in its agent, `claude --resume <id>`, `codex resume <id>` or `grok --resume <id>`, after `cd '<directory>' && ` when the directory is known. It says "Copied" or "Copy failed", politely to a screen reader too.
 
 ### Wall
 
@@ -146,18 +138,16 @@ The strip shows no request count or model: the model is in the stream's head, an
 
 **Figures** A tile shows, top to bottom:
 
-- the project and the state;
-- the title on one line, cut with an ellipsis, with the full title on hover (left out when the session has no title);
-- the latest action: `▸ prompt`, or `Tool · summary`, with `⤷` before a subagent's call. A shell call with a description shows the description;
-- a context meter, and `context N%`;
-- the tool count, the error count when above zero, and the cost;
-- the git branch, the source and the model.
+- the state, the error count when above zero, and **Pinned** when pinned;
+- the title on two lines at most, with the full title on hover (the project when the session has no title);
+- the project and the short model name;
+- a context meter, and `context N%`.
 
 A tile's border follows its state: your turn, approval? and running a tool each have a colored border, and ended has a dashed one. Thinking and idle tiles have the panel's usual border.
 
-**Controls** Selecting a tile pins its stream beside the tiles, and selecting it again unpins it. A pinned tile says **Pinned**, and a screen reader reads it as a pressed button. Its name is "Pin" and the session, then all the tile shows, in words: the project (when a title names the tile), the state and its detail, the latest action, the context, tools, errors and cost, then the branch, source and model. The name follows each update. The Wall holds two pinned streams at most: pinning a third unpins the oldest, and a status says so, such as "Pinned graft. Unpinned notes: 2 pins at most."
+**Controls** Selecting a tile pins its stream beside the tiles, and selecting it again unpins it. A pinned tile says **Pinned**, and a screen reader reads it as a pressed button. Its name is "Pin" and the session, then all the tile shows, in words: the state and its detail, the errors, the project, the model and the context. The name follows each update. The Wall holds two pinned streams at most: pinning a third unpins the oldest, and a status says so, such as "Pinned graft. Unpinned notes: 2 pins at most."
 
-A pinned stream shows its head, a status strip without the directory and Copy resume, and its stream, with its own stream filters and its own Follow, on when pinned. Its head has:
+A pinned stream shows its head, a status strip, and its stream, with its own stream filters and its own Follow, on when pinned. Its head has:
 
 - [**Session sheet**](/ai-ledger/everywhere/sheets/#session-sheet), which opens the session's sheet over the Wall. The pinned streams keep updating under it.
 - **Open in Stream**, which opens the session in the Stream view and puts the keyboard focus on the stream's heading. The pins stay in the URL for when you come back to the Wall.

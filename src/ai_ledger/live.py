@@ -409,18 +409,6 @@ def closed(cur, sids):
         GROUP BY 1 HAVING arg_max(closed, ts)""", [kinds, list(sids)]).fetchall()}
 
 
-def latest_action(events, text):
-    """The newest prompt, tool call or subagent call, for a wall tile. A shell call is named by the description the agent
-    gave it, as its stream row is; any other call, or a shell call with none, by its input."""
-    for e in reversed(events):
-        if e["k"] == "tool":
-            said = e["tool"] in APPROVAL_TOOLS and capped(e["description"], text)
-            return dict(kind="tool", tool=e["tool"], summary=(said or tool_input(e, text))[:200], lane=e["lane"])
-        if e["k"] == "prompt":
-            return dict(kind="prompt", tool=None, summary=None, lane=None)
-    return None
-
-
 ROW_COLS = "r.key, r.file, r.ts, r.subagent, coalesce(f.source, 'claude'), r.json"
 ROW_FROM = "raw_lines r LEFT JOIN files f ON f.path = r.file"
 
@@ -454,7 +442,7 @@ def figures(cur, sids, prices):
 
 def sessions(cur, project="", source="", automated=False, now=None, prices=None, text=False):
     """/api/live: sessions with a line in the last ACTIVE, newest first, each with its title, start (first_ts), state,
-    figures and latest action."""
+    and figures."""
     now = now or now_utc()
     prices = metrics.load_prices() if prices is None else prices
     where, params = metrics.scope(project, automated, source)
@@ -475,7 +463,7 @@ def sessions(cur, project="", source="", automated=False, now=None, prices=None,
         f = figs[sid]
         out.append(dict(session_id=sid, **title_of(found, sid), project=s["project"], source=s["source"], branch=s["git_branch"],
                         first_ts=iso(aware(s["first_ts"])), last_ts=iso(last), state=state(events, now, s["source"], last, sid in ended),
-                        latest=latest_action(events, text), window=window_of(f["model"], events, prices), **f))
+                        window=window_of(f["model"], events, prices), **f))
     return dict(now=iso(now), sessions=out, newest=None if out else newest_session(cur, where, params))
 
 
