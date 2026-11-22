@@ -28,7 +28,7 @@ With the cache chart focused in a view that shows the zoom control, plus (or `=`
 
 #### Scenario: Plus
 - **WHEN** the chart shows 30 days, the user reads Oct 15 and presses plus
-- **THEN** the chart shows 15 days around Oct 15, and the status says the days shown, such as "Showing Oct 8 to Oct 22, 15 of 30 days."
+- **THEN** the chart shows 15 days around Oct 15, and the status says the days shown, such as "Showing Oct 11 to Oct 25, 15 of 30 days."
 
 #### Scenario: Show all
 - **WHEN** the chart is zoomed and the user selects "Show all days"
