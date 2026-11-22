@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import limits from "../__fixtures__/limits";
 import sessions from "../__fixtures__/sessions";
 import usage from "../__fixtures__/usage";
+import calendar from "../__fixtures__/calendar";
 import { renderRouter } from "../testing";
 import { mockApi } from "./sheets/testing";
 import { setSearch } from "../url";
@@ -53,7 +54,7 @@ describe("PageSkeleton", () => {
     vi.stubGlobal("fetch", vi.fn((input: string) => {
       const url = String(input);
       // Activity opens on its Sessions tab, which lists the sessions.
-      const body = url.startsWith("/api/usage") ? usage : url.startsWith("/api/status") ? status : url.startsWith("/api/sessions") ? sessions : {};
+      const body = url.startsWith("/api/usage") ? usage : url.startsWith("/api/calendar") ? calendar : url.startsWith("/api/status") ? status : url.startsWith("/api/sessions") ? sessions : {};
       if (hold && url.startsWith("/api/usage")) return new Promise<Response>(r => { release = () => r({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response); });
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
     }));

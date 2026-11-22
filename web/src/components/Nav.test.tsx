@@ -12,6 +12,7 @@ import { renderApp, renderRouter } from "../testing";
 import { useApi } from "../useApi";
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import usage from "../__fixtures__/usage";
+import calendar from "../__fixtures__/calendar";
 import sessions from "../__fixtures__/sessions";
 import session from "../__fixtures__/session";
 import live from "../__fixtures__/live";
@@ -36,7 +37,7 @@ const result = () => document.getElementById("navResult")!;
 
 describe("Nav", () => {
   it("switches tabs keeping project, range, source and auto, and marks the current tab", async () => {
-    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/sessions") ? sessions : url.startsWith("/api/session") ? session : usage)));
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/sessions") ? sessions : url.startsWith("/api/session") ? session : url.startsWith("/api/calendar") ? calendar : usage)));
     history.replaceState(null, "", "/usage?project=foo&range=14&source=codex&auto=1&session=s1");
     renderRouter();
     await screen.findByRole("link", { name: "Activity" });
@@ -889,7 +890,7 @@ describe("Nav", () => {
     });
 
     it("picks a page from the keyboard: the list closes, the page opens with the filters, and focus is on its heading", async () => {
-      vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : usage)));
+      vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/calendar") ? calendar : usage)));
       history.replaceState(null, "", "/usage?project=foo&range=14");
       renderRouter();
       await screen.findByRole("heading", { level: 1, name: /requests|prompts|tool calls|sessions/i });

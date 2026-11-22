@@ -27,7 +27,7 @@ export const monday = (k: string): string => {
   return new Date(+t - ((t.getUTCDay() + 6) % 7) * 864e5).toISOString().slice(0, 10);
 };
 /** The YYYY-MM-DD day n days after the day k. */
-const plus = (k: string, n: number): string => new Date(Date.parse(k + "T00:00:00Z") + n * 864e5).toISOString().slice(0, 10);
+export const plus = (k: string, n: number): string => new Date(Date.parse(k + "T00:00:00Z") + n * 864e5).toISOString().slice(0, 10);
 type Days = Pick<UsagePayload, "start" | "end">;
 /** The first and last day a selection (a day, or the 7 days from a Monday) counts in a view: a week's days inside the view,
  *  as the server clips them. */

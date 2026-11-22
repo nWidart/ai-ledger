@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { usageUrl, viewOf, type SessionSort, type Span, type Totals, type UsagePayload, type View } from "../../api";
+import { calendarUrl, usageUrl, viewOf, type Day, type SessionSort, type Span, type Totals, type UsagePayload, type View } from "../../api";
 import { setOrder } from "../../colors";
 import { motion, useCountUp } from "../../components/chart";
 import { agentName, viewName } from "../../components/Filters";
@@ -13,7 +13,7 @@ import { DocsLink } from "../../components/DocsLink";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
 import { dayLabel, dur, num, pct, plural } from "../../format";
-import { judged, setSearch, usePathname, useSearchOf, useView } from "../../url";
+import { judged, setSearch, usePathname, useSearchOf, useView, type Range } from "../../url";
 import { noFacets } from "../../components/facets";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
@@ -26,6 +26,8 @@ import { firstWorkDay, flakyTools, reaches, shortTool, spanDays, type WorkMetric
 import { CHART_ID, WorkPanel } from "./WorkChart";
 import type { WorkPick } from "./workTracks";
 import { panelId, Workbench } from "./Workbench";
+import { ActivityCalendar } from "./calendar/ActivityCalendar";
+import { rangeFor } from "./calendar/calendarDays";
 import { preloadECharts } from "../../components/echart/load";
 import "./activity.css";
 
@@ -197,6 +199,33 @@ function Overview({ views }: { views: ReactNode }) {
   // The payload on screen is the previous view's while a new view loads: the chart then takes no pick, which would write
   // that view's day or week into the new one.
   const d = data, current = !!d && !previous;
+  // The range the payload counts: the server echoes the view's, one of the ranges the URL takes.
+  const shownRange = (d?.range ?? 0) as Range;
+  // The calendar's 53 weeks follow the view's filters, not its range: a change of range keeps them.
+  const cal = useApi(queries.calendar(want), { keepPrevious: true }), calCurrent = !!cal.data && !cal.previous, calKey = calendarUrl(want);
+  // The calendar's failure, held through its Retry: the hook clears the error while a request runs, and the failure line, its
+  // Retry with the focus, stays until an answer or another failure. A change of filters is a new request, not a retry: it drops it.
+  const [calFail, setCalFail] = useState<{ key: string; error: Error } | null>(null);
+  if (cal.error) { if (cal.error !== calFail?.error) setCalFail({ key: calKey, error: cal.error }); }
+  else if (calFail && (calFail.key !== calKey || !cal.loading)) setCalFail(null);
+  // The failure the user's own Retry asks again for: only that request reads "Retrying…" and empties the alert. A refetch of
+  // the page's (an ingest) changes neither: failing again, it says nothing new; answering, it clears the line.
+  const [calRetry, setCalRetry] = useState<Error | null>(null);
+  const calRetrying = !!calFail && calFail.error === calRetry && !cal.error;
+  const retryCal = () => { setCalRetry(calFail!.error); cal.retry(); };
+  // A Retry that brings the calendar removes its button. Only when that button held the focus as it went, its own request
+  // running, and the filters are still the ones it was pressed on, does the focus, left on nothing, go to the calendar. A
+  // change of filters cancels the Retry, and an answer to the page's own refetch removes the button too: in both the focus
+  // falls to the page. The ref's cleanup runs before React removes the button, while the focus is still on it; it keeps the
+  // key of the failed request the Retry asked again for.
+  const retryHeld = useRef<string | null>(null);
+  const retryRef = (el: HTMLButtonElement) => () => { retryHeld.current = calRetrying && document.activeElement === el ? calFail.key : null; };
+  useLayoutEffect(() => {
+    if (calFail || !retryHeld.current) return;
+    const key = retryHeld.current;
+    retryHeld.current = null;
+    if (calCurrent && key === calKey) document.getElementById("activity-calendar")?.focus();
+  }, [calFail, calCurrent, calKey]);
   // A week in the URL that the view does not reach is dropped, once the view's own figures are in.
   useEffect(() => {
     if (d && current && search.week && !reaches(search.week, d)) setSearch({ week: null }, { push: false });
@@ -205,7 +234,8 @@ function Overview({ views }: { views: ReactNode }) {
   // Opening a tab from elsewhere (a vital, an attention action) brings it into view and moves the focus into it: to the
   // element named, or the panel. Done once the tab's panel is drawn, then forgotten, so a later tab change moves nothing.
   // Every such action reports the range, so it clears the selection: the tab then shows the figures it was opened for.
-  const [goal, setGoal] = useState<{ tab: WorkTab; to: string } | null>(null);
+  // `view`, when given, is what comes into view in place of the element focused (the calendar's pick shows the tab list).
+  const [goal, setGoal] = useState<{ tab: WorkTab; to: string; view?: string } | null>(null);
   const go = (t: WorkTab, to = panelId(t), patch: Record<string, string | true | null> = {}) => {
     setSearch({ tab: t === "sessions" ? null : t, day: null, week: null, ...patch }, { push: false });
     setGoal({ tab: t, to });
@@ -213,7 +243,7 @@ function Overview({ views }: { views: ReactNode }) {
   useLayoutEffect(() => {
     if (!goal || goal.tab !== tab) return;
     const el = document.getElementById(goal.to) ?? document.getElementById(panelId(tab));
-    el?.scrollIntoView?.({ behavior: motion() ? "smooth" : "auto", block: "start" });
+    ((goal.view && document.getElementById(goal.view)) || el)?.scrollIntoView?.({ behavior: motion() ? "smooth" : "auto", block: "start" });
     el?.focus({ preventScroll: true });
     setGoal(null);
   }, [goal, tab]);
@@ -238,6 +268,18 @@ function Overview({ views }: { views: ReactNode }) {
     setSearch({ q: null, near: null, ...(p.week ? { week: p.day, day: null } : { day: p.day, week: null }) }, { push: false });
     setSessSort([]);
   };
+  // A calendar pick (decision 7): a day outside the range first widens it, a write of its own that drops the earlier
+  // selection and that Back undoes; then the day, as the work chart's pick writes it. The tabs, above the calendar, come
+  // into view from the tab list, under the sticky bars, with the focus on the selected one's panel, through the goal once the
+  // page has drawn the pick. The range counts back from the figures' last day, as the server clips: the calendar, which a
+  // change of range keeps, can end a day before it after midnight.
+  const pickDay = (day: Day) => {
+    const range = rangeFor(day, d!.end, shownRange);
+    if (range !== shownRange) setSearch({ range });
+    setSearch({ q: null, near: null, day, week: null }, { push: false });
+    setSessSort([]);
+    setGoal({ tab, to: panelId(tab), view: "workbench" });
+  };
   const clear = () => setSearch({ day: null, week: null }, { push: false });
   // The panel's own clear removes its button: the focus goes to the chart, as the chip's does.
   const clearToChart = () => { clear(); document.getElementById(CHART_ID)?.focus(); };
@@ -252,6 +294,11 @@ function Overview({ views }: { views: ReactNode }) {
   // The first load shows the placeholder; the loading look (dimmed figures) belongs to a page that has figures.
   const first = !d && !error;
   const cls = "wrap pg-activity" + (slow && !first ? " loading" : "") + (grow ? " grow" : "");
+  // The calendar's failure, over the calendar it keeps if any, as the banner says it for the page. The alert empties while Retry
+  // runs, so another failure is said once; the button stays, busy, so the focus stays on it.
+  const calFailed = calFail && <p className="empty"><span role="alert">{calRetrying ? "" : `Could not load the calendar (${calFail.error.message}).`
+    + (!cal.data ? "" : cal.previous ? " Still showing the calendar of the earlier filters; it cannot be selected." : " Still showing the last one loaded.")}</span>{" "}
+    <button ref={retryRef} type="button" className="linkish" aria-disabled={calRetrying || undefined} onClick={calRetrying ? undefined : retryCal}>{calRetrying ? "Retrying…" : "Retry"}</button></p>;
 
   return (
     <main id="content" className={cls} ref={wrap} aria-busy={loading || undefined}>
@@ -283,6 +330,10 @@ function Overview({ views }: { views: ReactNode }) {
             <TestsList tests={(dv ?? d).failed_tests} total={dv ? dv.tests_failed : d.totals.tests_failed} range={d.range} on={on} />
           </div>}
         </Workbench>
+        {cal.data ? <ActivityCalendar d={cal.data} metric={metric} range={shownRange} rangeEnd={d.end} selected={sel}
+          onPick={current && calCurrent ? pickDay : undefined} onClear={clear} status={calFailed} />
+          : <section className="panel sect cal" id="calendar" aria-labelledby="calendarTitle"><h2 id="calendarTitle">Activity calendar</h2>
+            {calFailed || <p className="empty">Loading the calendar…</p>}</section>}
       </>}
     </main>
   );

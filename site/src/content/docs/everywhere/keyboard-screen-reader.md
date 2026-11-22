@@ -22,6 +22,11 @@ Every page works from the keyboard and with a screen reader. This page lists the
 | Enter, and Space on Errors | A focused chart that selects a bucket | Select or clear the point you are reading. On Errors the reading stays, so the same key clears it. |
 | Left, Right, Home, End | A focused tab on Activity's workbench or on Context | Move to the previous, next, first or last tab, wrapping. Context selects it at once; on Activity, Enter or Space selects it. |
 | Tab | A focused tab | Move to the selected tab's panel. |
+| Left, Right | The focused Activity calendar | Read the day a week earlier or later; stop at the first and last day. |
+| Up, Down | The focused Activity calendar | Read the day before or after, so Down from a Sunday reads the next Monday; stop at the first and last day. They do not scroll the page. |
+| Home, End | The focused Activity calendar | Read the first or last day. |
+| Enter | The focused Activity calendar, with a day read | Select a day with activity and move the focus to the tabs' panel. A day with none selects nothing. |
+| Esc | The focused Activity calendar | End the reading. With none read, clear the selected day or week. |
 | Up, Down, Left, Right, Home, End | The focused Cost flow ("Where the cost goes") | Follow the cost along its [bands](/ai-ledger/pages/cost/#where-the-cost-goes): Up and Down move in a column, Right and Left follow a band to the next column. Up and Down do not scroll the page. |
 | Enter | The Cost flow, reading a named project | Open that project's sheet. |
 | Esc | The Cost flow, reading an item | End the reading. |

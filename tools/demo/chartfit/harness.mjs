@@ -72,15 +72,17 @@ export async function run(pages) {
       BASE,
       /** The server's JSON answer for a path. */
       json: async path => (await fetch(`${BASE}${path}`)).json(),
-      /** Answers a routed request with the server's JSON changed by f. A request the server drops (a connection reset, on a
-       *  loaded machine) fails in the page, where the check of what the pages reported names it, instead of ending the run. */
+      /** Answers a routed request with the server's JSON changed by f, which may be async to hold the answer back. A request
+       *  the server drops (a connection reset, on a loaded machine) fails in the page, where the check of what the pages
+       *  reported names it, instead of ending the run. */
       async answer(route, f) {
         let res;
         try { res = await route.fetch(); } catch { await route.abort("connectionreset").catch(() => {}); return; }
-        await route.fulfill({ response: res, json: f(await res.json()) }).catch(() => {});
+        await route.fulfill({ response: res, json: await f(await res.json()) }).catch(() => {});
       },
       /** A page on path with the chart under root drawn (ready(page) resolves once it is), logging what the page reports
-       *  under name. page.requests lists the /api/ requests it makes; page.done() records its reports and closes it.
+       *  under name. page.requests lists the /api/ requests it makes; page.done(except) records its reports, but those
+       *  except(report) lets go, and closes it.
        *  setup, when given, runs in the page before its scripts, before init; with answer, the chart's payload (the request
        *  data matches) is answer(payload). */
       async open({ path, root, ready, setup = null, data = null, answer = null }, name, options = {}, init = null) {
@@ -120,7 +122,7 @@ export async function run(pages) {
             for (const e of page.errors) if (!except(e)) reported.push(`${name}: ${e}`);
             await ctx.close();
           };
-          page.done = () => close();
+          page.done = except => close(except);
           try {
             const loading = (async () => { await page.goto(`${BASE}${path}`); await ready(page); })();
             loading.catch(() => {}); // after a drop it fails on the closed page, unheard

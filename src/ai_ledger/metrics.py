@@ -586,6 +586,32 @@ def day_view(cur, project="", range_days=0, day="", today=None, automated=False,
                 failed_tests=titles.with_titles(cur, tests), tests_failed=call_totals(cur, W, fp)["tests_failed"])
 
 
+CALENDAR_WEEKS = 53  # the weeks of the activity calendar, the current one last: a whole year is always there
+
+
+def calendar(cur, project="", today=None, automated=False, source=""):
+    """The work per day (daily_work(), as usage() counts it) from the Monday 52 weeks before this week's to today, whatever
+    the page's range, and first: the first day with a request under the same filters over all time, or None. Nothing after
+    today: no row, and first is None when nothing is recorded up to today. No prices are read. Raises ValueError for a bad source."""
+    today = today or local_today(cur)
+    start = today - timedelta(days=today.weekday() + 7 * (CALENDAR_WEEKS - 1))  # weekday() is 0 on Monday
+    ap = user_automated()[0]  # read once, so the rows and first leave out the same projects
+    _, _, _, fp, W, rq, rp = view(project, (today - start).days + 1, {}, today, automated, source, ap)
+    _, _, _, _, _, all_rq, all_rp = view(project, 0, {}, today, automated, source, ap)
+    end = today.isoformat()
+    first = cur.execute(f"{all_rq} SELECT min({day('ts')}) FROM rq", all_rp).fetchone()[0]
+    # view() bounds the time below only: a day after today (a machine with a fast clock) is dropped, here rather than in the
+    # shared filter, so the rows stay usage()'s up to today, and no first is after end.
+    days = [r for r in daily_work(cur, rq, rp, W, fp) if r["day"] <= end]
+    if first and first > end:
+        first = None
+    # A prompt or a tool call can fall on a local day before its session's first request: no row is dated before first.
+    if days and (first is None or days[0]["day"] < first):
+        first = days[0]["day"]
+    return dict(project=project, automated=bool(automated), source=source, start=start.isoformat(), end=end,
+                first=first, days=days)
+
+
 def previous_dates(range_days, today):
     """(first day, last day) of the equal-length period just before a view of range_days ending today; None for all time."""
     if not range_days:

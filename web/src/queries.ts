@@ -3,9 +3,9 @@
 // fields keys the same.
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import {
-  contextUrl, dayUrl, errorMarksUrl, errorUrl, errorsUrl, getJson, insightsUrl, limitsUrl, limitWindowUrl, liveSessionUrl, liveUrl, paletteUrl,
+  calendarUrl, contextUrl, dayUrl, errorMarksUrl, errorUrl, errorsUrl, getJson, insightsUrl, limitsUrl, limitWindowUrl, liveSessionUrl, liveUrl, paletteUrl,
   promptUrl, sessionUrl, sessionsUrl, statusUrl, toolUrl, usageUrl,
-  type ContextPayload, type Day, type DayView, type ErrorDetail, type ErrorsPayload, type InsightsPayload, type LimitHistoryRow,
+  type CalendarPayload, type ContextPayload, type Day, type DayView, type ErrorDetail, type ErrorsPayload, type InsightsPayload, type LimitHistoryRow,
   type LimitsPayload, type LimitWindowCurve, type LivePayload, type LiveSession, type PalettePayload, type SessionDetail, type SessionsPage,
   type Span, type Status, type ToolKind, type ToolPayload, type UsagePayload, type View,
 } from "./api";
@@ -26,6 +26,10 @@ export const queries = {
   }),
   usage: (v: View, session = "") => queryOptions({ queryKey: ["usage", view(v), session], queryFn: get<UsagePayload>(usageUrl(v, session)) }),
   day: (v: View, day: Day, days: Span = 1) => queryOptions({ queryKey: ["day", view(v), day, days], queryFn: get<DayView>(dayUrl(v, day, days)) }),
+  // The calendar takes no range, so a change of range does not refetch it.
+  calendar: (v: View) => queryOptions({
+    queryKey: ["calendar", { project: v.project, automated: v.automated, source: v.source }], queryFn: get<CalendarPayload>(calendarUrl(v)),
+  }),
   sessions: (v: View, opts: Parameters<typeof sessionsUrl>[1] = {}) =>
     queryOptions({ queryKey: ["sessions", view(v), opts], queryFn: get<SessionsPage>(sessionsUrl(v, opts)) }),
   // The drawer's pages, loaded by offset. Its key differs from `sessions`' at index 1, so the two caches never collide.

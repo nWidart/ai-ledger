@@ -6,12 +6,13 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import session from "./__fixtures__/session";
 import usage from "./__fixtures__/usage";
+import calendar from "./__fixtures__/calendar";
 import { ROUTES } from "./App";
 import { renderRouter } from "./testing";
 import { closeSheets, go, setSearch } from "./url";
 
 const status = { ingesting: false, last_ingest: null, last_change: null, last_stats: null, error: null, counts: {}, interval: 60, project_order: [] };
-const answer = (url: string) => url.startsWith("/api/status") ? status : url.startsWith("/api/usage") ? usage
+const answer = (url: string) => url.startsWith("/api/status") ? status : url.startsWith("/api/usage") ? usage : url.startsWith("/api/calendar") ? calendar
   : url.startsWith("/api/sessions") ? { total: 0, offset: 0, sessions: [] } : url.startsWith("/api/session?") ? session : {};
 const loaded =(path: keyof typeof ROUTES) => waitFor(() => expect(document.title).toBe(ROUTES[path].title));
 const settle = () => new Promise(r => setTimeout(r, 30));
