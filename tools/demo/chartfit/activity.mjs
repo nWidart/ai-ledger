@@ -58,9 +58,11 @@ export async function activity(h) {
     name: "activity", path: "/usage?range=30", root: ROOT, points: DAYS, label: day, unit: { one: "day", many: "days" }, at: 9, // day 10
     data: /\/api\/usage\?/,
     setup: sessions,
-    // The last day's work up, in its total and its first project's row, so the bars change and day 10 does not. Before
-    // today's first demo session is 30 minutes old the payload has no row for today (metrics.daily_work leaves out empty
-    // days): then the rows are added, as today's first session arriving adds them.
+    // The last day's work up, in its total and in the row of the project with the most sessions, so the bars change and
+    // day 10 does not: the stack's order (most sessions first), which day 10's reading follows, stays. Another project's
+    // row, such as the first of the day, could overtake the leader and reorder day 10's words. Before today's first demo
+    // session is 30 minutes old the payload has no row for today (metrics.daily_work leaves out empty days): then the
+    // rows are added, as today's first session arriving adds them.
     newer: (d, more) => {
       const up = r => ({ ...r, sessions: r.sessions + more, prompts: r.prompts + more, commits: r.commits + more });
       const empty = { day: d.end, sessions: 0, prompts: 0, commits: 0, calls: 0, failed_calls: 0 };
@@ -68,9 +70,12 @@ export async function activity(h) {
         if (!Array.isArray(d[list])) continue;
         d[list] = d[list].some(r => r.day === d.end) ? d[list].map(r => (r.day === d.end ? up(r) : r)) : [...d[list], up(empty)];
       }
-      const i = d.work_projects.findIndex(r => r.day === d.end);
+      const total = new Map();
+      for (const r of d.work_projects) total.set(r.project, (total.get(r.project) ?? 0) + r.sessions);
+      const lead = [...total].sort((a, b) => b[1] - a[1])[0][0];
+      const i = d.work_projects.findIndex(r => r.day === d.end && r.project === lead);
       if (i >= 0) d.work_projects[i] = up(d.work_projects[i]);
-      else d.work_projects = [...d.work_projects, up({ ...empty, project: d.work_projects[0].project })];
+      else d.work_projects = [...d.work_projects, up({ ...empty, project: lead })];
       return d;
     },
     kept: [["heading", "#workTitle"], ["hint", "#work .chart-head .hint"]],
