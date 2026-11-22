@@ -395,7 +395,7 @@ def demo_spans():
             "test": "Exit code 1\nFAIL src/cart.test.ts\n  ● cart › applies discount\n    expected 90, received 100\nTests: 1 failed, 41 passed"}
     calls = []
 
-    def call(tool, inp, start, end, agent=None, err=None, sub=None, result=True):
+    def call(tool, inp, start, end, err=None, sub=None, result=True):
         """sub: the agent's letter for a subagent call (its result file); result: False for a call with no result."""
         test = tool in categorize.SHELL_TOOLS and categorize.runs_tests(inp)
         end = at(*end) if end else None
