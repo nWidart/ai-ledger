@@ -245,7 +245,7 @@ Two lists side by side, each headed with its count, each showing its five newest
 - The shade is a step. Steps are cut at the median, the 80th and the 95th percentile of the days with any of the measure, over all 53 weeks, so a day has the same shade at every width. Agent work comes in bursts, so the darkest step holds about one active day in twenty. There are up to four steps, and fewer when the days have few distinct values.
 - The key above the grid gives each step's numbers, such as "1–2", "3–8", "9+". A step that holds one value shows that number.
 - A day with none of the measure is an empty cell. A day before the first recorded day under the same filters has no cell. When that first day is inside the weeks shown, the key ends with "Recording starts Sep 8, 2026". A day after today, which a machine whose clock runs ahead can record, has no cell and does not count in the steps.
-- Weekday labels (Mon, Wed, Fri) sit left of the grid and month names above it. A month name that would touch the next one, or run past the box, is left out.
+- Weekday labels (Mon, Wed, Fri) sit left of the grid and month names above it, both in the browser's language. When that language's short weekday names are wider than the margin, the margin widens to hold them, which can leave room for a week or two fewer. A month name that would touch the next one, or run past the box, is left out.
 - With none of the measure in the weeks shown but some in the year, the label reads "No commits in the last 26 weeks."; with none at all, "No commits yet."
 - Under forced colors a shade is a size: a square in the system text color that grows with the step, and an empty day is an unfilled square. The key's swatches follow.
 

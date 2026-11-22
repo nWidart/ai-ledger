@@ -4,7 +4,7 @@
 // ECharts chunk's way, and the layout is known without the chart, so the reading works before the drawing loads.
 import type { DailyWorkRow, Day } from "../../../api";
 import type { CustomSeriesOption, EChartsOption } from "../../../components/echart/echarts";
-import { baseOption } from "../../../components/echart/option";
+import { baseOption, type OptionEnv } from "../../../components/echart/option";
 import type { ChartEnv } from "../../../components/echart/tokens";
 import { dayRange } from "../../../format";
 import { RANGES, type Range } from "../../../url";
@@ -36,9 +36,12 @@ export interface CalendarFit {
 }
 
 /** The fit of decision 2: all 53 weeks at a pitch of up to 20px when they fit at the smallest pitch, else as many weeks as
- *  fit at the smallest. The smallest grows with the text, so two weekday labels two rows apart never touch. The block is never wider than the plot, so a phone shows fewer weeks and never scrolls. */
-export function calendarFit(width: number, textScale: number): CalendarFit {
-  const left = 30 * textScale, top = 18 * textScale, room = width - left - EDGE + 2; // the plot, and the last week's gap
+ *  fit at the smallest. The smallest grows with the text, so two weekday labels two rows apart never touch. The block is never wider than the plot, so a phone shows fewer weeks and never scrolls.
+ *  `labels`: the widest weekday label in px (`weekdayWidth`); the left margin is 30px (times the text scale), or wider to
+ *  hold it, as a language's short weekday names can be. */
+export function calendarFit(width: number, textScale: number, labels: number): CalendarFit {
+  const left = Math.max(30 * textScale, Math.ceil(labels + 6 * textScale)), top = 18 * textScale;
+  const room = width - left - EDGE + 2; // the plot, and the last week's gap
   const smallest = Math.max(12, Math.ceil(.6 * 11 * textScale)), fit = Math.floor(room / WEEKS);
   const [weeks, pitch] = fit >= smallest ? [WEEKS, Math.min(20, fit)] : [Math.floor(room / smallest), smallest];
   const gap = pitch >= 16 ? 3 : 2;
@@ -155,6 +158,15 @@ const monthName = (k: Day) => new Date(at(k)).toLocaleDateString(undefined, { mo
 /** The weekdays' short names from Monday, in the reader's language: Jan 1, 2024 is a Monday. */
 export const WEEKDAYS = Array.from({ length: 7 }, (_, row) =>
   new Date(Date.UTC(2024, 0, 1 + row)).toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" }));
+/** The rows labeled: Monday, Wednesday and Friday. */
+const LABELED = [0, 2, 4];
+/** The labels' font: the charts' text style, which reads only the text scale. */
+const labelFont = (textScale: number) => baseOption({ textScale } as OptionEnv).textStyle;
+/** The widest of the weekday labels at `textScale`, in px, for calendarFit's left margin. */
+export function weekdayWidth(textScale: number): number {
+  const { fontFamily, fontSize } = labelFont(textScale);
+  return Math.max(...LABELED.map(row => textWidth(WEEKDAYS[row]!, fontFamily, fontSize)));
+}
 
 type Shape = { type: "rect"; emphasisDisabled: true; shape: { x: number; y: number; width: number; height: number }; style: { fill: string; stroke?: string; lineWidth?: number } };
 const rect = (x: number, y: number, side: number, style: Shape["style"], height = side): Shape =>
@@ -175,10 +187,10 @@ function cell(c: CalendarDay, fit: CalendarFit, env: ChartEnv): Shape {
  *  before the first column. A month's name starts over the first column whose Monday is in it; it is left out when the next
  *  name starts less than 28px (times the text scale) after it, or when it would end past the box. */
 function labels(m: CalendarModel, fit: CalendarFit, env: ChartEnv) {
-  const { fontFamily, fontSize } = baseOption(env).textStyle, s = env.textScale;
+  const { fontFamily, fontSize } = labelFont(env.textScale), s = env.textScale;
   const text = (t: string, x: number, y: number, align: "left" | "right", verticalAlign: "middle" | "bottom") =>
     ({ type: "text" as const, style: { text: t, x, y, align, verticalAlign, fontFamily, fontSize, fill: env.ink.muted } });
-  const days = [0, 2, 4].map(row => text(WEEKDAYS[row]!, fit.left - 6 * s, fit.top + row * fit.pitch + fit.cell / 2, "right", "middle"));
+  const days = LABELED.map(row => text(WEEKDAYS[row]!, fit.left - 6 * s, fit.top + row * fit.pitch + fit.cell / 2, "right", "middle"));
   const starts: { x: number; name: string }[] = [];
   for (let col = 0; col < m.weeks; col++) {
     const name = monthName(plus(m.from, 7 * col));

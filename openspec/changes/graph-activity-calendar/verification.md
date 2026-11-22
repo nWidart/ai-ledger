@@ -21,6 +21,7 @@ Checked on the tree rebased onto `origin/main` at `05a44407`.
 | Desktop | `calendarDays.test.ts` "lays %ipx at a text scale of %i…" (1174px: 53 weeks) and "shows the weeks of a store older than a year"; `calendar.mjs:197` (1440px: 53 columns). |
 | Phone | `calendarDays.test.ts` "shows the weeks of a store 30 weeks old on a phone" (26 weeks); "keeps the block inside the plot at every width"; `calendar.mjs:197` (343px box: 26 columns), `calendar.mjs:262` (375px window: no sideways scroll). |
 | Larger text on a phone | `calendarDays.test.ts` "lays %ipx…" (343px at a text scale of 2: 20 weeks) and "names the weekdays and the months…" (22px labels at twice the text); `calendar.mjs:273` (twice the size, inside the box, none overlapping, by real widths), `calendar.mjs:263`. |
+| Long weekday names | `calendarDays.test.ts` "widens the left margin for wider weekday labels, before it fits the weeks" (a 37px label: a 43px margin, 25 weeks in 343px, the label ending at 37px). The measure itself (`weekdayWidth`, a canvas) has no test: jsdom has no canvas. |
 
 ### Show the calendar's recorded weeks
 

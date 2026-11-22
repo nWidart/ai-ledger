@@ -10,7 +10,7 @@ import { Table, type Column } from "../../../components/table/Table";
 import { dayLabel, num, plural } from "../../../format";
 import type { Range } from "../../../url";
 import { METRICS, monday, plus, type WorkMetric } from "../work";
-import { calendarFit, calendarModel, calendarOption, rangeFor, WEEKDAYS, type CalendarDay, type CalendarSelection, type CalendarStep } from "./calendarDays";
+import { calendarFit, calendarModel, calendarOption, rangeFor, WEEKDAYS, weekdayWidth, type CalendarDay, type CalendarSelection, type CalendarStep } from "./calendarDays";
 import { cellAt, moveDay } from "./gridReading";
 import "./calendar.css";
 
@@ -58,7 +58,9 @@ export function ActivityCalendar({ d, metric, range, rangeEnd, selected, onPick,
   const width = useWidth(box);
   // Read once per render, as the work chart does: the fit and the drawing are laid out at the same scale.
   const scale = textScale();
-  const fit = useMemo(() => calendarFit(width, scale), [width, scale]);
+  // The weekday labels are in the reader's language: their measured width sets the left margin before the weeks are fitted.
+  const labels = useMemo(() => weekdayWidth(scale), [scale]);
+  const fit = useMemo(() => calendarFit(width, scale, labels), [width, scale, labels]);
   const selDay = selected?.day, selDays = selected?.days;
   const m = useMemo(() => calendarModel(d, metric, fit.weeks, selDay && selDays ? { day: selDay, days: selDays } : null),
     [d, metric, fit.weeks, selDay, selDays]);

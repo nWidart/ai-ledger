@@ -30,6 +30,10 @@ The calendar SHALL show no more weeks than fit its box, 53 at most, and SHALL NO
 - **WHEN** recording began more than a year ago, the box is 343px wide and the browser's default font size is 32px
 - **THEN** it shows the newest 20 weeks, the labels are twice their default size, and no label overlaps another
 
+#### Scenario: Long weekday names
+- **WHEN** the browser's language writes a short weekday name wider than the default left margin holds
+- **THEN** the left margin widens to hold the widest of the three labels before the weeks are fitted, and no label is cut
+
 ### Requirement: Show the calendar's recorded weeks
 The calendar SHALL show the weeks from the week of the first recorded day under the filters to the current week, at least 13, and no more than fit its box. With no recorded day, it SHALL show the newest weeks that fit. The hint, the calendar's label, the month labels and the table SHALL name only the weeks shown. When no day shown has any of the measure, the label SHALL say "No <measure> yet." if no day served has any, and "No <measure> in the last N weeks." otherwise.
 

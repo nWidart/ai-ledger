@@ -22,7 +22,9 @@ const d: CalendarDays = {
   days: [row("2026-09-01", 3), row("2026-09-02", 0, 3), row("2026-10-06", 31), row("2026-11-16", 2), row("2026-11-18", 1)],
 };
 // A 343px box fits 26 weeks; a store recorded for 12 shows the floor of 13, from Monday, Aug 24.
-const FIT = calendarFit(343, 1);
+// The widest of "Mon", "Wed" and "Fri" at 11px is about 21px, times the text scale.
+const EN = 21;
+const FIT = calendarFit(343, 1, EN);
 const model = (over: Partial<CalendarDays> = {}, sel: Parameters<typeof calendarModel>[3] = null, weeks = FIT.weeks) =>
   calendarModel({ ...d, ...over }, "commits", weeks, sel);
 const dayOf = (m: CalendarModel, day: string) => m.days.find(c => c.day === day);
@@ -54,13 +56,20 @@ describe("calendarFit", () => {
     [1174, 2, 53, 20, 17, 175],
     [240, 2, 12, 14, 12, 134],
   ])("lays %ipx at a text scale of %i in %i weeks of %ipx, %ipx cells, %ipx high", (width, s, weeks, pitch, cell, height) => {
-    expect(calendarFit(width, s)).toMatchObject({ weeks, pitch, cell, height, left: 30 * s, top: 18 * s });
+    expect(calendarFit(width, s, EN * s)).toMatchObject({ weeks, pitch, cell, height, left: 30 * s, top: 18 * s });
+  });
+
+  it("widens the left margin for wider weekday labels, before it fits the weeks", () => {
+    // Persian's short Wednesday, about 37px at 11px: the margin holds it and the gap before the first column.
+    const wide = calendarFit(343, 1, 37);
+    expect(wide).toMatchObject({ left: 43, weeks: 25, pitch: 12 });
+    expect(texts(model({}, null, wide.weeks), wide)[0]).toMatchObject({ x: 37, align: "right" });
   });
 
   it("keeps the block inside the plot at every width", () => {
     for (const s of [1, 1.25, 2])
       for (let w = 240; w <= 1400; w++) {
-        const f = calendarFit(w, s);
+        const f = calendarFit(w, s, EN * s);
         expect(f.weeks * f.pitch - f.gap, `${w}px at ${s}`).toBeLessThanOrEqual(w - f.left - 2);
       }
   });
@@ -113,7 +122,7 @@ describe("calendarModel", () => {
     ["begun this week", "2026-11-18", 1174, 1, 13, "2026-08-24", 12, 1],
     ["never recorded", null, 1174, 1, 53, "2025-11-17", undefined, 0],
   ] as const)("shows the weeks of a store %s", (_, first, width, s, weeks, from, col, n) => {
-    const m = calendarModel({ ...d, first, days: first ? d.days.filter(r => r.day >= first) : [] }, "commits", calendarFit(width, s).weeks, null);
+    const m = calendarModel({ ...d, first, days: first ? d.days.filter(r => r.day >= first) : [] }, "commits", calendarFit(width, s, EN * s).weeks, null);
     expect([m.weeks, m.from, m.days[0]?.col, m.days.length]).toEqual([weeks, from, col, n]);
     // The newest cell, today, is in the last column shown.
     if (n) expect(m.days.at(-1)).toMatchObject({ day: d.end, col: weeks - 1 });
@@ -208,7 +217,7 @@ describe("calendarOption", () => {
     expect(labels[0]).toMatchObject({ x: 24, y: 23, align: "right", fill: "ink-muted", fontSize: 11 });
     expect(labels[3]).toMatchObject({ align: "left", y: 14 });
     // At twice the text the labels double and keep to their margins.
-    expect(texts(model(over), calendarFit(1174, 2), env({ textScale: 2 }))[0]).toMatchObject({ x: 48, fontSize: 22 });
+    expect(texts(model(over), calendarFit(1174, 2, EN * 2), env({ textScale: 2 }))[0]).toMatchObject({ x: 48, fontSize: 22 });
   });
 });
 
