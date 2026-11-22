@@ -28,7 +28,7 @@ Only the shots a page shows are kept: a shot no page references is deleted, and 
 | `context-pressure` | "Window pressure": how close sessions get to the window. | Context |
 | `context-grids` | "Window of a typical session": small window grids for the busiest projects. | Context |
 | `context-fills` | "What fills context": by tool and by MCP server. | Context |
-| `context-cost` | "Cost": what context costs. | Context |
+| `context-cost` | "Cost": what context costs, with the cache chart (bars, cache breaks and cache-hit ratio) and its zoom slider under the date labels. | Context |
 | `errors-summary` | The summary figures at the top. | Errors |
 | `errors-chart` | "Errors by type": the error rate line over stacked failed calls per day, with the zoom slider under the date labels. | Errors |
 | `errors-types` | "Error types": the table of types, counts and change. | Errors |

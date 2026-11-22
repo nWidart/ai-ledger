@@ -78,21 +78,18 @@
 .pg-context .lead-line b { color: var(--text-primary); font-weight: 600; }
 .pg-context .panel .scroll { margin-top: 8px; }
 
-/* Charts: the legend, plot, readout and tooltip rows every chart on this page shares */
+/* Charts: the legend, caption and tooltip rows every chart on this page shares */
 .pg-context .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 8px 0; }
 .pg-context .legend .key { font-size: .75rem; display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); max-width: 16rem; }
 .pg-context .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
 .pg-context .legend i.line { width: 14px; height: 0; border-radius: 0; border-top: 2px solid var(--text-primary); }
 .pg-context .legend i.band { background: var(--text-secondary); opacity: .25; }
-.pg-context .chart { position: relative; }
-.pg-context .chart svg { display: block; width: 100%; overflow: visible; }
-.pg-context .chart:focus-visible { outline-offset: 4px; border-radius: 4px; }
-.pg-context .readout { min-height: 1.5em; margin-top: 4px; font-size: .78125rem; color: var(--text-secondary); }
 .pg-context .axis-note, .pg-context .caption { margin-top: 2px; }
 .pg-context .tip .row { display: flex; gap: 16px; justify-content: space-between; }
-.pg-context .growth .chart svg { height: 260px; }
-.pg-context .start-trend .chart svg { height: 180px; }
-.pg-context .session-map .chart svg { height: 320px; }
+.pg-context .tip i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 6px; }
+/* Forced colors would paint a swatch in Canvas: it keeps its fill, framed in CanvasText, as the legend's keys do. A project
+   line keeps its color there too (growthCurves.ts), so the swatch still names it. */
+@media (forced-colors: active) { .pg-context .tip i { forced-color-adjust: none; outline: 1px solid CanvasText; } }
 /* The scale under a range column's heading, shared by the start ranges and the contributors */
 .pg-context :is(.rng-head .scale, .ctr-scale) { display: flex; justify-content: space-between; gap: 6px; font-weight: 400; font-size: .6875rem; color: var(--text-muted); margin-top: 2px; }
 

@@ -20,6 +20,9 @@
   --pal-filter-ink: light-dark(var(--series-1-ink), #74aff5);
   --series-2: light-dark(#eb6834, #d95926); --series-3: light-dark(#1baf7a, #199e70);
   --series-4: light-dark(#eda100, #c98500); --series-5: light-dark(#e87ba4, #d55181); --series-6: #008300;
+  /* The cache chart's breaks by cause: a model switch is three quarters --series-3 and a quarter black in light (--series-3
+     alone is under 3:1 on the surface there), --series-3 in dark; an expired cache is --warning-text in light, --warning in dark. */
+  --cache-switch: light-dark(#14835c, #199e70); --cache-expired: light-dark(#8a5a00, #d99a1e);
   --grid: light-dark(#e8e6e1, #2b2b28); --track: light-dark(#ebe9e4, #262624); --good: #0ca30c; --good-text: light-dark(#006300, #4cc94c);
   --critical: light-dark(#d03b3b, #e66767); --critical-text: light-dark(#b42318, #f08080);
   --critical-soft: light-dark(rgba(208,59,59,.1), rgba(230,103,103,.16));
@@ -223,7 +226,7 @@ dialog.sheet::backdrop { background: var(--scrim); }
   .pg-limits .lim-chart .plan line:not(.hit) { stroke: LinkText; }
   .pg-limits .lim-chart :is(.ax, .plan text) { fill: CanvasText; }
   .pg-limits .lim-chart .pick { fill: Highlight; stroke: Canvas; }
-  /* The ECharts bars edge themselves (stack.ts), and Context's cache chart edges its own segments (CacheChart.css). */
+  /* The ECharts bars edge themselves (stack.ts). */
   /* Keys and dots that name a series or a project by color alone. */
   .pdot, :is(.pg-activity, .pg-cost, .pg-judgments) .legend i:not(.line), .pg-context .legend i:not(.line), .pg-errors .sw:not(.line), .pg-judgments .key .sw { forced-color-adjust: none; outline: 1px solid CanvasText; }
 }

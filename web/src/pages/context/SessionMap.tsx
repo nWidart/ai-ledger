@@ -1,78 +1,45 @@
 // The session map: one dot per session, placed by its starting context (log scale) and its peak share of the window. The 30k-start
 // and 80%-peak lines cut it into four named quadrants; selecting one narrows the window pressure bars and lists its sessions.
-import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
+// The model, the fit, the picking and the drawing are mapDots.ts's (echart-context, decision 9). The wrapper draws and reads
+// nothing (`points={0}`); this component reads: the sessions oldest first, by key and by pointer, with its own tooltip, ring
+// and live region. All of them place a dot at the fit's pixel, as the option draws it, so they work before the drawing has
+// loaded and when it fails to.
+import { useCallback, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import type { ContextPayload, SessionPoint } from "../../api";
 import { useColors } from "../../colors";
-import { scaleMargins, textScale, tipAt, useWidth } from "../../components/chart";
+import { tipAt, useWidth } from "../../components/chart";
 import { ChartTable } from "../../components/DataTable";
+import { EChart } from "../../components/echart/EChart";
+import { labelWidth } from "../../components/echart/option";
+import { useChartEnv, type ChartEnv } from "../../components/echart/tokens";
 import { subjectAttrs } from "../../components/menu/subject";
 import { openSessionSheet, sessName, shortId } from "../../components/sheets/session";
 import { Table, type Column, type RowPick } from "../../components/table/Table";
 import { num, plural, when } from "../../format";
 import { Proj, SourceName } from "./cells";
-import { NEAR_LIMIT, QUADS, quadAt, quadOf, START_LARGE_TOKENS, share, short, windowLabel, type Quad } from "./context";
+import { dotAt, mapFit, mapModel, mapOption, quadAtPixel } from "./mapDots";
+import { QUADS, quadOf, share, short, windowLabel, type Quad } from "./context";
 import { SOURCE_LABELS } from "../../components/Filters";
 import { modified } from "../../components/keys";
 import "./SessionMap.css";
 
 type SessionsMap = ContextPayload["sessions_map"];
-const H = 320, M0 = { t: 14, r: 16, b: 46, l: 52 }; // the margins at the default text size
-/** A pointer picks the nearest dot within this many pixels. */
-const PICK_PX = 12;
+/** The legend's dot and ring, as mapDots draws them. */
 const R = 4, RING = 7.5;
-const STEPS = [1, 2, 5, 10];
 /** The most sessions a selected quadrant lists. */
 export const QUAD_LIST_MAX = 20;
+/** How far each key moves the reading through the sessions, oldest first. */
+const STEPS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity };
 
-/** The round value (1, 2, 5 times a power of ten) at or below v. */
-export function roundDown(v: number): number {
-  const p = 10 ** Math.floor(Math.log10(v));
-  return p * [...STEPS].reverse().find(m => m * p <= v * (1 + 1e-9))!;
-}
-/** The round value at or above v. */
-export function roundUp(v: number): number {
-  const p = 10 ** Math.floor(Math.log10(v));
-  return p * STEPS.find(m => m * p >= v * (1 - 1e-9))!;
-}
-/** The x domain: round values around the starts, always spanning the 30k line. */
-export function startDomain(starts: number[]): [number, number] {
-  const lo = Math.max(1, Math.min(START_LARGE_TOKENS, ...starts)), hi = Math.max(START_LARGE_TOKENS, ...starts);
-  const a = roundDown(lo), b = roundUp(hi);
-  return [a, b > a ? b : a * 10];
-}
-/** Where a start sits on the log axis, 0 at the domain's low end and 1 at its high end. */
-export const logFraction = (v: number, [lo, hi]: [number, number]): number => (Math.log(Math.max(v, lo)) - Math.log(lo)) / (Math.log(hi) - Math.log(lo));
-/** The round ticks (1, 2, 5 times a power of ten) inside the domain. */
-export function startTicks([lo, hi]: [number, number]): number[] {
-  const out: number[] = [];
-  for (let p = 10 ** Math.floor(Math.log10(lo)); p <= hi * (1 + 1e-9); p *= 10)
-    for (const m of [1, 2, 5]) if (m * p >= lo * (1 - 1e-9) && m * p <= hi * (1 + 1e-9)) out.push(m * p);
-  return out;
-}
-/** A point's share of its window as drawn: a peak over the window sits at 100%. */
-export const drawnShare = (p: SessionPoint): number => Math.min(1, p.peak / p.window);
-
-/** A point in one sentence, as the readout says it (the tooltip carries the same fields). */
-export const readPoint = (p: SessionPoint): string =>
+/** A point in one sentence, as the live region says it (the tooltip carries the same fields). */
+const readPoint =(p: SessionPoint): string =>
   `${sessName(p)}: ${p.project ?? "(no project)"}, ${SOURCE_LABELS[p.source]}, started ${when(p.first_ts)}: starting context ${short(p.start)} tokens, peak ${short(p.peak)} tokens, `
   + `${share(p.peak / p.window)} of a ${windowLabel(p.window)} window, ${plural(p.turns, "turn")}, ${plural(p.compactions, "compaction")}`;
 
-/** A quadrant's name as lines that fit room px at font size fs: one line when it fits, else its words wrapped, at a smaller size
- *  (down to 80%) when even its longest word does not fit. Widths are estimated for the semibold label font. */
-export function fitLines(label: string, room: number, fs: number): { lines: string[]; fs: number } {
-  const w = (s: string, f = fs) => s.length * f * .62;
-  if (w(label) <= room) return { lines: [label], fs };
-  const words = label.split(" "), lines: string[] = [];
-  for (const word of words) {
-    const last = lines.at(-1);
-    if (last != null && w(`${last} ${word}`) <= room) lines[lines.length - 1] = `${last} ${word}`;
-    else lines.push(word);
-  }
-  const longest = Math.max(...lines.map(l => w(l)));
-  return { lines, fs: longest <= room ? fs : Math.max(fs * .8, fs * room / longest) };
-}
+/** The session read, by its id: whether a key read it, its sentence as last said, and a count that makes the live region say
+ *  it again. */
+interface Reading { id: string; keyed: boolean; text: string; n: number }
 
-const byDate = (a: SessionPoint, b: SessionPoint) => (a.first_ts ?? "").localeCompare(b.first_ts ?? "") || a.session_id.localeCompare(b.session_id);
 const QUAD = Object.fromEntries(QUADS.map(q => [q.id, q])) as Record<Quad, typeof QUADS[number]>;
 
 // The chart's data table: one row per session; the row opens the session's sheet. The session is the row header: its name as a button, with its short id under a title.
@@ -92,10 +59,18 @@ const COLUMNS: Column<SessionPoint>[] = [
 ];
 const PICK: RowPick<SessionPoint> = { value: p => p.session_id, open: v => openSessionSheet(v), subject: p => ({ kind: "session", value: p.session_id }) };
 
+type MapProps = { map: SessionsMap; quad: Quad | null; onQuad: (q: Quad | null) => void; view: string };
+
 /** Every session of the view with a measured start, a known window and a peak, as a dot. quad: the selected quadrant (null for none);
- *  onQuad selects one, or clears it with null. */
-export function SessionMap({ map, quad, onQuad }: { map: SessionsMap; quad: Quad | null; onQuad: (q: Quad | null) => void }) {
-  const color = useColors(), box = useRef<HTMLDivElement>(null), tip = useRef<HTMLDivElement>(null), W = useWidth(box);
+ *  onQuad selects one, or clears it with null. view: what the user chose, never the figures: a new view ends the reading.
+ *  The map mounts with its first session, so the box it measures is the one on screen after an empty view. */
+export function SessionMap(props: MapProps) {
+  if (!props.map.points.length) return <p className="muted session-map-empty">No session in this view has a measured start, a known window and a peak.</p>;
+  return <Plotted {...props} />;
+}
+
+function Plotted({ map, quad, onQuad, view }: MapProps) {
+  const color = useColors(), box = useRef<HTMLDivElement>(null), tipEl = useRef<HTMLDivElement>(null), width = useWidth(box);
   const quadsRef = useRef<HTMLDivElement>(null);
   /** Clears the quadrant from its controls: Clear goes away with it, so focus moves to the quadrant that was pressed, not to the body. */
   const clearQuad = () => {
@@ -103,76 +78,116 @@ export function SessionMap({ map, quad, onQuad }: { map: SessionsMap; quad: Quad
     if (group?.contains(document.activeElement)) group.querySelector<HTMLButtonElement>(`button[data-quad="${quad}"]`)?.focus();
     onQuad(null);
   };
-  const [at, setAt] = useState<number | null>(null), pos = useRef({ x: 0, y: 0 });
-  const pts = useMemo(() => map.points.slice().sort(byDate), [map.points]);
-  const dom = useMemo(() => startDomain(pts.map(p => p.start)), [pts]);
-  const counts = useMemo(() => {
-    const c: Record<Quad, number> = { lean: 0, heavy: 0, full: 0, both: 0 };
-    for (const p of pts) c[quadOf(p)]++;
-    return c;
-  }, [pts]);
-  useLayoutEffect(() => {
-    if (at == null || !tip.current || !box.current) return;
-    const p = tipAt(box.current, tip.current, pos.current.x, pos.current.y);
-    tip.current.style.left = p.left + "px"; tip.current.style.top = p.top + "px";
-  }, [at]);
-  if (!pts.length) return <p className="muted session-map-empty">No session in this view has a measured start, a known window and a peak.</p>;
+  // The environment measures the quadrants' names: it changes when the page's web font has loaded, and the names are measured
+  // again. Its text scale, read once per render, is the one the fit and the drawing share. Its height is the wrapper's concern.
+  const env = useChartEnv(width, 0), s = env.textScale;
+  const model = useMemo(() => mapModel(map.points), [map.points]);
+  const fit = useMemo(() => mapFit(model, width, s, (t, w) => labelWidth(env, t, w)), [model, width, s, env]);
+  const pts = model.points, counts = model.counts;
+  // The projects' hues, as the dots read them: the page and the nav's status poll set the order, which can come after the
+  // payload, so the option is made again then. A new drawing of the same view: the reading stays.
+  const hues = useMemo(() => [...new Set(pts.map(p => p.project))], [pts]).map(color).join(" ");
+  const option = useCallback((e: ChartEnv) => mapOption(fit, { ...e, textScale: s }, { quad, color }),
+    // hues: a new project order is a new drawing
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fit, s, quad, color, hues]);
+  const order = useMemo(() => new Map(pts.map((p, i) => [p.session_id, i])), [pts]);
 
-  const ts = textScale(), M = scaleMargins(M0, ts); // labels and the room around them follow the browser's text size
-  const iw = W - M.l - M.r, ih = H - M.t - M.b;
-  const x = (v: number) => M.l + logFraction(v, dom) * iw, y = (r: number) => M.t + ih - Math.min(1, r) * ih;
-  const xTicks = startTicks(dom), yTicks = [0, .2, .4, .6, .8, 1];
-  const cur = at == null ? null : pts[at]!;
-  const label = `Session map: ${plural(pts.length, "session")} shown, ${num(counts.full + counts.both)} at or over 80% of their window, ${num(counts.both)} of those started at or over 30k tokens. `
-    + "Use the left and right arrow keys to step through sessions from oldest to newest, Enter to open one, Escape to dismiss it and clear the selected quadrant.";
-  const count = map.total <= pts.length ? plural(pts.length, "session") : `Showing the newest ${num(pts.length)} of ${num(map.total)} sessions`;
-  const inQuad = quad ? pts.filter(p => quadOf(p) === quad).reverse() : []; // newest first
+  // The reading, held by the session's id. A new view ends it, and so do newer figures without its session, in the render
+  // that sees them: `at` is null then, so nothing below looks up a dot the model no longer holds. A reading a key made is
+  // said again when newer figures change its words; the pointer's is not, and its tooltip shows the newer figures.
+  const [reading, setReading] = useState<Reading | null>(null);
+  const [seen, setSeen] = useState(view);
+  const found = reading && seen === view ? order.get(reading.id) : undefined;
+  const at = found ?? null, cur = at != null ? pts[at]! : null, shown = cur ? reading : null;
+  const text = cur ? readPoint(cur) : null;
+  if (seen !== view) {
+    setSeen(view);
+    setReading(null);
+  } else if (reading && at == null) setReading(null);
+  else if (reading?.keyed && text !== reading.text) setReading({ ...reading, text: text!, n: reading.n + 1 });
 
-  /** Where a pointer is in the plot's coordinates. */
-  const at2 = (ev: { clientX: number; clientY: number; currentTarget: Element }) => {
-    const r = ev.currentTarget.getBoundingClientRect(), kx = r.width ? iw / r.width : 1, ky = r.height ? ih / r.height : 1;
-    return { px: M.l + (ev.clientX - r.left) * kx, py: M.t + (ev.clientY - r.top) * ky, k: Math.max(kx, ky) };
+  /** Reads session i, or none, and says it. A key that reads the session already read says it again. */
+  const read = (i: number | null, keyed = false) => {
+    if (i == null) return setReading(null);
+    const p = pts[i]!;
+    setReading(was => ({ id: p.session_id, keyed, text: readPoint(p), n: (was?.n ?? 0) + 1 }));
   };
-  /** The dot nearest a pointer within PICK_PX, or null. */
-  const nearest = (ev: { clientX: number; clientY: number; currentTarget: Element }): number | null => {
-    const { px, py, k } = at2(ev);
-    let best: number | null = null, d2 = (PICK_PX * k) ** 2;
-    pts.forEach((p, i) => { const d = (x(p.start) - px) ** 2 + (y(drawnShare(p)) - py) ** 2; if (d <= d2) { d2 = d; best = i; } });
-    return best;
+
+  // Where the pointer's reading points, in client px; null for a key's, which points at the dot. Only the tooltip's place
+  // reads it: the hand and the click read the event's own place.
+  const pointer = useRef<{ x: number; y: number } | null>(null);
+  const placeTip = () => {
+    const el = box.current, tip = tipEl.current;
+    if (!el || !tip || at == null) return;
+    const r = el.getBoundingClientRect(), d = fit.dots[at]!, saved = pointer.current;
+    // Newer figures can move the dot read from under the pointer, as the wrapper's points: the tooltip then goes with the dot
+    // until the pointer moves again.
+    if (saved && dotAt(fit, saved.x - r.left, saved.y - r.top) !== at) pointer.current = null;
+    const p = pointer.current ?? { x: r.left + d.x, y: r.top + d.y };
+    const pos = tipAt(el, tip, p.x, p.y);
+    tip.style.left = `${pos.left}px`;
+    tip.style.top = `${pos.top}px`;
   };
-  const onMove = (ev: PointerEvent<SVGRectElement>) => { pos.current = { x: ev.clientX, y: ev.clientY }; setAt(nearest(ev)); if (tip.current && box.current && at != null) { const p = tipAt(box.current, tip.current, ev.clientX, ev.clientY); tip.current.style.left = p.left + "px"; tip.current.style.top = p.top + "px"; } };
+  const place = useEffectEvent(placeTip);
+  useLayoutEffect(() => place(), [shown, fit]);
+
+  /** The pointer's place in the box, which is the origin of the fit's pixels: read at the event, so a scroll is counted. */
+  const inBox = (ev: MouseEvent) => {
+    const r = box.current!.getBoundingClientRect();
+    return { x: ev.clientX - r.left, y: ev.clientY - r.top };
+  };
+  // A hand over the plot, where a click opens a session or selects a quadrant.
+  const [hand, setHand] = useState(false);
+  const onMove = (ev: MouseEvent) => {
+    const { x, y } = inBox(ev), i = dotAt(fit, x, y);
+    setHand(quadAtPixel(fit, x, y) != null || i != null);
+    if (i == null) { pointer.current = null; return read(null); }
+    pointer.current = { x: ev.clientX, y: ev.clientY };
+    if (i === at) placeTip();
+    else read(i);
+  };
+  const onLeave = () => { setHand(false); pointer.current = null; read(null); };
   // A dot opens its session; the plot away from any dot selects the quadrant under the pointer, or clears it when it is selected.
-  const onClick = (ev: MouseEvent<SVGRectElement>) => {
-    const i = nearest(ev);
+  const onClick = (ev: MouseEvent) => {
+    const { x, y } = inBox(ev), i = dotAt(fit, x, y);
     if (i != null) return openSessionSheet(pts[i]!.session_id);
-    const { px, py } = at2(ev);
-    const q = quadAt(px >= x(START_LARGE_TOKENS) ? START_LARGE_TOKENS : 0, py <= y(NEAR_LIMIT) ? NEAR_LIMIT : 0);
-    onQuad(q === quad ? null : q);
-  };
-  const step = (i: number) => {
-    setAt(i);
-    const b = box.current?.getBoundingClientRect(), p = pts[i]!;
-    if (b) pos.current = { x: b.left + (x(p.start) / W) * b.width, y: b.top + (y(drawnShare(p)) / W) * b.width };
+    const q = quadAtPixel(fit, x, y);
+    if (q) onQuad(q === quad ? null : q);
   };
   const onKey = (ev: KeyboardEvent) => {
     if (modified(ev)) return; // Alt+Left is history, Ctrl+Home the page: not ours
     // One Escape dismisses the reading and clears the quadrant, so the bars never stay narrowed behind a dismissed reading.
-    if (ev.key === "Escape") { setAt(null); if (quad) onQuad(null); return; }
+    if (ev.key === "Escape") { read(null); if (quad) onQuad(null); return; }
     if (ev.key === "Enter") { if (cur) { ev.preventDefault(); openSessionSheet(cur.session_id); } return; }
-    const d = ({ ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity } as Record<string, number>)[ev.key];
+    const d = STEPS[ev.key];
     if (d == null) return;
     ev.preventDefault();
-    step(Math.max(0, Math.min(pts.length - 1, (at ?? (d > 0 ? -1 : pts.length)) + d)));
+    pointer.current = null;
+    read(Math.max(0, Math.min(pts.length - 1, (at ?? (d > 0 ? -1 : pts.length)) + d)), true);
   };
-  // Each quadrant's name in its outer corner, wrapped to the room between the plot's edge and the 30k line.
-  const x30 = x(START_LARGE_TOKENS);
-  const corner = (q: typeof QUADS[number]) => {
-    const { lines, fs } = fitLines(q.label, Math.max(1, (q.heavy ? W - M.r - x30 : x30 - M.l) - 12), 11 * ts), lh = fs * 1.15;
-    return { x: q.heavy ? W - M.r - 6 : M.l + 6, y: q.full ? M.t + 13 * ts : M.t + ih - 7 * ts - (lines.length - 1) * lh, anchor: q.heavy ? "end" as const : "start" as const, lines, fs, lh };
-  };
-  const halo = { stroke: "var(--surface-1)", strokeWidth: 3, paintOrder: "stroke" } as const;
-  // The 80% line's label sits left of the 30k line, or right of it when the plot left of the line is too narrow for it.
-  const nearLeft = x30 - 4 - "80% of window".length * 11 * ts * .56 >= M.l + 2;
+
+  // Escape ends a reading wherever the focus is: the pointer can open one while the focus is elsewhere. A key from inside the
+  // box is the box's own. It never clears the quadrant from there: Escape in a sheet or a menu is theirs. Capturing, as the
+  // wrapper's: a control that stops Escape would keep it from a listener on the way up. The key goes on to that control.
+  // Attached as the tooltip is drawn, before the paint: an Escape pressed as it shows must find the listener.
+  const reads = shown != null;
+  const end = useEffectEvent(() => read(null));
+  useLayoutEffect(() => {
+    if (!reads) return;
+    const escape = (ev: globalThis.KeyboardEvent) => {
+      if (ev.key === "Escape" && !modified(ev) && !box.current?.contains(ev.target as Node)) end();
+    };
+    document.addEventListener("keydown", escape, true);
+    return () => document.removeEventListener("keydown", escape, true);
+  }, [reads]);
+
+
+  const label = `Session map: ${plural(pts.length, "session")} shown, ${num(counts.full + counts.both)} at or over 80% of their window, ${num(counts.both)} of those started at or over 30k tokens. `
+    + "Use the left and right arrow keys to step through sessions from oldest to newest, Enter to open one, Escape to dismiss it and clear the selected quadrant.";
+  const count = map.total <= pts.length ? plural(pts.length, "session") : `Showing the newest ${num(pts.length)} of ${num(map.total)} sessions`;
+  const inQuad = quad ? pts.filter(p => quadOf(p) === quad).reverse() : []; // newest first
+  const dot = at != null ? fit.dots[at]! : null;
 
   return (
     <div className="session-map">
@@ -181,32 +196,13 @@ export function SessionMap({ map, quad, onQuad }: { map: SessionsMap; quad: Quad
         <span className="key"><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r={R} fill="var(--text-secondary)" fillOpacity=".75" /></svg>A session, in its project's colour</span>
         <span className="key"><svg width="18" height="18" aria-hidden="true"><circle cx="9" cy="9" r={R} fill="var(--text-secondary)" fillOpacity=".75" /><circle cx="9" cy="9" r={RING} fill="none" stroke="var(--text-secondary)" strokeWidth="1.5" /></svg>Ring: compacted at least once</span>
       </div>
-      <div className="chart" ref={box} tabIndex={0} role="group" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
-        <svg viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
-          {quad && <rect className="quad-on" x={QUAD[quad].heavy ? x(START_LARGE_TOKENS) : M.l} y={QUAD[quad].full ? M.t : y(NEAR_LIMIT)}
-            width={QUAD[quad].heavy ? W - M.r - x(START_LARGE_TOKENS) : x(START_LARGE_TOKENS) - M.l} height={QUAD[quad].full ? y(NEAR_LIMIT) - M.t : M.t + ih - y(NEAR_LIMIT)} />}
-          {yTicks.map(v => <g key={v}><line x1={M.l} x2={W - M.r} y1={y(v)} y2={y(v)} stroke="var(--grid)" />
-            <text x={M.l - 6 * ts} y={y(v) + 4 * ts} textAnchor="end" fontSize={11 * ts} fill="var(--text-muted)">{Math.round(v * 100)}%</text></g>)}
-          {xTicks.map(t => <g key={t}><line x1={x(t)} x2={x(t)} y1={M.t} y2={M.t + ih} stroke="var(--grid)" />
-            <text x={x(t)} y={M.t + ih + 16 * ts} textAnchor="middle" fontSize={11 * ts} fill="var(--text-muted)">{short(t)}</text></g>)}
-          <text x={M.l + iw / 2} y={H - 6 * ts} textAnchor="middle" fontSize={11.5 * ts} fill="var(--text-secondary)">Starting context (tokens, log scale)</text>
-          <text transform={`translate(${12 * ts} ${M.t + ih / 2}) rotate(-90)`} textAnchor="middle" fontSize={11.5 * ts} fill="var(--text-secondary)">{/* The full title is about 6.5 text-sized units per character along the axis; a shorter one when the plot is too short for it. */}
-            {ih >= 24 * 6.5 * ts ? "Peak share of the window" : "Peak share"}</text>
-          <line className="ref-x" x1={x(START_LARGE_TOKENS)} x2={x(START_LARGE_TOKENS)} y1={M.t} y2={M.t + ih} stroke="var(--text-muted)" strokeDasharray="5 4" />
-          <text x={x(START_LARGE_TOKENS) + 4} y={y(.5)} fontSize={11 * ts} fill="var(--text-secondary)" {...halo}>30k start</text>
-          <line className="ref-y" x1={M.l} x2={W - M.r} y1={y(NEAR_LIMIT)} y2={y(NEAR_LIMIT)} stroke="var(--text-muted)" strokeDasharray="5 4" />
-          <text x={nearLeft ? x30 - 4 : x30 + 4} y={y(NEAR_LIMIT) + 13 * ts} textAnchor={nearLeft ? "end" : "start"} fontSize={11 * ts} fill="var(--text-secondary)" {...halo}>80% of window</text>
-          {pts.map((p, i) => <g key={p.session_id} className={"pt" + (i === at ? " on" : "") + (quad && quadOf(p) !== quad ? " out" : "")} data-id={p.session_id}>
-            {p.compactions > 0 && <circle className="ring" cx={x(p.start)} cy={y(drawnShare(p))} r={RING} fill="none" stroke={color(p.project)} strokeWidth="1.5" />}
-            <circle className="dot" cx={x(p.start)} cy={y(drawnShare(p))} r={R} fill={color(p.project)} fillOpacity=".75" stroke="var(--surface-1)" strokeWidth="1" />
-          </g>)}
-          {QUADS.map(q => { const c = corner(q); return <text key={q.id} className={"quad-label" + (q.id === quad ? " on" : "")} data-quad={q.id} x={c.x} y={c.y}
-            textAnchor={c.anchor} fontSize={c.fs} fontWeight="600" {...halo}>{c.lines.length === 1 ? q.label
-              : c.lines.map((l, k) => <tspan key={k} x={c.x} dy={k ? c.lh : 0}>{l}</tspan>)}</text>; })}
-          {cur && <circle className="cursor" cx={x(cur.start)} cy={y(drawnShare(cur))} r={cur.compactions > 0 ? RING + 3 : R + 4} fill="none" stroke="var(--text-primary)" strokeWidth="1.5" />}
-          <rect className="hit" x={M.l} y={M.t} width={iw} height={ih} fill="transparent" onPointerMove={onMove} onPointerLeave={() => setAt(null)} onClick={onClick} />
-        </svg>
-        <div className="tip" ref={tip} role="tooltip" style={{ display: cur ? "block" : "none" }}>{cur && <>
+      <div ref={box} className={hand ? "map-box hand" : "map-box"} onKeyDown={onKey} onMouseMove={onMove} onMouseLeave={onLeave} onClick={onClick}
+        onBlur={ev => { if (!box.current?.contains(ev.relatedTarget as Node | null)) read(null); }}>
+        <EChart label={label} height={fit.height} option={option} view={view} points={0} read={() => ""} />
+        {dot && cur && <svg className="map-mark" aria-hidden="true" width={width} height={fit.height}>
+          <circle cx={dot.x} cy={dot.y} r={cur.compactions > 0 ? RING + 3 : R + 4} /></svg>}
+        {/* The app's stylesheet hides a .tip until its chart shows it. */}
+        {cur && <div ref={tipEl} className="tip" role="tooltip" style={{ display: "block" }}>
           <div className="tname"><b>{sessName(cur)}</b></div>
           <div className="muted">{cur.project ?? "(no project)"} · {SOURCE_LABELS[cur.source]} · {when(cur.first_ts)}</div>
           <div className="row"><span>Starting context</span><b>{short(cur.start)}</b></div>
@@ -214,9 +210,10 @@ export function SessionMap({ map, quad, onQuad }: { map: SessionsMap; quad: Quad
           <div className="row"><span>Window</span><b>{windowLabel(cur.window)}</b></div>
           <div className="row"><span>Turns</span><b>{num(cur.turns)}</b></div>
           <div className="row"><span>Compactions</span><b>{num(cur.compactions)}</b></div>
-        </>}</div>
+        </div>}
+        {/* The map's one polite region: the wrapper's beside it stays empty. A new span says a sentence again, even the same words. */}
+        <div className="sr map-live" aria-live="polite">{shown && <span key={shown.n}>{shown.text}</span>}</div>
       </div>
-      <div className="readout" aria-live="polite">{cur ? readPoint(cur) : ""}</div>
       <div className="quads" ref={quadsRef} role="group" aria-label="Quadrants: select one to narrow the window pressure bars to its sessions"
         onKeyDown={ev => { if (ev.key === "Escape" && quad) { ev.stopPropagation(); clearQuad(); } }}>
         {QUADS.map(q => <button key={q.id} type="button" aria-pressed={quad === q.id} data-quad={q.id} onClick={() => onQuad(quad === q.id ? null : q.id)}>

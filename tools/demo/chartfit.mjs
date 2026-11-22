@@ -36,19 +36,21 @@
 //   chartfit/<page>.mjs    a page's descriptor, the order of its checks and its own checks: cost (Cost's daily chart),
 //                          activity (Activity's work chart, its two tracks, selection, zoom and weeks), judgments (the
 //                          Judgments view's outcome trend), errors (Errors' rate chart, its two tracks, its marks across
-//                          them, selection, zoom, weeks and message), calendar (Activity's calendar: no band, no axis,
-//                          its own checks), flow (Cost's flow from project to model to token kind, a graph with no
+//                          them, selection, zoom, weeks and message), context (Context's charts: the cache chart, its
+//                          three tracks, empty days, zoom, weeks and the cache reads), calendar (Activity's calendar:
+//                          no band, no axis, its own checks), flow (Cost's flow from project to model to token kind, a graph with no
 //                          axis: its own readers and checks, none of the shared ones), quadrant (the Project page's
 //                          sessions by cost and tool calls, which reads its dots itself: its own checks only, listed in
 //                          its header), spans (the session sheet's tool calls by thread, its own checks)
 // It runs locally, not in CI. It needs the build and the pinned Playwright:
 //   uv sync;  cd web && npm ci && npm run build;  cd tools/demo && npm ci
-//   node chartfit.mjs [cost] [activity] [judgments] [errors] [calendar] [flow] [quadrant] [spans]   the pages named, every
+//   node chartfit.mjs [cost] [activity] [judgments] [errors] [context] [calendar] [flow] [quadrant] [spans]   the pages named, every
 //                              page when none is; SHOTS=<dir> also saves screenshots of the charts there;
 //                              CHROMIUM=<path> uses that Chromium
 import { run } from "./chartfit/harness.mjs";
 import { activity } from "./chartfit/activity.mjs";
 import { calendar } from "./chartfit/calendar.mjs";
+import { context } from "./chartfit/context.mjs";
 import { cost } from "./chartfit/cost.mjs";
 import { errors } from "./chartfit/errors.mjs";
 import { judgments } from "./chartfit/judgments.mjs";
@@ -56,7 +58,7 @@ import { flow } from "./chartfit/flow.mjs";
 import { quadrant } from "./chartfit/quadrant.mjs";
 import { spans } from "./chartfit/spans.mjs";
 
-const PAGES = { cost, activity, judgments, errors, calendar, flow, quadrant, spans };
+const PAGES = { cost, activity, judgments, errors, context, calendar, flow, quadrant, spans };
 const named = process.argv.slice(2);
 const unknown = named.filter(n => !(n in PAGES));
 if (unknown.length) {

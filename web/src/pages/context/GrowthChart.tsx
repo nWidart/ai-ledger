@@ -1,31 +1,28 @@
-import { useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { ContextPayload, GrowthPoint } from "../../api";
 import { useColors } from "../../colors";
-import { scaleMargins, textScale, useWidth } from "../../components/chart";
+import { textScale } from "../../components/chart";
 import { ChartTable } from "../../components/DataTable";
+import { EChart } from "../../components/echart/EChart";
+import type { ChartEnv } from "../../components/echart/tokens";
 import { Table, type Column } from "../../components/table/Table";
-import { niceStep, num, pct, plural } from "../../format";
+import { num, pct, plural } from "../../format";
 import { NEAR_LIMIT, share as shareText, short } from "./context";
-import { modified } from "../../components/keys";
+import { growthLayout, growthModel, growthOption, projectKey, type GrowthMode, type GrowthProject } from "./growthCurves";
 import "./GrowthChart.css";
 
 type Curves = ContextPayload["growth"]["by_project_curves"];
-const H0 = 260, M0 = { t: 12, r: 14, b: 30, l: 52 }; // at the default text size
-/** The survival strip under the x-axis: its gap, bar height and the text row. */
-const STRIP = { gap: 6, bar: 22, text: 18 };
-type Mode = "tokens" | "share";
-const key = (p: { project: string | null }) => p.project ?? "";
+const noProject = (p: { project: string | null }) => p.project ?? "(no project)";
 
-type Drawn = { project: string | null; c: GrowthPoint[] };
 /** The chart's data table: the view's median and band at each turn, then one column per drawn project (its median, and with one isolated its band). */
-const tableColumns = (shown: Drawn[], only: Drawn | null, fmt: (v: number) => string): Column<GrowthPoint>[] => [
+const tableColumns = (shown: GrowthProject[], only: GrowthProject | null, fmt: (v: number) => string): Column<GrowthPoint>[] => [
   { id: "turn", header: "Turn", cellProps: () => ({ className: "num" }), cell: p => num(p.turn) },
   { id: "median", header: "Median", align: "num", cell: p => fmt(p.median) },
   { id: "p25", header: "25th percentile", align: "num", cell: p => fmt(p.p25) },
   { id: "p75", header: "75th percentile", align: "num", cell: p => fmt(p.p75) },
   { id: "sessions", header: "Sessions", align: "num", cell: p => num(p.sessions) },
-  ...shown.map((q): Column<GrowthPoint> => ({ id: `project:${key(q)}`, header: q.project ?? "(no project)", align: "num", cell: p => {
-    const c = q.c.find(r => r.turn === p.turn);
+  ...shown.map((q): Column<GrowthPoint> => ({ id: `project:${projectKey(q)}`, header: noProject(q), align: "num", cell: p => {
+    const c = q.curve.find(r => r.turn === p.turn);
     return c ? fmt(c.median) + (only ? ` (${fmt(c.p25)} to ${fmt(c.p75)})` : "") : "–";
   } })),
 ];
@@ -40,42 +37,53 @@ export const readShare = (p: GrowthPoint) =>
 
 /** The view's median context at each turn with its 25th to 75th percentile band, and the busiest projects' medians over it.
  *  x is the turn, y the prompt tokens of that turn (or, with `share`, the fraction of the window); a point needs at least 5 sessions,
- *  so a curve stops where the sessions run out. A strip under the axis shows how many sessions are still running at each turn.
- *  A project key isolates that project and its own band. */
-export function GrowthChart({ curve, projects, share }: { curve: GrowthPoint[]; projects: Curves; share?: GrowthPoint[] }) {
-  const color = useColors(), box = useRef<HTMLDivElement>(null), W = useWidth(box);
-  const [at, setAt] = useState<number | null>(null); // an index into the curve in view
-  const [mode, setMode] = useState<Mode>("tokens"), [sel, setSel] = useState<string | null>(null);
-  const canShare = !!share?.length, m: Mode = mode === "share" && canShare ? "share" : "tokens", isShare = m === "share", fmt = isShare ? shareText : short;
-  const drawn = useMemo(() => projects.map(p => ({ project: p.project, sessions: p.sessions, c: isShare ? p.share_curve : p.curve })).filter(p => p.c.length), [projects, isShare]);
-  const only = sel == null ? null : drawn.find(p => key(p) === sel) ?? null;
-  const shown = useMemo(() => only ? [only] : drawn, [only, drawn]);
-  const columns = useMemo(() => tableColumns(shown, only, fmt), [shown, only, fmt]);
-  if (!curve.length) return null;
-  // Labels and the room around them follow the browser's text size; the plot keeps its height.
-  const ts = textScale(), M = scaleMargins(M0, ts), H = H0 + (M.t + M.b) - (M0.t + M0.b);
-  const cv = isShare ? share! : curve;
-  const pick = (next: Mode) => {
-    setMode(next); setAt(null);
-    if (sel != null && !projects.some(p => key(p) === sel && (next === "share" ? p.share_curve : p.curve).length)) setSel(null);
+ *  so a curve stops where the sessions run out. A strip under the curve shows how many sessions are still running at each turn.
+ *  A project key isolates that project and its own band. The figures and the drawing are growthCurves.ts's; this component
+ *  holds the switch, the legend, the words of the reading and the data table, and draws through <EChart>, which owns the
+ *  keys, the pointer, the tooltip and the live readout. `view` is the page's key. */
+export function GrowthChart({ curve, projects, share, view }: { curve: GrowthPoint[]; projects: Curves; share?: GrowthPoint[]; view: string }) {
+  const color = useColors();
+  const [mode, setMode] = useState<GrowthMode>("tokens"), [sel, setSel] = useState<string | null>(null);
+  const canShare = !!share?.length, m: GrowthMode = mode === "share" && canShare ? "share" : "tokens", isShare = m === "share", fmt = isShare ? shareText : short;
+  // The projects' hues, as growthModel reads them: the page sets the order after the payload lands, so the model is made again then.
+  const hues = projects.map(p => color(p.project)).join(" ");
+  // The isolated project is the model's input, not the view's: isolating redraws the same view and keeps the reading.
+  const model = useMemo(() => (curve.length ? growthModel(curve, projects, share, m, sel, color) : null),
+    // hues: a new project order is a new drawing
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [curve, projects, share, m, sel, color, hues]);
+  // The text scale the box's height is worked out from, and the option is laid out at the same one.
+  const scale = textScale();
+  const option = useCallback((env: ChartEnv) => growthOption(model!, { ...env, textScale: scale }), [model, scale]);
+  // Each turn in order: a turn's index is its number less one, so these never move a point, but the reading goes by them.
+  const keys = useMemo(() => model?.points.map(p => String(p.turn)) ?? [], [model]);
+  const only = model?.isolated ?? null, shown = model?.projects, columns = useMemo(() => tableColumns(shown ?? [], only, fmt), [shown, only, fmt]);
+  if (!model) return null;
+  const { points: cv, legend: drawn } = model;
+  const pick = (next: GrowthMode) => {
+    setMode(next);
+    if (sel != null && !projects.some(p => projectKey(p) === sel && (next === "share" ? p.share_curve : p.curve).length)) setSel(null);
   };
   const last = cv[cv.length - 1]!, first = cv[0]!;
-  const xMax = Math.max(2, last.turn, ...shown.map(p => p.c.at(-1)?.turn ?? 0));
-  const top = Math.max(...(only ? [] : cv.map(p => p.p75)), ...cv.map(p => p.median), ...shown.flatMap(p => p.c.map(c => only ? c.p75 : c.median)), isShare ? NEAR_LIMIT : 0, 1e-9) * 1.06;
-  const step = niceStep(top / 4), yMax = Math.ceil(top / step) * step, iw = W - M.l - M.r, ih = H - M.t - M.b;
-  const x = (turn: number) => M.l + (turn - 1) / (xMax - 1) * iw, y = (v: number) => M.t + ih - v / yMax * ih;
-  const line = (c: GrowthPoint[]) => c.map((p, i) => `${i ? "L" : "M"}${x(p.turn).toFixed(1)},${y(p.median).toFixed(1)}`).join("");
-  const bandOf = (c: GrowthPoint[]) => `${c.map((p, i) => `${i ? "L" : "M"}${x(p.turn).toFixed(1)},${y(p.p75).toFixed(1)}`).join("")}${c.slice().reverse()
-    .map(p => `L${x(p.turn).toFixed(1)},${y(p.p25).toFixed(1)}`).join("")}Z`;
-  const yTicks: number[] = [], xStep = niceStep(xMax / 6), xTicks = [1];
-  for (let v = 0; v <= yMax + 1e-9; v += step) yTicks.push(v);
-  for (let t = xStep; t <= xMax; t += xStep) if (t > 1) xTicks.push(t);
-  // The survival strip: one bar per point of the curve in view, by its sessions.
-  const maxSessions = Math.max(...cv.map(p => p.sessions), 1), stripTop = H + STRIP.gap, barW = Math.max(1, Math.min(10, iw / cv.length * .7));
-  const svgH = H + STRIP.gap + STRIP.bar + STRIP.text * ts;
-
-  const cur = at == null ? null : cv[at] ?? null;
-  const readout = cur && [(isShare ? readShare : readTurn)(cur), ...shown.flatMap(p => { const c = p.c.find(q => q.turn === cur.turn); return c ? [`${p.project ?? "(no project)"} ${fmt(c.median)}` + (only ? ` (25th to 75th percentile ${fmt(c.p25)} to ${fmt(c.p75)})` : "")] : []; })].join("; ");
+  // The turn's sentence, then each drawn project's median at that turn (with one isolated, its band too).
+  const read = (i: number) => [(isShare ? readShare : readTurn)(cv[i]!), ...model.projects.flatMap(q => {
+    const c = q.points[i];
+    return c ? [`${noProject(q)} ${fmt(c.median)}` + (only ? ` (25th to 75th percentile ${fmt(c.p25)} to ${fmt(c.p75)})` : "")] : [];
+  })].join("; ");
+  const tip = (i: number) => {
+    const p = cv[i]!;
+    return <>
+      <div className="muted">Turn {num(p.turn)}</div>
+      <div className="row"><span><i style={{ background: "var(--text-primary)" }} />Median</span><b>{fmt(p.median)}</b></div>
+      <div className="row"><span>25th to 75th percentile</span><b>{fmt(p.p25)} to {fmt(p.p75)}</b></div>
+      <div className="row"><span>Sessions</span><b>{num(p.sessions)}</b></div>
+      {model.projects.flatMap(q => {
+        const c = q.points[i];
+        return c ? [<div key={projectKey(q)} className="row"><span><i style={{ background: q.color }} />{noProject(q)}</span>
+          <b>{fmt(c.median)}{only ? ` (${fmt(c.p25)} to ${fmt(c.p75)})` : ""}</b></div>] : [];
+      })}
+    </>;
+  };
   const label = (isShare
     ? (cv.length > 1
       ? `Median share of the window at each turn: ${fmt(first.median)} at turn ${first.turn}, ${fmt(last.median)} at turn ${last.turn}, the last turn with 5 or more sessions with a known window (${plural(last.sessions, "session")}). `
@@ -84,25 +92,10 @@ export function GrowthChart({ curve, projects, share }: { curve: GrowthPoint[]; 
     : (cv.length > 1
       ? `Median context at each turn: ${fmt(first.median)} tokens at turn ${first.turn}, ${fmt(last.median)} at turn ${last.turn}, the last turn with 5 or more sessions (${plural(last.sessions, "session")}). `
       : `Median context at turn ${last.turn}, the only turn with 5 or more sessions: ${fmt(last.median)} tokens (${plural(last.sessions, "session")}). `))
-    + (only ? `Showing only ${only.project ?? "(no project)"}, with its 25th to 75th percentile band, ${fmt(only.c.at(-1)!.p25)} to ${fmt(only.c.at(-1)!.p75)} at turn ${only.c.at(-1)!.turn}.`
+    + (only ? `Showing only ${noProject(only)}, with its 25th to 75th percentile band, ${fmt(only.curve.at(-1)!.p25)} to ${fmt(only.curve.at(-1)!.p75)} at turn ${only.curve.at(-1)!.turn}.`
       : `The band shows the 25th to 75th percentile, ${fmt(last.p25)} to ${fmt(last.p75)} at turn ${last.turn}.` + (drawn.length ? ` ${plural(drawn.length, "project")} drawn separately.` : ""))
     + ` Sessions still running: ${num(first.sessions)} at turn ${first.turn}, ${num(last.sessions)} at turn ${last.turn}.`
     + " Use the left and right arrow keys to read each turn, Escape to dismiss it.";
-  const near = (ev: PointerEvent) => {
-    // The pointer's x in the svg's own units: the plot rect starts at M.l and is iw wide, so offset and scale within it.
-    const r = ev.currentTarget.getBoundingClientRect(), px = M.l + (ev.clientX - r.left) * iw / (r.width || iw);
-    let best = 0;
-    cv.forEach((p, i) => { if (Math.abs(x(p.turn) - px) < Math.abs(x(cv[best]!.turn) - px)) best = i; });
-    return best;
-  };
-  const onKey = (ev: KeyboardEvent) => {
-    if (modified(ev)) return; // Alt+Left is history, Ctrl+Home the page: not ours
-    if (ev.key === "Escape") return setAt(null);
-    const d = ({ ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity } as Record<string, number>)[ev.key];
-    if (d == null) return;
-    ev.preventDefault();
-    setAt(Math.max(0, Math.min(cv.length - 1, (at ?? (d > 0 ? -1 : cv.length)) + d)));
-  };
 
   return (
     <div className="growth">
@@ -112,37 +105,14 @@ export function GrowthChart({ curve, projects, share }: { curve: GrowthPoint[]; 
       <div className="legend">
         <span className="key"><i className="line" />Median, all sessions in view</span>
         {!only && <span className="key"><i className="band" />25th to 75th percentile</span>}
-        {drawn.map(p => <button key={key(p)} type="button" className="key proj" aria-pressed={only === p} title={only === p ? "Show every project" : `Show only ${p.project ?? "(no project)"}`}
-          onClick={() => setSel(only === p ? null : key(p))}>
-          <i style={{ background: color(p.project) }} />{p.project ?? "(no project)"}<span className="muted"> · {plural(p.sessions, "session")}</span></button>)}
+        {drawn.map(p => <button key={projectKey(p)} type="button" className="key proj" aria-pressed={only === p} title={only === p ? "Show every project" : `Show only ${noProject(p)}`}
+          onClick={() => setSel(only === p ? null : projectKey(p))}>
+          <i style={{ background: p.color }} />{noProject(p)}<span className="muted"> · {plural(p.sessions, "session")}</span></button>)}
       </div>
-      <div className="chart" ref={box} tabIndex={0} role="group" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
-        <svg className="growth-svg" viewBox={`0 0 ${W} ${svgH}`} aria-hidden="true">
-          {yTicks.map(v => <g key={v}><line x1={M.l} x2={W - M.r} y1={y(v)} y2={y(v)} stroke="var(--grid)" />
-            <text x={M.l - 6 * ts} y={y(v) + 4 * ts} textAnchor="end" fontSize={11 * ts} fill="var(--text-muted)">{isShare ? pct(v) : short(v)}</text></g>)}
-          {xTicks.map(t => <text key={t} x={x(t)} y={H - 8 * ts} textAnchor="middle" fontSize={11 * ts} fill="var(--text-muted)">{t}</text>)}
-          {!only && <path className="band" d={bandOf(cv)} fill="var(--text-secondary)" opacity=".16" stroke="none" />}
-          {only && <path className="band proj-band" d={bandOf(only.c)} fill={color(only.project)} opacity=".18" stroke="none" />}
-          {isShare && <g className="limit"><line x1={M.l} x2={W - M.r} y1={y(NEAR_LIMIT)} y2={y(NEAR_LIMIT)} stroke="var(--text-muted)" strokeDasharray="5 4" />
-            <text x={W - M.r} y={y(NEAR_LIMIT) - 4 * ts} textAnchor="end" fontSize={11 * ts} fill="var(--text-muted)">{pct(NEAR_LIMIT)} of the window</text></g>}
-          {shown.map(p => <path key={key(p)} className="curve proj" d={line(p.c)} fill="none" stroke={color(p.project)} strokeWidth={only ? 3 : 1.5} strokeLinejoin="round" />)}
-          <path className="curve view" d={line(cv)} fill="none" stroke="var(--surface-1)" strokeWidth="4.5" strokeLinejoin="round" strokeLinecap="round" />
-          <path className="curve view" d={line(cv)} fill="none" stroke="var(--text-primary)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-          <circle cx={x(last.turn)} cy={y(last.median)} r="3.5" fill="var(--text-primary)" stroke="var(--surface-1)" strokeWidth="1.5" />
-          {cur && <><line x1={x(cur.turn)} x2={x(cur.turn)} y1={M.t} y2={M.t + ih} stroke="var(--text-muted)" strokeDasharray="3 3" />
-            <circle cx={x(cur.turn)} cy={y(cur.median)} r="4" fill="var(--text-primary)" stroke="var(--surface-1)" strokeWidth="1.5" /></>}
-          <rect x={M.l} y={M.t} width={iw} height={ih} fill="transparent" onPointerMove={ev => setAt(near(ev))} onPointerLeave={() => setAt(null)} />
-          <g className="strip">
-            {cv.map(p => { const h = Math.max(1, p.sessions / maxSessions * STRIP.bar);
-              return <rect key={p.turn} className="strip-bar" x={x(p.turn) - barW / 2} y={stripTop + STRIP.bar - h} width={barW} height={h} fill="var(--text-muted)" opacity=".55" />; })}
-            <text x={M.l} y={stripTop + STRIP.bar + 13 * ts} fontSize={11 * ts} fill="var(--text-muted)">Sessions still running at each turn</text>
-            <text x={W - M.r} y={stripTop + STRIP.bar + 13 * ts} textAnchor="end" fontSize={11 * ts} fill="var(--text-muted)">{num(first.sessions)} at turn {first.turn} to {num(last.sessions)} at turn {last.turn}</text>
-          </g>
-        </svg>
-      </div>
+      {/* The measure is in the view: switching it ends the reading. The isolated project is not. */}
+      <EChart label={label} height={growthLayout(scale).height} option={option} view={[view, m].join("|")} pointKeys={keys} points={cv.length} tip={tip} read={read} />
       <div className="axis-note muted small">{isShare ? "Turn in the session (a main-thread request that carries the context) · share of the model's context window at that turn"
         : "Turn in the session (a main-thread request that carries the context) · tokens the model read at that turn"}</div>
-      <div className="readout" aria-live="polite">{readout ?? ""}</div>
       {/* The chart's text alternative: the view's median and band at each turn, and each drawn project's median. */}
       <ChartTable><Table name={isShare ? "Median share of the window at each turn" : "Median context at each turn"} region="scroll tall" rows={cv} columns={columns} rowId={p => String(p.turn)} /></ChartTable>
     </div>
