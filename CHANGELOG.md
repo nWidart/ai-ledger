@@ -30,6 +30,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
   - The rate chart uses the shared chart component. It frames the selected day or week and keeps the reading on it, so the same key clears it, keeps the point you are reading when new data lands, and keeps both panels' height at larger text sizes.
   - The rate chart announces what a selection did from its own live region, and the sentence stays when the pointer leaves the chart.
   - The rate chart draws its fix labels inside the plot, one under the other on a shared day. With many fixes on one day, labels that do not fit inside the chart are left out; every fix keeps its dashed line.
+  - The rate chart keeps the point you are reading and the zoom when older data arrives or a folded stretch changes, so Space still clears the selection.
+- Cost's daily chart and Activity's work chart keep the day you are reading and the zoom when older days arrive or a rolling range moves on a day. The outcome trend keeps the week you are reading when a week joins it.
 - `/api/live/session` no longer returns `limits` or `cwd`, and `/api/live` no longer returns `latest`, each session's newest call.
 
 ### Fixed
