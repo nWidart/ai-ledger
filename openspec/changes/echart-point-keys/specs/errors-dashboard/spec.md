@@ -32,7 +32,7 @@ When newer data arrives for the same view, as after an ingest in the background,
 
 #### Scenario: The points move
 - **WHEN** the user reads Nov 4 in a chart zoomed to Oct 28 to Nov 6, and an ingest adds a tool call on a day before the chart's first day
-- **THEN** Nov 4 is still read, with its tooltip over its bar, Oct 28 to Nov 6 still show, nothing is said, and a selected Nov 4 is still selected and framed
+- **THEN** Nov 4 is still read, with its tooltip over its bar, Oct 28 to Nov 6 still show, nothing new is said (a zoom sentence the status held, now untrue, is dropped), and a selected Nov 4 is still selected and framed
 
 #### Scenario: Space after older calls arrive
 - **WHEN** Nov 4 is selected and still read, an ingest adds a tool call on a day before the chart's first day, and the user presses Space
@@ -45,6 +45,10 @@ When newer data arrives for the same view, as after an ingest in the background,
 #### Scenario: The day read is folded away
 - **WHEN** the user reads Nov 3, the third of seven days without a call at the end of the range, and an eighth such day arrives
 - **THEN** the eight days are one folded stretch, the reading ends, and its tooltip closes
+
+#### Scenario: A fold leaves fewer than 14 points
+- **WHEN** a 30-day chart of 14 points is zoomed, and a new folded stretch leaves it 13
+- **THEN** the zoom ends, the slider goes, and the status says "Showing all 30 days." once
 
 #### Scenario: Week after Day
 - **WHEN** the user reads Nov 2 by day and selects Week

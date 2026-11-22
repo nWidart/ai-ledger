@@ -59,7 +59,7 @@ On Errors a selection keeps the reading on its point so that Space clears it (th
 | P9 | The draft on the fake runtime: can a wrapper test see P5? | Yes. After the redraw the chart's calls are `setOption`, `dataZoom 17-31`, `convertToPixel(24)`, `updateAxisPointer`, `convertToPixel(24)`. With the layout effect placing the remapped reading, a `convertToPixel(24)` comes first, before `setOption`, and answers 293.33px where the point is at 240px. A list of another length than `points`, and a list with a key twice, end the reading and the zoom. |
 | P10 | What does comparing the keys cost at 400 points? | Node 26.13.1 on this machine, 400 ISO days, the mean of 20,000 runs: the same array, 0.02µs; another array with the same keys, 2.0µs; building the key-to-index map, 11.9µs. |
 
-**Not measured.** Whether a browser paints the frame between the two writes of P5 (jsdom paints nothing; the write order is the fact). A drag with a real pointer, and with touch. The pointer at rest in a real browser. Each is a browser line of step 3.1. A browser spike was not needed: P7 saw the drag in vitest.
+**Not measured.** Whether a browser paints the frame between the two writes of P5 (jsdom paints nothing; the write order is the fact). A drag with a real pointer, and with touch. The pointer at rest in a real browser. Each is a browser line of step 3.1. A browser spike was not needed: P7 saw the drag in vitest. Step 3.1 then measured all three, in Chromium's headless shell on the demo store (decision 11): no frame noted with the tooltip off its bar, 0.0px at worst over 109 frames, the per-frame reader proven by a correction held back on purpose, which it saw at 158px; a real drag, the handle 28.9px off the pointer after the backfill, then following the pointer; a pointer at rest, the tooltip over the band, 0.3px at worst. Mouse events only: touch is still not measured.
 
 ## Goals / Non-Goals
 
@@ -87,7 +87,7 @@ What a user will see or meet that differs from today. Each line names the decisi
 3. On the outcome trend, the reading stays when a week joins or leaves the trend, and when a new newest week comes (decision 6).
 4. "Show all days" stays, with a focus on it, through such a redraw. Today the zoom resets and the focus moves to the chart (decision 2).
 5. A zoom at the old end of a rolling range loses the day that leaves. At the fewest days a zoom shows, it takes the next day in, so seven still show (decision 2, P8b).
-6. A zoom that such a redraw leaves with none of its points, or with every point in it, ends, and the chart says "Showing all 15 days." once. Today a first point that moves says nothing (decisions 2 and 4).
+6. A zoom that such a redraw leaves with none of its points, or with every point in it, ends, and the chart says "Showing all 15 days." once. Today a first point that moves says nothing (decisions 2 and 4). The slider stays over every point while the view has 14 points or more. On Errors a new fold can leave fewer: then the caller turns `zoom` off, the slider goes, and the end is said once all the same (decision 7).
 7. After a redraw that moves the point read from under a pointer at rest, the tooltip sits over that point, with the band. Today it stays beside the pointer. This holds for every redraw, also a resize and a new point at the end (decision 5).
 8. A slider handle being dragged when such a redraw lands jumps to its window's new place, off the pointer by as much as the points moved, and the drag goes on from there (decision 5, P7).
 
@@ -107,7 +107,8 @@ Not different: the zoom's keys, words and minimum; what a view change does; what
  *  With keys, `view` holds only what the user chose: not the first point, nor anything else that fixes where a point
  *  sits. It still holds what gives a key another meaning: a day and a week can share one.
  *  A list the wrapper cannot go by (another length than `points`, or a key twice) keeps nothing through a redraw that
- *  changes the keys: the reading ends and every point shows, and the console names the fault. */
+ *  changes the keys: the reading ends and every point shows, and the console names the fault. It names it too at
+ *  mount, with a new view, and when `points` changes under the same keys. */
 pointKeys?: readonly string[];
 ```
 
@@ -115,7 +116,7 @@ The comments on three other props change with it, and nothing else of `EChartPro
 
 - `view`: its second paragraph becomes "Within a view a point keeps its index, and new points come at the end, unless the chart gives `pointKeys`. Without keys, the key must also hold what fixes the first point (a rolling range's first day): when that moves, it is another view."
 - `points`: gains "With `pointKeys`, the two lists have one length."
-- `onZoom`: its first sentence gains ", or a redraw that moved the points shown to other indexes". Its second sentence becomes "A redraw of the same view that keeps the points shown at their indexes is not a change."
+- `onZoom`: its first sentence gains ", or a redraw that moved the points shown to other indexes". Its second sentence becomes "A redraw of the same view that keeps the points shown at their indexes is not a change." As built it gains one more: "Turn `zoom` off in the render whose option draws no slider: with it on, a redraw that moves the points shown and drops the slider tells of the moved window, then of null, since the wrapper learns that the slider is gone only from the drawing." (decision 7).
 
 Each choice, with its reason:
 
@@ -124,8 +125,8 @@ Each choice, with its reason:
 - **A separate prop, not `points: number | readonly string[]`.** One prop would make a wrong length impossible. But `points` is read as a number in about twenty places of the wrapper and by every caller, and a prop named for a count that holds keys reads wrong. The length is checked instead.
 - **The lengths must agree, and each key comes once.** Each caller makes both from one list (`pts.length`, `pts.map(p => p.k)`), so a fault is a bug in the caller, or a duplicate in the data.
 - **A list the wrapper cannot go by keeps nothing.** With such a list the wrapper cannot say which point a key names. Guessing would read another day, which is the fault this change removes. So a redraw whose keys differ, to or from such a list, ends the reading and shows every point: what a new view did before this change, minus the emptied region (decision 4). The same holds when the keys appear or go in the same view (`undefined` on one side).
-- **The console names the fault**, once per redraw that meets it, with `console.error`. A test then fails by the rule of `test-setup.ts`, so a caller's fault cannot pass its page test. It is not thrown: a duplicate that comes from the data would take the page down for a chart that can still be read.
-- **Compared by identity, then by content.** The wrapper keeps the last list in its `drawing` state. Another array with the same keys is the same points, and the kept list is not replaced, so a caller that makes a new array each render costs one comparison and no extra render. P10: 0.02µs for the same array, 2.0µs for an equal one, at 400 points. The map is built only when the keys differ: 11.9µs.
+- **The console names the fault**, with `console.error`, naming the chart's label and the fault. As built it is sent from an effect, once per change that meets it: at mount, with a new view, with other keys, and when `points` changes under the same keys. A fault met where nothing is kept through it (the mount, a new view, another count) says that the next change of keys will end the reading and the zoom; one met by a change of keys says that they end. Under StrictMode's second run of the mount's effects it is still sent once. A test then fails by the rule of `test-setup.ts`, so a caller's fault cannot pass its page test. It is not thrown: a duplicate that comes from the data would take the page down for a chart that can still be read.
+- **Compared by identity, then by content.** The wrapper keeps the last list in its `drawing` state, with the count it was checked against and its fault (why the wrapper cannot go by it, or null), and the faults the last check met, for the console. Another array with the same keys is the same points, and the kept list is not replaced, so a caller that makes a new array each render costs one comparison and no extra render. P10: 0.02µs for the same array, 2.0µs for an equal one, at 400 points. The map is built only when the keys differ: 11.9µs.
 - **In state, not in a ref.** The render compares it, as it compares `view`, `zoom` and `status`.
 
 Alternative: a count, "n points joined at the front". Rejected: a fold that opens, and a week that joins the trend, move only the points after them.
@@ -159,6 +160,7 @@ Second in the chain, right after a new view:
 ```
 drawing.view !== shows          a new view: everything is cleared, and the new keys are kept
 keys differ from drawing.keys   the remap (this change)
+the same keys, another count    the list is checked again, for the console (this change, as built)
 drawing.zoom !== zoom           the zoom prop
 reading.i >= points             a reading past the last point
 a key's reading, other words    said again, alone
@@ -168,6 +170,7 @@ drawing.status !== status       the status, said alone
 
 - **After the view.** A new view is another chart: nothing is carried over, and the branch keeps the new list so that the next render compares against it.
 - **Before every other branch.** Each of them reads a point by index, or counts the points: `reading.i >= points`, `read(reading.i)`, `readZoom(shown)`. Run first, they would ask the caller for another point's words (`read(22)` is `d20` once two days joined), say them, and end a reading that the remap would have kept (a reading on index 29 of 30 when one point leaves at the front).
+- **The same keys, another count.** Built after the plan, for the console only: a list of the right length can become one of the wrong length when `points` changes and the caller's keys do not. Nothing moves; the list is checked again, so the console names the fault and the next change of keys goes by the answer.
 - **One branch a render, as now.** The remap sets state and React renders again. The later branches then see true indexes and do what they do today (decision 4).
 - **The render that runs the remap is thrown away.** React renders again before it commits, so the tooltip is never rendered for a stale index.
 - **It needs no chart.** Before the runtime has loaded, the reading is remapped the same way, and no zoom exists.
@@ -190,10 +193,13 @@ The remap itself says nothing. The existing rules say the rest, each in its own 
 - **Why the zoom's end is said.** It is the wrapper's standing rule: "a zoom that ends with no one asking is said once, so no one goes on believing the chart shows fewer days" (the foundation, decision 5). A view change says nothing because the user made it; this one they did not make.
 - **Why here and not in `keep()`.** `keep()` says the end when the chart drops the window. Here the render already knows, and saying it there keeps the status rule in one place: the status branch runs after it and takes the region alone.
 - **A reading that ends leaves the region as today's "point gone" branch leaves it**, so one rule covers both.
+- **On Errors, a backfill while zoomed empties the region.** After plus the region holds "Showing Oct 11 to Oct 25, 15 of 30 days."; once older calls bring six points to the front, it names the wrong count, so the zoom-sentence branch drops it and nothing new is said (the Errors zoom test in `ErrorsPage.test.tsx`). The same holds on every chart whose zoom sentence names the count.
 
 ### 5. The tooltip, the band, the pointer and a drag
 
-**A key's tooltip is placed after the drawing, never before it.** The layout effect that places the tooltip runs when the reading changes, before the draw effect. For a remapped reading it would ask the chart, which still draws the old points, where the new index is: another point (P5: 98.7px to the right, then back). So the layout effect skips a reading the remap moved, and the band effect, which runs after the draw and after `keep()`, places it. Until then the tooltip stays over the old drawing's point, which is what the screen still shows. The draft marks the remapped reading (`moved: true`); the builder may hold it another way. The test is the order of the chart's calls (P9).
+**A key's tooltip is placed after the drawing, never before it.** The layout effect that places the tooltip runs when the reading changes, before the draw effect. For a remapped reading it would ask the chart, which still draws the old points, where the new index is: another point (P5: 98.7px to the right, then back). So the layout effect skips a reading the remap moved, and the band effect, which runs after the draw and after `keep()`, places it. Until then the tooltip stays over the old drawing's point, which is what the screen still shows. The test is the order of the chart's calls (P9).
+
+As built there is no `moved` mark (the draft's). A ref, `drawnKeys`, holds the keys the chart was last drawn with, set by the draw effect. The layout effect skips placing a reading while `drawing.keys` is not `drawnKeys`: the keys changed since the chart last drew. It skips it also when the index stays, since the old drawing has another number of bands, so the chart would answer for another pixel. Before the chart exists it places as ever, at the point's share of the box. `drawing.keys` is among the draw effect's dependencies, so new keys are drawn, once, with their option. Newer data under the same keys, or with none, keeps each point at its index, and its reading is placed in the layout effect, before the paint, as before this change.
 
 **The band.** No new rule. The band effect runs after each drawing and each zoom, and moves the band to `drawnAt(chart, at)`. After the remap `at` is the new index, the draw effect has drawn, and `keep()` has sent the window (P3: the same pixel when the window keeps its points; the point's new place when not zoomed).
 
@@ -248,6 +254,7 @@ A remapped window is a change the caller hears of: `onZoom({ from: 17, to: 31 })
 - It costs nothing today: the one caller, `useZoomReset()`, reads only whether the window is null, and `setZoomed(true)` again renders nothing.
 - A window whose indexes stay over other points (P8b) is not reported. The indexes a caller holds are still the window.
 - The effect that calls it compares by value, as now. No code changes there; the comment on the prop does (decision 1).
+- **A redraw that moves the window and drops the slider**, with `zoom` still on: the remap moves the window, the caller hears it, then the draw effect finds no slider and the caller hears null. The wrapper learns that the slider is gone only from the drawing. So the callers turn `zoom` off in the render whose option draws no slider (each passes `zoom` from its own count of points), and the `onZoom` comment says so (decision 1). Then the `zoom` branch ends the zoom in the same render chain, and the caller hears null once.
 
 ### 8. What a caller draws by index
 
@@ -334,6 +341,35 @@ The lesson of the earlier changes: the fake draws nothing and has hidden real fa
 
 **The 400-line advisory.** Estimate, net: `EChart.test.tsx` 120 to 150, `EChart.real.test.tsx` 90 to 100, `ErrorsPage.test.tsx` and `rateTracks.test.ts` 25, `WorkChart.test.tsx` and `workTracks.test.ts` 12, `CostChart.test.tsx` 5, `Judgments.test.tsx` 3. In all 250 to 300, under the advisory 400. Not counted: the browser check, which runs locally and not in CI.
 
+As built (`git diff --numstat main HEAD -- '*.test.ts' '*.test.tsx'`), added and removed:
+
+| File | Added | Removed | Net |
+|---|---|---|---|
+| `EChart.test.tsx` | 222 | 1 | 221 |
+| `EChart.real.test.tsx` | 148 | 0 | 148 |
+| `ErrorsPage.test.tsx` | 42 | 13 | 29 |
+| `CostChart.test.tsx` | 9 | 15 | −6 |
+| `rateTracks.test.ts` | 7 | 4 | 3 |
+| `WorkChart.test.tsx` | 6 | 1 | 5 |
+| `Judgments.test.tsx` | 6 | 5 | 1 |
+| `workTracks.test.ts` | 4 | 3 | 1 |
+| In all | 444 | 42 | 402 |
+
+Two over the advisory. The real test is 148 lines, not 90 to 100: driving a drag on real ECharts needs its own mouse events and a handle reader, and each write of the tooltip's `left` is read as it is made. `EChart.test.tsx` is 70 lines over its estimate: the cases of decision 2's window rule are one table of seven rows, and the console's cases cover the mount, a new view and another count, which the plan did not have. No test line was cut to offset them: every one carries a rule no other test checks.
+
+**Tests that changed otherwise than the table above says.**
+
+- `EChart.test.tsx`, the pointer test is renamed "leaves the pointer's tooltip beside the pointer after a redraw, and puts it over the point once one moves the point away". The new cases are "keeps a key's reading and the window on their days when days join at the front, and says nothing", whose tooltip places are read at each commit through a React `Profiler` (what the next paint shows), "moves the reading and the window by a day that joins before them, and by a day that leaves", "ends a reading whose day leaves, without asking for its words, and leaves a status the region holds", the table "puts the window on its days still drawn when it …", "says a status alone when it arrives in the render whose keys end the zoom", "names a list it cannot go by at mount, with a new view, and when the points change under it, once each", "takes another list with the same keys for the same days, and renders and draws nothing more", "clears on a new view, which may bring keys where the last had none, and compares the keys after it with its own", "moves a reading by its key before the runtime has loaded", "says the days a drag shows once, on release, when days join under it" and "says a key's reading again, in its new index's words, when they changed, and leaves a pointer's unsaid".
+- `CostChart.test.tsx`, the rolling-range test lost its second half (with the focus elsewhere, the zoom resets and the focus stays there): the zoom no longer resets, so there is nothing to see there. It is "keeps the days shown, and the focus on 'Show all days', when a rolling range moves on a day"; the all-time one is "keeps the zoom on its days when an all-time view gains an earlier first day, as after an ingest of older transcripts".
+- `Judgments.test.tsx` now joins an older week, before the week read. A newer week at the end keeps the reading's index, so it passes without keys too. The test is "keeps the week read when newer figures of the same weeks arrive, and when a week joins".
+- `ErrorsPage.test.tsx`, the zoom test is rewritten at range 90, where the chart starts on the first call, so older calls add points at its front; a 30-day range never does. It is renamed "keeps the zoom and the point read through a selection, older calls and a type, clears with Space after them, and ends both at Week". The fold that opens joined "can't select a folded stretch without calls, says so in other words the second time, and reads its first day when it opens".
+
+**Spec scenarios with no test at any layer but the browser, or none at all.**
+
+- `errors-dashboard`, "The day read is folded away": no test. It is the wrapper's rule for a key that is gone (`EChart.test.tsx`, "ends a reading whose day leaves, …"), and a fold's key is its first bucket (`rateTracks.test.ts`). A page test would build eight days without calls at the end of the range only to replay that rule.
+- `errors-dashboard`, "A fold leaves fewer than 14 points": no test on Errors. It is the wrapper's `zoom` branch (`EChart.test.tsx`, "shows every point again when zoom turns off, …"; Cost's "moves the focus from 'Show all days' to the chart when the view falls under 14 days and loses its slider"), with Errors' `zoom` from its count of points (`rateTracks.ts`).
+- `cost-dashboard`, "Older days arrive while reading"; `usage-dashboard`, "The range moves on a day"; `insights-dashboard`, "A new newest week": a browser line of `tools/demo/chartfit/` only (decision 11). The page tests hold the same wiring through another scenario of the same chart.
+
 ### 11. The browser check
 
 One shared check in `tools/demo/chartfit/checks.mjs`, `backfill`, which each page's module runs with its own payload. A page's descriptor gains `fewer(payload, n)`: the payload without its first `n` points. The check opens the page on `fewer`, then answers the next request with the whole payload (`newerOn`), so the points join at the front.
@@ -358,6 +394,17 @@ On Errors, as its own checks:
 
 Each new line is first shown to fail: the builder runs it with the page's `pointKeys` taken out, pastes the failing line, and puts the prop back. The runner's header comment names the check.
 
+**As built: 15 lines**, every one ok in a run of 444 lines on the combined tree.
+
+- `backfill`, on each of the four charts, prints two lines. The first: the points that joined are drawn (every column, or with a zoom the slider's handles move, since the same days are a smaller share), the band is over the point's bar, the tooltip names it beside the band, and nothing is said; with a zoom, the first and the last label drawn stay and "Show all" stays. The second: on each animation frame the tooltip names the point and points within half a band of the band's centre; with a zoom the band does not move, and without one it is on the point's column, counting the points not yet drawn. The outcome trend runs it by one older week.
+- Activity: a rolling range that moves on a day, zoomed by plus (the first bar leaves, today's comes): the bars shown keep their days, the band its bar, "Show all days" stays, and nothing is said.
+- Judgments: a new newest week while a week is read: the band, the tooltip and the readout stay on it, at its new place, on every frame, and nothing is said. It fails only with the trend's old `view` key, which held every week, and not without `pointKeys`: a week at the end leaves the indexes of the weeks before it alone.
+- Cost: a window a drag made, then the backfill: the same days are drawn. A real drag with the button down through the backfill: the days drawn stay, the next move changes them and moves the handle by the pointer's movement, and the release says the days shown once (the handle 28.9px off the pointer after the backfill, then it follows). A pointer at rest, not zoomed: the band moves to the day's new place, off the pointer, and the tooltip names it over the band, on every frame (0.3px at worst).
+- Errors: a day selected with Space, then the backfill, then Space: the selection is cleared, the URL loses `at`, and "Selection cleared: …" is said once. A fold that opens under a key's reading: the reading is on the fold's first day, now a day of its own.
+- Cost's `fewer` moves the view's `start` on a range of 30 days, which the server never sends: a rolling range moves its 30 days on together. It is the way an all-time view's first day moves when older transcripts are ingested, and to the chart the two are one case, since its `view` leaves out the first day.
+
+The per-frame reader runs first in each animation frame: zrender stops its own loop after 10 still frames, and the redraw or the band's action starts it again after the reader has asked for its next frame. So a note holds the tooltip as that frame paints it, and the band and the bars as the frame before painted them: in the notes the band reaches its new place one frame late. Through every backfill no frame was noted with the tooltip off its bar (0.0px at worst over 61 to 109 frames). The reader was proven with a correction held back on purpose, which it saw at 158px, and the column rule by reading the wrong column by hand, which failed both lines of the outcome trend ("the band on column 3 of 4, column 4 of 5, not week 4's"). Each read of what is said waits first for the band and the tooltip to be on the point, then 400ms, so a late sentence under load is not missed.
+
 ### 12. Docs
 
 Short bullets in `CHANGELOG.md`, `[Unreleased]`, under Changed:
@@ -374,11 +421,21 @@ The sentences that become untrue, each rewritten with the `doc-coauthoring` skil
 | `site/src/content/docs/pages/errors.mdx`, "When the zoom resets" | "…or when the first point moves or a folded stretch appears, grows or opens." |
 | `web/src/pages/errors/PARITY.md`, "Rate chart" | "Changed since (echart-errors): the reading ends, and the zoom resets, when the view's first point or a fold moves." |
 
-`README.md` and `site/src/content/docs/pages/insights.mdx` have no sentence on this. No image changes: nothing is drawn differently at rest.
+`README.md` has no sentence on this. No image changes: nothing is drawn differently at rest.
+
+As written:
+
+| File | Sentences now |
+|---|---|
+| `cost.mdx`, "Zoom" | "The zoom stays on its days when the view's first day moves, because a range moves on a day at midnight or older days arrive; the day you are reading stays read, and the focus stays on **Show all days**. A zoom at the old end of a range loses the day that leaves. A zoom that has no day left, or now holds every day, ends, and the chart says "Showing all 30 days." once, with the count of the view." |
+| `activity.mdx`, "Zoom" | "The zoom resets when the view changes: the measure, the range, project, source or Include automated sessions. … It stays too when older bars arrive or the range moves on a day: the bars shown keep their days, and the bar you are reading stays read. A zoom at the old end of a range loses the bar that leaves; at 7 bars, the fewest a zoom shows, it takes in the next one." |
+| `errors.mdx`, "When the zoom resets" | "It resets when the view changes: the range, Day / Week, the project, the source, **Include subagents** or **Hide noise and muted**. … It stays too when the first point moves or a folded stretch appears, grows or opens, and so does the point you are reading, unless a fold hides that point; Space then still clears the selection. The zoom ends when a new fold folds away every point it shows: the chart says "Showing all 30 days." once, with the count of the view, and the slider stays, over every point. It ends the same way when a new fold leaves fewer than 14 points, and the slider goes." |
+| `insights.mdx`, "Figures" | Its last sentence, which this decision said was not there, said the reading stays "when new data arrives for the same weeks". It is widened: "When new data arrives, the week you are reading stays read while the chart still shows it, also when other weeks join or leave the trend or a newer week comes." |
+| `PARITY.md`, "Rate chart" | The entry keeps its text and gains "Changed since (echart-point-keys): …" with the rule and its port (`rateTracks.ts` `keys`, `EChart` `pointKeys`). |
 
 ## The draft the spike ran
 
-Not the final code: the builder writes it, with its comments. It is here because P4 to P9 measured this, and no other form.
+Not the final code: the builder writes it, with its comments. It is here because P4 to P9 measured this, and no other form. What was built differs in three places, each checked again by the tests and the real test: no `moved` mark, but the ref `drawnKeys` (decision 5); `indexed()`, which says why a list cannot be gone by, in place of `indexOf()`; and the last list's fault kept in `drawing`, with a branch for another count under the same keys (decisions 1 and 3).
 
 ```ts
 const differ = (a?: readonly string[], b?: readonly string[]) =>
@@ -417,6 +474,7 @@ function windowOn(w: Shown, was: readonly string[], at: Map<string, number>, n: 
 }
 
 // The layout effect: the band effect places a reading the remap moved, after the draw.
+// As built: `if (!chart || drawnKeys.current === drawing.keys) place(i)`, with `drawnKeys` set by the draw effect.
 useLayoutEffect(() => { if (at != null && !reading?.moved) place(at); }, [reading, at]);
 
 // The band effect, before the band's action and place(at):

@@ -34,9 +34,9 @@ None.
 
 ## Impact
 
-- **Code.** `web/src/components/echart/EChart.tsx` gains `pointKeys`, one branch in its render chain and two placement rules for the tooltip. `rateTracks.ts`, `RateChart.tsx`, `CostChart.tsx`, `workTracks.ts`, `WorkChart.tsx` and `OutcomeTrend.tsx` pass keys and shorten their `view` keys.
+- **Code.** `web/src/components/echart/EChart.tsx` gains `pointKeys`, two branches in its render chain (the remap, and a check of the keys when the count of points changes under them), an effect that tells the console of a list it cannot go by, and two placement rules for the tooltip. `rateTracks.ts`, `RateChart.tsx`, `CostChart.tsx`, `workTracks.ts`, `WorkChart.tsx` and `OutcomeTrend.tsx` pass keys and shorten their `view` keys.
 - **Dependencies.** None added. Nothing is added to the ECharts chunk.
-- **Tests.** The remap rule is tested once, in `EChart.test.tsx`. A new `EChart.real.test.tsx` runs it on real ECharts in jsdom, a slider drag included. Each page gets one wiring assertion, in a test that already builds its fixture. The fake runtime gains no behavior: its header names what it does not model. Estimate: 250 to 300 net test lines.
+- **Tests.** The remap rule is tested once, in `EChart.test.tsx`. A new `EChart.real.test.tsx` runs it on real ECharts in jsdom, a slider drag included. Each page gets one wiring assertion, in a test that already builds its fixture. The fake runtime gains no behavior: its header names what it does not model. Estimate: 250 to 300 net test lines. As built: 444 added, 42 removed, 402 net, two over the advisory 400; `design.md` (decision 10) says why.
 - **Tooling.** `tools/demo/chartfit/checks.mjs` gains a shared backfill check, and `cost.mjs`, `activity.mjs`, `judgments.mjs` and `errors.mjs` run it.
-- **Docs.** `CHANGELOG.md`, three sentences of the docs site (Cost, Activity, Errors) and one entry of `web/src/pages/errors/PARITY.md`. `README.md` has no sentence that becomes untrue.
+- **Docs.** `CHANGELOG.md`, three sentences of the docs site (Cost, Activity, Errors), one widened on Insights (the outcome trend) and one entry of `web/src/pages/errors/PARITY.md`. `README.md` has no sentence that becomes untrue.
 - **Not changed.** The API, every payload, the page fixtures, stored data, the URL keys, the option builders' drawings, the zoom's rules and words, and the Context page: another change migrates it and builds on this contract.
