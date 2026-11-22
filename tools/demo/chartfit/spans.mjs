@@ -12,7 +12,7 @@
 //   (closed and opened again, and from another page), and as the sheet's scrollbar comes and goes (the data table opened
 //   and every row shown);
 // - the clipped bar runs past the plot's right edge into its right margin and ends in a point just before the box's edge, and the 24.5-minute bar ends where the gap does, across the
-//   break; the failed call with no end is the red 2px tick, taller than its row, and its sentence says it failed;
+//   break; the failed call with no end is the red 2px tick, taller than its row, its sentence says it failed, and the pointer on its top pixel reads it;
 // - at 16px and 32px text in a 343px box no lane label leaves the box or overlaps a bar or another label;
 // - the pointer reads a bar with the mark on it within 1px, a tick drawn over a bar reads the tick, empty space nothing;
 //   the hand over a span only; its tooltip never covers the bar it names;
@@ -312,6 +312,13 @@ export async function spans(h) {
     line(`the failed call with no end (${clocks[C.nodur.id]}) is the red 2px tick, taller than its row, and its sentence says it failed`,
       fails.length === 2 && Math.abs(tick.w - 2) <= .1 && tick.h >= 9.9 && row.length > 0 && tick.box.t <= row[0].box.t - 1.9 && names(C.nodur, s.live, clocks) && words.endsWith(", failed"),
       tick ? `${fails.length} red ticks; ${px(tick.w)}x${px(tick.h)} in rgb(${tick.fill}), ${px(row[0] ? row[0].box.t - tick.box.t : NaN)}px above its row's bars; said "${s.live}"` : "no red tick");
+    // The same tick's top pixel, above its row's bars: the drawn box reads it, not the row band, from no reading.
+    await away(page);
+    const shut = await until(() => state(page), x => !x.tip && !x.mark), y = tick ? tick.box.t + .5 : NaN;
+    if (tick) await page.mouse.move(tick.x, y);
+    const top = await until(() => state(page), x => !!x.tip && names(C.nodur, x.live, clocks)), m = marked(top, dr);
+    line(`the pointer on the top pixel of that tick (${clocks[C.nodur.id]}), above its row's bars, reads that call`, !shut.tip && !shut.mark && !!row[0] && y < row[0].box.t - 1 && !!top.tip && names(C.nodur, top.live, clocks) && m?.sp.start === tick.start,
+      `from ${shut.tip ? "a tooltip" : "no tooltip"}; at ${px(row[0] ? row[0].box.t - y : NaN)}px above its row's bars: ${top.tip ? "a tooltip" : "no tooltip"}, the mark ${m ? `on a ${m.sp.kind}` : "on no span"}, said "${top.live}"`);
     await page.done();
   }
 
