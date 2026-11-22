@@ -8,20 +8,19 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Project and Context (one project): "What loads before your first prompt" ranks the snapshot's categories and every MCP server, memory file, custom agent and skill. It shows how often Claude Code called each server and skill in the view, and a name opens its sheet.
-
-### Changed
-
-- `/api/context` `overhead` has `items`, `calls` and `before_view` in place of `top`.
 - Context's cache chart zooms in views of 14 days or weeks or more, with a slider or the plus and minus keys.
 
 ### Changed
 
+- `/api/context` `overhead` has `items`, `calls` and `before_view` in place of `top`.
 - Context:
   - The four charts use the shared chart component.
   - The cache and weekly start charts read a day or week with no data.
   - The growth and weekly start charts show a tooltip.
   - The reading stays on its day, week, turn or session when new data lands.
   - The weekly start chart and the session map keep their plot's height at larger text sizes.
+  - The line under each chart that repeated the reading is gone: the tooltip shows it.
+  - Escape closes a chart's tooltip wherever the focus is.
 
 ## [0.7.0] - 2026-11-22
 
