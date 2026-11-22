@@ -46,9 +46,6 @@
 .pg-errors .chart-table .tall { max-height: 520px; overflow: auto; }
 .pg-errors .chart-table thead th { position: sticky; top: 0; background: var(--surface-1); }
 .pg-errors .chart-table tbody th { font-weight: 400; white-space: nowrap; }
-.pg-errors #chart { position: relative; border-radius: 6px; }
-.pg-errors #chart:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
-.pg-errors #chart svg { display: block; width: 100%; height: 320px; overflow: visible; }
 .pg-errors #chart .empty { padding: 16px 0; }
 /* Legend: each type is a button that selects it; Other and the rate line are keys. */
 .pg-errors .legend { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 4px 0 10px; }
@@ -61,10 +58,7 @@
 .pg-errors .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
 .pg-errors .sw.line { width: 14px; height: 0; border-radius: 0; border-top: 2px solid var(--text-primary); }
 .pg-errors .sw.nodata { background: var(--surface-2); border: 1px dashed var(--border); }
-.pg-errors .sw.low { width: 8px; height: 8px; border-radius: 50%; border: 1.25px solid var(--text-muted); background: var(--surface-1); }
-/* Selecting a type lifts its layer and dims the rest in place. */
-@media (prefers-reduced-motion: no-preference) { .pg-errors #chart .layer, .pg-errors #chart .fix { transition: opacity .2s; } }
-.pg-errors #chart svg.has-sel .layer:not(.on), .pg-errors #chart svg.has-sel .fix:not(.on) { opacity: .2; }
+.pg-errors .sw.low { width: 8px; height: 8px; border-radius: 50%; border: 1.25px solid var(--low-ring, var(--text-primary)); background: var(--surface-1); }
 .pg-errors .sw.line.sel { border-top-width: 2.5px; }
 /* The selected type, named under the legend while it stays selected. */
 .pg-errors .selout { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; font-size: .8125rem; margin: -4px 0 10px; padding: 6px 10px;
@@ -79,11 +73,7 @@
 .pg-errors .tip .tot { border-bottom: 1px solid var(--border); margin-bottom: 4px; padding-bottom: 4px; }
 /* Motion only for readers who haven't asked for less. */
 @media (prefers-reduced-motion: no-preference) {
-  .pg-errors #chart svg.grow .bars { animation: err-grow .55s var(--ease-grow) both; transform-box: view-box; }
-  .pg-errors #chart svg.grow .rline { stroke-dasharray: 1; animation: err-draw .7s .15s ease-out both; }
   .pg-errors .bar > i { animation: err-bar-in .45s ease-out both; transform-origin: left; }
-  @keyframes err-grow { from { transform: scaleY(0); } }
-  @keyframes err-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
   @keyframes err-bar-in { from { transform: scaleX(0); } }
 }
 .pg-errors .grid2 { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; }
@@ -346,5 +336,3 @@
 /* A tool name can be long (an MCP tool): the name shrinks and cuts, the clear mark stays. */
 .pg-errors .chip.tool { display: inline-flex; gap: 4px; min-width: 0; max-width: 100%; }
 .pg-errors .chip.tool .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-/* The chart's click target picks a bucket. */
-.pg-errors #hit { cursor: pointer; }

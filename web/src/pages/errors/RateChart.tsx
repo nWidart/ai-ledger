@@ -1,54 +1,69 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
-import { FEW_CALLS, LOW_CALLS, lowVolume, textScale } from "../../components/chart";
+import { memo, useCallback, useMemo, useState, type CSSProperties } from "react";
+import { FEW_CALLS, LOW_CALLS, textScale } from "../../components/chart";
 import { ChartTable } from "../../components/DataTable";
+import { EChart, type Shown } from "../../components/echart/EChart";
+import type { ChartEnv } from "../../components/echart/tokens";
+import { useZoomReset } from "../../components/echart/zoomReset";
 import { modified } from "../../components/keys";
 import { Table, type Column } from "../../components/table/Table";
-import { num as fmt, niceStep } from "../../format";
+import { num as fmt } from "../../format";
 import { useErrors } from "./context";
-import { bucketLabel, bucketOf, chartData, idle, incSummary, label, linePath, noCalls, pointRows, pointText, pointWhen, selectable, shortLabel, sumCalls, TOPN, typeColor } from "./model";
-
-// Two panels on one time axis, each with its own labeled scale: error rate (line) above, error counts by type (stacked bars) below.
-const H = 320, MR = 10, rH = 100;
-const T = ({ x, y, a = "end", strong, children }: { x: number; y: number; a?: "start" | "middle" | "end"; strong?: boolean; children: ReactNode }) => (
-  <text x={x} y={y} textAnchor={a} fontSize={11 * textScale()} fill={strong ? "var(--text-secondary)" : "var(--text-muted)"} fontWeight={strong ? 500 : undefined}>{children}</text>
-);
+import { bucketLabel, type ChartPt, idle, incSummary, noCalls, pointRows, pointText, pointWhen, selectable, shortLabel, sumCalls, TOPN, typeColor } from "./model";
+import { rateLayout, rateModel, rateOption, rateZoomWords } from "./rateTracks";
 
 /** A row of the chart's data table: a bucket, its rate and whether it has few calls. */
-interface TableRow { p: ReturnType<typeof chartData>["pts"][number]; rate: number | null | undefined; low: boolean }
+interface TableRow { p: ChartPt; rate: number | null; low: boolean }
 
+const CLEARED = "Selection cleared: the table and detail cover the whole range.";
+/** What a click, Enter or Space on a folded stretch says. Two true sentences, alternating: the same text twice says nothing. */
+const FOLDED = ["A stretch without tool calls cannot be selected.", "This stretch has no tool calls to select."] as const;
+
+/** The error rate above the failed calls stacked by type, on one time axis (echart-errors). The figures and the drawing are
+ *  rateTracks.ts's; this component holds the heading, the Day / Week switch, the legend, the selection panel, the words of
+ *  the reading, the tooltip and the data table, and draws through <EChart>, which owns the keys, the pointer, the tooltip's
+ *  place, the readout and the zoom. */
 export const RateChart = memo(function RateChart() {
-  const { m, v, f, vt, fixes, pick, after, update, say } = useErrors();
-  // The labels and the room around them follow the browser's text size; the plots keep their height.
-  const ts = textScale(), ML = 40 * ts, rT = 18 * ts + 4 * (ts - 1), bT = rT + rH + 26 * ts, bH = H - bT - 24 * ts;
-  const box = useRef<HTMLDivElement>(null), svg = useRef<SVGSVGElement>(null), tipEl = useRef<HTMLDivElement>(null);
-  const [W, setW] = useState(0);
-  const [hover, setHover] = useState<{ i: number; sx: number; sy: number } | null>(null), [live, setLive] = useState("");
-  const { keys, pts } = useMemo(() => chartData(m, v, f, vt), [m, v, f, vt]);
-  const dataKey = JSON.stringify([f.start, v.project, v.source, v.sub, v.noise, v.gran, vt.extra]);
-  const cat = v.cat, per = v.gran === "week" ? "week" : "day";
+  const { m, v, f, vt, fixes, pick, after, update } = useErrors();
+  // Everything the model reads: the view (the type and the bucket selection included), the filtered data, the view's types
+  // and the applied fixes.
+  const rm = useMemo(() => rateModel(m, v, f, vt, fixes), [m, v, f, vt, fixes]);
+  // The text scale the box's height is worked out from, read here, and the option is laid out at the same one: the wrapper
+  // reads the scale again on each of its own renders (a reading), which would lay the drawing out for a box it is not in.
+  const scale = textScale();
+  const option = useCallback((env: ChartEnv) => rateOption(rm, { ...env, textScale: scale }), [rm, scale]);
+  const { pts, rates, low, zoom } = rm, cat = v.cat, per = v.gran === "week" ? "week" : "day";
+  const { ref: box, onZoom, button: showAll } = useZoomReset();
 
-  // Width from the box; a resize redraws after it settles.
-  useLayoutEffect(() => {
-    const el = box.current!;
-    setW(el.clientWidth || 800);
-    let t = 0;
-    const ro = new ResizeObserver(() => { clearTimeout(t); t = window.setTimeout(() => setW(el.clientWidth || 800), 120); });
-    ro.observe(el);
-    return () => { ro.disconnect(); clearTimeout(t); };
-  }, []);
-  // The keyboard's current point, by its bucket key: it outlives the reading (selecting a point can close the open type, which
-  // drops the reading) and a redraw that shifts the points, and resolves to a point only while the chart still has that key.
-  const cur = useRef<string | null>(null);
-  // A redraw drops the reading.
-  useEffect(() => { setHover(null); setLive(""); }, [dataKey, cat, W, fixes, pts]);
+  // What the last click, Enter or Space on the chart did, and the selection it left ("" for none). The status is that
+  // sentence only while the selection drawn is the one it names, so it arrives in the render that draws it, whenever the
+  // URL lands. A selection that changes from outside the chart (the chip, Back, a type opened over the bucket, a filter)
+  // empties it, and the sentence is never said later out of context.
+  const drawnAt = rm.selected == null ? "" : pts[rm.selected]!.k;
+  const [status, setStatus] = useState({ text: "", of: drawnAt });
+  const [seen, setSeen] = useState(drawnAt);
+  if (seen !== drawnAt) {
+    setSeen(drawnAt);
+    if (status.of !== drawnAt) setStatus({ text: "", of: drawnAt });
+  }
+  // Selects a bucket for the type table and the detail, or clears it when it is the selected one. A folded stretch has no
+  // calls to explain. False in every case: the reading stays, so the same key or click acts on the same point again.
+  const activate = (i: number) => {
+    const p = pts[i];
+    if (!p) return false;
+    if (!selectable(p)) {
+      setStatus({ text: status.text === FOLDED[0] ? FOLDED[1] : FOLDED[0], of: drawnAt });
+      return false;
+    }
+    const on = drawnAt === p.k;
+    setStatus(on ? { text: CLEARED, of: "" } : { text: `Selected ${pointWhen(v, p)}: the table and detail show only its errors.`, of: p.k });
+    update({ at: on ? null : p.k }, true);
+    return false;
+  };
+  const read = (i: number) => pointText(m, v, pts[i]!, vt, low[i]);
+  const readZoom = (s: Shown | null) => rateZoomWords(rm, s);
 
-  const n = keys.length, iw = (W || 800) - ML - MR, bw = iw / n, cx = (i: number) => ML + (i + .5) * bw;
-  // The rate panel shows the selected type's rate on its own scale, or the overall rate. Buckets with under LOW_CALLS calls
-  // (when others have more) are marked and left out of the scale: one quiet day's 3 of 12 can't flatten the rest.
-  const rates = useMemo(() => pts.map(p => (cat ? (p.c ? (p.byAll[cat] || 0) / p.c * 100 : null) : p.r)), [pts, cat]);
-  const low = useMemo(() => lowVolume(pts.map(p => p.c)), [pts]);
   // The chart's data table: per bucket its calls, failed calls and rate (the selected type's when one is), then each type layer and Other.
-  const tableRows = useMemo(() => pts.map((p, i): TableRow => ({ p, rate: rates[i], low: !!low[i] })), [pts, rates, low]);
+  const tableRows = useMemo(() => pts.map((p, i): TableRow => ({ p, rate: rates[i] ?? null, low: !!low[i] })), [pts, rates, low]);
   const other = pts.some(p => p.other);
   const columns = useMemo((): Column<TableRow>[] => [
     { id: "when", header: per === "week" ? "Week" : "Day", cell: r => `${pointWhen(v, r.p)}${r.p.k === v.at && !r.p.to ? " (selected)" : ""}` },
@@ -59,144 +74,36 @@ export const RateChart = memo(function RateChart() {
     ...vt.layers.map((c): Column<TableRow> => ({ id: `type:${c}`, header: shortLabel(m.cats[c]!.label), align: "num", cell: r => fmt(r.p.by[c] || 0) })),
     ...(other ? [{ id: "other", header: "Other types", align: "num", cell: (r: TableRow) => fmt(r.p.other) } as const] : []),
   ], [m, v, vt, cat, per, other]);
-  const rMax0 = Math.max(.1, ...rates.map((r, i) => (low[i] ? 0 : r || 0))) * 1.1, rStep = niceStep(rMax0 / 3), rMax = Math.ceil(rMax0 / rStep) * rStep;
-  const yR = (x: number) => rT + rH - Math.min(x, rMax) / rMax * rH;
-  // Counts are whole: whole steps.
-  const eMax0 = Math.max(1, ...pts.map(p => p.e)) * 1.05, eStep = Math.max(1, niceStep(eMax0 / Math.max(1, Math.min(3, bH / (50 * ts))))), eMax = Math.ceil(eMax0 / eStep) * eStep;
-  const yB = (x: number) => bT + bH - x / eMax * bH;
-  const order = [...vt.layers, "__other"];
-  const layer = cat && (vt.layers.includes(cat) ? cat : "__other");
 
-  const drawn = useMemo(() => {
-    const Wd = W || 800, g: ReactNode[] = [];
-    // No activity: faint bands over buckets without a single tool call, labeled when there's room.
-    for (let i = 0; i < n; i++) {
-      if (!idle(pts[i]!)) continue;
-      let j = i;
-      while (j + 1 < n && idle(pts[j + 1]!)) j++;
-      const x0 = ML + i * bw, w = (j - i + 1) * bw;
-      g.push(<rect key={"na" + i} className="noact" x={x0} y={rT} width={w} height={bT + bH - rT} fill="var(--surface-2)" opacity=".75" />);
-      if (w > 64) g.push(<T key={"nt" + i} x={x0 + w / 2} y={bT + bH / 2} a="middle">no activity</T>);
-      // A folded stretch: a break in the axis, two slashes on its baseline.
-      for (let k = i; k <= j; k++) if (pts[k]!.to) g.push(<T key={"fold" + k} x={cx(k)} y={bT + bH + 4 * ts} a="middle">//</T>);
-      i = j;
-    }
-    for (let x = 0; x <= rMax + 1e-9; x += rStep)
-      g.push(<line key={"rg" + x} x1={ML} x2={Wd - MR} y1={yR(x)} y2={yR(x)} stroke="var(--grid)" />, <T key={"rl" + x} x={ML - 6 * ts} y={yR(x) + 4 * ts}>{fmt(x, rStep < 1 ? 1 : 0) + "%"}</T>);
-    for (let x = 0; x <= eMax + 1e-9; x += eStep)
-      g.push(<line key={"eg" + x} x1={ML} x2={Wd - MR} y1={yB(x)} y2={yB(x)} stroke="var(--grid)" />, <T key={"el" + x} x={ML - 6 * ts} y={yB(x) + 4 * ts}>{fmt(x)}</T>);
-    g.push(<T key="rt" x={ML} y={rT - 7 * ts} a="start" strong>{cat ? `${shortLabel(m.cats[cat]!.label)} rate, % of tool calls` : "Error rate, % of tool calls"}</T>, <T key="bt" x={ML} y={bT - 8 * ts} a="start" strong>{`Failed calls per ${per}, by type`}</T>);
-    const every = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(iw / (70 * ts)))));
-    keys.forEach((k, i) => { if (i % every === 0) g.push(<T key={"x" + k} x={cx(i)} y={H - 6 * ts} a="middle">{label(k)}</T>); });
-    // Stacked bars: biggest type on the baseline, Other on top; a 2px surface gap between segments.
-    const bwid = Math.max(1, Math.min(26, bw * .72)), rects: Record<string, ReactNode[]> = Object.fromEntries(order.map(c => [c, []]));
-    pts.forEach((p, i) => {
-      let acc = 0;
-      for (const c of order) {
-        const val = c === "__other" ? p.other : p.by[c] || 0;
-        if (!val) continue;
-        const y0 = yB(acc), y1 = yB(acc + val), h = y0 - y1, gap = h > 4 ? 2 : 0;
-        rects[c]!.push(<rect key={i} x={(cx(i) - bwid / 2).toFixed(1)} y={y1.toFixed(1)} width={bwid.toFixed(1)} height={Math.max(.8, h - gap).toFixed(1)} rx="1.5" />);
-        acc += val;
-      }
-    });
-    // Rate line: solid across buckets with calls; a faint dotted bridge over a no-activity gap. Low-volume buckets get a hollow mark.
-    const all = linePath(rates, cx, yR);
-    rates.forEach((r, i) => { if (low[i] && r != null) g.push(<circle key={"lo" + i} className="lowc" cx={cx(i)} cy={yR(r)} r="3" fill="var(--surface-1)" stroke="var(--text-muted)" strokeWidth="1.25" />); });
-    const fx = Object.entries(fixes).flatMap(([cid, day]) => {
-      const i = keys.indexOf(bucketOf(day, v.gran));
-      return i < 0 || !m.cats[cid] ? [] : [[cid, i] as const];
-    });
-    return { g, rects, all, fx };
-  }, [pts, W, fixes, vt, cat, ts]); // the scales and labels follow from these
-
-  const lineColor = cat ? typeColor(cat, vt) : "var(--text-primary)";
-  const sel = v.at ? pts.findIndex(p => p.k === v.at && selectable(p)) : -1;
-  const empty = !pts.some(p => p.c), noErrors = !pts.some(p => p.e);
-  // Without the SVG (no calls, or no errors to draw) there is nothing to read or select: the render and the keys share this.
-  const bare = empty || noErrors;
-
-  const show = (i: number, sx: number, sy: number) => { setHover({ i, sx, sy }); return pointText(m, v, pts[i]!, vt, low[i]); };
-  const hide = () => setHover(null), blur = () => { hide(); cur.current = null; };
-  const at = (ev: MouseEvent<SVGRectElement>) => {
-    const r = svg.current!.getBoundingClientRect(), px = (ev.clientX - r.left) * (W || 800) / r.width;
-    return Math.max(0, Math.min(n - 1, Math.floor((px - ML) / bw)));
-  };
-  const move = (ev: MouseEvent<SVGRectElement>) => { cur.current = null; show(at(ev), ev.clientX, ev.clientY); };
-  // Selects a bucket for the type table and the detail, or clears it when it is the selected one. A folded stretch has no calls to explain.
-  const toggle = (i: number) => {
-    const p = pts[i]!;
-    if (!selectable(p)) return say("A stretch without tool calls cannot be selected.");
-    const on = v.at === p.k;
-    update({ at: on ? null : p.k }, true);
-    say(on ? "Selection cleared: the table and detail cover the whole range." : `Selected ${pointWhen(v, p)}: the table and detail show only its errors.`);
-  };
-  const key = (ev: KeyboardEvent<HTMLDivElement>) => {
-    if (modified(ev)) return; // Alt+Left is history, Shift+Space scrolls up: not ours
-    if (ev.key === "Escape") return blur();
-    const pick = ev.key === "Enter" || ev.key === " ";
-    if (pick) ev.preventDefault(); // Space would scroll the page
-    if (bare) return;
-    const k = cur.current == null ? -1 : pts.findIndex(p => p.k === cur.current), ci = k >= 0 ? k : hover?.i ?? -1;
-    if (pick) return ci >= 0 ? toggle(ci) : undefined;
-    const i = ({ ArrowLeft: ci < 0 ? n - 1 : ci - 1, ArrowRight: ci + 1, Home: 0, End: n - 1 } as Record<string, number>)[ev.key];
-    if (i == null) return;
-    ev.preventDefault();
-    const j = Math.max(0, Math.min(n - 1, i)), y = rates[j], r = svg.current!.getBoundingClientRect();
-    cur.current = pts[j]!.k;
-    setLive(show(j, r.left + cx(j) * r.width / (W || 800), r.top + (y == null ? rT + rH / 2 : yR(y)) * r.height / H));
-  };
-  // The tooltip sits right of the pointer, or left of it near the window's edge; above it near the bottom edge.
-  useLayoutEffect(() => {
-    const tip = tipEl.current;
-    if (!tip || !hover) return;
-    const tx = hover.sx + 14 + tip.offsetWidth > window.innerWidth ? Math.max(4, hover.sx - tip.offsetWidth - 14) : hover.sx + 14;
-    const ty = hover.sy - 10 + tip.offsetHeight > window.innerHeight - 4 ? Math.max(4, hover.sy - tip.offsetHeight - 14) : hover.sy - 10;
-    tip.style.left = tx + window.scrollX + "px"; tip.style.top = ty + window.scrollY + "px";
-  }, [hover]);
-
-  const hp = hover && pts[hover.i], hr = hover ? rates[hover.i] : null;
-  return <>
+  const empty = rm.bare === "empty", noErrors = rm.bare != null;
+  const keys = `Use the left and right arrow keys to read each point, Enter or Space to select the ${per} for the table and examples${zoom ? ", and plus and minus to zoom" : ""}.`;
+  const label = `Errors by type and error rate. ${keys}${v.at ? ` Selected: ${bucketLabel(m, v)}.` : ""}`;
+  return (
     <section className="panel chart-card" aria-labelledby="chartTitle">
       {/* The chart's own option in its header, as on Activity and Cost; the URL keeps it under gran. */}
       <div className="chart-head">
         <div><h2 id="chartTitle">{cat ? `Errors by type · ${m.cats[cat]!.label} selected` : "Errors by type"}</h2>
-          <div className="hint" id="chartHint">{`Failed tool calls per ${per}, top ${TOPN} types and Other, with ${cat ? "the selected type's" : "the"} error rate (errors per 100 tool calls) above. Dashed lines mark fixes you applied.`}</div></div>
+          <div className="hint" id="chartHint">{`Failed tool calls per ${per}, top ${TOPN} types and Other, with ${cat ? "the selected type's" : "the"} error rate (errors per 100 tool calls) above. Dashed lines mark fixes you applied.${zoom ? " Plus and minus zoom." : ""}`}</div></div>
         <div className="seg" id="fGran" role="group" aria-label="Granularity">
           {(["day", "week"] as const).map(g => <button key={g} type="button" aria-pressed={v.gran === g} onClick={() => update({ gran: g }, true)}>{g === "day" ? "Day" : "Week"}</button>)}
         </div>
       </div>
       {!noErrors && legend(pts.some(idle), low.some(Boolean))}
       {selOut()}
-      <div id="chart" ref={box} tabIndex={0} role="group" aria-describedby="chartHint" aria-label={`Errors by type and error rate. Use the left and right arrow keys to read each point, Enter or Space to select the ${per} for the table and examples.${v.at ? ` Selected: ${bucketLabel(m, v)}.` : ""}`}
-        onKeyDown={key} onBlur={blur}>
-        {bare ? <div className="empty">{empty ? "No tool calls in this range." : `No failed tool calls in this range, out of ${fmt(sumCalls(v, f.calls))}.`}</div>
-          : <svg key={dataKey} ref={svg} viewBox={`0 0 ${W || 800} ${H}`} aria-hidden="true" className={"grow" + (cat ? " has-sel" : "")}>
-            {drawn.g}
-            <g className="bars" style={{ transformOrigin: `0 ${bT + bH}px` }}>
-              {order.map(c => <g key={c} className={"layer" + (c === layer ? " on" : "")} data-c={c} fill={c === "__other" ? "var(--type-other)" : typeColor(c, vt)}>{drawn.rects[c]}</g>)}
-            </g>
-            <path d={drawn.all.bridge} fill="none" stroke={cat ? lineColor : "var(--text-muted)"} strokeWidth="1.25" strokeDasharray="1 4" strokeLinecap="round" opacity=".7" />
-            <path className="rline" id={cat ? "rSel" : "rAll"} pathLength={1} d={drawn.all.solid} fill="none" stroke={lineColor} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-            {drawn.fx.map(([cid, i]) => <g key={cid} className={"fix" + (cid === cat ? " on" : "")} data-c={cid}>
-              <line x1={cx(i)} x2={cx(i)} y1={rT} y2={bT + bH} stroke="var(--good)" strokeWidth="1.5" strokeDasharray="4 3" />
-              <text x={cx(i) + 4} y={rT + 10 * ts} fontSize={11 * ts} fill="var(--good-text)">✓ {shortLabel(m.cats[cid]!.label)}</text></g>)}
-            <rect id="xh" x={hover ? ML + hover.i * bw : 0} y={rT} height={bT + bH - rT} width={bw} fill="var(--text-primary)" opacity=".06" visibility={hover ? "visible" : "hidden"} />
-            <circle id="xd" r="4.5" cx={hp && hr != null ? cx(hover.i) : 0} cy={hp && hr != null ? yR(hr) : 0} fill={lineColor} stroke="var(--surface-1)" strokeWidth="2"
-              visibility={hp && hr != null ? "visible" : "hidden"} />
-            {sel >= 0 && <g id="atMark" data-at={v.at}>
-              <rect x={ML + sel * bw} y={rT} width={bw} height={bT + bH - rT} fill="var(--text-primary)" opacity=".08" stroke="var(--text-primary)" strokeWidth="1.5" />
-              <path d={`M${cx(sel) - 5},${bT + bH + 12}L${cx(sel) + 5},${bT + bH + 12}L${cx(sel)},${bT + bH + 4}Z`} fill="var(--text-primary)" /></g>}
-            <rect x={ML} y={rT} width={iw} height={bT + bH - rT} fill="transparent" id="hit" onMouseMove={move} onMouseLeave={hide} onClick={ev => toggle(at(ev))} />
-          </svg>}
+      {/* One stable element around the chart and the message that replaces it: the page's observer watches it, since the
+          two boxes are different elements and an observer on one would go stale when they swap. */}
+      <div id="chartView">
+        {/* Space never scrolls the page under the message either, as under the chart (keys.space); a modified Space is the browser's. */}
+        {rm.bare ? <div id="chart" className="echart" tabIndex={0} role="group" aria-label={label} aria-describedby="chartHint"
+          onKeyDown={e => { if (e.key === " " && !modified(e)) e.preventDefault(); }}>
+          <div className="empty">{empty ? "No tool calls in this range." : `No failed tool calls in this range, out of ${fmt(sumCalls(v, f.calls))}.`}</div></div>
+          : <EChart ref={box} id="chart" label={label} describedBy="chartHint" height={rateLayout(rm, scale).height} option={option} view={rm.view}
+            points={pts.length} tip={tip} read={read} keys={{ space: true }} onActivate={activate} status={status.of === drawnAt ? status.text : ""}
+            zoom={zoom} onZoom={onZoom} readZoom={readZoom} />}
       </div>
-      <div className="sr" id="chartLive" aria-live="polite">{live}</div>
-      {!bare && table()}
+      {!rm.bare && table()}
     </section>
-    <div className="tip" id="tip" role="tooltip" ref={tipEl} style={{ display: hp ? "block" : "none" }}>
-      {hp && tip(hover.i)}
-    </div>
-  </>;
+  );
 
   // Render helpers, not components: their buttons keep their identity (and focus) across renders.
   function tip(i: number) {
@@ -219,7 +126,7 @@ export const RateChart = memo(function RateChart() {
       rows={tableRows} columns={columns} rowId={r => r.p.k} /></ChartTable>;
   }
 
-  /** Each type is a button that selects it; Other and the rate line are keys. */
+  /** Each type is a button that selects it; Other and the rate line are keys. "Show all" ends the row while the chart is zoomed. */
   function legend(gaps: boolean, lows: boolean) {
     const s = cat && vt.counts[cat] ? cat : null, sc = s && typeColor(s, vt);
     return (
@@ -229,8 +136,10 @@ export const RateChart = memo(function RateChart() {
         {Object.keys(vt.counts).length > vt.layers.length && <span className="key"><i className="sw" style={{ background: "var(--type-other)" }} />Other types</span>}
         {s ? <span className="key"><i className="sw line sel" style={{ borderTopColor: sc! }} />{shortLabel(m.cats[s]!.label)} rate</span>
           : <span className="key"><i className="sw line" />Error rate</span>}
-        {lows && <span className="key"><i className="sw low" />{`Under ${LOW_CALLS} calls`}</span>}
+        {/* The ring takes the line's color through a custom property, not an inline border: the forced-colors rule still decides there. */}
+        {lows && <span className="key"><i className="sw low" style={{ "--low-ring": rm.line } as CSSProperties} />{`Under ${LOW_CALLS} calls`}</span>}
         {gaps && <span className="key"><i className="sw nodata" />No activity</span>}
+        {showAll(per === "week" ? "Show all weeks" : "Show all days")}
       </div>
     );
   }

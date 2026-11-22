@@ -192,10 +192,10 @@ dialog.sheet::backdrop { background: var(--scrim); }
     .pg-limits .hs-bar[aria-pressed="true"],
     :is(.pg-activity, .pg-cost, .pg-limits, .pg-judgments, dialog.sheet) tbody tr.sel, .pg-errors tbody tr.sel
   ):not(:focus-visible) { outline: 2px solid Highlight; outline-offset: -2px; }
-  /* A low-call rate point is hollow: a page-colored center and a text-colored ring, on the charts and in their keys, so it
-     reads apart from the solid line whatever the user's Canvas is. */
-  .pg-errors circle.lowc { forced-color-adjust: none; fill: Canvas; stroke: CanvasText; }
-  .pg-activity .legend .key i.low, .pg-errors .sw.low { forced-color-adjust: none; background: Canvas; border-color: CanvasText; }
+  /* A low-call rate point is hollow: a page-colored center and a text-colored ring, in the keys (the ECharts charts draw their own
+     dots), so it reads apart from the solid line whatever the user's Canvas is. Both selectors name the legend and its key to
+     outrank the page stylesheets' rules, which the build places after this file. */
+  .pg-activity .legend .key i.low, .pg-errors .legend .key .sw.low { forced-color-adjust: none; background: Canvas; border-color: CanvasText; }
   /* Bars: the fill keeps its color, the track and the fill sit in a frame. */
   .ledger .bar, :is(.pg-activity, .pg-cost) .ibar, .pg-context :is(.pressure .band, .pressure .pkey i, .rng-bar, .rng-med, .ctr-bar i, .ctr-rbar, .ctr-med, .ctr-split-bar > span, .ctr-key), .pg-errors .bar, .pg-live .meter, .pg-judgments .mixbar, .pg-judgments .mixbar i:not(.rest), .ledger .sw { forced-color-adjust: none; outline: 1px solid CanvasText; }
   /* The stacked bar clips its parts, so each part draws its frame inside itself; the spacer gets none, the framed track shows the empty end. */
@@ -223,9 +223,7 @@ dialog.sheet::backdrop { background: var(--scrim); }
   .pg-limits .lim-chart .plan line:not(.hit) { stroke: LinkText; }
   .pg-limits .lim-chart :is(.ax, .plan text) { fill: CanvasText; }
   .pg-limits .lim-chart .pick { fill: Highlight; stroke: Canvas; }
-  /* Errors' stacked layers: series colors kept, each edged in the text color. The ECharts bars edge themselves (stack.ts),
-     and Context's cache chart edges its own segments (CacheChart.css). */
-  .pg-errors #chart .layer { forced-color-adjust: none; stroke: CanvasText; stroke-width: .75px; }
+  /* The ECharts bars edge themselves (stack.ts), and Context's cache chart edges its own segments (CacheChart.css). */
   /* Keys and dots that name a series or a project by color alone. */
   .pdot, :is(.pg-activity, .pg-cost, .pg-judgments) .legend i:not(.line), .pg-context .legend i:not(.line), .pg-errors .sw:not(.line), .pg-judgments .key .sw { forced-color-adjust: none; outline: 1px solid CanvasText; }
 }

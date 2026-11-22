@@ -10,6 +10,7 @@ import { validateSearch } from "./search";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { DocsLink } from "../../components/DocsLink";
+import { preloadECharts } from "../../components/echart/load";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { Ctx, Keyed, RowContext, tableFocus, type ErrorsCtx, type RowCtx } from "./context";
 import { Detail } from "./Detail";
@@ -21,6 +22,9 @@ import { Summary } from "./Summary";
 import { TypeTable } from "./TypeTable";
 import { loadMode, MODE_KEY, readView, savedOf, store, VIEW_KEY, viewPatch, type Mode, type SavedView } from "./view";
 import "./errors.css";
+
+// The chart's runtime is requested with the page's own chunk, not after the page has rendered.
+preloadECharts();
 
 const NARROW = "(max-width: 56.25em)";
 const DEAD_LINK = "The linked error is no longer in the store. It may have been dropped by a rebuild, or the link is from another store. Showing the view without it.";
@@ -149,7 +153,8 @@ export function ErrorsPage() {
 
   // The mini chart shows only while the main chart is out of view.
   useEffect(() => {
-    const el = base && document.getElementById("chart");
+    // The stable element around the chart's box and the message's, which swap.
+    const el = base && document.getElementById("chartView");
     if (!el) return;
     const io = new IntersectionObserver(es => setChartInView(es[es.length - 1]!.isIntersecting), { threshold: .25 });
     io.observe(el);

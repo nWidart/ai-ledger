@@ -17,9 +17,9 @@ Every page works from the keyboard and with a screen reader. This page lists the
 | Left, Right | A focused chart | Read the previous or next point. |
 | Home, End | A focused chart | Read the first or last point. |
 | Esc | The focused Activity work chart, with no bar being read | Clear the selected day or week. |
-| Plus (or `=`) | The focused Cost daily chart or Activity work chart, in a view of 14 or more days or weeks | Zoom in: halve the days or weeks shown, around the one you are reading (the newest when you read none), down to 7. |
-| Minus | The focused Cost daily chart or Activity work chart, in a view of 14 or more days or weeks | Zoom out: double the days or weeks shown, up to every one. |
-| Enter (Space on Errors) | A focused chart that selects a bucket | Select or clear the point you are reading. |
+| Plus (or `=`) | The focused Cost daily chart, Activity work chart or Errors chart, in a view of 14 or more days or weeks (on Errors, 14 points: a folded stretch is one) | Zoom in: halve the days or weeks shown, around the one you are reading (the newest when you read none), down to 7. |
+| Minus | The focused Cost daily chart, Activity work chart or Errors chart, in a view of 14 or more days or weeks (on Errors, 14 points) | Zoom out: double the days or weeks shown, up to every one. |
+| Enter, and Space on Errors | A focused chart that selects a bucket | Select or clear the point you are reading. On Errors the reading stays, so the same key clears it. |
 | Left, Right, Home, End | A focused tab on Activity's workbench or on Context | Move to the previous, next, first or last tab, wrapping. Context selects it at once; on Activity, Enter or Space selects it. |
 | Tab | A focused tab | Move to the selected tab's panel. |
 | Left, Right | The focused Activity calendar | Read the day a week earlier or later; stop at the first and last day. |

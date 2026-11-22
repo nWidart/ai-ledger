@@ -41,13 +41,24 @@ describe("stackRects", () => {
     expect(rects([5]).map(s => s.r)).toEqual([[3, 3, 0, 0]]);
   });
 
-  it("keeps every segment's minimum when they add up to more than the bar, so the bar rises above its top", () => {
-    // Five segments on a 2px bar: 1px, then 1px over a 2px gap four times, a 13px bar from the baseline.
-    const r = rects([1, 1, 1, 1, 1], Y0 - 2);
+  it("never draws a stack taller than its total when its minimums do not fit: the gaps shrink first, then the segments", () => {
+    const tall = (r: StackRect[]) => Y0 - r.at(-1)!.y;
+    // Five segments on an 8px bar: 1px each, the four gaps shrunk from 2px to .75px.
+    const r = rects([1, 1, 1, 1, 1], Y0 - 8);
     expect(r.map(s => s.height)).toEqual([1, 1, 1, 1, 1]);
-    expect(gapsKept(r)).toBe(true);
-    expect(r[0]!.y + r[0]!.height).toBe(Y0);
-    expect(r.at(-1)!.y).toBe(Y0 - 13);
+    expect(r.map(s => s.y)).toEqual([219, 217.25, 215.5, 213.75, 212]);
+    // The reviewer's case: a 600 axis over 152px. One failure in each of five types is under 1.3px, no gaps; 40 in one is 10.1px.
+    const px = (n: number) => Y0 - n * 152 / 600;
+    expect(tall(rects([1, 1, 1, 1, 1], px(5)))).toBeCloseTo(5 * 152 / 600, 9);
+    expect(tall(rects([1, 1, 1, 1, 1], px(5)))).toBeLessThan(tall(rects([40], px(40))));
+    // A stack with any value stays visible: 1px at least, as one segment has.
+    expect(tall(rects([1, 1, 1], Y0 - .2))).toBeCloseTo(1, 9);
+    expect(tall(rects([1], Y0 - .2))).toBeCloseTo(1, 9);
+    // Heights follow totals, for any number of segments.
+    const at = (t: number, n: number) => tall(rects(Array.from({ length: n }, () => t / n), px(t)));
+    for (const [a, b] of [[1, 2], [2, 5], [5, 8], [8, 12], [12, 40], [40, 450]] as const) {
+      for (const n of [1, 2, 3, 5]) for (const m of [1, 2, 3, 5]) expect(at(a, n)).toBeLessThanOrEqual(at(b, m) + 1e-9);
+    }
   });
 
   it("draws no rectangle for a zero value, and keeps each rectangle's kind", () => {
@@ -116,6 +127,10 @@ describe("stackSeries", () => {
     expect(g.children.map(c => c.shape.height).every(h => h >= 1)).toBe(true);
     expect(g.children[0]!.shape.y + g.children[0]!.shape.height).toBeCloseTo(Y0, 9);
     expect(g.children[2]!.shape.y).toBeCloseTo(TOP, 9);
+    // A kind's `o` is its rectangle's fill opacity; a kind without one is drawn opaque, the key absent.
+    const faint = draw(stackSeries({ kinds: [{ ...kinds[0]!, o: .2 }, kinds[1]!, kinds[2]!], values: shares, hatched: () => false, env: env() }), 0)!;
+    expect(faint.children[0]!.style.fillOpacity).toBe(.2);
+    expect(faint.children[1]!.style).not.toHaveProperty("fillOpacity");
   });
 
   it("takes a bar width rule of its own", () => {

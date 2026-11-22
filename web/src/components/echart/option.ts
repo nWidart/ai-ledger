@@ -11,7 +11,7 @@ import type {
 export interface OptionEnv {
   /** A CSS color, such as "var(--critical)", as a concrete color. */
   color(css: string): string;
-  ink: { text: string; muted: string; grid: string; surface: string; border: string; cursor: string; accent: string; tint: string };
+  ink: { text: string; secondary: string; muted: string; grid: string; surface: string; border: string; cursor: string; accent: string; tint: string };
   /** (forced-colors: active): the ink roles are system colors. */
   forced: boolean;
   textScale: number;
@@ -60,6 +60,42 @@ export const valueAxis = (env: OptionEnv, { max, step, format }: { max: number; 
   axisLabel: { color: env.ink.muted, fontSize: size(env), margin: 6 * env.textScale, formatter: (v: number) => format(v) },
 });
 
+/** The title's weight: `axisTitle` draws and measures it at this one. */
+const TITLE_WEIGHT = 500;
+/** The characters of `text` as a reader sees them: an emoji or a letter with its combining marks is one. Where the
+ *  browser has no `Intl.Segmenter`, by code point. */
+const graphemes = (text: string): string[] =>
+  typeof Intl.Segmenter === "function" ? Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text), s => s.segment) : Array.from(text);
+
+/** `text`, or its longest start with "…" that is at most `maxWidth` px wide as drawn, cut between characters as a reader
+ *  sees them (`graphemes`); "" where not even "…" fits. */
+function cutTitle(env: OptionEnv, text: string, maxWidth: number): string {
+  const fits = (t: string) => labelWidth(env, t, TITLE_WEIGHT) <= maxWidth;
+  if (fits(text)) return text;
+  const cs = graphemes(text);
+  for (let n = cs.length - 1; n > 0; n--) {
+    const t = `${cs.slice(0, n).join("").trimEnd()}…`;
+    if (fits(t)) return t;
+  }
+  return fits("…") ? "…" : "";
+}
+
+/** The part of a value axis that names it as a track's title, to spread into the axis `valueAxis` gives: the name drawn
+ *  left-aligned at the grid's left, its text box ending 7px (times the text scale) over the grid's top, in the secondary
+ *  ink at weight 500, cut with an ellipsis where it passes `maxWidth` px and drawn not at all where not even the
+ *  ellipsis fits. `maxWidth` is the plot's width: the box's less the layout's left and right.
+ *  The cut is made here, by the measure of the text as drawn (`labelWidth` at weight 500), and made again on the
+ *  redraw the environment brings when the page's web fonts have loaded (`useChartEnv`). ECharts' own `nameTruncate`
+ *  measures once, as it first lays the title out: in Chromium that was before IBM Plex Sans had loaded, in the fallback
+ *  font ("Bash exit code other…" 213.6px then, 222.3px as drawn at 22px), so a cut title ended 3 to 10px past a 219px
+ *  plot. Its cut is an estimate besides: zrender's truncateText measures at most twice. */
+export const axisTitle = (env: OptionEnv, text: string, maxWidth: number): Pick<ValueAxis, "name" | "nameLocation" | "nameGap" | "nameTextStyle"> => ({
+  name: cutTitle(env, text, maxWidth),
+  nameLocation: "end",
+  nameGap: 7 * env.textScale,
+  nameTextStyle: { align: "left", color: env.ink.secondary, fontSize: size(env), fontWeight: TITLE_WEIGHT },
+});
+
 /** Where a label `width` px wide over a band goes, or null when the plot is narrower than the label. First by the rule of
  *  `peakLabelAt` in chart.ts: centred over the band's centre (cx), or, within 56px (times the text scale) of the plot's
  *  edge, anchored at the bar's edge. That rule assumes a short label: a long one ("Peak 66 sessions · Week of Nov 2" is
@@ -78,13 +114,14 @@ export function labelAnchor(cx: number, bar: number, plot: { x: number; width: n
 }
 
 let measure: CanvasRenderingContext2D | null | undefined;
-/** The width in px of a line of text in a canvas font: the measure zrender lays its text out by (platformApi.measureText
- *  in zrender/lib/core/platform.js), on a canvas of its own, so this module keeps out of the ECharts chunk. In Chromium it
- *  matches the drawn SVG text within 0.02px. jsdom has no canvas (test-setup): there it estimates 0.6em a character. */
-function textWidth(text: string, font: string, fontSize: number): number {
+/** The width in px of a line of text in the chart's font at its size (11px times the text scale) and a font weight: the
+ *  measure zrender lays its text out by (platformApi.measureText in zrender/lib/core/platform.js), on a canvas of its own,
+ *  so this module keeps out of the ECharts chunk. In Chromium it matches the drawn SVG text within 0.02px. jsdom has no
+ *  canvas (test-setup): there it estimates 0.6em a character. */
+export function labelWidth(env: OptionEnv, text: string, weight = 400): number {
   measure ||= document.createElement("canvas").getContext("2d");
-  if (!measure) return text.length * fontSize * .6;
-  measure.font = font;
+  if (!measure) return text.length * size(env) * .6;
+  measure.font = `${weight} ${size(env)}px ${FONT}`;
   return measure.measureText(text).width;
 }
 
@@ -100,7 +137,7 @@ export const pointLabel = (env: OptionEnv, { index, value, text }: { index: numb
   renderItem: (params, api) => {
     const [cx, cy] = api.coord([api.value(0), api.value(1)]) as [number, number];
     const band = (api.size!([1, 0]) as number[])[0]!, bar = Math.max(1, band - Math.min(4, band * .25));
-    const width = textWidth(text, `600 ${size(env)}px ${FONT}`, size(env));
+    const width = labelWidth(env, text, 600);
     const at = labelAnchor(cx, bar, params.coordSys as unknown as { x: number; width: number }, env.textScale, width);
     if (!at) return null;
     const { x, align } = at;
