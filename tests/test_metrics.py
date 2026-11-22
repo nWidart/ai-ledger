@@ -76,6 +76,26 @@ class FastPricingTest(unittest.TestCase):
         self.assertEqual([r["fast"] for r in self.cost("m-fast", None)["models"]], [False])
 
 
+class SessionTitlesTest(unittest.TestCase):
+    def test_sessions_rows_keep_their_title_past_the_top_sessions_cut(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        con = store.open_store(os.path.join(tmp, "x.duckdb"))
+        self.addCleanup(con.close)
+        c = con.cursor()
+        ids = [f"s{i:02d}" for i in range(51)]  # s00 costs least: the 51st by cost, outside top_sessions
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts"], [(i, "foo", "2026-11-05 09:00:00", "2026-11-05 09:30:00") for i in ids])
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [(f"p{i}", i, "2026-11-05 09:00:00", False) for i in ids])
+        store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking", "cache_read",
+                                     "cache_5m", "cache_1h", "thinking_ms"],
+                     [(f"r{i}", i, "2026-11-05 09:01:00", "m-a", False, n * 1000, 0, 0, 0, 0, 0, 0) for n, i in enumerate(ids)])
+        store.insert(c, "raw_lines", ["key", "file", "line_no", "type", "session_id", "ts", "subagent", "json"],
+                     [("x0", "f", 1, "user", "s00", "2026-11-05 09:00:00Z", False, '{"type":"user","promptId":"ps00","message":{"content":"fix the build"}}')])
+        got = metrics.usage(con.cursor(), prices=PRICES, today=TODAY)
+        self.assertNotIn("s00", [x["session_id"] for x in got["top_sessions"]])
+        self.assertEqual({x["session_id"]: x["title"] for x in got["sessions"]}["s00"], "fix the build")
+
+
 class UnpricedRatiosTest(unittest.TestCase):
     """Cost per prompt and per commit are unknown (null), not $0, when every request is on an unpriced model."""
 
@@ -468,9 +488,6 @@ class MetricsTest(unittest.TestCase):
             self.assertEqual((s["title"], s["first_prompt_cut"]), ("fix the build", False))
             listed = metrics.session_list(c, prices=PRICES, today=TODAY)["sessions"]
             self.assertEqual({x["session_id"]: x["title"] for x in listed}, {"s1": "fix the build", "s2": None, "s3": None})
-            u = metrics.usage(c, "foo", 7, "s1", prices=PRICES, today=TODAY)  # the same title on `sessions` and `top_sessions`
-            for key in ("sessions", "top_sessions"):
-                self.assertEqual({x["session_id"]: x["title"] for x in u[key]}["s1"], "fix the build", key)
         finally:
             c.execute("DELETE FROM raw_lines WHERE key IN ('x1', 'x2')")
 
@@ -532,8 +549,6 @@ class MetricsTest(unittest.TestCase):
         for key in ("sessions", "top_sessions", "near_limit"):
             for x in self.foo7[key]:
                 self.assertFalse({"model_ms", "tool_ms", "timed_output"} & x.keys(), (key, x["session_id"]))
-        # Every `sessions` row carries a title key (set in test_session_timeline, where the store has a prompt).
-        self.assertTrue(all("title" in x for x in self.foo7["sessions"]))
 
     def test_outcomes(self):
         t = self.foo7["totals"]
