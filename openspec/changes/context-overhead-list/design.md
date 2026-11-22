@@ -63,7 +63,7 @@ Why not a treemap: two thirds of the fixture's overhead (17,876 of 28,413 tokens
 
 ```json
 {
-  "ts": "2026-11-15T10:42:41.622Z", "session_id": "ad33f29e-…", "model": "claude-fable-5-2", "version": "2.1.325", "window": 1000000,
+  "uuid": "c1f0…", "ts": "2026-11-15T10:42:41.622Z", "session_id": "ad33f29e-…", "model": "claude-fable-5-2", "version": "2.1.325", "window": 1000000,
   "before_view": false,
   "categories": [{ "name": "System prompt", "tokens": 4107, "state": "used" }, "…"],
   "items": [
@@ -83,8 +83,9 @@ Why not a treemap: two thirds of the fixture's overhead (17,876 of 28,413 tokens
 (The snapshot and its items are the repo's fixture; the call counts are made up.)
 
 - `items`: every part of kind `mcp_tool`, `memory_file`, `agent` or `skill`, ordered by tokens (largest first), then by name (no name last), then by `seq`. A NULL name or detail is kept as `null`: the item's tokens count toward its category. A negative token count reads as 0 (`greatest(coalesce(tokens, 0), 0)`); the parser accepts any integer, and a negative item would shrink a sum.
+- `uuid`: the snapshot's own id (`context_snapshots.uuid`, its primary key). Two snapshots of one session can share a `ts` (or both have none), so the web tells one snapshot from the next by `uuid`, never by `session_id` and `ts` (decisions 7 and 9).
 - `seq` is the item's identity: unique within the snapshot, so the web keys rows by it and never by a name.
-- `server` is the key the item's calls are stored under, by the parser's own rule: `store.mcp_server_of(name)` for a name of the form `mcp__<server>__<tool>`, else `detail`; `null` for other kinds, or when neither gives one. An empty `detail` is sent as it is (`""`); the web reads an empty name, detail or server as missing. It is sent because the snapshot's `server_name` and the stored calls' server can differ (a plugin's server, for one), and the tool sheet needs the stored key.
+- `server` is the key the item's calls are stored under, by the parser's own rule: `store.mcp_server_of(name)` for a name of the form `mcp__<server>__<tool>`, else `detail`. The rule is `main`'s, unchanged: everything between `mcp__` and the name's last `__` (see Risks for a tool name holding `__`); `null` for other kinds, or when neither gives one. An empty `detail` is sent as it is (`""`); the web reads an empty name, detail or server as missing. It is sent because the snapshot's `server_name` and the stored calls' server can differ (a plugin's server, for one), and the tool sheet needs the stored key.
 - `calls`: `mcp` per server key, `skill` per skill name, each only for keys and names the snapshot holds and only when called; a missing entry is 0. Lists, not objects keyed by name: a skill named `constructor` would otherwise read a function from `Object.prototype` in the web.
 - `before_view`: the snapshot was taken before the view's first day (`false` for all time or a NULL `ts`).
 - `OVERHEAD_TOP` and `top` go. Every reader is listed under Context; each is updated in step 3.1.
@@ -200,7 +201,7 @@ function calledText(n: number): string;            // private
 
 A list of items (a category's items, or a server's tools) of more than `FOLD + 1` (6) rows shows its first 5 and folds the rest into one row: "209 more, 8.4k tokens" with a button "Show all 214"; expanded, the rest show and the same button reads "Show fewer". Six rows or fewer show whole: a fold row would take the place of the one row it hides. Five, as `PREVIEW` in `activity/tables.tsx`.
 
-`fold()` is pure and in the model, and writes the fold row's two texts; the state (the set of expanded lists, by the list's key, for one snapshot: its `session_id` and `ts`) is the component's. A refetch of the same snapshot keeps every fold; a new snapshot starts with every list folded. The categories themselves never fold: there are at most seven, plus up to four uncounted kinds.
+`fold()` is pure and in the model, and writes the fold row's two texts; the state (the set of expanded lists, by the list's key, for one snapshot: its `uuid`) is the component's. A refetch of the same snapshot keeps every fold; a new snapshot starts with every list folded. The categories themselves never fold: there are at most seven, plus up to four uncounted kinds.
 
 ### 8. The words
 
@@ -255,10 +256,10 @@ The call text: "not called by Claude Code in this view", "called once by Claude 
 
 - **Markup.** `<details class="ol">` → `<summary>`; the heading line; an `<ol>` of categories, each `<li>` holding its row and, when it has items, an `<ol>` of items. A server's tools are a `<details>` in its row ("4 tools, median 410 tokens" as the summary) holding an `<ol>`. Ordered lists: the order is the ranking.
 - **One sentence a row.** Each row's text, in DOM order, reads as one sentence: "Skills, 9.4k tokens, 33%, 214 skills, median 40 tokens." The bar is `aria-hidden`. Nothing is said only by a bar or a color.
-- **Buttons only where a row does something.** `OverheadList({ snapshot, onOpen })` takes the opener as a prop, so the component does not import the sheets; `ContextGrid` passes `openToolSheet`. With `onOpen`, the name of an MCP server row with a key, and of a named skill row, is a `<button class="linkish">` that calls `onOpen("mcp", server)` or `onOpen("skill", name)` and carries `subjectAttrs` of the same kind and value, so the context menu works on it as on Activity's tables. Without `onOpen` no name is a button. Enter, Space or a click on the name opens the sheet. Categories, memory files, agents, tools and keyless or unnamed items are text, and the fold rows' buttons and the tools disclosures are the only other controls.
+- **Buttons only where a row does something.** `OverheadList({ snapshot, onOpen })` takes the opener as a prop, so the component does not import the sheets. With `onOpen`, the name of an MCP server row with a key, and of a named skill row, is a `<button class="linkish">` that calls `onOpen("mcp", server)` or `onOpen("skill", name)` and carries `subjectAttrs` of the same kind and value, so the context menu works on it as on Activity's tables. Without `onOpen` no name is a button. `ContextGrid` takes the same optional `onOpen` and hands it on; the pages pass `openToolSheet` (the Context page only while its payload is the selected project's, decision 13). Enter, Space or a click on the name opens the sheet. Categories, memory files, agents, tools and keyless or unnamed items are text, and the fold rows' buttons and the tools disclosures are the only other controls.
 - **Focus.** The fold button is the same element in both states, at the end of its list, so it keeps the focus when it expands or folds the list; `aria-expanded` says which, and `aria-controls` names the list. Closing a tool sheet returns the focus as the sheet already does.
 - **Named lists.** Each `<ol>` is labelled (`aria-labelledby`): the categories by the summary, a category's items by its name, a server's tools by its name and its tools line. Ids come from `useId()` and the model's keys.
-- **A new snapshot.** The categories' `<ol>` takes the snapshot (`session_id` and `ts`) as its React `key`, so a new snapshot of the same project closes every server's tools disclosure and every fold, while the outer `<details>` stays open. Another project on the Context page closes the list too (decision 13).
+- **A new snapshot.** The categories' `<ol>` takes the snapshot's `uuid` as its React `key`, so a new snapshot of the same project closes every server's tools disclosure and every fold, while the outer `<details>` stays open, even when the new snapshot has the same session and time. Another project on either page closes the list too (decision 13).
 - **No live region.** Nothing changes without the reader's action: a refetch after Refresh or Measure now redraws in place, and the Block around it already marks itself busy.
 - **The memory file's folder** is in its line, with its type, so it is read and seen without a hover. The file name keeps the full path as its `title` for the pointer. Nothing else has a `title`.
 
@@ -270,7 +271,7 @@ The rules as built (abridged; spacing and type sizes are `theme.css`'s existing 
 
 ```css
 .ol { --ol-bar: var(--series-1); --ol-item: color-mix(in srgb, var(--series-1) 55%, var(--surface-1)); container-type: inline-size; }
-.ol-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(4rem, 9rem) max-content; column-gap: var(--space-4); align-items: baseline; }
+.ol-row { display: grid; grid-template-columns: minmax(0, 1fr) 9rem max-content; column-gap: var(--space-4); align-items: baseline; }
 .ol-name { grid-column: 1; grid-row: 1; min-width: 0; overflow-wrap: anywhere; }
 .ol-fig { grid-column: 3; grid-row: 1; font-variant-numeric: tabular-nums; }
 .ol-track { grid-column: 2; grid-row: 1; block-size: .5rem; align-self: center; }
@@ -280,9 +281,11 @@ The rules as built (abridged; spacing and type sizes are `theme.css`'s existing 
 @container (max-width: 24rem) {
   .ol-row { grid-template-columns: minmax(0, 1fr) max-content; }
   .ol-fig { grid-column: 2; }
-  .ol-track { grid-column: 1 / -1; grid-row: 2; }
+  .ol-track { grid-column: 1 / -1; grid-row: 2; justify-self: start; inline-size: calc(100cqi - 2 * var(--space-6)); }
 }
 ```
+
+- **One track width at every level.** Each nested list is indented, so a track sized by its own row would be shorter for an item than for its category, and a server's tool shorter still: equal tokens would draw unequal bars. Beside the name the track is a fixed `9rem` column (the name, `minmax(0, 1fr)`, gives way; it was `minmax(4rem, 9rem)`, which a tight row could shrink). Under the name every track is as wide as the deepest row, a server's tool's, two narrow indents in: `100cqi` is the list's own width (`.ol` is the container), the same at every level.
 
 - **DOM order is reading order.** In the DOM the figure comes before the bar, so a row reads name, figure, line; the grid places the bar between name and figure on screen. Hidden `", "` separators (`.sr`) make each row one sentence for a screen reader.
 
@@ -324,7 +327,8 @@ The rules as built (abridged; spacing and type sizes are `theme.css`'s existing 
 
 - **Project page.** In the Context block, the grid's side column, after the legend (or after "Measured overhead" in the snapshot-alone mode), where "Largest overhead items" was (decision 1). Measure now stays under the block's figures, below the grid; a measurement refetches the payload and the list shows the new snapshot.
 - **Context page.** On Overhead and pressure, with one project selected, in the one full grid (`Grids.tsx` → `ContextGrid`). With no project selected there is no full grid and no list, as today.
-- `Grids.tsx` changes by one line: the one full `ContextGrid` takes `key={d.project}`, so selecting another project mounts a new grid and its list draws folded again (decision 1: closed, for screen sharing). The Context page keeps the previous payload while the next loads, so without the key the grid stays mounted and the open list would carry over to the other project. A new snapshot of the same project keeps the grid and the open list (decision 12). `blocks.tsx`, `ContextPage.tsx` and `sections.tsx` do not change.
+- **Context page, another project.** The page keeps the previous payload while the next loads or after it failed (`keepPrevious`), so the payload's project can lag the selected one. The one full `ContextGrid` in `Grids.tsx` is keyed by both, the selected project (`useView()`) and the payload's: selecting another project mounts a new grid at once, its list closed (decision 1: closed, for screen sharing), and the new payload's arrival mounts one again, so a list opened on the old figures does not stay open over the new ones. While the two differ, `Grids` passes no `onOpen`: a name opened then would open a sheet scoped to the selected project, not the one the list shows, so names are plain text. A new snapshot of the same project keeps the grid and the open list (decision 12). `ContextPage.tsx` and `sections.tsx` do not change.
+- **Project page, another project.** `useKept` never shows another project's figures, so there is no such window; but the Context block's content stays mounted when another project's Context comes from the cache, and the `<details>` would carry its open state over. The block's content is keyed by the project (one `Fragment` around the grid, the facts and Measure now, which had the same key on its own).
 
 ### 14. Bundle
 
@@ -338,8 +342,8 @@ The rules as built (abridged; spacing and type sizes are `theme.css`'s existing 
 | `tests/test_derive.py`, `ContextSnapshotTest` | `test_a_snapshot_tool_and_its_calls_have_one_server_key`: a `/context` line and its session's calls ingested, a tool whose `server_name` differs from its prefix and a plugin's server; each item's `server` equals the stored calls' key and its calls count | The risk of step 1.1: the snapshot's server and its calls drifting apart |
 | `web/src/pages/project/overhead.test.ts` | Ranking and shares on the fixture's numbers; servers grouped by key and labelled by detail; every line of decision 8, singular and plural; `nested`, `over` and `uncounted`; the fold at 6 and 7 rows; two `CLAUDE.md` files; labels of NULL names; a skill named `constructor` | Decisions 5 to 8 |
 | `web/src/pages/project/OverheadList.test.tsx` | What a user reaches: closed summary; opened rows in rank order as text; a server name opens its sheet (URL gains `mcp=`), a skill name its skill sheet; files and agents have no button; Show all and Show fewer keep the focus on the button and flip `aria-expanded`; an `over` category's items have no bar; the before-view sentence | Decision 9, the wiring of the model |
-| `ProjectPage.test.tsx` | The existing snapshot test asserts the summary and one opened server row in place of "Largest overhead items"; the snapshot-alone test asserts the summary | The Project page's place |
-| `pages/context/Grids.test.tsx` | The existing one-project test gets a snapshot, asserts the summary, and that another project's list draws closed | The Context page's place, decision 13's key |
+| `ProjectPage.test.tsx` | The existing snapshot test asserts the summary and one opened server row, and that going back to a project whose Context is cached draws its list closed; the snapshot-alone test asserts the summary | The Project page's place, decision 13's key |
+| `pages/context/Grids.test.tsx` | The existing one-project test gets a snapshot, asserts the summary, that selecting another project closes the list and leaves no name a button while the old payload shows, and that the new payload's list is closed with its buttons | The Context page's place, decision 13's key and opener |
 
 Net test lines, estimated: Python 70, model 120, component 90, pages 15, removed `top` assertions −15: about 280, under the 400-line advice. **As built: 447** (472 added, 25 removed; `verification.md` gives the split). Over the advice because the model's tests carry the rules this design left open and the build settled (shares at the ends, one token, figures that read alike, empty strings, NaN, two servers of one label, "Unknown server" last), one table-driven case per line of decision 8, and the ingest-to-payload test of the server key.
 
@@ -355,8 +359,10 @@ Net test lines, estimated: Python 70, model 120, component 90, pages 15, removed
 - **37 KB more JSON for a large configuration.** → Loopback only, about 6 ms; fetched once per view.
 - **The list repeats the categories the grid's legend already lists.** → The legend gives each category's share of the window; the list ranks them by share of the overhead and puts the items under them, and it is closed until asked for.
 - **The row and the sheet can disagree** on a server's calls with all sources selected (decision 4). → The row says "by Claude Code".
+- **A Claude Code tool name holding `__` in its tool part** (`mcp__github__do__it`) is stored under the server key `github__do`, not `github`: `main`'s rule takes everything before the last `__`, and this change keeps it (it only moved the expression into `store.mcp_server_of`). A server with such a tool then reads as two rows here, as it already does in Activity's MCP table and the tool sheet. Claude Code's own split takes the first `__` after `mcp`. Changing the rule changes the stored `tool_calls.mcp_server` for every page and needs a rebuild, so it is left to its own change. Open question 3.
 
 ## Open Questions
 
 1. **A loaded flag.** The repo's fixture is a trimmed real snapshot and shows no loaded or deferred field per MCP tool. On a copy of your own store, does a recent `/context` line's `contextUsage.mcp_tools[]` carry one (such as `isLoaded` or `deferred`)? If it does, a later change parses it, and decision 5's "over" case becomes exact nesting.
 2. **Plugin names.** On a copy of your store, does a plugin skill's name in `contextUsage.skills[]` equal the `skill` input of its Skill calls (both `plugin:skill`, say)? And does a plugin MCP server's `server_name` match the `mcp__<server>__` prefix of its tools? If the skill names differ, those rows read "not called" when they were called.
+3. **The server boundary.** Should the stored server key take the first `__` after `mcp__`, as Claude Code splits a tool name? That changes `tool_calls.mcp_server` for tools whose own name holds `__`, on every page that reads it (Activity's MCP table, the tool sheet's `mcp=` filter, the inspector, Context's tool figures), and needs `uv run ai-ledger rebuild` with a `CHANGELOG.md` line. A separate change; nothing in this repository shows a server name that holds `__`.

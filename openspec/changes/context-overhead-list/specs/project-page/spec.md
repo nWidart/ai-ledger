@@ -15,6 +15,13 @@ With a context snapshot, the Context block SHALL offer a disclosure "What loads 
 - **WHEN** the snapshot lists one custom agent and has no category above 0
 - **THEN** the summary reads "What loads before your first prompt" with no total, and the list says that no category of the snapshot loads tokens before the first prompt
 
+### Requirement: Close the overhead list for another project
+Selecting another project SHALL draw that project's overhead list closed, even when its Context comes from what the page already fetched.
+
+#### Scenario: Another project on the Project page
+- **WHEN** the user opened `bar`'s list, then goes back to the Project page of `foo`, whose Context the page already fetched
+- **THEN** `foo`'s list is closed
+
 ### Requirement: Write the overhead shares at either end
 In the overhead list, a share above 0 that would round to 0% SHALL read as under 0.1%, and a share under 1 that would round to 100% SHALL read as over 99%.
 
@@ -23,11 +30,15 @@ In the overhead list, a share above 0 that would round to 0% SHALL read as under
 - **THEN** System tools reads "2.0M tokens, >99%" and System prompt "1 token, <0.1%"
 
 ### Requirement: Keep the overhead list open for a new snapshot
-A new snapshot of the same project SHALL keep the overhead list open, and SHALL close what was opened in it: each server's tools and each list shown in full.
+A new snapshot of the same project SHALL keep the overhead list open, and SHALL close what was opened in it: each server's tools and each list shown in full. A snapshot SHALL be told from another by its own id, not by its session and time.
 
 #### Scenario: A new snapshot of the same project
 - **WHEN** the list and the tools of a server are open, and a newer snapshot of the same project arrives
 - **THEN** the list stays open, the server's tools are closed, and the list says when the newer snapshot was measured
+
+#### Scenario: A replacement snapshot with the same time
+- **WHEN** the list and the tools of a server are open, and another snapshot of the same session with the same time replaces it
+- **THEN** the list stays open and the server's tools are closed
 
 ### Requirement: Say when the overhead snapshot predates the view
 When the snapshot was taken before the view's first day, the overhead list SHALL say so and that the configuration may have changed since. For a view of all time it SHALL say nothing of the kind.
@@ -100,11 +111,15 @@ When the items listed for a category hold more tokens than the category loads, t
 - **THEN** the tools' servers are listed under "MCP tools" after the ranked categories, with no bar, and the row says none of them is counted before the first prompt
 
 ### Requirement: Fit the overhead list on any screen
-The overhead list SHALL not scroll the page sideways at any width or text size. In a narrow box the bar SHALL move under the row's name. A bar SHALL be at least 1px for an item above 0 tokens. Under forced colors a bar SHALL be told by its length and a border, not by a hue. Nothing in the list SHALL animate, and nothing in it SHALL be reachable only by hovering.
+The overhead list SHALL not scroll the page sideways at any width or text size. In a narrow box the bar SHALL move under the row's name. Every bar's track SHALL have one width at every level of the list, in either layout, so equal tokens draw bars of equal length. A bar SHALL be at least 1px for an item above 0 tokens. Under forced colors a bar SHALL be told by its length and a border, not by a hue. Nothing in the list SHALL animate, and nothing in it SHALL be reachable only by hovering.
 
 #### Scenario: A phone at large text
 - **WHEN** the user opens the list on a 375px screen with 32px text
 - **THEN** each bar sits under its row's name and the page does not scroll sideways
+
+#### Scenario: Equal tokens, equal bars
+- **WHEN** a memory file holds as many tokens as the System prompt category, the list is open in a 343px box, and a server's tools are open
+- **THEN** the category's, the file's and each tool's tracks are one width, and the category's and the file's bars are one length
 
 #### Scenario: A tiny item
 - **WHEN** a 40-token skill is listed beside a 12,790-token category
@@ -122,4 +137,4 @@ The overhead list SHALL not scroll the page sideways at any width or text size. 
 
 ### Requirement: List the largest overhead items
 **Reason**: Five items per group, no custom agents and no call counts could not say what to remove, or tell one large item from many small ones.
-**Migration**: Replaced by "List what loads before the first prompt", "Write the overhead shares at either end", "Keep the overhead list open for a new snapshot", "Say when the overhead snapshot predates the view", "Rank the overhead items under their category", "Tell apart MCP servers of one name", "Say how often each MCP server and skill was called", "List MCP tools of no server under Unknown server", "Show overhead items that do not fit their category" and "Fit the overhead list on any screen". `/api/context` `overhead.top` is replaced by `items` and `calls`.
+**Migration**: Replaced by "List what loads before the first prompt", "Close the overhead list for another project", "Write the overhead shares at either end", "Keep the overhead list open for a new snapshot", "Say when the overhead snapshot predates the view", "Rank the overhead items under their category", "Tell apart MCP servers of one name", "Say how often each MCP server and skill was called", "List MCP tools of no server under Unknown server", "Show overhead items that do not fit their category" and "Fit the overhead list on any screen". `/api/context` `overhead.top` is replaced by `items` and `calls`.

@@ -1,6 +1,6 @@
 # Verification
 
-The change as built at `de1513d9` (branch `feat/context-overhead-list`), checked in step 4.4. Steps 4.2 (bundle limit) and 4.3 (Context docs page) wait for `echart-context` to merge and are not part of this record.
+The change as built at `de1513d9` (branch `feat/context-overhead-list`), checked in step 4.4, then fixed for the pull request's review (step `overhead-sol-1`): the snapshot's `uuid` in the payload, one track width at every level, the Project page's Context block keyed by the project, and the Context page's list closed and its names plain text while another project loads. Steps 4.2 (bundle limit) and 4.3 (Context docs page) wait for `echart-context` to merge and are not part of this record.
 
 ## Scenarios
 
@@ -16,6 +16,7 @@ Each scenario of the two spec deltas, with the test that proves it (file, then t
 | One project | `web/src/pages/context/Grids.test.tsx`, window grids: "draws the one full grid, with its legend and the list of what loads before the first prompt, when a project is selected" |
 | One project with a snapshot | The same test; browser line (9) |
 | Another project selected | The same test (the list opened, another project rerendered, its list closed); browser line (12) |
+| Another project still loading | The same test (another project selected while the old payload shows: the list closed, no button on a name; the new payload's list closed, its names buttons) |
 
 ### `project-page`: List what loads before the first prompt
 
@@ -24,6 +25,12 @@ Each scenario of the two spec deltas, with the test that proves it (file, then t
 | Ranked categories | `web/src/pages/project/overhead.test.ts`, loadList: "ranks the fixture's categories by their share of what loads before the first prompt, with each one's items" |
 | Closed on load | `web/src/pages/project/ProjectPage.test.tsx`: "splits the starting cells by the snapshot, with its date, model, deferred tools and largest items"; `web/src/pages/project/OverheadList.test.tsx`, OverheadList: "is closed until asked; opened, a named list of categories in rank order, each row one sentence, its bar decoration" |
 | Nothing counted before the first prompt | `web/src/pages/project/overhead.test.ts`, loadList: "says when the items hold more than their category, or when it counts none of them" |
+
+### `project-page`: Close the overhead list for another project
+
+| Scenario | Proof |
+|---|---|
+| Another project on the Project page | `web/src/pages/project/ProjectPage.test.tsx`: "splits the starting cells by the snapshot, with its date, model, deferred tools and largest items" (`bar`'s list opened, back to `foo` from the cache: closed) |
 
 ### `project-page`: Write the overhead shares at either end
 
@@ -36,6 +43,7 @@ Each scenario of the two spec deltas, with the test that proves it (file, then t
 | Scenario | Proof |
 |---|---|
 | A new snapshot of the same project | `web/src/pages/project/OverheadList.test.tsx`, OverheadList: "makes a button only of a named server's and a skill's name, opening it by its call key, and none without an opener"; browser line (12) |
+| A replacement snapshot with the same time | The same test (same `session_id` and `ts`, another `uuid`: the tools closed, the list open); `tests/test_context.py`: `OverheadTest.test_latest_snapshot_of_the_project_whatever_the_range` (`uuid` sent) |
 
 ### `project-page`: Say when the overhead snapshot predates the view
 
@@ -85,6 +93,7 @@ Each scenario of the two spec deltas, with the test that proves it (file, then t
 | Scenario | Proof |
 |---|---|
 | A phone at large text | Browser lines (1) and (2) |
+| Equal tokens, equal bars | Browser line (16) of the review fixes |
 | A tiny item | Browser line (3) |
 | Forced colors | Browser line (4) |
 | A memory file on a phone | Browser line (14); `web/src/pages/project/OverheadList.test.tsx`, OverheadList: "is closed until asked; opened, a named list of categories in rank order, each row one sentence, its bar decoration" (the folder in the row's text) |
@@ -95,20 +104,20 @@ The server key that links a snapshot's MCP tool to its stored calls has its own 
 
 ## Net test lines
 
-`git diff --numstat b414d690..de1513d9` over the test files:
+`git diff --numstat b414d690..HEAD` over the test files, at step `overhead-sol-1`'s head:
 
 | File | Added | Removed |
 |---|---|---|
 | `tests/test_context.py` | 84 | 10 |
 | `tests/test_derive.py` | 17 | 1 |
-| `web/src/pages/context/Grids.test.tsx` | 19 | 5 |
-| `web/src/pages/project/OverheadList.test.tsx` | 130 | 0 |
-| `web/src/pages/project/ProjectPage.test.tsx` | 17 | 7 |
+| `web/src/pages/context/Grids.test.tsx` | 29 | 6 |
+| `web/src/pages/project/OverheadList.test.tsx` | 131 | 0 |
+| `web/src/pages/project/ProjectPage.test.tsx` | 26 | 8 |
 | `web/src/pages/project/overhead.test.ts` | 203 | 0 |
-| `web/src/pages/project/project.test.ts` | 2 | 2 |
-| **Total** | **472** | **25** |
+| `web/src/pages/project/project.test.ts` | 3 | 3 |
+| **Total** | **493** | **28** |
 
-Net: **447** lines, over the 400-line advice (about 280 planned). Why: the model's test, the largest part, carries the rules that `design.md` left open and the build settled (shares under 0.1% and over 99%, "1 token", figures that read alike written in full, empty strings as missing, negative and NaN counts, two servers of one label, "Unknown server" last), one table-driven case per line of decision 8, and a guard against "NaN", "undefined" and "null" in any text. The ingest-to-payload test of the server key in `tests/test_derive.py` covers step 1.1's stated risk, which no other layer can see. No test repeats a rule at a second layer: the page tests assert the wiring once.
+Net: **465** lines (447 at `de1513d9`; the review fixes add 18: the stale-payload and cached-project assertions, and `uuid` in each test snapshot), over the 400-line advice (about 280 planned). Why: the model's test, the largest part, carries the rules that `design.md` left open and the build settled (shares under 0.1% and over 99%, "1 token", figures that read alike written in full, empty strings as missing, negative and NaN counts, two servers of one label, "Unknown server" last), one table-driven case per line of decision 8, and a guard against "NaN", "undefined" and "null" in any text. The ingest-to-payload test of the server key in `tests/test_derive.py` covers step 1.1's stated risk, which no other layer can see. No test repeats a rule at a second layer: the page tests assert the wiring once.
 
 ## Checks of step 4.4
 
@@ -128,6 +137,53 @@ Run at `de1513d9` with this step's document changes (no file under `web/src` or 
 | `openspec validate --specs --strict` | Pass: 22 passed, 0 failed |
 
 Bundle as built, against the base `b414d690` (gzip): `ContextGrid-*.js` 6.21 kB (3.68 kB), `ProjectPage-*.js` 9.48 kB (9.47 kB), `ContextPage-*.js` 19.55 kB (19.54 kB), `index-*.js` 111.41 kB (111.40 kB; 347.59 kB raw at both), `echarts-*.js` 179.09 kB, the same file.
+
+## Checks of step `overhead-sol-1`
+
+| Check | Result |
+|---|---|
+| `uv run ruff check` | Pass: all checks passed |
+| `uv run pytest -n 2` | Pass: 710 passed, 493 subtests passed |
+| `npm run typecheck` (in `web/`) | Pass: no error |
+| `npm run lint` (in `web/`) | Pass: 0 errors, 141 warnings, none in a line of this step |
+| `npx vitest run --maxWorkers=2` (in `web/`) | Pass: 108 files, 2,397 tests |
+| `npm run build` (in `web/`) | Pass |
+| `node scripts/check-bundle.mjs` (in `web/`) | Pass: 8 chunks within their limits |
+| `cd site && npm ci && npm run check` | Pass: drift check (19 theme tokens, 44 shots paired and listed), `astro check` 0 errors and 0 warnings, 42 pages built |
+| `openspec validate context-overhead-list --strict` | Pass: valid |
+| `openspec validate --specs --strict` | Pass: 22 passed, 0 failed |
+
+Bundle (gzip): `ContextGrid-*.js` 6.20 kB (16.65 kB raw), `ProjectPage-*.js` 9.49 kB, `ContextPage-*.js` 19.58 kB, `index-*.js` 111.41 kB (347.59 kB raw).
+
+## Browser check (step `overhead-sol-1`)
+
+Run on the synthetic demo store with the review fixes built; readers (1) to (4) are step 4.1's, re-run because the track rules changed, (16) is new. The memory file of 4,107 tokens matches the System prompt category, and MCP tools fit their category so a server's tools have bars.
+
+```
+(1) Project page, opened, at 1440px, 375px and 1280px with a 32px root font: no sideways scroll of the list and every row inside its column (the list and its side column measured, not the page's navigation): ok (1440px: 315 rows in a 554px column; 375px: 315 rows in a 317px column; 1280px at 32px: 315 rows in a 554px column)
+(2) In a 343px box at 16px and 32px text the bar sits under the name: ok (312 bars, 0 beside their name; list 343px; 312 bars, 0 beside their name; list 343px)
+(3) A 40-token skill's bar is 1px wide and present: ok (bar 1px, 0.41px unfloored, track 144px)
+(4) Forced colors: every bar, items and tools included, CanvasText in a bordered track: ok (CanvasText rgb(255, 255, 255); 312 bars, 306 of items, 3 of tools; 0 off)
+(16) Every track one width at every level, a category's, an item's and a server's tool's; a category and an item of equal tokens draw bars of equal length (375px, a 343px box at 16px and 32px text, 1440px, 1280px at 32px): ok (375px: tracks: category 293.0px, item 293.0px, tool 293.0px, 312 tracks 293.0 to 293.0px; bars of 4107 tokens: category 86.0px, item 86.0px; 343px box at 16px: tracks: category 319.0px, item 319.0px, tool 319.0px, 312 tracks 319.0 to 319.0px; bars of 4107 tokens: category 93.6px, item 93.6px; 343px box at 32px: tracks: category 319.0px, item 319.0px, tool 319.0px, 312 tracks 319.0 to 319.0px; bars of 4107 tokens: category 93.6px, item 93.6px; 1440px (beside the name): tracks: category 144.0px, item 144.0px, tool 144.0px, 312 tracks 144.0 to 144.0px; bars of 4107 tokens: category 42.2px, item 42.2px; 1280px at 32px: tracks: category 530.0px, item 530.0px, tool 530.0px, 312 tracks 530.0 to 530.0px; bars of 4107 tokens: category 155.5px, item 155.5px)
+(11) No console or page error: ok (every page; 0 connections dropped by the demo server)
+```
+
+Each reader's failing proof:
+
+```
+inside (1): 375px, every name and line set nowrap: fails as it should (4 boxes: BDI. 29-377 outside 29-346)
+under (2): a 700px box at 16px, the wide layout: fails as it should (312 bars, 312 beside their name; list 700px)
+onePx (3): the 1px floor removed: fails as it should (bar 0.40625px, 0.41px unfloored, track 144px)
+forced (4): forced colors off: fails as it should (CanvasText rgb(255, 255, 255); 312 bars, 306 of items, 3 of tools; 1560 off: bar rgb(57, 135, 229))
+```
+
+Reader (16) on the build before the track fix (the same run, items 3 to 5 built, `OverheadList.css` as at `de1513d9`):
+
+```
+(16) Every track one width at every level, a category's, an item's and a server's tool's; a category and an item of equal tokens draw bars of equal length (375px, a 343px box at 16px and 32px text, 1440px, 1280px at 32px): FAIL (375px: tracks: category 317.0px, item 305.0px, tool 293.0px, 312 tracks 293.0 to 317.0px; bars of 4107 tokens: category 93.0px, item 89.5px; 343px box at 16px: tracks: category 343.0px, item 331.0px, tool 319.0px, 312 tracks 319.0 to 343.0px; bars of 4107 tokens: category 100.6px, item 97.1px; 343px box at 32px: tracks: category 343.0px, item 331.0px, tool 319.0px, 312 tracks 319.0 to 343.0px; bars of 4107 tokens: category 100.6px, item 97.1px; 1440px (beside the name): tracks: category 144.0px, item 144.0px, tool 144.0px, 312 tracks 144.0 to 144.0px; bars of 4107 tokens: category 42.2px, item 42.2px; 1280px at 32px: tracks: category 554.0px, item 542.0px, tool 530.0px, 312 tracks 530.0 to 554.0px; bars of 4107 tokens: category 162.5px, item 159.0px)
+```
+
+The wide layout's tracks were already one width (144px) at 1440px; its column is now a fixed `9rem` instead of `minmax(4rem, 9rem)`, so a tight row can no longer shrink one.
 
 ## Browser check (step 4.1)
 
