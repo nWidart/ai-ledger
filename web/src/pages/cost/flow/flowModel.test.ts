@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { color, setOrder } from "../../../colors";
 import type { CustomSeriesOption, CustomSeriesRenderItemAPI, CustomSeriesRenderItemParams } from "../../../components/echart/echarts";
 import type { OptionEnv } from "../../../components/echart/option";
-import { bandPath, flowFit, flowLayout, flowModel, flowOption, type FlowInput, type FlowLayout, type FlowModel } from "./flowModel";
+import { bandPath, flowFit, flowLayout, flowModel, flowOption, type FlowGraph, type FlowInput, type FlowLayout } from "./flowModel";
 
 const ink = { text: "ink-text", secondary: "ink-secondary", muted: "ink-muted", grid: "ink-grid", surface: "ink-surface",
   border: "ink-border", cursor: "ink-cursor", accent: "ink-accent", tint: "ink-tint" };
@@ -25,8 +25,8 @@ function view(pairs: [string | null, string, number][], split: Record<string, Sp
       cost_cache_read: sum(m => m.cost_cache_read), cost_cache_5m: sum(m => m.cost_cache_5m), cost_cache_1h: sum(m => m.cost_cache_1h) },
     cost_flow: { pairs: pairs.map(([p, model, c]) => ({ project: p, model, cost: c })), models } };
 }
-const labels = (m: FlowModel, c: number) => m.columns[c]!.nodes.map(n => n.label);
-const ids = (m: FlowModel, c: number) => m.columns[c]!.nodes.map(n => n.id);
+const labels = (m: FlowGraph, c: number) => m.columns[c]!.nodes.map(n => n.label);
+const ids = (m: FlowGraph, c: number) => m.columns[c]!.nodes.map(n => n.id);
 
 // Eight projects over five models, one session with no project, and a Grok model whose cost was reported.
 const rich = view([
@@ -39,7 +39,7 @@ const rich = view([
 afterEach(() => setOrder([]));
 
 describe("flowModel", () => {
-  // Decision 4, on the project column; the model column folds by the same rule.
+  // Decision 4, on the project column, and the model column for its ties; both fold by the same rule.
   it.each([
     { rule: "a long tail: the five costliest, then Other", costs: [100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 5, 3],
       want: ["P01", "P02", "P03", "P04", "P05", "Other (7)"] },
@@ -47,12 +47,15 @@ describe("flowModel", () => {
     { rule: "a name under 1% among the first five folds", costs: [90, 8, 0.5, 0.4], want: ["P01", "P02", "Other (2)"] },
     { rule: "a name at $0.00 is no node and not counted", costs: [90, 8, 0.5, 0], want: ["P01", "P02", "P03"] },
     { rule: "ties A to Z", costs: [5, 5, 5], want: ["P01", "P02", "P03"] },
-  ])("folds: $rule", ({ costs, want }) => {
-    const pairs = costs.map((c, i): [string, string, number] => [`P${String(i + 1).padStart(2, "0")}`, "m1", c]);
+    // As the daily chart stacked by model ranks and colors them: "claude-zeta" before "d-model", though "d-model" < "zeta".
+    { rule: "model ties A to Z on the raw name", column: 1, names: ["claude-zeta", "d-model"], costs: [5, 5], want: ["zeta", "d-model"] },
+  ])("folds: $rule", ({ costs, want, column = 0, names }) => {
+    const name = (i: number) => names?.[i] ?? `P${String(i + 1).padStart(2, "0")}`;
+    const pairs = costs.map((c, i): [string, string, number] => column ? ["p", name(i), c] : [name(i), "m1", c]);
     const m = flowModel(view([...pairs].reverse()));
-    expect(labels(m, 0)).toEqual(want);
+    expect(labels(m, column)).toEqual(want);
     // Other holds every folded name and loses no cent of them, the costliest first.
-    const other = m.columns[0]!.nodes.find(n => n.id === "p"), rest = costs.slice(want.filter(w => !w.startsWith("Other")).length);
+    const other = m.columns[column]!.nodes.find(n => n.id === (column ? "m" : "p")), rest = costs.slice(want.filter(w => !w.startsWith("Other")).length);
     expect(other?.members?.map(x => x.value) ?? []).toEqual(rest.filter(c => c > 0));
     expect(other?.value ?? 0).toBeCloseTo(rest.reduce((a, b) => a + b, 0), 9);
   });
@@ -219,7 +222,9 @@ describe("flowOption", () => {
     expect(texts.find(t => t.text === "opus-4-5")).toMatchObject({ x: 408, align: "left", width: 176, overflow: "truncate", ellipsis: "…", fill: "ink-text", stroke: "ink-surface", lineWidth: 3, fontSize: 11 });
     expect(texts.find(t => t.text === "$72")).toMatchObject({ fill: "ink-muted" });
     expect(texts.filter(t => ["Project", "Model", "Token kind"].includes(t.text as string)).map(t => t.fill)).toEqual(["ink-muted", "ink-muted", "ink-muted"]);
-    expect(flowOption(l, env({ textScale: 2 }))).toMatchObject({ textStyle: { fontSize: 22 } });
+    // The labels' size follows the layout's text scale.
+    const big = draw(flowLayout(flowModel(rich), flowFit(800, 2, 3))!).nodes.find(c => c.type === "text" && c.style.text === "opus-4-5");
+    expect(big?.style.fontSize).toBe(22);
   });
 
   it("outlines the bands and fills the nodes in the text ink under forced colors", () => {

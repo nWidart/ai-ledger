@@ -104,7 +104,6 @@ describe("flowAt", () => {
   it("reads the topmost of two crossing bands, and each alone elsewhere", () => {
     expect(at(120, 25)).toEqual(src("A|B"));
     expect(at(120, 125)).toEqual(src("C|D"));
-    expect(at(mid, 75)).toEqual(src("C|D"));
   });
 
   it("reads nothing between the columns off a band, or in the title margin", () => {

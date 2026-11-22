@@ -55,7 +55,9 @@ function useFlow(layout: FlowLayout | null) {
       nodes, bands, into, out,
       column: (id: string) => layout.columns[column.get(id)!]!,
       reading: { columns: layout.columns.map(c => c.nodes), bands: layout.bands },
-      hit: { nodes: [...nodes.values()].map(n => ({ id: n.id, x: n.x, y: n.y, w: n.width, h: n.height })), bands: layout.bands },
+      // What is drawn, so a node or band grown to be seen is read where it is seen.
+      hit: { nodes: [...nodes.values()].map(n => ({ id: n.id, x: n.x, y: n.drawn.y, w: n.width, h: n.drawn.h })),
+        bands: layout.bands.map(b => ({ id: b.id, x0: b.x0, x1: b.x1, ...b.drawn })) },
     };
   }, [layout]);
 }
@@ -213,8 +215,8 @@ export function CostFlow({ d, onProject }: CostFlowProps) {
 
   const at = reading?.at;
   const band = at && "band" in at ? g?.bands.get(at.band) : undefined, node = at && "node" in at ? g?.nodes.get(at.node) : undefined;
-  const mark = band ? <path d={bandPath(band)} />
-    : node ? <rect x={node.x - 2} y={node.y + Math.min(0, node.height / 2 - 1) - 2} width={node.width + 4} height={Math.max(2, node.height) + 4} /> : null;
+  const mark = band ? <path d={bandPath({ ...band, ...band.drawn })} />
+    : node ? <rect x={node.x - 2} y={node.drawn.y - 2} width={node.width + 4} height={node.drawn.h + 4} /> : null;
 
   return (
     <section className="panel sect" id="flow" aria-labelledby="flowTitle">

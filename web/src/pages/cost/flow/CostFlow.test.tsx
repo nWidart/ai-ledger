@@ -92,8 +92,8 @@ describe("cost flow: reading", () => {
     expect(live()).toBe("Model sonnet-4-5: $68, 32.4% of $210. From dune $30, beacon $20, atlas-api $18. To Input $34, Output + thinking $34.");
   });
 
-  it("reads a band under the pointer, and ends the reading when the pointer leaves", () => {
-    show();
+  it("reads a band under the pointer, ends the reading when the pointer leaves, and reads a tiny node where it is drawn", () => {
+    const { rerender } = show();
     const b = flowLayout(flowModel(d), flowFit(800, 1, 3))!.bands.find(x => x.id === "p:atlas-api|m:claude-opus-4-5")!;
     fireEvent.mouseMove(group(), { clientX: (b.x0 + b.x1) / 2, clientY: (b.y0 + b.y1) / 2 + b.h / 2 });
     expect(live()).toBe("atlas-api to opus-4-5: $24, 11.4% of $210 and 40.0% of atlas-api.");
@@ -101,6 +101,14 @@ describe("cost flow: reading", () => {
     fireEvent.mouseLeave(document.querySelector(".flow-box")!);
     expect(live()).toBe("");
     expect(screen.queryByRole("tooltip")).toBeNull();
+    // $0.05 of opus's input was a cache write: a 0.04px node, drawn 2px tall.
+    const tiny = { ...d, cost_flow: { ...d.cost_flow, models: d.cost_flow.models.map(m =>
+      m.model === "claude-opus-4-5" ? { ...m, cost_input: m.cost_input! - .05, cost_cache_5m: .05 } : m) } };
+    rerender(<CostFlow d={tiny} onProject={() => {}} />);
+    const n = flowLayout(flowModel(tiny), flowFit(800, 1, 3))!.columns[2]!.nodes.find(x => x.id === "k:write")!;
+    expect(n.height).toBeLessThan(.1);
+    fireEvent.mouseMove(group(), { clientX: n.x + 4, clientY: n.y + n.height / 2 + .9 });
+    expect(live()).toMatch(/^Cache write: \$0\.05,/);
   });
 
   it("opens a project's sheet on Enter, and on a model, Other or a band does nothing and keeps the reading", () => {
