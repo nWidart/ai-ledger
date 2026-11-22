@@ -142,6 +142,7 @@ export function SessionSpans({ s }: { s: SessionDetail }) {
   const onKey = (ev: KeyboardEvent) => {
     if (!layout || modified(ev)) return; // Alt+Left is history, Ctrl+Home the sheet's top: not ours
     if (ev.key === "Escape") {
+      if (ev.nativeEvent.isComposing) return; // it ends an input method's composition
       if (!shown) return; // with nothing read, the sheet's: it closes
       // The reading ends, and the sheet stays open: a prevented Escape is no close request for the dialog.
       ev.preventDefault();

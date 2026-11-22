@@ -26,6 +26,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
   - The line under each chart that repeated the reading is gone: the tooltip shows it.
   - Escape closes a chart's tooltip wherever the focus is.
 
+### Fixed
+
+- The session sheet's tool-call chart leaves an Escape that ends an input-method composition alone.
+
 ## [0.7.0] - 2026-11-22
 
 ### Added

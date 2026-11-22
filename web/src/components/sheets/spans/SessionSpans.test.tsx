@@ -199,6 +199,8 @@ describe("tool calls by thread: reading", () => {
       fireEvent.mouseMove(box(), pixel("m2"));
       expect(fireEvent.keyDown(document.body, { key: "Escape", isComposing: true })).toBe(true);
       expect(live().textContent).toBe(said("m2"));
+      expect(fireEvent.keyDown(box(), { key: "Escape", isComposing: true })).toBe(true); // on the box too
+      expect(live().textContent).toBe(said("m2"));
       fireEvent.keyDown(other, { key: "Escape" });
       expect([own.mock.calls.length, live().textContent]).toEqual([1, ""]);
     } finally {
