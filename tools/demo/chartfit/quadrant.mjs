@@ -9,7 +9,12 @@
 //   medians' pixels;
 // - the axes at 16px and 32px text, in a 343px box and at 1440px, with a session at $0, one at 0 tool calls and one at four
 //   digits: the cost labels in dollars, the zero lanes' "$0" and "0" both drawn, the four-digit tool calls inside the left
-//   margin, no label overlapping another or leaving the box, both axis names drawn;
+//   margin, no label overlapping another (a tool-call label beside the rotated name anywhere along it) or leaving the
+//   box, both axis names drawn; the same with a session at 400,000 tool calls and one at $4,000, the axes' last labels
+//   ("500,000" and "$5,000") drawn at 1440px;
+// - names in a 343px box: a 300-character title with no space and a right-to-left one whole in the tooltip, beside the dot
+//   and inside the box; a session with no title, start, project, branch or model reads "started –", with no "Invalid
+//   Date", NaN or page error; the data table, open, with the long title does not make the page scroll sideways;
 // - the corner names: each drawn one inside its quadrant, its 3px surface halo painted under its fill (paint-order), and the
 //   list under the plot names all four with counts adding up to the dots;
 // - the guides, the corner names and the list are gone with one or two sessions, and the "too few" line says so; the "newest
@@ -139,9 +144,10 @@ function axesOf(texts, frame) {
   const x = scale(xs, "ax", frame.l), y = scale(ys, "ay", frame.b);
   return x && y ? { x, y, xs, ys } : null;
 }
-/** The texts that leave the box, and the pairs whose em boxes overlap. */
+/** The texts that leave the box, and the pairs whose em boxes overlap: a line's em box is its width by its size, a rotated
+ *  name's its size by its length, so a tool-call label anywhere beside the rotated name meets it. */
 function fitTexts(texts, box) {
-  const em = t => ({ ...t, t: t.y - t.size / 2, b: t.y + t.size / 2 });
+  const em = t => (t.h > 2 * t.size ? { ...t, l: t.x - t.size / 2, r: t.x + t.size / 2 } : { ...t, t: t.y - t.size / 2, b: t.y + t.size / 2 });
   const at = t => `"${t.text}" ${Math.round(t.l - box.l)}..${Math.round(t.r - box.l)}x${Math.round(t.t - box.t)}..${Math.round(t.b - box.t)}`;
   const out = texts.filter(t => t.l < box.l - .5 || t.r > box.r + .5 || t.t < box.t - .5 || t.b > box.b + .5).map(at);
   const over = [], ems = texts.map(em);
@@ -540,6 +546,60 @@ export async function quadrant(h) {
       else if (big) await shot(page, "32px");
       await page.done();
     }
+  }
+
+  // ---------- wide labels: a session at 400,000 tool calls and one at $4,000, at 1440px and in a 343px box at 32px ----------
+  {
+    const [A, B] = [ROWS[25], ROWS[35]];
+    const answer = d => edit(edit(d, [A.session_id], x => ({ ...x, tool_calls: 400000 })), [B.session_id], x => ({ ...x, cost: 4000 }));
+    const rows = dotsOf(answer(structuredClone(base)));
+    for (const [win, big] of [[W, false], [NARROW, true]]) {
+      const page = await open(`wide labels ${win}px${big ? " 32px" : ""}`, { answer, options: { viewport: { width: win, height: 900 } }, init: big ? root32 : null });
+      const dr = await drawing(page);
+      const what = `a ${px(dr.box.w)}px box at ${big ? 32 : 16}px text, a session at 400,000 tool calls and one at $4,000`;
+      placedLine(dr, rows, what);
+      await labels(dr, what);
+      // At 1440px the axes' last labels, "500,000" and "$5,000", are drawn at the plot's top and right ends; in the narrow
+      // box at 32px a label beside them may give way, and one six-digit and one four-digit label are drawn.
+      const ax = axesOf(dr.texts, dr.frame), ys = (ax?.ys ?? []).map(t => t.text), xs = (ax?.xs ?? []).map(t => t.text);
+      const ends = big ? ys.some(t => /^[15]00,000$/.test(t)) && xs.some(t => /^\$[15],000$/.test(t)) : ys.includes("500,000") && xs.includes("$5,000");
+      line(`${what}: ${big ? "a six-digit tool-call label and a four-digit cost label are" : "the last labels, \"500,000\" and \"$5,000\", are"} drawn`, ends,
+        `cost ${xs.join(" ")}; tool calls ${ys.join(" ")}`);
+      await page.done();
+    }
+  }
+
+  // ---------- names in a 343px box: a 300-character title with no space, a right-to-left one, and a session with no title,
+  // start, project, branch or model ----------
+  {
+    const LONG = "ExportTheQuarterlyInvoiceReportWithoutBreaks".repeat(7).slice(0, 300), RTL = "إصلاح اختبار تصدير الفواتير المتقطع في الحساب الرئيسي";
+    const [L, R, Z] = [ROWS[0], ROWS[N - 1], ROWS[N >> 1]];
+    const answer = d => edit(edit(edit(d, [L.session_id], x => ({ ...x, title: LONG })), [R.session_id], x => ({ ...x, title: RTL })),
+      [Z.session_id], x => ({ ...x, title: null, first_ts: null, last_ts: null, project: null, git_branch: null, peak_model: null, duration_s: null }));
+    const rows = dotsOf(answer(structuredClone(base)));
+    const page = await open("names 343px", { answer, options: { viewport: { width: NARROW, height: 900 } } });
+    const r = await reading(page, rows);
+    await plot(page).focus();
+    const ends = [];
+    for (const [key, k] of [["Home", 0], ["End", N - 1]]) { await page.keyboard.press(key); ends.push([k, await r.reach(k)]); }
+    line(`a ${px(r.dr.box.w)}px box: a 300-character title with no space and a right-to-left one show whole in the tooltip, wrapped, beside the dot and inside the box`,
+      ends.every(([k, s]) => r.on(s, k).ok && besideIn(s, s.mark?.x)), ends.map(([k, s]) => `${r.on(s, k).ok ? `"${s.tip.name.slice(0, 12)}…" read` : r.on(s, k).at}, ${tipAt(s)}`).join("; "));
+    const kz = rows.findIndex(x => x.session_id === Z.session_id);
+    await page.keyboard.press("Home");
+    for (let k = 0; k < kz; k++) await page.keyboard.press("ArrowRight");
+    const z = r.on(await r.reach(kz), kz), said = await ev(page, () => window.quad.live());
+    const odd = await ev(page, () => (document.querySelector("#quadrant").textContent.match(/Invalid Date|NaN|undefined|null/g) ?? []));
+    line(`a session with no title, start, project, branch or model: its dot reads "started –", nothing in the block says "Invalid Date", NaN, undefined or null, no page error`,
+      z.ok && said.includes(", started –:") && !odd.length && !page.errors.length, `${z.ok ? `said "${said}"` : z.at}${odd.length ? `; the block says ${odd.join(", ")}` : ""}${page.errors.length ? `; ${page.errors.join("; ")}` : ""}`);
+    await page.keyboard.press("Escape");
+    await page.locator(`${ROOT} .chart-table > button`).click();
+    const table = await until(() => ev(page, long => {
+      const cell = [...document.querySelectorAll("#quadrant .chart-table tbody tr")].find(tr => tr.textContent.includes(long));
+      return { rows: document.querySelectorAll("#quadrant .chart-table tbody tr").length, cell: !!cell && cell.getBoundingClientRect().width > 0, sw: document.documentElement.scrollWidth, w: innerWidth };
+    }, LONG.slice(0, 40)), t => t.cell);
+    line(`the data table open with the 300-character title in a ${px(r.dr.box.w)}px box: the page does not scroll sideways`, table.cell && table.rows === N && table.sw <= table.w,
+      `${table.rows} rows, the long title's row ${table.cell ? "shown" : "not shown"}; the page ${table.sw}px wide in ${table.w}px`);
+    await page.done();
   }
 
   // ---------- the page around the block: a 375px window, and 32px text at 1280px ----------
