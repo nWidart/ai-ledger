@@ -120,6 +120,40 @@ export default {
    "cost": 0.75
   }
  ],
+ "cost_flow": {
+  "pairs": [
+   {
+    "project": "foo",
+    "model": "m-a",
+    "cost": 1.812
+   },
+   {
+    "project": "foo",
+    "model": "grok-4.7-build",
+    "cost": 0.75
+   }
+  ],
+  "models": [
+   {
+    "model": "m-a",
+    "cost": 1.812,
+    "cost_input": 0.45,
+    "cost_output": 1.3,
+    "cost_cache_read": 0.062,
+    "cost_cache_5m": 0.0,
+    "cost_cache_1h": 0.0
+   },
+   {
+    "model": "grok-4.7-build",
+    "cost": 0.75,
+    "cost_input": null,
+    "cost_output": null,
+    "cost_cache_read": null,
+    "cost_cache_5m": null,
+    "cost_cache_1h": null
+   }
+  ]
+ },
  "daily_work": [
   {
    "day": "2026-11-05",

@@ -172,6 +172,45 @@ export default {
    "cost": 0.0002
   }
  ],
+ "cost_flow": {
+  "pairs": [
+   {
+    "project": "foo",
+    "model": "m-a",
+    "cost": 15.8
+   },
+   {
+    "project": "observer-sessions",
+    "model": "m-a",
+    "cost": 0.0004
+   },
+   {
+    "project": "bar",
+    "model": "m-tier",
+    "cost": 0.00026
+   }
+  ],
+  "models": [
+   {
+    "model": "m-a",
+    "cost": 15.8004,
+    "cost_input": 2.0002,
+    "cost_output": 10.0002,
+    "cost_cache_read": 0.8,
+    "cost_cache_5m": 1.0,
+    "cost_cache_1h": 2.0
+   },
+   {
+    "model": "m-tier",
+    "cost": 0.00026,
+    "cost_input": 0.00012,
+    "cost_output": 2e-05,
+    "cost_cache_read": 0.00012,
+    "cost_cache_5m": 0.0,
+    "cost_cache_1h": 0.0
+   }
+  ]
+ },
  "daily_work": [
   {
    "day": "2026-10-01",

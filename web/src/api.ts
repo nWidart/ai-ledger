@@ -34,6 +34,15 @@ export interface DailyProjectRow { day: Day; project: string | null; cost: numbe
 /** A day's cost by model, and by agent: priced requests only, so a day's rows add up to its cost in daily. */
 export interface DailyModelRow { day: Day; model: string; cost: number }
 export interface DailySourceRow { day: Day; source: Source; cost: number }
+/** The cost flow's rows (cost_flow), from the view's priced or reported requests only, so they add up to totals.cost.
+ *  A pair: a project (null for sessions with no project) and a model, costliest first. */
+export interface FlowPair { project: string | null; model: string; cost: number }
+/** A model's cost and its estimate split by kind, which add up to the totals' kinds. A kind is null when no request of
+ *  the model is estimated; cost less the kinds is the part an agent reported with no split by kind. */
+export interface FlowModel {
+  model: string; cost: number; cost_input: number | null; cost_output: number | null; cost_cache_read: number | null;
+  cost_cache_5m: number | null; cost_cache_1h: number | null;
+}
 /** Work per day (or per week, named by its Monday, in work): sessions with a request in it, each counted once, prompts,
  *  commits (as in totals), tool calls and failed tool calls. Idle days are left out. */
 export interface DailyWorkRow { day: Day; sessions: number; prompts: number; commits: number; calls: number; failed_calls: number }
@@ -90,6 +99,8 @@ export interface UsagePayload {
   project: string; range: number; automated: boolean; source: Source | ""; start: Day | null; end: Day;
   projects: string[]; project_order: string[]; totals: Totals;
   daily: DailyRow[]; daily_projects: DailyProjectRow[]; daily_models: DailyModelRow[]; daily_sources: DailySourceRow[]; daily_work: DailyWorkRow[];
+  /** The view's cost from project to model (pairs) and by model with its kinds (models); unpriced requests add no row. */
+  cost_flow: { pairs: FlowPair[]; models: FlowModel[] };
   /** The work rows by work_bucket: weeks (Monday start, local) when the first work day is over 60 days before the end. */
   work_bucket: "day" | "week"; work: DailyWorkRow[];
   /** work split by project; a bucket's rows add up to its work row. */

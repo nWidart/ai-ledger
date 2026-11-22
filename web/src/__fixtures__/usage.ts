@@ -122,6 +122,26 @@ export default {
    "cost": 15.8
   }
  ],
+ "cost_flow": {
+  "pairs": [
+   {
+    "project": "foo",
+    "model": "m-a",
+    "cost": 15.8
+   }
+  ],
+  "models": [
+   {
+    "model": "m-a",
+    "cost": 15.8,
+    "cost_input": 2.0,
+    "cost_output": 10.0,
+    "cost_cache_read": 0.8,
+    "cost_cache_5m": 1.0,
+    "cost_cache_1h": 2.0
+   }
+  ]
+ },
  "daily_work": [
   {
    "day": "2026-11-04",

@@ -427,6 +427,15 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
         count(*) AS requests, count(*) FILTER (WHERE NOT subagent) AS main_requests,
         coalesce(sum(tokens) FILTER (WHERE subagent), 0) AS sub_tokens, sum(cost) FILTER (WHERE subagent) AS sub_cost,
         coalesce(sum(thinking_ms), 0) AS thinking_ms, {costs} FROM rq""", rp)[0]
+    # The cost flow, from project to model to token kind: one scan grouped by project and model (the pairs) and by model
+    # alone (with its kinds). grouping(project) tells a model's row from a pair whose session has no project. Unpriced
+    # requests add no row; a model whose requests all carry a reported cost has its kinds NULL.
+    flow = rows(cur, f"""{rq} SELECT project, model, grouping(project) AS whole, sum(cost) AS cost, {costs}
+        FROM rq WHERE cost IS NOT NULL GROUP BY GROUPING SETS ((project, model), (model))
+        ORDER BY whole, cost DESC, project, model""", rp)
+    kinds = ["model", "cost"] + [f"cost_{k}" for k in PRICE_KINDS]
+    cost_flow = dict(pairs=[dict(project=r["project"], model=r["model"], cost=r["cost"]) for r in flow if not r["whole"]],
+                     models=[{k: r[k] for k in kinds} for r in flow if r["whole"]])
     unpriced = rows(cur, f"{rq} SELECT model, count(*) AS requests, sum(tokens) AS tokens FROM rq WHERE cost IS NULL GROUP BY 1 ORDER BY 3 DESC, 1", rp)
     models = rows(cur, f"""{rq} SELECT model, coalesce(effort, '(none)') AS effort, coalesce(speed = 'fast', false) AS fast,
         count(*) AS requests, sum(tokens) AS tokens, sum(cost) AS cost FROM rq GROUP BY 1, 2, 3
@@ -464,7 +473,7 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
         near_limit=sum(1 for x in sess if x["near_limit"]), **timing(cur, rq, rp))
     out = dict(project=project, range=range_days, automated=bool(automated), source=source, start=start.isoformat() if start else None, end=today.isoformat(),
                projects=project_list(cur, automated, af["projects"]), project_order=project_order(cur, af["projects"]), totals=totals, daily=daily, daily_projects=daily_projects,
-               daily_models=daily_models, daily_sources=daily_sources,
+               daily_models=daily_models, daily_sources=daily_sources, cost_flow=cost_flow,
                daily_work=work, work_bucket=bucket, work=work if by is day else daily_work(cur, rq, rp, W, fp, by),
                work_projects=daily_work(cur, rq, rp, W, fp, by, by_project=True), speed_trend=speed_trend(cur, rq, rp, by),
                unpriced=unpriced, models=models, by_project=by_project, **tool_rates(cur, W, fp),
