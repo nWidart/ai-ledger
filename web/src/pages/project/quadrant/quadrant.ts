@@ -109,11 +109,15 @@ const M = { left: 58, right: 14, top: 10, bottom: 44 };
 /** The zero lanes at text scale 1: half a "$0.01" label across, one line up. */
 const LANE_X = 30, LANE_Y = 16;
 
-/** The axis drawn over a plot length of p px: with a lane, min sits so the stretch under lo is l px. */
+/** The axis drawn over a plot length of p px: with a lane, min sits so the stretch under the smallest tick is l px, and at
+ *  most a decade. ECharts ticks a log axis at its ends and at the powers of ten, so the smallest tick over the lane is the
+ *  power of ten at or under lo, and a lane of more than a decade holds another: either tick, drawn in the lane, would hide
+ *  the lane's "0" label. A lane of a decade has its power of ten at min, where it reads "0". */
 function fitAxis(e: Extent, p: number, l: number): FitAxis {
   if (!e.zero) return { min: e.lo, max: e.hi, lane: false };
   const room = Math.max(p, 2 * l); // a plot too short for its lane gives it half
-  return { min: e.lo * (e.lo / e.hi) ** (l / (room - l)), max: e.hi, lane: true };
+  const tick = 10 ** Math.floor(Math.log10(e.lo) + 1e-9);
+  return { min: Math.max(tick * (tick / e.hi) ** (l / (room - l)), tick / 10), max: e.hi, lane: true };
 }
 /** Where v sits on the axis, 0 at min and 1 at max; a 0 sits at min. */
 const frac = (v: number, a: FitAxis) => (Math.log(Math.max(v, a.min)) - Math.log(a.min)) / (Math.log(a.max) - Math.log(a.min));

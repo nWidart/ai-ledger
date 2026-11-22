@@ -85,9 +85,17 @@ describe("quadrantFit", () => {
     expect(f.dots[0]).toMatchObject({ x: f.x.min, px: f.plot.x, filled: true });
     expect(f.dots.find(d => d.y === f.y.min)!.py).toBe(f.plot.y + f.plot.h);
     f.dots.forEach((d, i) => expect(dotAt(f, d.px, d.py)).toBe(i)); // each pixel reads back its own dot, in a lane or not
-    const lo = quadrantFit({ ...m, dots: [{ ...m.dots[0]!, cost: m.x.lo, calls: m.y.lo }] }, width, s).dots[0]!;
+    // The smallest tick: ECharts ticks a log axis at the powers of ten, so it is 1 under lo 2, not lo.
+    expect([m.x.lo, m.y.lo]).toEqual([2, 2]);
+    const lo = quadrantFit({ ...m, dots: [{ ...m.dots[0]!, cost: 1, calls: 1 }] }, width, s).dots[0]!;
     expect(lo.px - f.plot.x).toBeCloseTo(width ? 30 * s : 0, 9); // no plot width: every dot at its left edge
     expect(f.plot.y + f.plot.h - lo.py).toBeCloseTo(16 * s, 9);
+  });
+
+  it("keeps a lane to a decade, so no other power of ten is ticked in it", () => {
+    const m = model([row(0, 3), row(0.01, 3), row(20, 9)]);
+    expect(quadrantFit(m, 343, 1).x.min).toBeCloseTo(0.01 * (0.01 / 20) ** (30 / 241), 12); // 30px: under a decade
+    expect(quadrantFit(m, 343, 2).x.min).toBe(0.001); // 60px of 199 would be 1.4 decades
   });
 
   it.each([
