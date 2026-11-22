@@ -286,13 +286,15 @@ export async function spans(h) {
       `sheet ${g.s.sw} of ${g.s.cw}px, box ${px(g.b.l - g.s.l)}..${px(g.b.r - g.s.l)} of ${px(g.s.w)}; the page ${g.doc} of ${g.w}px`);
     await aligned(page, "the 40rem sheet");
     await shot(page, "light");
-    const { dr, tl } = await ev(page, () => ({ dr: window.sp.drawing(), tl: window.sp.timeline() }));
-    // The clipped bar: the only polygon, its point the rightmost vertex at its middle height, on the strip's right edge. It
-    // starts where the axis ends (the last start), so it is the point alone: zrender drops the polygon's repeated vertices.
+    const { dr, tl, bx } = await ev(page, () => ({ dr: window.sp.drawing(), tl: window.sp.timeline(), bx: window.sp.box() }));
+    // The clipped bar: the only polygon, five vertices, its point the rightmost vertex at its middle height, in the plot's
+    // right margin (past the strip's right edge) and at most 2px before the box's. It starts where the axis ends (the last
+    // start), so the layout draws it at its minimum length: a visible shape, not a sliver at the edge.
     const cl = dr.spans.filter(x => x.kind === "clipped");
     const c0 = cl[0], right = tl.strip.r;
-    line("the call past the axis's end is one bar that ends at the plot's right edge in a point", cl.length === 1 && Math.abs(c0.point.x - right) <= .5 && Math.abs(c0.point.y - c0.y) <= .5 && c0.n >= 3,
-      c0 ? `${cl.length} clipped, ${px(c0.w)}px wide, its point at ${px(c0.point.x - right)}px from the edge and ${px(c0.point.y - c0.y)}px from its middle, ${c0.n} vertices` : "no clipped bar");
+    line("the call past the axis's end is one bar at least 6px long that ends in a point in the plot's right margin, inside the box",
+      cl.length === 1 && c0.n === 5 && c0.w >= 5.5 && c0.point.x > right + 1 && c0.point.x <= bx.r - 1.5 && Math.abs(c0.point.y - c0.y) <= .5,
+      c0 ? `${cl.length} clipped, ${px(c0.box.l - right)}..${px(c0.point.x - right)}px from the plot's edge (${px(c0.w)}px long), the box's edge at ${px(bx.r - right)}px, ${px(c0.point.y - c0.y)}px from its middle, ${c0.n} vertices` : "no clipped bar");
     // The 24.5-minute bar: where its gap ends, on the timeline's context line (the request at the gap's end); across the
     // chart's one break band and the timeline's one.
     const reqs = base.requests.filter(r => !r.subagent && r.ts && r.context != null), j = reqs.findIndex(r => Date.parse(r.ts) === e2eGap[1]);
@@ -640,18 +642,20 @@ export async function spans(h) {
     line(`${what}: the tooltip of a ${BIG.length}-character input and a ${MCP.length}-character tool name, by a key and by the pointer, is shown, both wrapped, inside the box`,
       got.every(s => s.tip && s.tip.l >= s.box.l - .5 && s.tip.r <= s.box.r + .5 && s.tip.spill <= 1 && s.tip.lines[0] > 1 && s.tip.lines[1] > 1) && w1 === w0,
       got.map(s => (s.tip ? `${px(s.tip.l - s.box.l)}..${px(s.tip.r - s.box.l)} of ${px(s.box.w)}, the name on ${s.tip.lines[0]} lines and the input on ${s.tip.lines[1]}` : "no tooltip")).join("; ") + `; ${w1}px after`);
-    if (!big) {
-      // The data table: the long tool name wraps in its Tool column, and the sheet does not scroll sideways.
-      await away(page);
-      await page.locator("dialog.sheet[open] .spans .chart-table > button").click();
-      const t = await until(() => ev(page, m => {
-        const b = [...document.querySelectorAll("dialog.sheet[open] .spans table button.cellbtn")].find(x => x.textContent === m);
-        const d = document.querySelector("dialog.sheet[open]");
-        return b ? { lines: window.chartfit.lines(b), w: b.getBoundingClientRect().width, sw: d.scrollWidth, cw: d.clientWidth } : null;
-      }, MCP), x => x && x.lines > 1);
-      line(`${what}: the ${MCP.length}-character tool name wraps in the "Calls by duration" table (the store's longest is ${toolLen}), and the sheet does not scroll sideways`,
-        !!t && t.lines > 1 && t.sw <= t.cw, t ? `${t.lines} lines in ${px(t.w)}px; the sheet ${t.sw} of ${t.cw}px` : "not in the table");
-    }
+    // The data table: the long tool name wraps in its Tool column onto a few lines (at most 6 at 16px text; the column's
+    // minimum width scales with the text), and neither the sheet nor the table scrolls sideways.
+    await away(page);
+    const sw0 = await ev(page, () => document.querySelector("dialog.sheet[open]").scrollWidth);
+    await page.locator("dialog.sheet[open] .spans .chart-table > button").click();
+    const t = await until(() => ev(page, m => {
+      const b = [...document.querySelectorAll("dialog.sheet[open] .spans table button.cellbtn")].find(x => x.textContent === m);
+      const d = document.querySelector("dialog.sheet[open]"), r = b?.closest("table").parentElement;
+      return b ? { lines: window.chartfit.lines(b), w: b.getBoundingClientRect().width, sw: d.scrollWidth, cw: d.clientWidth, tsw: r.scrollWidth, tcw: r.clientWidth,
+        cols: [...b.closest("tr").cells].map(c => Math.round(c.getBoundingClientRect().width)) } : null;
+    }, MCP), x => x && x.lines > 1);
+    line(`${what}: the ${MCP.length}-character tool name wraps onto a few lines in the "Calls by duration" table (the store's longest is ${toolLen}), and neither the sheet nor the table scrolls sideways`,
+      !!t && t.lines > 1 && (big || t.lines <= 6) && t.sw <= t.cw && t.tsw <= t.tcw,
+      t ? `${t.lines} lines in ${px(t.w)}px; columns ${t.cols.join(", ")}px; the sheet ${t.sw} of ${t.cw}px (${sw0}px closed), the table ${t.tsw} of ${t.tcw}px` : "not in the table");
     await page.done();
   }
 
