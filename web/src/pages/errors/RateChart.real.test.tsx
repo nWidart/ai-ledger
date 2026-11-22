@@ -121,6 +121,8 @@ it("draws both tracks and the marks on the frame, zooms both together, dims the 
   expect(fixLines().map(p => d(p).cx)).toEqual([expect.closeTo(at(5), 0), expect.closeTo(at(19), 0), expect.closeTo(at(19), 0)]);
   const labels = fixLabels().map(t => ({ x: textX(t), y: Number(t.getAttribute("y")), anchor: t.getAttribute("text-anchor") }));
   expect(labels).toHaveLength(3);
+  // Each on a 3px halo of the surface's color, so a line it crosses breaks behind its letters.
+  expect(new Set(fixLabels().map(t => `${tokenOf(t.getAttribute("stroke"))} ${t.getAttribute("stroke-width")}`))).toEqual(new Set(["var(--surface-1) 3"]));
   expect(labels[0]).toMatchObject({ x: expect.closeTo(at(5) + 4, 1), anchor: "start" });
   for (const l of labels.slice(1)) expect(l).toMatchObject({ x: expect.closeTo(at(19) - 4, 1), anchor: "end" });
   expect(Math.abs(labels[2]!.y - labels[1]!.y)).toBeCloseTo(13, 1);

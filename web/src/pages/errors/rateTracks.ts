@@ -222,9 +222,10 @@ function fixMarks(m: RateModel, env: ChartEnv): CustomSeriesOption {
       }];
       const text = `✓ ${fx.label}`, w = labelWidth(env, text), gap = 4 * s;
       const at = cx + gap + w <= right ? { x: cx + gap, align: "left" as const } : cx - gap - w >= frame.x ? { x: cx - gap, align: "right" as const } : null;
+      // A halo in the surface's color, as pointLabel's, as wide as the letters grow: the rate line breaks behind the text.
       if (at) children.push({
         type: "text", emphasisDisabled: true,
-        style: { text, ...at, y: frame.y + (2 + 13 * fx.row) * s, verticalAlign: "top", fontFamily, fontSize, fill, opacity },
+        style: { text, ...at, y: frame.y + (2 + 13 * fx.row) * s, verticalAlign: "top", fontFamily, fontSize, fill, stroke: env.ink.surface, lineWidth: 3 * s, opacity },
       });
       return { type: "group", children };
     },
