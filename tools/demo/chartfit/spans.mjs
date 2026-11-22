@@ -23,8 +23,9 @@
 // - Enter and a click open the tool's sheet, the browser's Back returns to the session's; a touch tap reads and opens at
 //   once;
 // - the tooltip in a 343px box at 16px and 32px text, for the session's longest input and a 120-character input with a
-//   60-character tool name: shown, wrapped, inside the box, and the chart's box keeps its width; that tool name wraps in
-//   the data table;
+//   60-character tool name: shown, wrapped, inside the box, and the chart's box keeps its width; the data table, opened
+//   with every row, scrolls sideways in its own region and widens the sheet no more than the closed table does, that tool
+//   name's cell is at least 8ch wide (at most 12 lines at 16px text), and no cell's text is cut;
 // - loading: no chunk before a sheet opens; a blocked chunk leaves the line in place of the section and the rest of the
 //   sheet; on Live the ECharts chunk loads once; the Models block's move as the section appears with the figures there;
 // - colors: forced colors (system colors for the spans, rings, labels, key and the mark Highlight), dark (the mark against
@@ -596,6 +597,30 @@ export async function spans(h) {
   const BIG = "npm run test:e2e -- --project=chromium --grep @checkout --retries=2 --reporter=line --workers=4 --trace=retain-on-failure".slice(0, 120);
   const MCP = "mcp__browser-automation-server__browser_take_full_screenshot";
   const bigAnswer = d => { d.calls = d.calls.map(c => (c.id === LANES[0][0].id ? { ...c, tool: MCP, input: BIG } : c)); return d; };
+  /** The open sheet's scroll width, client width, and the element reaching farthest right that the sheet scrolls to (none
+   *  of its ancestors in the sheet clips it), named by its selector and its parent's, with its width. */
+  const sheetFit = page => ev(page, () => {
+    const d = document.querySelector("dialog.sheet[open]"), l = d.getBoundingClientRect().left;
+    const name = e => `${e.tagName.toLowerCase()}${e.id ? `#${e.id}` : ""}${[...e.classList].map(c => `.${c}`).join("")}`;
+    const clipped = e => { for (let a = e.parentElement; a && a !== d; a = a.parentElement) if (getComputedStyle(a).overflowX !== "visible") return true; return false; };
+    let far = null;
+    for (const e of d.querySelectorAll("*")) {
+      const r = e.getBoundingClientRect();
+      if ((!far || r.right > far.r) && !clipped(e)) far = { r: r.right, e, w: r.width };
+    }
+    return { sw: d.scrollWidth, cw: d.clientWidth, widest: far ? `${name(far.e.parentElement)} > ${name(far.e)} "${far.e.textContent.slice(0, 24)}", ${Math.round(far.w)}px wide to ${Math.round(far.r - l)}px` : "none" };
+  });
+  /** The same sheet in a 343px box without this section: its chunk's request blocked, the section shows its one line. */
+  const bareSheet = async big => {
+    const page = await h.open({ path: "/usage?range=30", root: ROOT, setup: spanReaders, ready: p => p.waitForFunction(() => document.querySelector(".echart-plot svg path"), null, { timeout: 15000 }) },
+      `spans bare ${big ? 32 : 16}px`, { viewport: { width: NARROW, height: 900 } }, big ? root32 : null);
+    await page.route(/\/SessionSpans-[^/]*\.js$/, r => r.abort("blockedbyclient"));
+    await ev(page, p => { history.pushState(null, "", p); dispatchEvent(new PopStateEvent("popstate")); }, PATH);
+    await until(() => ev(page, () => [...(document.querySelector("dialog.sheet[open]")?.querySelectorAll("p, div") ?? [])].some(e => e.textContent === "The tool-call chart could not be loaded. Reload the page to try again.")), x => x);
+    const fit = await sheetFit(page);
+    await page.done(e => /Failed to load resource|SessionSpans/.test(e));
+    return fit;
+  };
   for (const big of [false, true]) {
     const page = await open(`343px ${big ? 32 : 16}px`, { options: { viewport: { width: NARROW, height: 900 } }, init: big ? root32 : null });
     const what = `a ${(await ev(page, () => window.sp.widths())).spans}px box at ${big ? 32 : 16}px text`;
@@ -642,20 +667,31 @@ export async function spans(h) {
     line(`${what}: the tooltip of a ${BIG.length}-character input and a ${MCP.length}-character tool name, by a key and by the pointer, is shown, both wrapped, inside the box`,
       got.every(s => s.tip && s.tip.l >= s.box.l - .5 && s.tip.r <= s.box.r + .5 && s.tip.spill <= 1 && s.tip.lines[0] > 1 && s.tip.lines[1] > 1) && w1 === w0,
       got.map(s => (s.tip ? `${px(s.tip.l - s.box.l)}..${px(s.tip.r - s.box.l)} of ${px(s.box.w)}, the name on ${s.tip.lines[0]} lines and the input on ${s.tip.lines[1]}` : "no tooltip")).join("; ") + `; ${w1}px after`);
-    // The data table: the long tool name wraps in its Tool column onto a few lines (at most 6 at 16px text; the column's
-    // minimum width scales with the text), and neither the sheet nor the table scrolls sideways.
+    // The data table, opened with every row: six columns do not fit 343px, so the table scrolls sideways in its own region
+    // and the sheet's scroll width stays what it is with the table closed. The long tool name keeps its column at least
+    // 8ch wide (at most 12 lines at 16px text), and no cell's text is cut.
     await away(page);
-    const sw0 = await ev(page, () => document.querySelector("dialog.sheet[open]").scrollWidth);
+    const closed = await sheetFit(page);
     await page.locator("dialog.sheet[open] .spans .chart-table > button").click();
+    await page.locator("dialog.sheet[open] .spans .chart-table button.linkish.small").click();
     const t = await until(() => ev(page, m => {
       const b = [...document.querySelectorAll("dialog.sheet[open] .spans table button.cellbtn")].find(x => x.textContent === m);
-      const d = document.querySelector("dialog.sheet[open]"), r = b?.closest("table").parentElement;
-      return b ? { lines: window.chartfit.lines(b), w: b.getBoundingClientRect().width, sw: d.scrollWidth, cw: d.clientWidth, tsw: r.scrollWidth, tcw: r.clientWidth,
-        cols: [...b.closest("tr").cells].map(c => Math.round(c.getBoundingClientRect().width)) } : null;
-    }, MCP), x => x && x.lines > 1);
-    line(`${what}: the ${MCP.length}-character tool name wraps onto a few lines in the "Calls by duration" table (the store's longest is ${toolLen}), and neither the sheet nor the table scrolls sideways`,
-      !!t && t.lines > 1 && (big || t.lines <= 6) && t.sw <= t.cw && t.tsw <= t.tcw,
-      t ? `${t.lines} lines in ${px(t.w)}px; columns ${t.cols.join(", ")}px; the sheet ${t.sw} of ${t.cw}px (${sw0}px closed), the table ${t.tsw} of ${t.tcw}px` : "not in the table");
+      if (!b) return null;
+      const d = document.querySelector("dialog.sheet[open]"), table = b.closest("table"), r = table.closest("[role=region]"), td = b.closest("td");
+      const ch = document.createElement("span");
+      ch.style.cssText = "display:inline-block;width:8ch";
+      td.append(ch);
+      const eight = ch.getBoundingClientRect().width;
+      ch.remove();
+      const cells = [...table.querySelectorAll("th, td, .cellbtn")];
+      const cut = cells.filter(e => e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1 || getComputedStyle(e).textOverflow === "ellipsis" && e.scrollWidth > e.clientWidth);
+      return { lines: window.chartfit.lines(b), w: td.getBoundingClientRect().width, eight, rows: table.tBodies[0].rows.length, sw: d.scrollWidth, cw: d.clientWidth,
+        region: !!r && getComputedStyle(r).overflowX === "auto" && r.contains(table), tsw: r?.scrollWidth, tcw: r?.clientWidth, cells: cells.length, cut: cut.map(e => e.textContent.slice(0, 20)) };
+    }, MCP), x => x && x.lines > 1 && x.rows > 20);
+    const bare = await bareSheet(big);
+    line(`${what}: the "Calls by duration" table opened with every row scrolls sideways in its own region, not the sheet; the ${MCP.length}-character tool name's cell is at least 8ch wide${big ? "" : " and wraps onto at most 12 lines"}; no cell's text is cut`,
+      !!t && t.region && t.sw <= closed.sw && t.w >= t.eight - .5 && t.lines > 1 && (big || t.lines <= 12) && !t.cut.length,
+      t ? `the sheet ${t.sw} of ${t.cw}px open, ${closed.sw} of ${closed.cw}px closed (widest ${closed.widest}), ${bare.sw} of ${bare.cw}px without the section (widest ${bare.widest}); the table ${t.tsw} of ${t.tcw}px in its region; the name on ${t.lines} lines in a ${px(t.w)}px cell (8ch ${px(t.eight)}px); ${t.cut.length} of ${t.cells} cells cut${t.cut.length ? `: ${t.cut.slice(0, 3).join(", ")}` : ""}` : "not in the table");
     await page.done();
   }
 
