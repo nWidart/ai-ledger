@@ -52,6 +52,14 @@ The token kind column SHALL have the kinds the Tokens and cache drawer bills: In
 - **WHEN** a Grok model's requests carry reported costs of $0.75 and no estimate
 - **THEN** that model has one band of $0.75 to Reported, and the reading of the Reported node says it is not split by kind
 
+#### Scenario: A model with no name
+- **WHEN** a Grok turn with no breakdown by model is stored with no model name and a reported cost of $2
+- **THEN** the model column has a node "(no model name)" of $2, apart from every named model and Other, with one band of $2 to Reported
+
+#### Scenario: A cost of one tick
+- **WHEN** the view's only request is a Grok request whose reported cost is one USD tick, $0.0000000001
+- **THEN** its model has a band to Reported, and the data table a row for it
+
 ### Requirement: Fold small projects and models into Other in the cost flow
 The project column and the model column SHALL each show their five costliest names that hold at least 1% of the view's cost, and SHALL fold every other name with a cost into one "Other (N)" node, last in its column. When only one name would fold, it SHALL keep its own node instead. The fold SHALL be the same at every width. The token kinds SHALL NOT fold. A name whose cost is $0.00 SHALL have no node and SHALL NOT count in Other.
 
@@ -93,6 +101,13 @@ Requests from unpriced models SHALL NOT be drawn, since their cost is unknown, a
 #### Scenario: No usage
 - **WHEN** the view has no request
 - **THEN** the section says "No usage in this view, so no cost to follow."
+
+### Requirement: Draw no cost flow for a cost below zero
+When a cost of the view is below zero, from a price below zero, the section SHALL say why there is no flow in place of the graph, SHALL draw no node or band, and SHALL keep its data table with every cost signed, each step adding up to the page's total cost.
+
+#### Scenario: A cost below zero
+- **WHEN** a price below zero in prices.json gives a pair a cost of −$1.00 and the heading reads $2
+- **THEN** the section says why there is no flow, draws no node or band, and its table lists the −$1.00 row, each step adding up to $2.00
 
 ### Requirement: Read the cost flow along its bands
 On the focused cost flow, Up and Down SHALL move to the next or the previous item: a node in its column, or a band among the bands of the node it was entered from. Right SHALL read a node's top band out, and on a band, the node it reaches; Left the same in the other direction. Home and End SHALL read the first and the last item in the same way. A move past an end SHALL keep the item and say it again. Escape, the focus leaving the flow and the pointer leaving it SHALL end the reading.
@@ -158,8 +173,16 @@ The cost flow SHALL fit its box at every width and text size, and the page SHALL
 - **WHEN** the user reads a project whose name is cut on the graph
 - **THEN** the tooltip and the sentence give its whole name
 
+#### Scenario: A long name's tooltip on a phone
+- **WHEN** the user reads a project with a very long name in a 343px box
+- **THEN** the tooltip fits inside the box, the name wraps, and each figure stays on one line
+
 ### Requirement: Offer the cost flow as a table
 Under the cost flow, a "Show data table" button SHALL expose `aria-expanded` and, when expanded, show every flow of the view, unfolded: one row per project and model, $0.00 ones too, then one row per model and token kind with a cost, each with its step, its source, its target, its cost to the cent and its share of the cost. The rows of each step SHALL add up to the total. The table SHALL be closed on every page load and SHALL NOT be rendered while closed.
+
+#### Scenario: Names that would collide
+- **WHEN** the view has the pairs app to v1|m:v2 at $2 and app|m:v1 to v2 at $1
+- **THEN** the graph has a band for each, with its own cost, and the table a row for each
 
 #### Scenario: A project inside Other
 - **WHEN** delta is folded into Other on the graph and the user shows the data table
@@ -170,7 +193,7 @@ Under the cost flow, a "Show data table" button SHALL expose `aria-expanded` and
 - **THEN** the table lists the model to token kind rows only
 
 ### Requirement: Serve the cost flow with the usage payload
-The usage payload SHALL hold the view's cost per project and model and, per model, its cost and its estimated cost of each billed kind, from the same requests and prices as its totals, with no row for unpriced requests. Each project's pairs SHALL add up to its cost in the project figures, the pairs and the models to the total cost, and each kind over the models to the total of that kind.
+The usage payload SHALL hold the view's cost per project and model and, per model, its cost, its estimated cost of each billed kind and its reported cost, from the same requests and prices as its totals, with no row for unpriced requests. Each project's pairs SHALL add up to its cost in the project figures, the pairs and the models to the total cost, and each kind over the models to the total of that kind. The payload SHALL read all its figures in one snapshot of the store.
 
 #### Scenario: A request with no project
 - **WHEN** a priced request belongs to a session with no project
@@ -178,4 +201,12 @@ The usage payload SHALL hold the view's cost per project and model and, per mode
 
 #### Scenario: A reported cost
 - **WHEN** a model's only requests carry reported costs
-- **THEN** its model row has its cost and no kind costs
+- **THEN** its model row has its cost, no kind costs, and its reported cost equal to its cost
+
+#### Scenario: A request with no model name
+- **WHEN** a request with a reported cost has no model name
+- **THEN** the payload has a pair and a model row for it with no model name
+
+#### Scenario: An ingest while the payload is built
+- **WHEN** an ingest commits a priced request after the payload's first query
+- **THEN** the daily cost, the total cost and the cost flow all leave it out

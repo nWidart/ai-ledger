@@ -74,7 +74,7 @@ Rules that follow:
 
 - **Columns.** Project, Model, Token kind. A band is the estimated cost, in dollars, that flowed from one node to the next. Width is cost, never tokens: the reader asks about money, and a cache read band sized by tokens would be the widest for the cheapest kind.
 - **The kinds.** Input, Output + thinking, Cache write (both lifetimes), Cache read: the four the drawer bills, with its names, so the two views agree. Thinking is not split from output: the spec bills it as one kind with one cost, and a thinking band would be an allocation, not a price. The lifetimes are joined as in the drawer; the drawer and the table keep them apart.
-- **Reported.** A fifth kind node, "Reported", holds the cost an agent reported with no split by kind, per model: the model's `cost` less its kinds. It is drawn when above 1e-9 (the float guard of `costDays()`), so the kinds column adds up to the total. Its reading says "not split by kind".
+- **Reported.** A fifth kind node, "Reported", holds the cost an agent reported with no split by kind, per model: `cost_reported`, the server's sum of the model's reported costs, so the kinds column adds up to the total. It is drawn when above zero, however small: a Grok request of one USD tick is $0.0000000001, which a float guard on "cost less its kinds" would drop. A model with no name (a Grok turn with no breakdown by model) is the node "(no model name)", id `m?`, which no name and not Other gives. Its reading says "not split by kind".
 - **One project selected: two columns**, Model and Token kind. Why: the page heading already says "on atlas-api", and a lone project node would be one bar of 100% that takes a third of the width from the bands that carry the answer. The section's heading says the project.
 - **One model, or one project in an unfiltered view**: the column stays, a single node. It is a true answer ("all of it went to Opus"), and the shape of the graph does not change with the data.
 - **Order.** In each column, nodes by cost, largest at the top, Other and Reported last; ties A to Z, a model's on its raw name (`claude-zeta` before `d-model`), as `costKinds()` ranks the daily chart's models. At a node, its bands leave in the order of the nodes they reach and arrive in the order of the nodes they come from, so no two bands of one node cross each other.
@@ -85,8 +85,8 @@ Rules that follow:
 ```
 GET /api/usage?…   (unchanged parameters)
 → { …, cost_flow: { pairs: FlowPair[], models: FlowModel[] } }
-FlowPair  = { project: string | null, model: string, cost: number }
-FlowModel = { model: string, cost: number, cost_input, cost_output, cost_cache_read, cost_cache_5m, cost_cache_1h: number | null }
+FlowPair  = { project: string | null, model: string | null, cost: number }
+FlowModel = { model: string | null, cost: number, cost_input, cost_output, cost_cache_read, cost_cache_5m, cost_cache_1h, cost_reported: number | null }
 ```
 
 `FlowPair` and `FlowModel` are the row types in `web/src/api.ts`. The graph built from them is `FlowGraph` (decision 10), so the payload's `FlowModel` keeps its name.
@@ -94,15 +94,15 @@ FlowModel = { model: string, cost: number, cost_input, cost_output, cost_cache_r
 In `usage()`, on the view's `rq` and `rp`, with the `costs` text it already builds for `tot`:
 
 ```sql
-{rq} SELECT project, model, grouping(project) AS whole, sum(cost) AS cost, {costs}
+{rq} SELECT project, model, grouping(project) AS whole, sum(cost) AS cost, {costs}, sum(reported_cost) AS cost_reported
 FROM rq WHERE cost IS NOT NULL
 GROUP BY GROUPING SETS ((project, model), (model))
 ORDER BY whole, cost DESC, project, model
 ```
 
-`pairs` are the rows with `whole = 0` (project, model, cost); `models` the rows with `whole = 1` (model, cost and the five kinds). `grouping(project)` tells a model's total row from a pair whose project is NULL.
+`pairs` are the rows with `whole = 0` (project, model, cost); `models` the rows with `whole = 1` (model, cost, the five kinds and `cost_reported`). `grouping(project)` tells a model's total row from a pair whose project is NULL; a NULL model (Grok's turn with no breakdown by model) is a group of its own in both sets.
 
-- **Prices.** Nothing is priced again. The kinds are the `cost_<kind>` columns of `requests_cte()`, the tier chosen once per request, so a pair's cost and a model's kinds are sums of the same numbers as `totals`, `by_project` and `daily_models`. The web derives Reported as `cost − Σ kinds` per model, as `TokenPairs.tsx` does for the view.
+- **Prices.** Nothing is priced again. The kinds are the `cost_<kind>` columns of `requests_cte()`, the tier chosen once per request, so a pair's cost and a model's kinds are sums of the same numbers as `totals`, `by_project` and `daily_models`. A request costs its kinds or its reported cost, so a model's kinds and `cost_reported` add up to its cost; the web draws Reported from `cost_reported`, with no subtraction. A price below zero (the prices file takes any finite number) gives signed costs: the web then draws no flow and keeps the table. `usage()` reads every figure in one transaction, rolled back at the end, so an ingest that commits meanwhile cannot set the flow apart from the heading.
 - **Unpriced.** `WHERE cost IS NOT NULL`, as `daily_models`: an unpriced request adds no row. A reported-only model has a row with its five kinds NULL.
 - **Filters.** The view's own: range, project, source, automated, through `view()`. Nothing is source-specific: Claude Code, Codex and Grok requests are rows of the same derived tables.
 - **Equal to the page.** Σ `pairs.cost` = Σ `models.cost` = `totals.cost`; Σ `models.cost_<kind>` = `totals.cost_<kind>`; Σ of a project's pairs = its `by_project` cost. Measured equal to the cent (Context). Proven by the Python test of step 1.1 on the stores of `MetricsTest`, `ReportedCostTest` and `SourceFilterTest`, which hold priced, long-tier, fast, reported, unpriced and no-project requests; the web side by step 2.1 (every column of the model adds up to its input's total) and by step 3.1 (the section's total reads as the heading's).
