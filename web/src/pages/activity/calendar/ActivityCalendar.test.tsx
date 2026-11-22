@@ -39,18 +39,27 @@ beforeEach(() => {
 });
 
 it("names the span, the busiest day and the keys, and the hint and the key name the measure and the steps", () => {
-  calendar();
+  const { redraw } = calendar();
   expect(group().getAttribute("aria-label")).toBe("Commits per day as a calendar, 53 weeks from Nov 17, 2025 to Nov 18, 2026, in columns from Monday to Sunday. "
     + "10 days with commits, the most 40 on Wednesday, Nov 18, 2026. Use the arrow keys to read a day: left and right move a week, up and down a day, "
     + "Home and End go to the first and last day. Enter selects the day and Escape clears the selection.");
   expect(document.querySelector("#calendar .hint")!.textContent).toMatch(/^Commits per day, last 53 weeks\./);
   expect([...document.querySelectorAll("#calendar .legend .key")].map(k => k.textContent)).toEqual(["No commits", "1–2", "3–8", "9–40", "Recording starts Sep 1, 2026"]);
+  // Recorded from the first Monday shown: the line still shows.
+  redraw({ ...d, first: "2025-11-17" });
+  expect(document.querySelector("#calendar .legend .key:last-child")!.textContent).toBe("Recording starts Nov 17, 2025");
 });
 
-it("says when no day has the measure, and when no day is recorded", () => {
+it("says when no day has the measure, when only weeks not shown have it, and when no day is recorded", () => {
+  // A phone's box: 26 weeks, from May 25, 2026.
+  vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(343);
   const { redraw } = calendar({ d: { ...d, days: d.days.map(r => ({ ...r, commits: 0 })) } });
   expect(group().getAttribute("aria-label")).toMatch(/from Monday to Sunday\. No commits yet\. Use the arrow keys/);
   expect(document.querySelector("#calendar .legend .key")!.textContent).toBe("No commits yet");
+  // The only commits are in January: the steps keep them, the words say the weeks shown have none.
+  redraw({ ...d, first: "2026-01-05", days: [row("2026-01-05", 3), row("2026-11-18", 0, { prompts: 2 })] });
+  expect(group().getAttribute("aria-label")).toMatch(/from Monday to Sunday\. No commits in the last 26 weeks\. Use the arrow keys/);
+  expect([...document.querySelectorAll("#calendar .legend .key")].map(k => k.textContent)).toEqual(["No commits", "1–3"]);
   redraw({ ...d, first: null, days: [] });
   expect(group().getAttribute("aria-label")).toMatch(/from Monday to Sunday\. No activity yet\.$/);
 });

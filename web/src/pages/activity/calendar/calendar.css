@@ -19,15 +19,17 @@
 .cal-box .tip .cal-sw { margin-right: var(--space-3); }
 
 /* Forced colors: a shade is no system color, so the swatches are the cells' squares (calendarDays.ts): a step a centred
-   square in the text color, 3, 5, 8 and 10px for steps 1 to 4 of a 10px cell, drawn as the content box inside a clear
-   border; no work an unfilled square edged in GrayText. The ring takes the system highlight. */
+   square in the text color, 3, 5, 8 and 10px for steps 1 to 4 of a 10px cell, drawn as a background of that size centred
+   in the swatch (not inside a clear border: a browser rounds a border of 1px or more down to whole device pixels, which
+   would make the squares larger than the cells'); no work an unfilled square edged in GrayText. The ring takes the system
+   highlight. */
 @media (forced-colors: active) {
   .cal-cursor { outline-color: Highlight; }
-  .cal-sw { forced-color-adjust: none; border-radius: 0; border: 0 solid transparent; }
-  /* As specific as the shade rules above, and after them, so their background (with its clip) gives way. */
-  .cal-sw[data-shade] { background: CanvasText; background-clip: content-box; }
+  .cal-sw { forced-color-adjust: none; border-radius: 0; }
+  /* As specific as the shade rules above, and after them, so their background gives way. */
+  .cal-sw[data-shade] { background: linear-gradient(CanvasText, CanvasText) center / 10px 10px no-repeat; }
   .cal-sw[data-shade="0"] { background: none; border: 1px solid GrayText; }
-  .cal-sw[data-shade="1"] { border-width: 3.5px; }
-  .cal-sw[data-shade="2"] { border-width: 2.5px; }
-  .cal-sw[data-shade="3"] { border-width: 1px; }
+  .cal-sw[data-shade="1"] { background-size: 3px 3px; }
+  .cal-sw[data-shade="2"] { background-size: 5px 5px; }
+  .cal-sw[data-shade="3"] { background-size: 8px 8px; }
 }

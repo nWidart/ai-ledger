@@ -742,6 +742,11 @@ class MetricsTest(unittest.TestCase):
         foo, bar = (metrics.calendar(c, p, today=TODAY) for p in ("foo", "bar"))
         self.assertEqual(([r["day"] for r in foo["days"]], foo["first"], foo["project"]), (["2026-11-04", "2026-11-05"], "2026-11-04", "foo"))
         self.assertEqual(([r["day"] for r in bar["days"]], bar["first"]), (["2026-10-01"], "2026-10-01"))
+        # A prompt the day before bar's first request: its day is a row, and so the first day.
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [("p7", "s3", "2026-09-30 12:00:00", False)])
+        self.addCleanup(c.execute, "DELETE FROM prompts WHERE prompt_id = 'p7'")
+        bar = metrics.calendar(c, "bar", today=TODAY)
+        self.assertEqual(([r["day"] for r in bar["days"]], bar["first"]), (["2026-09-30", "2026-10-01"], "2026-09-30"))
         # A year later bar's day is out of the rows, but still the first day.
         later = metrics.calendar(c, today=date(2027, 11, 5))
         self.assertEqual((later["start"], [r["day"] for r in later["days"]], later["first"]),

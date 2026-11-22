@@ -577,8 +577,12 @@ def calendar(cur, project="", today=None, automated=False, source=""):
     _, _, _, fp, W, rq, rp = view(project, (today - start).days + 1, {}, today, automated, source, ap)
     _, _, _, _, _, all_rq, all_rp = view(project, 0, {}, today, automated, source, ap)
     first = cur.execute(f"{all_rq} SELECT min({day('ts')}) FROM rq", all_rp).fetchone()[0]
+    days = daily_work(cur, rq, rp, W, fp)
+    # A prompt or a tool call can fall on a local day before its session's first request: no row is dated before first.
+    if days and (first is None or days[0]["day"] < first):
+        first = days[0]["day"]
     return dict(project=project, automated=bool(automated), source=source, start=start.isoformat(), end=today.isoformat(),
-                first=first, days=daily_work(cur, rq, rp, W, fp))
+                first=first, days=days)
 
 
 def previous_dates(range_days, today):

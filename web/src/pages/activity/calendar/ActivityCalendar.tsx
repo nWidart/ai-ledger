@@ -196,10 +196,12 @@ export function ActivityCalendar({ d, metric, range, selected, onPick, onClear }
   const span = `${plural(m.weeks, "week")} from ${dayLabel(m.from, true)} to ${dayLabel(d.end, true)}, in columns from Monday to Sunday.`;
   const keys = "Use the arrow keys to read a day: left and right move a week, up and down a day, Home and End go to the first and last day. "
     + "Enter selects the day and Escape clears the selection.";
+  // The steps are over the whole payload: with none, no day has the measure yet; with some, the weeks shown may still have none.
+  const none = m.steps.length ? `No ${unit} in the last ${plural(m.weeks, "week")}.` : `No ${unit} yet.`;
   const label = `${M.label} per day as a calendar, ${span} `
     + (!m.days.length ? "No activity yet."
-      : `${m.peak ? `${plural(m.active, "day")} with ${unit}, the most ${num(m.peak.value)} on ${dayName(m.peak.day)}.` : `No ${unit} yet.`} ${keys}`);
-  const recording = d.first && d.first > m.from && d.first <= d.end ? d.first : null;
+      : `${m.peak ? `${plural(m.active, "day")} with ${unit}, the most ${num(m.peak.value)} on ${dayName(m.peak.day)}.` : none} ${keys}`);
+  const recording = d.first && d.first >= m.from && d.first <= d.end ? d.first : null;
 
   // The data table: a row per week shown, a column per weekday, and the week's total.
   const rows = useMemo(() => {
