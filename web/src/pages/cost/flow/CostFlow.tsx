@@ -2,7 +2,7 @@
 // figures, the layout and the drawing are flowModel.ts's, the keys and the pointer test flowReading.ts's. The wrapper
 // draws and reads nothing (`points={0}`); this component reads: the item read, the tooltip, the mark over it and the
 // live region, all from the layout, so they work before the drawing has loaded and when it fails to.
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import type { UsagePayload } from "../../../api";
 import { useColors } from "../../../colors";
 import { tipAt, textScale, useWidth } from "../../../components/chart";
@@ -182,10 +182,11 @@ export function CostFlow({ d, onProject }: CostFlowProps) {
   const onLeave = () => { setHand(false); read(null); };
 
   // Escape ends a reading wherever the focus is, since the pointer can open one while the focus is elsewhere. A key from
-  // inside the box is the box's own. Capturing, as the wrapper's: a control that stops Escape would keep it from us.
+  // inside the box is the box's own. Capturing, as the wrapper's: a control that stops Escape would keep it from us. Added
+  // before the tooltip is painted, so an Escape pressed the moment it shows still ends it.
   const open = !!shown;
   const end = useEffectEvent(() => read(null));
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     const escape = (ev: globalThis.KeyboardEvent) => {
       if (ev.key === "Escape" && !modified(ev) && !box.current?.contains(ev.target as Node)) end();
