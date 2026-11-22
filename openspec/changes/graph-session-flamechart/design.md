@@ -135,7 +135,7 @@ Alternative (not the plan): squeeze a gap only where no call is running, so a lo
 
 ### 5. The layout: lanes, rows and caps
 
-`spansLayout(s, width, ts)` in `spans.ts`, pure, returns `null` when `timelineModel` does (fewer than two times) and otherwise the lanes, the spans, the box's height and the counts the notes need.
+`spansLayout(tl, calls, width, s)` in `spans.ts`, pure: `tl` is `timelineModel(s, width, ts)`'s result, made by the caller, and `calls` the payload's calls, typed by the fields the layout reads. It returns `null` when `tl` is null (fewer than two times) and otherwise the lanes, the spans, the box's height and the counts the notes need.
 
 **Lanes**, top to bottom: the main thread; subagent lanes 1, 2, … by rank; "Subagents, not told apart" (lane null); a lane is drawn only when it has a call, except the main thread, drawn while any lane has a call. A lane's key is built from its rank (`main`, `sub-3`, `apart`, `other`), never from a name or a path.
 
