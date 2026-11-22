@@ -630,7 +630,7 @@ The text of a toggletip SHALL be exposed to assistive technology once it shows, 
 - **THEN** the screen reader reads the method text, which follows the button
 
 ### Requirement: Open toggletips on hover
-A toggletip SHALL also show its text when the pointer rests on it, after a short delay, and hide it when the pointer leaves, unless it was activated while open. An activated toggletip stays open until it is activated again, Escape or a click outside it. Showing on hover SHALL announce nothing to a screen reader.
+A toggletip SHALL also show its text when the pointer rests on it, after a short delay, and hide it when the pointer leaves, unless it was activated while open. An activated toggletip stays open until it is activated again, Escape or a click outside it. Showing on hover SHALL announce nothing to a screen reader. Showing or hiding a toggletip's text, by hover or activation, SHALL NOT move the button or the content around it, whatever layout holds it.
 
 #### Scenario: Hover
 - **WHEN** the user rests the pointer on the toggletip beside the Errors page's "Time lost" header, then moves it away
@@ -639,6 +639,10 @@ A toggletip SHALL also show its text when the pointer rests on it, after a short
 #### Scenario: Pinned by a click
 - **WHEN** the user rests the pointer on a toggletip, clicks it, then moves the pointer away
 - **THEN** the explanation stays until the user clicks it again, presses Escape or clicks outside it
+
+#### Scenario: Toggletip in a row with gaps
+- **WHEN** the user rests the pointer on the Cache read toggletip in Live's status strip, a row whose items are set apart by gaps
+- **THEN** the explanation shows, and the button and the text beside it keep their places
 
 ### Requirement: Name data tables and their headers
 Every data table SHALL have an accessible name, and every header cell SHALL declare its scope (`col` or `row`). Every row that presents data SHALL have a row header scoped to that row and naming it, such as the session of an error loop or the window of a closed window. The row header SHALL come before the row's data cells, since it names only the cells after it. A table wrapper that scrolls sideways SHALL be a named region that takes keyboard focus, so a keyboard user can scroll it.

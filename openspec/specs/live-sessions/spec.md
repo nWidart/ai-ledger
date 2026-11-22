@@ -7,7 +7,7 @@ Follow running Claude Code, Codex and Grok sessions within seconds of their tran
 ## Requirements
 
 ### Requirement: List active sessions
-The app SHALL list as active every session whose newest stored line is less than 10 minutes old, newest first. Each entry SHALL give the session's project, source, git branch, model, cost so far, state and the time the session started. The list SHALL honour the project, source and automated filters.
+The app SHALL list as active every session whose newest stored line is less than 10 minutes old, newest first. Each entry SHALL give the session's project, source, git branch, model, cost so far, state and the time the session started. An entry SHALL NOT carry the session's newest call (`latest`): the stream reports calls. The list SHALL honour the project, source and automated filters.
 
 #### Scenario: Two running sessions and an old one
 - **WHEN** session A wrote a line 20 seconds ago, session B 4 minutes ago and session C 2 hours ago
@@ -24,6 +24,10 @@ The app SHALL list as active every session whose newest stored line is less than
 #### Scenario: Session start
 - **WHEN** a session whose first line is stamped 09:00 wrote a line a minute ago
 - **THEN** its entry carries 09:00 as its start, whatever its newest line says
+
+#### Scenario: No newest call
+- **WHEN** an active session's newest event is a tool call
+- **THEN** its entry in `/api/live` holds no `latest` field
 
 ### Requirement: Derive each session's state
 The app SHALL give each active session one state, checked in this order:
@@ -269,10 +273,7 @@ A tool call's input SHALL be cut to 300 characters by default, and a subagent ca
 For one session, the app SHALL report:
 - its newest main-thread request's context, and its window when known, alike on a first load, a catch-up and the list;
 - its compactions, with the context before each;
-- its cost, requests, tool calls, failed calls and cache-read share;
-- its working directory, when known;
-- its pulse of the 10 minutes up to now: each main-thread request's context, from the last one before, and each tool call that ended;
-- the newest plan-limit use for its source.
+- its cost, requests, tool calls, failed calls and cache-read share.
 
 #### Scenario: Known context window
 - **WHEN** the newest request used 55,000 tokens of context on a model with a 1,000,000-token window
@@ -281,6 +282,13 @@ For one session, the app SHALL report:
 #### Scenario: Unknown context window
 - **WHEN** the model's context window is not known
 - **THEN** the app reports the context in tokens with no window
+
+#### Scenario: Window on a catch-up
+- **WHEN** a Codex session on a model with no price states a 272,000-token window at a turn's start, more than a minute before a catch-up's cursor
+- **THEN** the catch-up, the first load and the active list all report the 272,000-token window
+
+### Requirement: Report the session's pulse
+For one session, the app SHALL report its pulse of the 10 minutes up to now: each main-thread request's context, from the last one before, and each tool call that ended.
 
 #### Scenario: Pulse
 - **WHEN** a session made a main-thread request at 40,000 tokens 12 minutes ago and one at 62,000 tokens 2 minutes ago, and a subagent's call failed a minute ago
@@ -294,9 +302,12 @@ For one session, the app SHALL report:
 - **WHEN** the app reports a pulse ending at 08:10 and the store holds a request stamped 08:11
 - **THEN** the pulse leaves that request out
 
-#### Scenario: Window on a catch-up
-- **WHEN** a Codex session on a model with no price states a 272,000-token window at a turn's start, more than a minute before a catch-up's cursor
-- **THEN** the catch-up, the first load and the active list all report the 272,000-token window
+### Requirement: Leave plan limits and directory out of the session report
+`/api/live/session` SHALL NOT report plan-limit use (`limits`) or the working directory (`cwd`): the Limits page and the session detail report them.
+
+#### Scenario: No plan limits or directory
+- **WHEN** the session's source has open plan-limit windows and the store holds the session's working directory
+- **THEN** `/api/live/session` holds neither a `limits` nor a `cwd` field
 
 ### Requirement: Report Grok's figures when a turn ends
 Grok writes its usage once per turn, so a Grok session's token figures, cost and context SHALL change when a turn ends, not during it.
