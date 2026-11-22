@@ -8,10 +8,11 @@ const assets = fileURLToPath(new URL("../../src/ai_ledger/web/assets/", import.m
 
 // Limits in kB (1 kB = 1000 bytes) of gzip -9.
 const LIMITS = {
-  index: 130, // catches a static import of ECharts into the entry (109.9 kB with Errors' rate chart on ECharts and the activity calendar)
+  index: 130, // catches a static import of ECharts into the entry (110.1 kB with Errors' rate chart on ECharts, the activity calendar and the session sheet's lazy mount)
   CostPage: 20,
   ActivityPage: 31, // 28.3 kB with the activity calendar's section (its loading and failure states), plus 2.7 kB of room
   ErrorsPage: 26,
+  SessionSpans: 9, // 6.3 kB: the session sheet's tool-call chart (layout, option, reading and table), loaded when a sheet opens
   ProjectPage: 11, // 9.3 kB: the page, its blocks and the session quadrant (model, fit, reading, option); catches a static import of ECharts
   // The `<EChart>` wrapper (6.3 kB), which Cost, Activity, Errors and Project load. Project draws a chart but does not zoom,
   // so the build moved the wrapper out of `zoomReset` into its own shared chunk.
@@ -22,7 +23,7 @@ const LIMITS = {
   echarts: 195, // the lazy ECharts chunk, which the charts of Cost, Activity, Errors and Project load
 };
 // The page chunks and the two shared chart chunks, each of which must match exactly one file.
-const SINGLE = ["index", "CostPage", "ActivityPage", "ErrorsPage", "ProjectPage", "EChart", "zoomReset"];
+const SINGLE = ["index", "CostPage", "ActivityPage", "ErrorsPage", "ProjectPage", "SessionSpans", "EChart", "zoomReset"];
 // How many `echarts-*.js` chunks the build must hold: one, which the charts of Cost, Activity, Errors and Project load.
 const ECHARTS_CHUNKS = 1;
 
