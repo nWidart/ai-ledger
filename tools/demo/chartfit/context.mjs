@@ -1415,6 +1415,8 @@ function watchDots() {
 
 // The map's rules for the payload's sessions, as context.ts and mapDots.ts give them.
 const START_LARGE = 30000, NEAR = .8;
+/** How long a timing of the 1,000-session map waits for what it times, in ms: until()'s deadline. */
+const WAIT = 4000;
 const NAMES = { lean: "Lean", heavy: "Heavy start", full: "Grew full", both: "Heavy and full" };
 /** The sessions on the map, oldest first. */
 const mapRows = d => d.sessions_map.points.slice().sort((a, b) => (a.first_ts ?? "").localeCompare(b.first_ts ?? "") || a.session_id.localeCompare(b.session_id));
@@ -2019,7 +2021,8 @@ async function sessionMap(h) {
     const page = await open("1,000 sessions", { answer, path: "/context?range=30&tab=growth",
       ready: async p => { await p.waitForFunction(() => document.querySelector(".growth .echart-plot svg path")); } });
     await settle(page);
-    const first = await ev(page, () => new Promise(resolve => {
+    // Each timing waits up to WAIT, as until() does: one never met gives what was drawn then, and the run goes on.
+    const first = await ev(page, wait => new Promise(resolve => {
       const t0 = performance.now();
       let mount = null;
       const mo = new MutationObserver(() => {
@@ -2027,31 +2030,39 @@ async function sessionMap(h) {
         mount ??= document.querySelector("#pressure .session-map") ? now : null;
         if (window.mapfit.dots().length < 1000) return;
         mo.disconnect();
+        clearTimeout(late);
         requestAnimationFrame(() => resolve({ mount: mount - t0, drawn: now - t0, painted: performance.now() - t0 }));
       });
+      const late = setTimeout(() => { mo.disconnect(); resolve({ late: true, mounted: mount != null, dots: window.mapfit.dots().length }); }, wait);
       mo.observe(document.body, { childList: true, subtree: true });
       document.querySelector("#ctab-overhead").click();
-    }));
-    line("1,000 sessions: the first drawing takes under 100ms", first.drawn < 100,
-      `from the tab's click: the map mounted at ${first.mount.toFixed(1)}ms, its 1,000 dots in the SVG at ${first.drawn.toFixed(1)}ms, the next frame at ${first.painted.toFixed(1)}ms`);
+    }), WAIT);
+    line("1,000 sessions: the first drawing takes under 100ms", !first.late && first.drawn < 100, first.late
+      ? `after ${WAIT}ms the map ${first.mounted ? "mounted" : "not mounted"}, ${first.dots} dots in the SVG`
+      : `from the tab's click: the map mounted at ${first.mount.toFixed(1)}ms, its 1,000 dots in the SVG at ${first.drawn.toFixed(1)}ms, the next frame at ${first.painted.toFixed(1)}ms`);
     await page.locator(`${ROOT} .map-box`).scrollIntoViewIfNeeded();
     await settle(page);
-    const redraw = await ev(page, want => new Promise(resolve => {
+    const redraw = await ev(page, ([want, wait]) => new Promise(resolve => {
       let t0 = 0, done = false;
+      const dimmed = () => window.mapfit.dots().filter(d => d.so < .5).length;
       const check = () => {
-        if (done || window.mapfit.dots().filter(d => d.so < .5).length !== 1000 - want || !window.mapfit.wash()) return;
+        if (done || dimmed() !== 1000 - want || !window.mapfit.wash()) return;
         done = true;
+        mo.disconnect();
+        clearTimeout(late);
         const t = performance.now() - t0;
         requestAnimationFrame(() => resolve({ drawn: t, painted: performance.now() - t0 }));
       };
       const mo = new MutationObserver(check);
+      const late = setTimeout(() => { done = true; mo.disconnect(); resolve({ late: true, dimmed: dimmed(), wash: !!window.mapfit.wash() }); }, wait);
       mo.observe(document.querySelector("#pressure .session-map .echart-plot"), { childList: true, subtree: true, attributes: true });
       t0 = performance.now();
       document.querySelector('#pressure .session-map .quads button[data-quad="both"]').click();
       check();
-    }), both);
-    line("1,000 sessions: a quadrant's redraw takes under 100ms", redraw.drawn < 100,
-      `from the button's click: ${1000 - both} dots dimmed and the wash drawn at ${redraw.drawn.toFixed(1)}ms, the next frame at ${redraw.painted.toFixed(1)}ms`);
+    }), [both, WAIT]);
+    line("1,000 sessions: a quadrant's redraw takes under 100ms", !redraw.late && redraw.drawn < 100, redraw.late
+      ? `after ${WAIT}ms ${redraw.dimmed} dots dimmed, not ${1000 - both}, ${redraw.wash ? "the wash drawn" : "no wash"}`
+      : `from the button's click: ${1000 - both} dots dimmed and the wash drawn at ${redraw.drawn.toFixed(1)}ms, the next frame at ${redraw.painted.toFixed(1)}ms`);
     await shot(page, "1000");
     // The oldest session read, then newer figures that push it off the map: the reading ends, with nothing said.
     await page.locator(`${ROOT} .quads button[data-quad="both"]`).click();
