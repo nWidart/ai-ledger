@@ -18,7 +18,7 @@ export const SUB_LANES = 6;
 export const ROW = 10, BAR = 8;
 const PAD = 4, LABEL = 14, LANE_GAP = 6, AXIS = 16;
 
-/** ok and failed: a timed call; open: no result; still: no duration, or no start. */
+/** ok and failed: a timed call; open: no result; still: no duration, no start, or an end that cannot be read. */
 export type SpanKind = "ok" | "failed" | "open" | "still";
 
 export interface Span {
@@ -32,6 +32,8 @@ export interface Span {
   /** The drawn edges in px of the box: at least 1px apart. */
   x0: number; x1: number;
   kind: SpanKind;
+  /** The call failed (is_error), whatever its kind: a still call can fail too, as a Codex call with no duration. */
+  failed: boolean;
   /** Ran past the axis's end: drawn to the plot's edge. */
   clipped: boolean;
   /** Ran through squeezed time: drawn shorter than it lasted. */
@@ -63,6 +65,8 @@ export interface SpansLayout {
   left: number; right: number;
   /** Each squeezed gap's break, its centre's x in px. */
   breaks: number[];
+  /** The timeline's axis runs over 20 hours (its fmtT rule): times then carry their date. */
+  long: boolean;
   /** The notes' counts. over: each lane with calls drawn over its last row; folded: the subagents in "Other subagents". */
   notes: { still: number; clipped: number; squeezed: number; over: { lane: number; n: number }[]; folded: number[] };
 }
@@ -76,7 +80,7 @@ function gapX(tl: TimelineModel, t: number): number {
 
 /** A time's x in px of a box width px wide (decision 2): the timeline's x(), the gap rule, clamped to the plot, and scaled
  *  as the timeline's svg is below 300px. t: a finite time in ms. */
-export function spanX(tl: TimelineModel, width: number, t: number): number {
+function spanX(tl: TimelineModel, width: number, t: number): number {
   const x = Math.min(Math.max(gapX(tl, t), tl.m.l), tl.m.l + tl.iw);
   return x * width / tl.W;
 }
@@ -87,9 +91,10 @@ const time = (ts: string | null | undefined): number | null => {
 };
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-/** tl: timelineModel(s, width, ts) for the same width; calls: the payload's; ts: the text scale. Null with no timeline. */
+/** tl: timelineModel(s, width, ts) for the same width; calls: the payload's; ts: the text scale. Null with no timeline, or
+ *  for a width that is not a positive finite number. */
 export function spansLayout(tl: TimelineModel | null, calls: readonly SpanCall[], width: number, ts: number): SpansLayout | null {
-  if (!tl) return null;
+  if (!tl || !(width > 0 && Number.isFinite(width))) return null;
   const k = width / tl.W;
   // The axis's px per ms where no gap ends: every gap is over 20 minutes, so none ends in the first minute.
   const perMs = (tl.x(tl.start + 60e3) - tl.x(tl.start)) / 60e3;
@@ -103,13 +108,14 @@ export function spansLayout(tl: TimelineModel | null, calls: readonly SpanCall[]
     const start = c.start_ts ? at : null, end = time(c.end_ts);
     const sub = !c.subagent ? 0 : Number.isInteger(c.lane) && c.lane! >= 1 ? c.lane : null;
     const timed = start != null && end != null && end > start;
-    const kind: SpanKind = !timed ? (start != null && end == null ? "open" : "still") : c.is_error ? "failed" : "ok";
+    // open: no end at all; an end that cannot be read is a result with no duration.
+    const kind: SpanKind = !timed ? (start != null && !c.end_ts ? "open" : "still") : c.is_error ? "failed" : "ok";
     const xs = spanX(tl, width, at), xe = timed ? spanX(tl, width, end!) : xs;
     placed.push({
       at, until: timed ? end! : at, group: sub === 0 ? "main" : sub == null ? "apart" : `sub-${sub}`,
       span: {
         id: c.id, tool: c.tool ?? "Unknown tool", known: c.tool != null, input: c.input ?? "", lane: 0, row: 0, sub,
-        x0: xs - .5, x1: Math.max(xe, xs) + .5, kind,
+        x0: xs - .5, x1: Math.max(xe, xs) + .5, kind, failed: c.is_error === true,
         clipped: timed && end! > tl.end,
         squeezed: timed && (end! - start!) * perMs - (gapX(tl, end!) - tl.x(start!)) > 1e-6,
         start, end, ms: timed ? end! - start! : null,
@@ -156,6 +162,7 @@ export function spansLayout(tl: TimelineModel | null, calls: readonly SpanCall[]
     lanes, spans, bottom: y, height: Math.ceil(y + AXIS * ts),
     left: tl.m.l * k, right: (tl.m.l + tl.iw) * k,
     breaks: tl.gaps.map(g => g.bx * k),
+    long: tl.end - tl.start > 20 * 3600e3,
     notes: {
       still: spans.filter(s => s.kind === "still").length,
       clipped: spans.filter(s => s.clipped).length,

@@ -78,13 +78,9 @@ export function alongside(l: SpansLayout, id: string): number | undefined {
   return s && l.spans.filter(o => o !== s && overlap(s, o)).length;
 }
 
-/** The session spans over 20 hours (the timeline's long rule), by its calls' own times: times then carry their date. */
-function long(l: SpansLayout): boolean {
-  const ts = l.spans.flatMap(s => [s.start, s.end]).filter((t): t is number => t != null);
-  return ts.length > 0 && Math.max(...ts) - Math.min(...ts) > 20 * 3600e3;
-}
+/** A time in words; with its date on a timeline over 20 hours (the layout's long, the timeline's rule). */
 const clock = (l: SpansLayout, t: number) => new Date(t).toLocaleTimeString(undefined,
-  { ...(long(l) ? { month: "short", day: "numeric" } : {}), hour: "2-digit", minute: "2-digit", second: "2-digit" } as const);
+  { ...(l.long ? { month: "short", day: "numeric" } : {}), hour: "2-digit", minute: "2-digit", second: "2-digit" } as const);
 /** A duration in one unit: dur() from a second, ms() under one. */
 const length = (v: number) => (Math.round(v) < 1000 ? ms(v) : dur(v / 1000));
 /** The call's own thread: a call of the folded lane keeps its subagent's number. */
@@ -98,7 +94,7 @@ function when(l: SpansLayout, s: Span): [string, string] {
   if (s.kind === "open") return [`started ${t}, no result recorded`, `Started ${t}, no result recorded`];
   if (s.kind === "still") return [`at ${t}, no duration recorded`, `At ${t}, no duration recorded`];
   const both = `${t} to ${clock(l, s.end!)}`;
-  return [`${both}, ${length(s.ms!)}${s.kind === "failed" ? ", failed" : ""}`, both];
+  return [`${both}, ${length(s.ms!)}`, both];
 }
 
 /** The call in one sentence, as the live region says it; undefined for an id the layout does not hold. */
@@ -106,7 +102,8 @@ export function readSpan(l: SpansLayout, id: string): string | undefined {
   const s = spanOf(l, id);
   if (!s) return undefined;
   const n = alongside(l, id)!;
-  return `${s.tool} on ${on(s)}, ${when(l, s)[0]}${s.input ? `: ${s.input}` : ""}.`
+  // A failed call says so whatever its kind: a call with no duration can fail too.
+  return `${s.tool} on ${on(s)}, ${when(l, s)[0]}${s.failed ? ", failed" : ""}${s.input ? `: ${s.input}` : ""}.`
     + (n ? ` ${plural(n, "other call")} ran during it.` : "");
 }
 
@@ -118,7 +115,8 @@ export function tipRows(l: SpansLayout, id: string): { tool: string; input: stri
   const n = alongside(l, id)!;
   const rows = [thread(s), when(l, s)[1]];
   if (s.ms != null) rows.push(length(s.ms));
-  if (s.kind === "ok" || s.kind === "failed") rows.push(s.kind === "failed" ? "Failed" : "Succeeded");
+  // The outcome of every call with a result: an open call has none.
+  if (s.kind !== "open" || s.failed) rows.push(s.failed ? "Failed" : "Succeeded");
   if (n) rows.push(`and ${plural(n, "other call")} at the same time`);
   return { tool: s.tool, input: s.input || null, rows };
 }

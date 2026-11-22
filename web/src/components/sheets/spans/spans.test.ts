@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import session from "../../../__fixtures__/session";
 import type { SessionDetail } from "../../../api";
 import { timelineModel } from "../session";
-import { spansLayout, spanX, type SpanCall } from "./spans";
+import { spansLayout, type SpanCall } from "./spans";
 
 const T0 = Date.parse("2026-11-04T10:00:00.000Z");
 const at = (min: number) => new Date(T0 + min * 60e3).toISOString();
@@ -23,26 +23,24 @@ const layout = (calls: SpanCall[], width = 600, ts = 1) => {
 };
 const span = (l: ReturnType<typeof layout>["l"], c: SpanCall) => l.spans.find(s => s.id === c.id)!;
 
-describe("spanX", () => {
+describe("the time mapping", () => {
   // Starts at 0, 2, 42 and 45: a squeezed gap from 2 to 42 before the axis's end; keep is 30 s (5 minutes active).
   const long = call(2, 30), short = call(2, 2.25), past = call(42, 50), calls = [call(0, 1), long, short, past, call(45, 45.5)];
   const { tl, l } = layout(calls);
   const g = tl.gaps[0]!;
 
   it.each([
-    ["a call longer than keep ending inside the gap: at the gap's far side", Date.parse(long.end_ts!), tl.x(g.b)],
-    ["a short call ending inside the gap: unchanged", Date.parse(short.end_ts!), tl.x(Date.parse(short.end_ts!))],
-    ["a time past the axis's end: at the plot's edge", Date.parse(past.end_ts!), tl.m.l + tl.iw],
-    ["a start on the axis", Date.parse(past.start_ts!), tl.x(Date.parse(past.start_ts!))],
-  ])("%s", (_, t, x) => {
+    ["a call longer than keep ending inside the gap: at the gap's far side", long, "x1", tl.x(g.b) + .5],
+    ["a short call ending inside the gap: unchanged", short, "x1", tl.x(Date.parse(short.end_ts!)) + .5],
+    ["a time past the axis's end: at the plot's edge", past, "x1", tl.m.l + tl.iw + .5],
+    ["a start on the axis", past, "x0", tl.x(Date.parse(past.start_ts!)) - .5],
+  ] as const)("%s", (_, c, edge, x) => {
     expect(tl.gaps).toHaveLength(1);
-    expect(spanX(tl, 600, t)).toBeCloseTo(x, 9);
+    expect(span(l, c)[edge]).toBeCloseTo(x, 9);
   });
 
   it("flags the clipped and the squeezed call, not the short one", () => {
     expect([span(l, long), span(l, short), span(l, past)].map(s => [s.clipped, s.squeezed])).toEqual([[false, true], [false, false], [true, false]]);
-    expect(span(l, long).x1).toBeCloseTo(tl.x(g.b) + .5, 9);
-    expect(span(l, past).x1).toBeCloseTo(tl.m.l + tl.iw + .5, 9);
     expect([span(l, long).ms, span(l, past).end]).toEqual([28 * 60e3, Date.parse(past.end_ts!)]);
     expect(l.breaks).toEqual([g.bx]);
   });
@@ -50,7 +48,7 @@ describe("spanX", () => {
   it("scales by the box's width below 300px, as the timeline's svg", () => {
     const narrow = timelineModel(sess(calls), 280, 1)!, small = spansLayout(narrow, calls, 280, 1)!;
     const t = Date.parse(past.start_ts!);
-    expect(spanX(narrow, 280, t)).toBeCloseTo(narrow.x(t) * 280 / 300, 9);
+    expect(span(small, past).x0).toBeCloseTo(narrow.x(t) * 280 / 300 - .5, 9);
     expect([small.left, small.right]).toEqual([narrow.m.l * 280 / 300, (narrow.m.l + narrow.iw) * 280 / 300]);
     expect(small.breaks[0]).toBeCloseTo(narrow.gaps[0]!.bx * 280 / 300, 9);
   });
@@ -61,19 +59,23 @@ describe("spanX", () => {
     expect(odd.spans.map(s => s.id)).toEqual([bad[0]!.id, bad[1]!.id, bad[3]!.id]);
     expect(odd.spans.every(s => Number.isFinite(s.x0) && Number.isFinite(s.x1))).toBe(true);
     expect(spansLayout(null, bad, 600, 1)).toBeNull();
+    const tl = timelineModel(sess(bad), 600, 1)!;
+    expect([NaN, 0, -1, Infinity].map(w => spansLayout(tl, bad, w, 1))).toEqual([null, null, null, null]);
   });
 });
 
 describe("spansLayout", () => {
   it.each([
-    ["a timed call", call(1, 1.5), "ok"],
-    ["a failed call", call(1, 1.5, { is_error: true }), "failed"],
-    ["a call with no result", call(1, null, { is_error: null }), "open"],
-    ["a call with no duration", call(1, 1), "still"],
-    ["a call that ends before it starts", call(1, .5), "still"],
-  ])("draws %s from x(start) − 0.5, at least 1px wide", (_, c, kind) => {
+    ["a timed call", call(1, 1.5), "ok", false],
+    ["a failed call", call(1, 1.5, { is_error: true }), "failed", true],
+    ["a call with no result", call(1, null, { is_error: null }), "open", false],
+    ["a call with no duration", call(1, 1), "still", false],
+    ["a failed call with no duration", call(1, 1, { is_error: true }), "still", true],
+    ["a call that ends before it starts", call(1, .5), "still", false],
+    ["a call whose end cannot be read", call(1, null, { end_ts: "2026-13-45T99:00:00" }), "still", false],
+  ])("draws %s from x(start) − 0.5, at least 1px wide", (_, c, kind, failed) => {
     const calls = [call(0, .1), c, call(10, 11)], { tl, l } = layout(calls), s = span(l, c);
-    expect(s.kind).toBe(kind);
+    expect([s.kind, s.failed]).toEqual([kind, failed]);
     expect(s.x0).toBeCloseTo(tl.x(Date.parse(c.start_ts!)) - .5, 9);
     expect(s.x1 - s.x0).toBeGreaterThanOrEqual(1);
     expect(s.ms).toBe(kind === "ok" || kind === "failed" ? 30e3 : null);

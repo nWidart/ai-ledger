@@ -14,8 +14,8 @@ const call = (start: number | null, end: number | null, o: Partial<SpanCall> = {
   is_error: false, subagent: false, lane: 0, input: "", ...o,
 });
 const sub = (lane: number | null, start: number, end: number | null, o: Partial<SpanCall> = {}) => call(start, end, { subagent: true, lane, ...o });
-const layout = (calls: SpanCall[]) => {
-  const s = { ...session, requests: [], compaction_ts: [], calls: calls.map(c => ({ ...c, category: null, is_commit: false })) } as unknown as SessionDetail;
+const layout = (calls: SpanCall[], compaction_ts: string[] = []) => {
+  const s = { ...session, requests: [], compaction_ts, calls: calls.map(c => ({ ...c, category: null, is_commit: false })) } as unknown as SessionDetail;
   return spansLayout(timelineModel(s, 600, 1), calls, 600, 1)!;
 };
 const clock = (min: number, date = false) => new Date(T0 + min * 60e3).toLocaleTimeString(undefined,
@@ -51,14 +51,16 @@ describe("spanAt", () => {
 describe("the words", () => {
   const timed = call(2, 8.5, { is_error: true, input: "npm test" }), open = sub(2, 2, null, { input: "npm run dev" });
   const still = call(20, 20, { tool: "exec_command", input: "cargo test" }), noStart = call(null, 22, { tool: "Read" });
+  const stillFailed = call(23, 23, { tool: "exec_command", is_error: true });
   const past = call(30, 50), others = [sub(1, 5, 6)], folded = [1, 2, 3, 4, 5, 6, 7].map(r => sub(r, 25, 26));
-  const l = layout([timed, open, still, noStart, past, ...others, ...folded, call(31, 32, { tool: null })]);
+  const l = layout([timed, open, still, noStart, stillFailed, past, ...others, ...folded, call(31, 32, { tool: null })]);
 
   it("says each call in one sentence, its true times and one-unit duration", () => {
-    expect([timed, open, still, noStart, past, folded[6]!].map(c => readSpan(l, c.id))).toEqual([
+    expect([timed, open, still, stillFailed, noStart, past, folded[6]!].map(c => readSpan(l, c.id))).toEqual([
       `Bash on the main thread, ${clock(2)} to ${clock(8.5)}, 7m, failed: npm test. 2 other calls ran during it.`,
       `Bash on subagent 2, started ${clock(2)}, no result recorded: npm run dev. 1 other call ran during it.`,
       `exec_command on the main thread, at ${clock(20)}, no duration recorded: cargo test.`,
+      `exec_command on the main thread, at ${clock(23)}, no duration recorded, failed.`,
       `Read on the main thread, ended ${clock(22)}, start not recorded.`,
       `Bash on the main thread, ${clock(30)} to ${clock(50)}, 20m. 1 other call ran during it.`,
       `Bash on subagent 7, ${clock(25)} to ${clock(26)}, 1m. 6 other calls ran during it.`,
@@ -66,19 +68,22 @@ describe("the words", () => {
     expect([alongside(l, still.id), alongside(l, timed.id)]).toEqual([0, 2]);
     const short = layout([call(0, 0.007), call(30, 31)]);
     expect(readSpan(short, short.spans[0]!.id)).toContain(", 420ms.");
-    const long = layout([call(0, 1), call(21 * 60, 21 * 60 + 1)]);
+    // The timeline's axis runs over 20 hours by a compaction, though the calls' own times do not.
+    const long = layout([call(0, 1), call(2, 3)], [at(21 * 60)]);
     expect(readSpan(long, long.spans[0]!.id)).toContain(`${clock(0, true)} to ${clock(1, true)}`);
   });
 
   it("gives a clipped call's tooltip its true times", () => {
     expect(l.spans.find(s => s.id === past.id)!.clipped).toBe(true);
     expect(tipRows(l, past.id)).toEqual({ tool: "Bash", input: null, rows: ["Main thread", `${clock(30)} to ${clock(50)}`, "20m", "Succeeded", "and 1 other call at the same time"] });
+    expect([still, stillFailed].map(c => tipRows(l, c.id)!.rows)).toEqual([
+      ["Main thread", `At ${clock(20)}, no duration recorded`, "Succeeded"], ["Main thread", `At ${clock(23)}, no duration recorded`, "Failed"]]);
     expect(tipRows(l, open.id)).toEqual({ tool: "Bash", input: "npm run dev", rows: ["Subagent 2", `Started ${clock(2)}, no result recorded`, "and 1 other call at the same time"] });
   });
 
   it("labels the group", () => {
     expect(groupLabel(l, { ...session.info, active_s: 6840 })).toBe("Tool calls of this session by thread, on the timeline's time axis: "
-      + "14 calls on 8 threads, the main thread and 7 subagents, over 1.9h of active time; the longest, Bash, 20m. Use the left and right arrow keys "
+      + "15 calls on 8 threads, the main thread and 7 subagents, over 1.9h of active time; the longest, Bash, 20m. Use the left and right arrow keys "
       + "to step through a thread's calls, up and down to change thread, Home and End for its first and last call, Enter to open the tool.");
   });
 
