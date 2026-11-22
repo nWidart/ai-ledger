@@ -49,6 +49,11 @@ describe("quadrantModel", () => {
     expect(notes(below).leftOut).toBe("3 sessions are left out: 1 with no known cost and 2 with a negative cost.");
     expect(notes(model([row(1, 1), row(-2, 2)])).leftOut).toBe("1 session with a negative cost is left out.");
     expect(notes(model([row(-1, 1), row(null, 2)])).none).toBe("No session in this view has a known cost of $0 or more, so none can be placed.");
+    // Cut: an older session may have a cost, and under three dots there is no median to be the newest sessions'.
+    expect(notes(model([row(null, 1), row(-1, 2)], 412))).toEqual({ none: "No session in the newest 2 has a known cost of $0 or more, so none can be placed.",
+      few: null, cut: "The newest 2 of 412 sessions in this view.", leftOut: null });
+    expect(notes(model([row(1, 1), row(2, 2), row(null, 3)], 412))).toMatchObject({ none: null, cut: "The newest 3 of 412 sessions in this view.",
+      few: "2 sessions: too few to split at a median.", leftOut: "1 session with no known cost is left out." });
   });
 
   it("reads cheapest first, then by tool calls, start and id, whatever the rows' order", () => {

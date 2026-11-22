@@ -259,9 +259,10 @@ export function notes(model: QuadrantModel) {
   const n = model.dots.length, out = model.leftOut, neg = model.negative;
   const one = (k: number, what: string) => `${plural(k, "session")} with ${what} ${k === 1 ? "is" : "are"} left out.`;
   return {
-    none: n ? null : `No session in this view has a known cost${neg ? " of $0 or more" : ""}, so none can be placed.`,
+    // Cut, an older session may have a cost: the sentence names the sample. Under three dots there is no median to name.
+    none: n ? null : `No session ${model.cut ? `in the newest ${num(model.rows)}` : "in this view"} has a known cost${neg ? " of $0 or more" : ""}, so none can be placed.`,
     few: n && !model.split ? few(n) : null,
-    cut: model.cut ? `The newest ${num(model.rows)} of ${num(model.total)} sessions in this view; the medians are theirs.` : null,
+    cut: model.cut ? `The newest ${num(model.rows)} of ${num(model.total)} sessions in this view${model.split ? "; the medians are theirs" : ""}.` : null,
     leftOut: !n || !(out + neg) ? null
       : out && neg ? `${plural(out + neg, "session")} are left out: ${num(out)} with no known cost and ${num(neg)} with a negative cost.`
       : out ? one(out, "no known cost") : one(neg, "a negative cost"),
