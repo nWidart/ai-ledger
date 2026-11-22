@@ -8,13 +8,14 @@ import { Pulse } from "./Pulse";
 export const NEAR_FULL = 0.8;
 
 /** A state's tag, with its detail as hover text; plain: the page shows the detail beside it, so no hover text. why: an
- *  inferred state's "(inferred)" is a toggletip that gives the reason, for where the page shows it nowhere else. */
-export function StateTag({ st, now, plain, why }: { st: LiveState; now: number; plain?: boolean; why?: boolean }) {
+ *  inferred state's "(inferred)" is a toggletip that gives the reason, for where the page shows it nowhere else. quiet:
+ *  "(inferred)" is for screen readers only, where the tag has no room for it. */
+export function StateTag({ st, now, plain, why, quiet }: { st: LiveState; now: number; plain?: boolean; why?: boolean; quiet?: boolean }) {
   const t = stateText(st, now), reason = st.inferred ? INFERRED_WHY[st.kind] : undefined;
   return <span className={"state st-" + st.kind} title={plain ? undefined : reason ?? t.detail}>
     <i aria-hidden="true" />{t.label}{st.inferred && (why && reason
       ? <> <Toggletip label="(inferred)" name="Why inferred" className="inf">{reason}</Toggletip></>
-      : <span className="inf"> (inferred)</span>)}</span>;
+      : quiet ? <>{" "}<span className="sr">(inferred)</span></> : <span className="inf"> (inferred)</span>)}</span>;
 }
 
 /** The selected session in one strip above its stream, about this conversation only. A head row: its state with the

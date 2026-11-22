@@ -17,7 +17,7 @@ An audit of Live with real data (13 active sessions, titles of 25 to 72 characte
 
 - **Rail cards.** Two lines, one height: the title (or project) with an `✕N` error badge, then the state tag, which never shrinks, the project when titled, and the context percent. Cost, source, latest action, the meter and the branch leave the card.
 - **Wall tiles.** Four lines, one height per row: state with errors and the pinned mark; the title on two lines at most; the project and model; the context meter. Latest action, tools, cost, branch and source leave the tile and its accessible name.
-- **Status strip.** About the conversation only. Row one: state and detail, then cost, tools, errors as a plain number and cache read. Row two: Context (readout over a full-width meter with compaction marks) beside Last 10 min (the pulse at full column width). Plan limits, the working directory and Copy resume leave the strip. **BREAKING**: `/api/live/session` drops `limits` and `cwd`.
+- **Status strip.** About the conversation only. Row one: state and detail, then cost, tools, errors as a plain number and cache read. Row two: Context (readout over a full-width meter with compaction marks) beside Last 10 min (the pulse at full column width). Plan limits, the working directory and Copy resume leave the strip. **BREAKING**: `/api/live/session` drops `limits` and `cwd`, and `/api/live` drops `latest`, the newest call of each session.
 - **Toggletips.** A toggletip is one inline element, so showing it on hover moves nothing around it.
 - **Follow.** Scrolling back to the bottom turns Follow back on.
 - **One errors filter.** "Failed calls only", a checkbox with the count, in the filter row.
@@ -34,7 +34,7 @@ None.
 ### Modified Capabilities
 
 - `live-dashboard`: rail entries, wall tiles, the status strip, Follow, the stream filters, Full text, Markdown bodies and the narrow layout.
-- `live-sessions`: the session payload loses plan-limit use and the working directory.
+- `live-sessions`: the session payload loses plan-limit use and the working directory, and the list payload loses each session's newest call.
 - `dashboard-app`: showing a toggletip moves nothing around it.
 
 ## Impact

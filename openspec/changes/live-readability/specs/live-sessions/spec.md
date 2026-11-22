@@ -1,5 +1,28 @@
 ## MODIFIED Requirements
 
+### Requirement: List active sessions
+The app SHALL list as active every session whose newest stored line is less than 10 minutes old, newest first. Each entry SHALL give the session's project, source, git branch, model, cost so far, state and the time the session started. An entry SHALL NOT carry the session's newest call (`latest`): the stream reports calls. The list SHALL honour the project, source and automated filters.
+
+#### Scenario: Two running sessions and an old one
+- **WHEN** session A wrote a line 20 seconds ago, session B 4 minutes ago and session C 2 hours ago
+- **THEN** the list holds A then B, and not C
+
+#### Scenario: Filtered to one source
+- **WHEN** a Claude Code and a Codex session are active and the source filter is Codex
+- **THEN** the list holds only the Codex session
+
+#### Scenario: Automated session
+- **WHEN** an automated session is active and the automated toggle is off
+- **THEN** the list does not hold it
+
+#### Scenario: Session start
+- **WHEN** a session whose first line is stamped 09:00 wrote a line a minute ago
+- **THEN** its entry carries 09:00 as its start, whatever its newest line says
+
+#### Scenario: No newest call
+- **WHEN** an active session's newest event is a tool call
+- **THEN** its entry in `/api/live` holds no `latest` field
+
 ### Requirement: Report the agent's figures
 For one session, the app SHALL report:
 - its newest main-thread request's context, and its window when known, alike on a first load, a catch-up and the list;

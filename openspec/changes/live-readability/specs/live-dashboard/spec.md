@@ -37,7 +37,7 @@ Raw HTML in a prompt or reply body SHALL show as text and SHALL NOT become eleme
 ## MODIFIED Requirements
 
 ### Requirement: Show each session in its rail entry
-Each rail entry SHALL take two lines, and every entry SHALL have the same height. Its first line SHALL show the session's title, cut with an ellipsis when it does not fit, and, at its end when above zero, the error count with a ✕, such as `✕2`. An entry with no title SHALL show the project as its first line. Its second line SHALL show the state, then the project with its color when the entry has a title, and, at its end, the context percent when the window is known, in the warning color above the near-full mark. The state SHALL never shrink or be cut; the project SHALL shrink first, cut with an ellipsis. An entry SHALL NOT show the cost, the source, the branch, the latest action or a meter. An entry in *your turn*, *thinking* or *idle* SHALL show how long the session has been in that state, and an entry running a tool SHALL show the tool's name and how long it has run, such as `Bash 12s`. The entry's accessible name SHALL carry what it shows: the title or project, the state with its detail, the project, the context percent and the errors in words, such as "2 errors". At 1440x900 the rail SHALL hold 8 sessions without scrolling.
+Each rail entry SHALL take two lines, and every entry SHALL have the same height. Its first line SHALL show the session's title, cut with an ellipsis when it does not fit, and, at its end when above zero, the error count with a ✕, such as `✕2`. An entry with no title SHALL show the project as its first line. Its second line SHALL show the state, then the project with its color when the entry has a title, and, at its end, the context percent when the window is known, in the warning color above the near-full mark. The project SHALL shrink first, cut with an ellipsis; the state SHALL be cut with an ellipsis only once the project has shrunk to nothing. An inferred state SHALL NOT show "(inferred)" in the entry, and the entry's accessible name SHALL say it is inferred. An entry SHALL NOT show the cost, the source, the branch, the latest action or a meter. An entry in *your turn*, *thinking* or *idle* SHALL show how long the session has been in that state, and an entry running a tool SHALL show the tool's name and how long it has run, such as `Bash 12s`. The entry's accessible name SHALL carry what it shows: the title or project, the state with its detail, the project, the context percent and the errors in words, such as "2 errors". At 1440x900 the rail SHALL hold 8 sessions without scrolling.
 
 #### Scenario: Two sessions in one project
 - **WHEN** two `ai-ledger` sessions are active with the AI titles "Add session titles" and "Fix Cost test"
@@ -69,7 +69,7 @@ Each rail entry SHALL take two lines, and every entry SHALL have the same height
 
 #### Scenario: Long title and long project
 - **WHEN** a session titled with 72 characters in a project of 30 characters is running a `mcp__t3-code__delegate_task` call, in a 1440x900 window
-- **THEN** the title and the project are cut with an ellipsis, the state shows whole, and the entry has the height of every other entry
+- **THEN** the title and the project are cut with an ellipsis, the state shows whole while any of the project remains, and the entry has the height of every other entry
 
 #### Scenario: Unknown window
 - **WHEN** the session's context window is not known

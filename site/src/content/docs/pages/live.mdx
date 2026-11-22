@@ -34,7 +34,7 @@ The bar beside the heading holds, in this order:
 | --- | --- |
 | **Stream** / **Wall** | Switches between one session in detail and every session as a tile. |
 | **Follow** | Stream view only. Keeps the newest event in view. On at load. Opening a session turns it on again, and so does scrolling the stream to the bottom yourself. |
-| **Full text** | Stream view only; the Wall never shows full text. Shows transcript text as written, and renders prompts and replies as Markdown. Off on every load. When you turn it on, a warning opens under the bar, over the page: "Full text on. Prompts, replies and tool output show as written, secrets included. The app only listens on 127.0.0.1; turn this off before sharing your screen." **Dismiss** closes it, and it closes itself after 6 seconds; it waits while you hover or focus it. The warning takes no room, so the stream does not move when it opens or closes. While Full text is on, the toggle keeps a warning tint, also after you dismiss the warning. |
+| **Full text** | Stream view only; the Wall never shows full text. Shows transcript text as written, and renders prompts and replies as Markdown (headings sit two levels down, a `#` shows as an h3; links other than http(s) or mailto, and footnotes, show as text). Off on every load. When you turn it on, a warning opens under the bar, over the page: "Full text on. Prompts, replies and tool output show as written, secrets included. The app only listens on 127.0.0.1; turn this off before sharing your screen." **Dismiss** closes it, and it closes itself after 6 seconds; it waits while you hover or focus it. The warning takes no room, so the stream does not move when it opens or closes. While Full text is on, the toggle keeps a warning tint, also after you dismiss the warning. |
 | **Pause** / **Resume** | Holds new events and states until you resume. |
 
 In the bar, before **Follow**, a status says one of: "Connecting…", "Updating live", "Paused" (with the number of updates held), or "Connection lost · reconnecting…". A paused page shows no live dot, and its state dots do not pulse. After a lost connection the page retries on its own, waiting longer after each failure up to 30 seconds, and fetches what it missed when it is back.
@@ -63,9 +63,8 @@ The Stream view has two panels from left to right: the rail and the session's st
 
 Each entry shows:
 
-- the session's title as its main line, or the project when the session has no title;
 - on the first line, the session's title, or the project when the session has no title, with `✕ N` when calls failed. A screen reader reads `✕ N` as "N errors";
-- on the second line, the state with its time, then the project (when a title is shown) and the percent of the context window used (left out when the window is not known). The state never shrinks.
+- on the second line, the state with its time, then the project (when a title is shown) and the percent of the context window used (left out when the window is not known). The project shrinks first; the state is cut only when the project is gone. The rail leaves out "(inferred)", which screen readers still hear.
 
 The footer reads `N sessions working · N waiting for you · $ so far`; the "waiting for you" part shows only when at least one session waits. Working counts the working group. Waiting counts approval? and your turn. Idle and ended count as neither.
 
@@ -141,7 +140,7 @@ The strip shows no plan limits, working directory, request count or model: the [
 - the state, the error count when above zero, and **Pinned** when pinned;
 - the title on two lines at most, with the full title on hover (the project when the session has no title);
 - the project and the short model name;
-- a context meter, and `context N%`.
+- a context meter, and `N%`.
 
 A tile's border follows its state: your turn, approval? and running a tool each have a colored border, and ended has a dashed one. Thinking and idle tiles have the panel's usual border.
 

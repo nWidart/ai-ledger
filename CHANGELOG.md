@@ -25,7 +25,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
   - Follow turns back on when you scroll the stream to the bottom.
   - The Full text warning closes itself after 6 seconds, and waits while you hover or focus it.
   - With Full text on, prompts and replies render as Markdown. Raw HTML shows as text, links open in a new tab, and images show as links and are never loaded.
-- `/api/live/session` no longer returns `limits` or `cwd`.
+- `/api/live/session` no longer returns `limits` or `cwd`, and `/api/live` no longer returns `latest`, each session's newest call.
 
 ### Fixed
 

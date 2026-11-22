@@ -72,10 +72,10 @@ export function elapsed(msec: number | null): string {
   return `${Math.floor(s / 3600)}h ${String(Math.floor(s / 60) % 60).padStart(2, "0")}m`;
 }
 
-/** What one state says in words, for the rail, the wall and the panel. Your turn, thinking and idle say for how long. */
 /** An MCP tool (mcp__server__tool) by its tool part, where the full name would crowd a row or a tag. */
 export const shortName = (tool: string) => (tool.startsWith("mcp__") && tool.split("__").slice(2).join("__")) || tool;
 
+/** What one state says in words, for the rail, the wall and the panel. Your turn, thinking and idle say for how long. */
 export function stateText(st: LiveState, now: number): { label: string; detail: string } {
   const el = elapsed(since(st.since, now)), timed = (label: string) => (el === "–" ? label : `${label} ${el}`);
   switch (st.kind) {

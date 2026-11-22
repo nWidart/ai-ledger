@@ -185,13 +185,15 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
   }, []);
   // Follow's place for the box: its foot when the newest row ends the stream, else just far enough to show that row
   // whole. A row too tall for the box shows from its top, wherever the box stands: a second call then moves nothing.
-  // It notes where that leaves the box, and the reach the box has there, for onScroll.
+  // With Follow off it moves nothing. Either way it notes where the box stands, and the reach the box has there, for
+  // onScroll: with Follow off too, so that the user's next scroll is measured against the box as it is now, after new
+  // rows or a resize, and one jump to the new foot (End, the scrollbar, a flick) turns Follow on.
   const place = useCallback(() => {
     const el = box.current, row = newest.current;
-    if (!el || !follow) return;
-    if (!row || foot) el.scrollTop = el.scrollHeight;
-    else {
-      const r = row.getBoundingClientRect(), top = r.top - el.getBoundingClientRect().top + el.scrollTop, bottom = top + r.height;
+    if (!el) return;
+    if (follow && (!row || foot)) el.scrollTop = el.scrollHeight;
+    else if (follow) {
+      const r = row!.getBoundingClientRect(), top = r.top - el.getBoundingClientRect().top + el.scrollTop, bottom = top + r.height;
       if (top < el.scrollTop || r.height + PAD > el.clientHeight) el.scrollTop = top - PAD;
       else if (bottom > el.scrollTop + el.clientHeight) el.scrollTop = bottom + PAD - el.clientHeight;
     }

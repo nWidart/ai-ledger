@@ -107,8 +107,9 @@ export function LivePage() {
     [...around.querySelectorAll<HTMLElement>("[data-session]")].find(b => b.dataset.session === focused!.dataset.session)?.focus();
   });
   const bare = !list && !listError;
-  // A rail entry: two lines of fixed height. Its name (title, else project) and its errors; then its state, never cut, the
-  // project under a title, which gives way first, and the context. Its accessible name says the same in words.
+  // A rail entry: two lines of fixed height. Its name (title, else project) and its errors; then its state, the project
+  // under a title, which gives way first, and the context. Its accessible name says the same in words, and whether the
+  // state is inferred, which the entry has no room to show.
   const entry = (s: LiveListSession) => {
     const share = s.context != null && s.window ? s.context / s.window : null;
     return <li key={s.session_id}>
@@ -118,7 +119,7 @@ export function LivePage() {
         {/* The spaces of the accessible name are text between the parts: a part's own edge spaces drop out of it. */}
         <span className="sr">,</span>{" "}
         <span className="sub"><StateNote st={stateNow(s.state, now)} now={now} />
-          {s.title && <><span className="sep" aria-hidden="true">·</span><span className="sr">, project</span>{" "}<ProjectName project={s.project} /></>}</span>
+          {s.title && <span className="proj"><span className="sep" aria-hidden="true">·</span><span className="sr">, project</span>{" "}<ProjectName project={s.project} /></span>}</span>
         {share != null && <span className={"ctx" + (share > NEAR_FULL ? " warn" : "")}><span className="sr">, context</span>{" "}{pct(share)}</span>}
       </button></li>;
   };

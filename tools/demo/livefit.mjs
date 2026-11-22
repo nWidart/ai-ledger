@@ -1,15 +1,16 @@
-// Checks Live's layout in a real browser, which the jsdom tests cannot lay out. At 1440 x 900, 1280 x 800 and 390 x 844:
-// no rail entry's state tag is cut, the rail entries share one height and so do the Wall tiles, hovering each `?` in the
-// strip moves none of its figures, wheeling the event list back to its foot turns Follow on again, and the Full text
-// warning moves nothing and is gone after 7 s. On desktop the 10 min pulse is at least 200px wide; at 1440 x 900 the
-// stream is wider than 798px and the rail holds the sessions without scrolling; at 390 x 844 the page has no horizontal
-// scroll, the first event is on the first screen and the pulse's readout stays inside it. On the Wall it pins two
-// sessions and measures them. It runs locally, not in CI.
+// Checks Live's layout in a real browser, which the jsdom tests cannot lay out. At 1440 x 900, 1280 x 800, 760 x 900 and
+// 390 x 844: no rail entry's state tag is cut while its project still shows, or reaches the context or past the card, the
+// rail entries share one height and so do the Wall tiles, hovering each `?` in the strip moves none of its figures,
+// wheeling the event list back to its foot turns Follow on again, as does one jump to the foot after the rows grew with
+// Follow off, the Full text warning moves nothing and is gone after 7 s, and the pulse's readout stays on the screen with
+// no horizontal scroll. On desktop the 10 min pulse is at least 200px wide; at 1440 x 900 the stream is wider than 798px
+// and the rail holds the sessions without scrolling; at 390 x 844 the page has no horizontal scroll and the first event is
+// on the first screen. On the Wall it pins two sessions and measures them. It runs locally, not in CI.
 // It needs the demo server and the pinned Playwright:
 //   cd web && npm ci && npm run build;  cd tools/demo && npm ci && uv run seed.py && uv run serve.py   (DEMO_PORT moves it)
 //   node livefit.mjs        prints the figures, and exits 1 naming a check that fails
 // The live list and sessions are answered from the web tests' fixtures (12 sessions with real shapes: long titles, a long
-// MCP tool, a 30-character branch), so the figures do not depend on a replay. Each session gets its own detail: its list
+// MCP tool, here given a longer name still, a 30-character branch), so the figures do not depend on a replay. Each session gets its own detail: its list
 // entry over the Claude Code or Codex fixture, with that fixture's events repeated enough times for the stream to scroll.
 // CHROMIUM=<path> uses that Chromium instead of Playwright's own.
 import { chromium } from "playwright";
@@ -21,6 +22,9 @@ const FIX = new URL("../../web/src/__fixtures__/", import.meta.url).pathname;
 /** A generated fixture's object: the JSON between `export default` and `satisfies`. */
 const fixture = name => JSON.parse(readFileSync(FIX + name, "utf8").replace(/^[\s\S]*?export default /, "").replace(/\s*satisfies \w+;\s*$/, ""));
 const list = fixture("live.ts"), claude = fixture("live-session.ts"), codex = fixture("live-session-codex.ts");
+// The MCP tool a session runs, by the longest name the real app showed: too long for a rail entry, which must cut it.
+const mcp = list.sessions.find(s => s.state.kind === "tool" && s.state.tool?.startsWith("mcp__"));
+mcp.state = { ...mcp.state, tool: "mcp__t3-code__t3_environment_preferences_update" };
 /** The active list, with or without query string; not /api/live/session or /api/live/events. */
 const LIST = /\/api\/live(\?|$)/;
 const shift = (ts, sec) => ts && new Date(Date.parse(ts) - sec * 1000).toISOString();
@@ -73,7 +77,7 @@ const follow = page => page.getByRole("checkbox", { name: "Follow" }).isChecked(
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM });
 const fails = [], n = list.sessions.length;
 try {
-  for (const [width, height] of [[1440, 900], [1280, 800], [390, 844]]) {
+  for (const [width, height] of [[1440, 900], [1280, 800], [760, 900], [390, 844]]) {
     const at = `${width}x${height}`, phone = width < 721;
     const page = await open(b, width, height, "/live?session=s1");
     const m = await measure(page);
@@ -92,11 +96,23 @@ try {
       if (m.firstEvent.top < 0 || m.firstEvent.bottom > height) fails.push(`the first event is not on the first screen at ${at}`);
     }
 
-    // The rail: every state tag whole, every entry one height.
-    const cut = await page.evaluate(() => [...document.querySelectorAll(".pg-live .rail .state")].filter(s => s.scrollWidth > s.clientWidth).map(s => s.textContent));
+    // The rail: a state tag cut only once its project is gone, never reaching the context or past its card; every entry
+    // one height.
+    const { cut, over, cuts } = await page.evaluate(() => {
+      const r = { cut: [], over: [], cuts: 0 };
+      for (const b of document.querySelectorAll(".pg-live .rail button[data-session]")) {
+        const st = b.querySelector(".sub .state"), s = st.getBoundingClientRect(), ctx = b.querySelector(".ctx")?.getBoundingClientRect();
+        const proj = b.querySelector(".sub .proj")?.getBoundingClientRect().width ?? 0, name = st.textContent;
+        if (st.scrollWidth > st.clientWidth) { r.cuts++; if (proj > 0) r.cut.push(name); }
+        if (s.right > b.getBoundingClientRect().right || (ctx && s.right > ctx.left)) r.over.push(name);
+      }
+      return r;
+    });
     const rail = await heights(page, ".pg-live .rail button[data-session]");
-    console.log(`${at}: rail entries ${rail.join("px, ")}px high; ${cut.length ? `CUT state tags: ${cut.join(" | ")}` : "no state tag cut"}`);
-    if (cut.length) fails.push(`${cut.length} rail state tags cut at ${at}`);
+    console.log(`${at}: rail entries ${rail.join("px, ")}px high; ${cuts} state tags cut with an ellipsis; `
+      + `${cut.length ? `CUT BESIDE A PROJECT: ${cut.join(" | ")}` : "none beside a project"}; ${over.length ? `OVERLAPPING: ${over.join(" | ")}` : "none overlapping"}`);
+    if (cut.length) fails.push(`${cut.length} rail state tags cut while their project shows at ${at}`);
+    if (over.length) fails.push(`${over.length} rail state tags reach the context or pass the card at ${at}`);
     if (rail.length !== 1) fails.push(`rail entries of ${rail.length} heights at ${at}`);
 
     // The strip: hovering a `?` opens its tip over the page, moving no figure; the pulse fills its column on desktop.
@@ -131,6 +147,20 @@ try {
       const back = await follow(page);
       console.log(`${at}: Follow ${on ? "on" : "OFF"}, after a wheel up ${off ? "STILL ON" : "off"}, at the foot ${back ? "on" : "STILL OFF"}`);
       if (!on || off || !back) fails.push(`wheeling the event list to its foot does not turn Follow back on at ${at}`);
+      // New rows while Follow is off (here the last row grows, which the page sees as it sees new rows), then one jump to
+      // the new foot, as End or the scrollbar makes: Follow is back on.
+      const last = (el, pad) => { [...el.querySelectorAll(".ev")].at(-1).style.paddingBottom = pad; };
+      await page.mouse.wheel(0, -400);
+      await page.waitForTimeout(300);
+      const off2 = await follow(page);
+      await box.evaluate(last, "600px");
+      await page.waitForTimeout(300);
+      await box.evaluate(el => { el.scrollTop = el.scrollHeight; });
+      await page.waitForTimeout(300);
+      const jumped = await follow(page);
+      await box.evaluate(last, "");
+      console.log(`${at}: after a wheel up Follow ${off2 ? "STILL ON" : "off"}; rows grew, one jump to the foot: ${jumped ? "on" : "STILL OFF"}`);
+      if (off2 || !jumped) fails.push(`one jump to the foot after the rows grew does not turn Follow back on at ${at}`);
     }
     await page.mouse.move(0, 0);
 
@@ -144,7 +174,7 @@ try {
     if (t.streamTop !== m.streamTop) fails.push(`the Full text warning moves the stream at ${at}`);
     if (!shown || left) fails.push(`the Full text warning is not gone 7 s after it shows at ${at}`);
 
-    if (phone) {  // the pulse's readout, opened by keyboard on its last minute, stays on the screen
+    {  // the pulse's readout, opened by keyboard on its last minute, stays on the screen
       await page.locator(".pg-live .strip .pulse .chart").focus();
       await page.keyboard.press("End");
       await page.waitForTimeout(200);

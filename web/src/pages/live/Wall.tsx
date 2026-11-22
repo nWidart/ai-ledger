@@ -12,9 +12,10 @@ import { groupSessions, INFERRED_WHY, NO_FILTERS, stateNow, stateText, type Lane
 /** What a state's hover text says, for where it is no hover: a state's detail, or why it is inferred. */
 const stateWhy = (st: LiveState, now: number) => (st.inferred ? INFERRED_WHY[st.kind] : undefined) ?? stateText(st, now).detail;
 
-/** A state's tag with its detail as text a screen reader gets, in place of the hover-only title: where the page shows no detail. */
+/** A state's tag with its detail as text a screen reader gets, in place of the hover-only title: where the page shows no
+ *  detail. A rail entry has no room for "(inferred)": it too is for screen readers only. */
 export function StateNote({ st, now }: { st: LiveState; now: number }) {
-  return <><StateTag st={st} now={now} plain /><span className="sr">: {stateWhy(st, now)}</span></>;
+  return <><StateTag st={st} now={now} plain quiet /><span className="sr">: {stateWhy(st, now)}</span></>;
 }
 
 /** A session as the page names it: its title, else its project. */

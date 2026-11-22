@@ -685,6 +685,9 @@ describe("LivePage", () => {
     expect(follow()).toBe(false);
     await scrollTo(l.top - 300);
     expect(resize({ rows: 2000 }, true)).toEqual([false, true]); // the box clamped to its foot: not the user's scroll
+    expect(resize({ rows: 2600 }, true)).toEqual([false, false]); // new rows while Follow is off
+    await scrollTo(l.rows - l.room); // one jump to the new foot (End, the scrollbar): Follow is back on
+    expect(follow()).toBe(true);
   });
 
   it("follows the newest event into a lane in the middle of the stream, without its own scroll turning Follow off", async () => {
@@ -1258,7 +1261,8 @@ describe("LivePage", () => {
   });
 
   it("shows a reply's full text as Markdown, with raw HTML as text and links only to the web and mail", async () => {
-    const md = "**Done**: see [the docs](https://example.com/docs) <b>raw</b> [run](javascript:alert(1)) ![shot](https://example.com/s.png)";
+    const md = "**Done**: see [the docs](https://example.com/docs) <b>raw</b> [run](javascript:alert(1)) ![shot](https://example.com/s.png)"
+      + "\n\n# Plan\n\n[![pic](https://example.com/p.png)](https://example.com/p) <javascript:alert(2)> as noted[^1]\n\n[^1]: a note";
     show("?session=s1", { session: q => (q.get("text") ? { ...s1text, events: s1text.events.map(e => (e.k === "reply" ? { ...e, text: md } : e)) } : s1) });
     await stream();
     await userEvent.click(check("Full text"));
@@ -1266,7 +1270,11 @@ describe("LivePage", () => {
     expect([body.querySelector("strong")!.textContent, body.querySelector("b, img"), within(body as HTMLElement).queryByRole("link", { name: "run" })]).toEqual(["Done", null, null]);
     expect(body.textContent).toContain("<b>raw</b> run shot");
     const links = within(body as HTMLElement).getAllByRole("link").map(a => [a.textContent, a.getAttribute("href"), a.getAttribute("target"), a.getAttribute("rel")]);
-    expect(links).toEqual([["the docs", "https://example.com/docs", "_blank", "noreferrer noopener"], ["shot", "https://example.com/s.png", "_blank", "noreferrer noopener"]]);
+    expect(links).toEqual([["the docs", "https://example.com/docs", "_blank", "noreferrer noopener"], ["shot", "https://example.com/s.png", "_blank", "noreferrer noopener"],
+      ["pic", "https://example.com/p", "_blank", "noreferrer noopener"]]); // a linked image is one link; an unsafe autolink none
+    expect(body.textContent).toContain("javascript:alert(2)");
+    // A reply's # is no heading of the page's, and a footnote gives no id that another row's could repeat.
+    expect([body.querySelector("h1, h2"), body.querySelector("h3")?.textContent, body.querySelector("[id]")]).toEqual([null, "Plan", null]);
   });
 
   it("takes the text off the screen at once when Full text turns off, with the events held before it", async () => {

@@ -8,7 +8,7 @@ Live has three reading surfaces: the rail (Stream view, left), the Wall's tiles,
 
 **Goals:** each surface shows few facts, at fixed heights, with the state never cut; the strip is about the current conversation only; nothing moves on hover; one way to filter to failed calls; Follow that comes back when the user returns to the bottom; readable prompt and reply bodies.
 
-**Non-Goals:** no change to session states, the list payload, lanes, Pause, pins or the session sheet. The Limits page keeps plan limits; the session sheet and the context menu keep the directory and the resume command.
+**Non-Goals:** no change to session states, lanes, Pause, pins or the session sheet. The list payload changes in one field only: `/api/live` drops `latest` (each session's newest call), which neither the rail nor the Wall reads any more. The Limits page keeps plan limits; the session sheet and the context menu keep the directory and the resume command.
 
 ## Decisions
 

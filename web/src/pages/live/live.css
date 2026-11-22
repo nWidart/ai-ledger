@@ -54,8 +54,8 @@
 .pg-live .rail .group h3 { padding: 5px 14px 1px; }
 /* 4px under each group, with its heading's 5px above the next (livefit.mjs checks the fit at 1440 x 900). */
 .pg-live .rail ul { list-style: none; margin: 0; padding: 0 6px 4px; }
-/* An entry is two lines of fixed height, whatever it holds: the name and the errors' ✕N, then the state, the project
-   under a title and the context. */
+/* An entry is two lines of fixed height, whatever it holds: the name and the errors' ✕N, then the state (without
+   "(inferred)", which only screen readers get here), the project under a title and the context. */
 .pg-live .rail li button { width: 100%; text-align: left; border: 0; background: none; border-radius: 9px; padding: 4px 9px;
   display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 1.25rem 1.125rem; gap: 0 8px; align-items: center; }
 .pg-live .rail li button:hover { background: var(--surface-2); }
@@ -63,9 +63,14 @@
 .pg-live .rail li button > .ttl, .pg-live .rail li button > .pname { grid-area: 1 / 1; font-weight: 600; line-height: 1.25rem; }
 .pg-live .rail .ttl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pg-live .rail .errs { grid-area: 1 / 2; font-size: .75rem; font-weight: 600; }
-/* The state never shrinks; the project gives way, cut with an ellipsis. */
-.pg-live .rail .sub { grid-area: 2 / 1; display: flex; align-items: center; min-width: 0; font-size: .75rem; line-height: 1.125rem; color: var(--text-muted); white-space: nowrap; }
-.pg-live .rail .sub .state { flex: none; }
+/* The project gives way first, cut with an ellipsis, its dot and separator with it; only once it is gone does the state
+   (which does not shrink, but is capped at the line's width) give way, cut with an ellipsis. The line clips, so neither
+   passes into the context or past the card. */
+.pg-live .rail .sub { grid-area: 2 / 1; display: flex; align-items: center; min-width: 0; overflow: hidden; font-size: .75rem; line-height: 1.125rem;
+  color: var(--text-muted); white-space: nowrap; }
+.pg-live .rail .sub .state { display: block; flex: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.pg-live .rail .sub .state i { margin-right: 5px; vertical-align: 0; }
+.pg-live .rail .sub .proj { display: flex; align-items: center; flex: 0 1 auto; min-width: 0; overflow: hidden; }
 .pg-live .rail .sub .sep { flex: none; margin: 0 4px; }
 .pg-live .rail .sub .pname { flex: 0 1 auto; }
 .pg-live .rail .ctx { grid-area: 2 / 2; font-size: .6875rem; line-height: 1.125rem; color: var(--text-muted); }
@@ -104,7 +109,7 @@
 .pg-live .body > * { margin: 0; }
 .pg-live .body > * + * { margin-top: 6px; }
 .pg-live .body :is(h1, h2, h3, h4, h5, h6) { font-size: .875rem; font-weight: 600; line-height: 1.35; }
-.pg-live .body h1 { font-size: .9375rem; }
+.pg-live .body h3 { font-size: .9375rem; } /* a reply's #: Markdown sets each heading two levels down */
 .pg-live .body :is(ul, ol) { padding-left: var(--space-8); }
 .pg-live .body li + li { margin-top: 2px; }
 .pg-live .body :is(ul, ol) :is(ul, ol) { margin: 2px 0 0; }
@@ -183,8 +188,9 @@
 .pg-live .pulse .bad { fill: none; stroke: var(--critical-text); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
 .pg-live .pulse .base { stroke: var(--border); vector-effect: non-scaling-stroke; }
 .pg-live .pulse .cur { fill: var(--track); }
-/* The readout opens under the pulse, over the page, so the strip does not move. */
-.pg-live .pulse .readout { position: absolute; top: calc(100% + 4px); left: 0; z-index: var(--z-sticky); white-space: nowrap; font-size: .75rem; color: var(--text-primary);
+/* The readout opens under the pulse, over the page, so the strip does not move. It hangs from the pulse's right end: the
+   pulse ends the strip's last column, so a readout wider than the pulse reaches into the strip, never past the page's edge. */
+.pg-live .pulse .readout { position: absolute; top: calc(100% + 4px); right: 0; z-index: var(--z-sticky); white-space: nowrap; font-size: .75rem; color: var(--text-primary);
   background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; box-shadow: var(--shadow-pop); }
 .pg-live .pulse .readout:empty { display: none; }
 .pg-live .meter { display: block; height: 10px; border-radius: 6px; background: var(--track); overflow: hidden; position: relative; margin: 8px 0 4px; }
