@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Dismiss a chart tooltip with Escape
-Escape SHALL dismiss the open tooltip of the Cost, Activity work, outcome trend and Errors rate charts, and of Context's cache, growth, weekly start and session map charts, whether the pointer or the keyboard reading opened it, without closing a sheet or the palette and without changing the selected bucket.
+Escape SHALL dismiss the open tooltip of the Cost, cost flow, Activity work, outcome trend, Errors rate and session plot charts, and of Context's cache, growth, weekly start and session map charts, whether the pointer or the keyboard reading opened it, without closing a sheet or the palette and without changing the selected bucket.
 
 #### Scenario: Escape on a hovered bar
 - **WHEN** the tooltip of a Cost bar is open and the user presses Escape
@@ -24,7 +24,7 @@ Escape SHALL dismiss the open tooltip of the Cost, Activity work, outcome trend 
 - **THEN** the tooltip closes and the quadrant stays selected
 
 ### Requirement: Keep a chart's space while it loads
-A chart whose drawing code loads after the page SHALL hold its final height from its first render, so nothing under it moves when it draws. Its label, keyboard reading, live readout and data table SHALL work before it has drawn. The Cost daily chart, the Activity work chart, the outcome trend, the Errors rate chart, and Context's cache, growth, weekly start and session map charts are such charts.
+A chart whose drawing code loads after the page SHALL hold its final height from its first render, so nothing under it moves when it draws. Its label, keyboard reading, live readout and data table SHALL work before it has drawn. The Cost daily chart, the cost flow, the Activity work chart, the outcome trend, the Errors rate chart, the Activity calendar, the session plot, and Context's cache, growth, weekly start and session map charts are such charts.
 
 #### Scenario: First visit to Cost
 - **WHEN** the user opens Cost for the first time and the chart's drawing code has not loaded yet
