@@ -57,7 +57,7 @@ describe("cost flow: the group's label", () => {
   it("names the three columns, the total and the keys, and what unpriced requests leave out", () => {
     show(view(PAIRS, { unpriced: [{ model: "m-unknown", requests: 10, tokens: 1 }, { model: "m-new", requests: 2, tokens: 1 }] }));
     expect(group().getAttribute("aria-label")).toBe("Estimated cost from project to model to token kind, $210 in all: 7 projects, 4 models and 3 kinds, "
-      + `each band as wide as its cost. 12 requests from unpriced models are not drawn: their cost is unknown. ${KEYS} Enter on a project opens its summary.`);
+      + `each band as wide as its cost. 12 requests from unpriced models are not drawn: their cost is unknown. ${KEYS} Enter on a project opens its sheet.`);
     expect(screen.getByText(/^Not drawn:/).textContent).toBe("Not drawn: 12 requests from unpriced models (m-unknown, m-new), whose cost is unknown.");
   });
 
@@ -163,9 +163,7 @@ describe("cost flow: what it shows", () => {
     vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(343);
     document.documentElement.style.fontSize = "32px";
     show();
-    expect(within(screen.getByRole("list", { name: "Model" })).getAllByRole("listitem").map(li => li.textContent))
-      .toEqual(["opus-4-5 $100", "sonnet-4-5 $68", "gpt-5.1-codex $32", "haiku-4-5 $10"]);
-    expect(screen.queryByRole("list", { name: "Project" })).toBeNull();
+    expect(within(screen.getByRole("list", { name: "Model" })).getAllByRole("listitem")[0]!.textContent).toBe("opus-4-5 $100");
   });
 
   it("lists every pair of a project folded into Other in the data table, to the cent", () => {

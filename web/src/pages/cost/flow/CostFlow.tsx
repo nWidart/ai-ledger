@@ -14,7 +14,7 @@ import { modified } from "../../../components/keys";
 import { Table, type Column } from "../../../components/table/Table";
 import { num, pct, plural, usd } from "../../../format";
 import { Unpriced } from "../drawers";
-import { bandPath, EPS, flowFit, flowLayout, flowModel, flowOption, KINDS, REPORTED, type FlowInput, type FlowLayout, type PlacedBand, type PlacedNode } from "./flowModel";
+import { bandPath, flowFit, flowLayout, flowModel, flowOption, REPORTED, type FlowInput, type FlowLayout, type FlowRow, type PlacedBand, type PlacedNode } from "./flowModel";
 import { flowAt, moveFlow, type FlowItem } from "./flowReading";
 import "./flow.css";
 
@@ -32,15 +32,13 @@ interface Reading { at: FlowItem; keyed: boolean; text: string; n: number }
 const cents = (n: number) => "$" + num(n, 2);
 const share = (v: number, of: number) => pct(of > 0 ? v / of : 0, 1);
 const WORD: Record<string, string> = { project: "project", model: "model" };
-/** A model's name as its node says it. */
-const short = (model: string) => model.replace(/^claude-/, "");
 /** Up to three names with their cost, and how many more. */
 const list = (xs: { name: string; value: number }[]) =>
   xs.slice(0, 3).map(x => `${x.name} ${usd(x.value)}`).join(", ") + (xs.length > 3 ? ` and ${num(xs.length - 3)} more` : "");
 const byCost = <T extends { value: number }>(xs: T[]) => [...xs].sort((a, b) => b.value - a.value);
 
-/** A row of the data table: one flow, unfolded. */
-interface FlowRow { id: string; step: string; from: string; to: string; cost: number }
+/** A row of the data table: one flow, unfolded, and its step. */
+interface TableRow extends FlowRow { step: string }
 
 /** An item of the graph, found: its band or its node. */
 type Found = { band: PlacedBand; node?: undefined } | { node: PlacedNode; band?: undefined };
@@ -202,24 +200,18 @@ export function CostFlow({ d, onProject }: CostFlowProps) {
   const notDrawn = unpriced ? ` ${plural(unpriced, "request")} from unpriced models ${unpriced === 1 ? "is" : "are"} not drawn: their cost is unknown.` : "";
   const label = one
     ? `Estimated cost on ${d.project} from model to token kind, ${usd(total)} in all: ${plural(names("model"), "model")} and ${plural(names("kind"), "kind")}, each band as wide as its cost.${notDrawn} ${keys}`
-    : `Estimated cost from project to model to token kind, ${usd(total)} in all: ${plural(names("project"), "project")}, ${plural(names("model"), "model")} and ${plural(names("kind"), "kind")}, each band as wide as its cost.${notDrawn} ${keys} Enter on a project opens its summary.`;
+    : `Estimated cost from project to model to token kind, ${usd(total)} in all: ${plural(names("project"), "project")}, ${plural(names("model"), "model")} and ${plural(names("kind"), "kind")}, each band as wide as its cost.${notDrawn} ${keys} Enter on a project opens its sheet.`;
 
-  const rows = useMemo((): FlowRow[] => {
-    if (model.empty) return [];
-    const pairs = byCost(d.cost_flow.pairs.map(p => ({ id: `p|${p.project ?? ""}|${p.model}`, step: "Project to model", from: p.project || "(no project)", to: short(p.model), value: p.cost })));
-    const kinds = byCost(d.cost_flow.models.flatMap(m => {
-      const est = KINDS.map(k => ({ id: `m|${m.model}|${k.id}`, step: "Model to token kind", from: short(m.model), to: k.label, value: k.of(m) }));
-      const reported = m.cost - est.reduce((a, k) => a + k.value, 0);
-      return [...est.filter(k => k.value > 0), ...(reported > EPS ? [{ id: `m|${m.model}|${REPORTED}`, step: "Model to token kind", from: short(m.model), to: "Reported", value: reported }] : [])];
-    }));
-    return [...(one ? [] : pairs), ...kinds].map(({ value, ...r }) => ({ ...r, cost: value }));
-  }, [d, model, one]);
-  const tableColumns = useMemo((): Column<FlowRow>[] => [
+  const rows = useMemo((): TableRow[] => [
+    ...byCost(model.rows.pairs).map(r => ({ ...r, step: "Project to model" })),
+    ...byCost(model.rows.kinds).map(r => ({ ...r, step: "Model to token kind" })),
+  ], [model]);
+  const tableColumns = useMemo((): Column<TableRow>[] => [
     { id: "step", header: "Step", cell: r => r.step },
     { id: "from", header: "From", cell: r => r.from },
     { id: "to", header: "To", cell: r => r.to },
-    { id: "cost", header: "Est. cost", align: "num", cell: r => cents(r.cost) },
-    { id: "share", header: "Share of cost", align: "num", cell: r => share(r.cost, total) },
+    { id: "cost", header: "Est. cost", align: "num", cell: r => cents(r.value) },
+    { id: "share", header: "Share of cost", align: "num", cell: r => share(r.value, total) },
   ], [total]);
 
   const found = shown && g?.find(shown.at), band = found?.band, node = found?.node;
@@ -256,7 +248,7 @@ export function CostFlow({ d, onProject }: CostFlowProps) {
       })}
       {unpriced > 0 && <p className="hint flow-unpriced">Not drawn: {plural(unpriced, "request")} from unpriced models
         {` (${d.unpriced.map(u => u.model ?? "no model name").join(", ")})`}, whose cost is unknown.</p>}
-      {layout && <ChartTable><Table name="Estimated cost from project to model to token kind" region="scroll" rows={rows} columns={tableColumns} rowId={r => r.id} /></ChartTable>}
+      {layout && <ChartTable><Table name={one ? `Estimated cost on ${d.project} from model to token kind` : "Estimated cost from project to model to token kind"} region="scroll" rows={rows} columns={tableColumns} rowId={r => r.id} /></ChartTable>}
     </section>
   );
 }

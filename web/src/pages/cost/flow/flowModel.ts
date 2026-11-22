@@ -35,6 +35,8 @@ export interface FlowNode {
 }
 export interface FlowBand { id: `${string}|${string}`; from: string; to: string; value: number }
 export interface FlowColumn { key: FlowColumnKey; title: string; nodes: FlowNode[] }
+/** A flow before folding, between two names as the nodes say them: a row of the data table. */
+export interface FlowRow { id: string; from: string; to: string; value: number }
 export interface FlowGraph {
   /** Why there is no flow (decision 11), or null. With a sentence, the columns and bands are empty. */
   empty: string | null;
@@ -43,11 +45,14 @@ export interface FlowGraph {
   /** Project, Model, Token kind; with one project selected, Model and Token kind. */
   columns: FlowColumn[];
   bands: FlowBand[];
+  /** Every flow unfolded, from the same figures as the bands: project to model (none with one project selected), then
+   *  model to token kind. */
+  rows: { pairs: FlowRow[]; kinds: FlowRow[] };
 }
 
 const TITLE: Record<FlowColumnKey, string> = { project: "Project", model: "Model", kind: "Token kind" };
 /** The billed kinds, as the Tokens and cache drawer names them (tokenPairs in cost.ts), and the reported cost. */
-export const KINDS: { id: string; label: string; of: (m: FlowModel) => number }[] = [
+const KINDS: { id: string; label: string; of: (m: FlowModel) => number }[] = [
   { id: "k:input", label: "Input", of: m => m.cost_input ?? 0 },
   { id: "k:output", label: "Output + thinking", of: m => m.cost_output ?? 0 },
   { id: "k:write", label: "Cache write", of: m => (m.cost_cache_5m ?? 0) + (m.cost_cache_1h ?? 0) },
@@ -55,7 +60,9 @@ export const KINDS: { id: string; label: string; of: (m: FlowModel) => number }[
 ];
 export const REPORTED = "k:reported";
 /** A model's cost less its kinds under this is float leftovers, not a reported cost (as costDays' guard). */
-export const EPS = 1e-9;
+const EPS = 1e-9;
+/** A model's name as its node says it. */
+const short = (model: string) => model.replace(/^claude-/, "");
 const KIND_COLOR = "var(--text-secondary)";
 const FOLD = { keep: 5, floor: .01 };
 
@@ -77,7 +84,7 @@ const add = (m: Map<string, number>, k: string, v: number) => m.set(k, (m.get(k)
 
 /** The flow of a view: its columns of nodes, each by cost with Other and Reported last, and its bands, in dollars. */
 export function flowModel(d: FlowInput): FlowGraph {
-  const none = (empty: string): FlowGraph => ({ empty, total: 0, columns: [], bands: [] });
+  const none = (empty: string): FlowGraph => ({ empty, total: 0, columns: [], bands: [], rows: { pairs: [], kinds: [] } });
   if (!d.totals.requests) return none("No usage in this view, so no cost to follow.");
   if (d.totals.cost == null) return none("No request in this view is priced, so there is no cost to follow.");
   const pairs = d.cost_flow.pairs.filter(p => p.cost > 0);
@@ -89,11 +96,11 @@ export function flowModel(d: FlowInput): FlowGraph {
   for (const p of pairs) add(modelCost, p.model, p.cost);
   const modelColor = new Map(costKinds({ project: d.project, by_project: [], daily_models: [...modelCost].map(([model, cost]) => ({ day: "", model, cost })) }, "model")
     .map(k => [k.k, k.c]));
-  const models = fold([...modelCost].map(([m, value]) => ({ key: m, label: m.replace(/^claude-/, ""), value })), total);
+  const models = fold([...modelCost].map(([m, value]) => ({ key: m, label: short(m), value })), total);
   const modelId = new Map<string, string>([...models.kept.map(m => [m.key, "m:" + m.key] as const), ...models.rest.map(m => [m.key, "m"] as const)]);
 
   const columns: FlowColumn[] = [];
-  const bands = new Map<string, FlowBand>();
+  const bands = new Map<string, FlowBand>(), rows: FlowGraph["rows"] = { pairs: [], kinds: [] };
   const flow = (from: string, to: string, v: number) => {
     if (!(v > 0)) return;
     const id = `${from}|${to}` as const, b = bands.get(id);
@@ -114,6 +121,8 @@ export function flowModel(d: FlowInput): FlowGraph {
       ...other("p", 0, projects.rest),
     ] });
     for (const p of pairs) flow(projectId.get(p.project ?? "")!, modelId.get(p.model)!, p.cost);
+    // The table lists the $0.00 pairs too.
+    rows.pairs = d.cost_flow.pairs.map(p => ({ id: `p|${p.project ?? ""}|${p.model}`, from: p.project || "(no project)", to: short(p.model), value: p.cost }));
   }
   const mc = columns.length, kc = mc + 1;
   columns.push({ key: "model", title: TITLE.model, nodes: [
@@ -127,16 +136,21 @@ export function flowModel(d: FlowInput): FlowGraph {
     const id = modelId.get(m.model);
     if (!id) continue; // no cost in the view: no node, no band
     let est = 0;
-    for (const k of KINDS) { const v = k.of(m); est += v; flow(id, k.id, v); if (v > 0) add(kindCost, k.id, v); }
+    const kind = (k: string, label: string, v: number) => {
+      flow(id, k, v);
+      add(kindCost, k, v);
+      rows.kinds.push({ id: `m|${m.model}|${k}`, from: short(m.model), to: label, value: v });
+    };
+    for (const k of KINDS) { const v = k.of(m); est += v; if (v > 0) kind(k.id, k.label, v); }
     const reported = m.cost - est;
-    if (reported > EPS) { flow(id, REPORTED, reported); add(kindCost, REPORTED, reported); }
+    if (reported > EPS) kind(REPORTED, "Reported", reported);
   }
   columns.push({ key: "kind", title: TITLE.kind, nodes: [
     ...ranked(KINDS.map(k => ({ id: k.id, label: k.label, value: kindCost.get(k.id) ?? 0 })), k => k.label),
     ...(kindCost.has(REPORTED) ? [{ id: REPORTED, label: "Reported", value: kindCost.get(REPORTED)! }] : []),
   ].map(k => ({ ...k, column: kc, color: KIND_COLOR })) });
 
-  return { empty: null, total, columns, bands: [...bands.values()] };
+  return { empty: null, total, columns, bands: [...bands.values()], rows };
 }
 
 /** The box's geometry for a width, a text scale and a number of columns (decision 5). */
