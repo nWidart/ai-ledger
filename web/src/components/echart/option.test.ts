@@ -101,6 +101,10 @@ describe("axisTitle", () => {
     expect(axisTitle(env(), title, 100).name).toBe("Error rate, % of tool…"); // 22 characters, 99px; at weight 400 it would keep 25
     expect(axisTitle(env({ textScale: 2 }), title, 200).name).toBe("Error rate, % of tool…"); // twice the size in twice the room
     expect(axisTitle(env(), title, 4).name).toBe("");
+    // By grapheme: an emoji of four UTF-16 units and a combining mark are kept whole or left out whole.
+    expect(axisTitle(env(), "ab👍🏽cd", 18).name).toBe("ab…");
+    expect(axisTitle(env(), "Cafés", 25).name).toBe("Caf…");
+    expect(axisTitle(env(), "👍🏽", 10).name).toBe("…");
   });
 });
 

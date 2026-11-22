@@ -62,12 +62,19 @@ export const valueAxis = (env: OptionEnv, { max, step, format }: { max: number; 
 
 /** The title's weight: `axisTitle` draws and measures it at this one. */
 const TITLE_WEIGHT = 500;
-/** `text`, or its longest start with "…" that is at most `maxWidth` px wide as drawn; "" where not even "…" fits. */
+/** The characters of `text` as a reader sees them: an emoji or a letter with its combining marks is one. Where the
+ *  browser has no `Intl.Segmenter`, by code point. */
+const graphemes = (text: string): string[] =>
+  typeof Intl.Segmenter === "function" ? Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text), s => s.segment) : Array.from(text);
+
+/** `text`, or its longest start with "…" that is at most `maxWidth` px wide as drawn, cut between characters as a reader
+ *  sees them (`graphemes`); "" where not even "…" fits. */
 function cutTitle(env: OptionEnv, text: string, maxWidth: number): string {
   const fits = (t: string) => labelWidth(env, t, TITLE_WEIGHT) <= maxWidth;
   if (fits(text)) return text;
-  for (let n = text.length - 1; n > 0; n--) {
-    const t = `${text.slice(0, n).trimEnd()}…`;
+  const cs = graphemes(text);
+  for (let n = cs.length - 1; n > 0; n--) {
+    const t = `${cs.slice(0, n).join("").trimEnd()}…`;
     if (fits(t)) return t;
   }
   return fits("…") ? "…" : "";
