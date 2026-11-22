@@ -29,6 +29,9 @@ function logAxis(env: ChartEnv, a: FitAxis, { name, gap, zero, format }: { name:
     max: a.max,
     name,
     nameLocation: "middle",
+    // The gap is from the axis line, where the margins leave the name its room: ECharts 6 would move the name past a
+    // label it comes near ("1,000" up), out of the box.
+    nameMoveOverlap: false,
     nameGap: gap * s,
     nameTextStyle: { color: env.ink.secondary, fontSize },
     axisLine: { show: false },
