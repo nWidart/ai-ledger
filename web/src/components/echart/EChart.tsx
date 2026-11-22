@@ -60,7 +60,8 @@ export interface EChartProps {
    *  With keys, `view` holds only what the user chose: not the first point, nor anything else that fixes where a point
    *  sits. It still holds what gives a key another meaning: a day and a week can share one.
    *  A list the wrapper cannot go by (another length than `points`, or a key twice) keeps nothing through a redraw that
-   *  changes the keys: the reading ends and every point shows, and the console names the fault. */
+   *  changes the keys: the reading ends and every point shows, and the console names the fault. It names it too at
+   *  mount, with a new view, and when `points` changes under the same keys. */
   pointKeys?: readonly string[];
   /** The tooltip for point i. Without it, the chart has no tooltip. */
   tip?: (i: number) => ReactNode;
@@ -161,6 +162,15 @@ function faultOf(keys: Keys, n: number) {
   const at = keys && indexed(keys, n);
   return typeof at === "string" ? at : null;
 }
+/** The faults a change of the keys or of the points met, for the console. `ends`: they ended the reading and the zoom,
+ *  as a change of keys does; else they will end them at the next one. */
+type Faults = { of: readonly string[]; ends: boolean };
+/** A list of keys for n points, checked where nothing is kept through it: the mount, a new view, another count under
+ *  the same keys. */
+function checked(keys: Keys, n: number) {
+  const fault = faultOf(keys, n);
+  return { points: n, fault, faults: fault ? { of: [`the point keys hold ${fault}`], ends: false } : null };
+}
 /** The window `w`, made over the keys `was`, put on the first and the last of its points that the keys `at` still draw,
  *  among n points: null when every point shows. Null too when none is left, or when the two came in the other order (the
  *  keys changed their order). A window under MIN_SHOWN points is widened as the slider widens it: the start is kept,
@@ -196,8 +206,6 @@ function zoomAround(s: Shown | null, n: number, f: number, c: number): Shown | n
 interface Said { status?: string; reading: string | null; zoom: string | null }
 /** A key's tooltip points this far under the top of the grid, as the hand-written charts have it. */
 const KEY_DROP = 20;
-/** No fault met: what a drawing starts with. */
-const FINE: readonly string[] = [];
 
 /** Where the chart draws point i, in px from the plot's top left: the middle of its band, at the top of the grid, which is
  *  found within 4px by going down the plot. A point the chart does not show is at the plot's top. */
@@ -257,12 +265,13 @@ export function EChart({
   // indexes the keys moved it to, or it would ask for another point's words, say them, or end a reading that is still
   // drawn. The render that moves them is thrown away before it commits, so no tooltip is rendered for a stale index.
   // `drawing.keys` is the last list, kept until one with other keys comes, so a list made again with the same keys
-  // renders nothing more; `fault` is why the wrapper cannot go by it, or null; `faults` is what the last change of keys
-  // met, a new list each time, which the console is told of once.
+  // renders nothing more; `points` is the count it was checked against; `fault` is why the wrapper cannot go by it, or
+  // null; `faults` is what the last check met (the mount, a new view, other keys, another count under the same keys),
+  // a new object each time, which the console is told of once.
   const shows = view ?? option;
-  const [drawing, setDrawing] = useState(() => ({ view: shows, zoom, status, keys: pointKeys, fault: faultOf(pointKeys, points), faults: FINE }));
+  const [drawing, setDrawing] = useState(() => ({ view: shows, zoom, status, keys: pointKeys, ...checked(pointKeys, points) }));
   if (drawing.view !== shows) {
-    setDrawing({ view: shows, zoom, status, keys: pointKeys, fault: faultOf(pointKeys, points), faults: FINE });
+    setDrawing({ view: shows, zoom, status, keys: pointKeys, ...checked(pointKeys, points) });
     setReading(null);
     setZoomed(null);
     setSaid(null);
@@ -277,7 +286,7 @@ export function EChart({
       drawing.fault && `the last point keys held ${drawing.fault}`,
       typeof now === "string" ? `the point keys hold ${now}` : null,
     ].filter(f => f != null);
-    setDrawing({ ...drawing, keys: pointKeys, fault: typeof now === "string" ? now : null, faults });
+    setDrawing({ ...drawing, keys: pointKeys, points, fault: typeof now === "string" ? now : null, faults: faults.length ? { of: faults, ends: true } : null });
     const by = was && !drawing.fault && now instanceof Map ? now : null;
     const i = reading && by && was ? by.get(was[reading.i]!) : undefined;
     if (reading && i == null) {
@@ -291,6 +300,10 @@ export function EChart({
       setZoomed(next); // the draw effect puts the chart's window on it (`keep`)
       if (!next && readZoom) setSaid({ reading: null, zoom: readZoom(null) }); // the zoom ended with no one asking: said once
     }
+  } else if (pointKeys && drawing.points !== points) {
+    // Another count under the same keys: nothing moves, but the list is checked again, for the console and for the
+    // next change of keys.
+    setDrawing({ ...drawing, ...checked(pointKeys, points) });
   } else if (drawing.zoom !== zoom) {
     setDrawing({ ...drawing, zoom });
     setZoomed(null);
@@ -573,11 +586,17 @@ export function EChart({
   }, [chart, option, env, shows, zoom]);
   // After the draw effect, which must still see the status of the commit before.
   useEffect(() => { settled.current = status; }, [status]);
-  // A caller's fault in its point keys, met by a change of keys: told once, not thrown, since a duplicate can come
-  // from the data and the chart can still be read.
-  const complain = useEffectEvent((faults: readonly string[]) =>
-    console.error(`EChart "${label}": ${faults.join("; ")}, so the reading and the zoom end.`));
-  useEffect(() => { if (drawing.faults.length) complain(drawing.faults); }, [drawing.faults]);
+  // A caller's fault in its point keys, met at mount, with a new view or by a change of the keys or of the points: told
+  // once, not thrown, since a duplicate can come from the data and the chart can still be read. Once under StrictMode's
+  // second run of the mount's effects too.
+  const complain = useEffectEvent(({ of, ends }: Faults) => console.error(`EChart "${label}": ${of.join("; ")}, so ${
+    ends ? "the reading and the zoom end" : "a redraw that changes the keys will end the reading and the zoom"}.`));
+  const complained = useRef<Faults | null>(null);
+  useEffect(() => {
+    if (!drawing.faults || drawing.faults === complained.current) return;
+    complained.current = drawing.faults;
+    complain(drawing.faults);
+  }, [drawing.faults]);
   // The caller hears of every change to the points shown, whatever made it: a key, the slider, reset(), a new view, or
   // a redraw that left the zoom no slider or no room.
   const told = useRef<Shown | null>(null);

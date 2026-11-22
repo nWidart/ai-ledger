@@ -1432,6 +1432,7 @@ describe("EChart zoom", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const { rerender } = render(keyed(MONTH, before));
     const chart = await drawn();
+    error.mockClear(); // a list already wrong at mount is named then: here, only the change counts
     chart.zoomTo(15, 29);
     readBack(MONTH, "Oct 23");
     rerender(keyed(EARLY, after));
@@ -1440,6 +1441,25 @@ describe("EChart zoom", () => {
     expect(chart.shown).toEqual({ from: 0, to: 31 });
     expect(readout()).toBe("Showing all 32 days.");
     expect(error.mock.calls).toEqual([[`EChart "${LABEL}": ${fault}, so the reading and the zoom end.`]]);
+  });
+
+  it("names a list it cannot go by at mount, with a new view, and when the points change under it, once each", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const short = MONTH.slice(1), view = "29 days by project";
+    const strict = (list: readonly string[], props: Partial<EChartProps>) => <StrictMode>{keyed(list, props)}</StrictMode>;
+    const { rerender } = render(strict(MONTH, { pointKeys: short })); // its effects run twice at mount
+    await drawn();
+    rerender(strict(MONTH, { pointKeys: [...short] }));
+    rerender(strict(EARLY, { pointKeys: short, view }));
+    rerender(strict(MONTH, { pointKeys: short, view }));
+    const named = (fault: string) => [`EChart "${LABEL}": the point keys hold ${fault}, so a redraw that changes the keys will end the reading and the zoom.`];
+    expect(error.mock.calls).toEqual([named("29 keys for 30 points"), named("29 keys for 32 points"), named("29 keys for 30 points")]);
+    // The list fits its points again: the next change of keys keeps the reading on its day.
+    rerender(strict(short, { view }));
+    readBack(short, "Oct 23");
+    rerender(strict(["Sep 30", ...short], { view }));
+    expect(tooltip()!.textContent).toBe("Oct 23 tip");
+    expect(error).toHaveBeenCalledTimes(3);
   });
 
   it("takes another list with the same keys for the same days, and renders and draws nothing more", async () => {
