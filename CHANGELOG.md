@@ -12,6 +12,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - `/api/context` `overhead` has `items`, `calls` and `before_view` in place of `top`.
+- The session sheet has "Tool calls by thread" under the timeline's events: one lane per thread (the main thread, each subagent), each call a bar from its start to its result, on the timeline's time axis.
+  - A failed call is a hollow bar, a call with no result a ring, a call with no recorded duration a tick; a call that ran past the last event ends in a point.
+  - Read it with the arrow keys or the pointer; Enter or a click opens the tool's sheet. "Show data table" lists the calls by duration.
+- `/api/session` calls carry `lane` and `input`.
 
 ## [0.7.0] - 2026-11-22
 
@@ -25,10 +29,6 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - `/api/usage` has `cost_flow`: the cost of each project and model pair, and of each model by token kind and its reported cost.
 - Project: "Sessions by cost and tool calls" plots each session as a dot, split at the medians into four named quadrants. Read it with the arrow keys; a dot opens its session. A filled dot made a commit.
 - `/api/usage` `sessions` rows carry a `title`.
-- The session sheet has "Tool calls by thread" under the timeline's events: one lane per thread (the main thread, each subagent), each call a bar from its start to its result, on the timeline's time axis.
-  - A failed call is a hollow bar, a call with no result a ring, a call with no recorded duration a tick; a call that ran past the last event ends in a point.
-  - Read it with the arrow keys or the pointer; Enter or a click opens the tool's sheet. "Show data table" lists the calls by duration.
-- `/api/session` calls carry `lane` and `input`.
 
 ### Changed
 
