@@ -38,7 +38,7 @@ With three dots or more, two dashed lines SHALL cross the session plot at the me
 - **THEN** it counts as cheap
 
 ### Requirement: Name the session plot's quadrants
-The four quadrants SHALL be named "Cheap, much done" (top left), "Costly, much done" (top right), "Cheap, little done" (bottom left) and "Costly, little done" (bottom right). A list under the plot SHALL give each name with its count. A name SHALL be drawn in its quadrant's corner only when it fits there.
+The four quadrants SHALL be named "Cheap, much done" (top left), "Costly, much done" (top right), "Cheap, little done" (bottom left) and "Costly, little done" (bottom right). A list under the plot SHALL give each name with its count. A name SHALL be drawn in its quadrant's corner only when the quadrant has room for it both across and up.
 
 #### Scenario: Counts
 - **WHEN** 8 of the shown sessions are costly with little done
@@ -47,6 +47,10 @@ The four quadrants SHALL be named "Cheap, much done" (top left), "Costly, much d
 #### Scenario: A name with no room
 - **WHEN** a quadrant is too narrow for its name at the text size in use
 - **THEN** its name is not drawn on the plot, and the list under the plot still names it with its count
+
+#### Scenario: A median on the plot's edge
+- **WHEN** three sessions cost $1, $2 and $3 and made no tool call, so the median of tool calls lies on the plot's bottom edge
+- **THEN** only the two upper names are drawn, and the list under the plot names all four
 
 ### Requirement: Show few sessions without a split
 With one or two dots, the block SHALL draw them with no median lines, no quadrant names and no quadrant list, and SHALL say that the sessions are too few to split at a median. With sessions but none of known cost, it SHALL say that none can be placed and draw no plot.
@@ -60,11 +64,15 @@ With one or two dots, the block SHALL draw them with no median lines, no quadran
 - **THEN** the block says no session in this view has a known cost, and shows no plot
 
 ### Requirement: Say which sessions the session plot leaves out
-When the view holds more sessions than the usage payload lists, the block SHALL say that it shows the newest of them and that the medians are theirs. It SHALL say how many sessions it leaves out because their cost is unknown. A session whose cost is below $0 (a custom price list may hold negative rates) SHALL have no dot either, and the same line SHALL count it. A session with a cost and some unpriced requests SHALL be a dot at its known cost, read as "at least" that cost.
+When the view holds more sessions than the usage payload lists, the block SHALL say that it shows the newest, and, with a split, that the medians are theirs; with no dot, that none of the newest has a known cost. It SHALL count the sessions it leaves out for an unknown cost. A session below $0 SHALL have no dot either, and the same line SHALL count it. A session with a cost and some unpriced requests SHALL be a dot at its known cost, read as "at least" that cost.
 
 #### Scenario: More than 300 sessions
 - **WHEN** the view holds 412 sessions of `foo`
 - **THEN** the block says it shows the newest 300 of 412 sessions in this view, with their medians
+
+#### Scenario: A cut view with nothing plottable
+- **WHEN** the view holds 412 sessions of `foo` and none of the newest 300 has a known cost
+- **THEN** the block says it shows the newest 300 of 412 sessions, with no word of medians, and that no session in the newest 300 has a known cost
 
 #### Scenario: Unknown costs
 - **WHEN** two sessions of the view are on unpriced models alone
@@ -97,11 +105,15 @@ The session plot SHALL be read by keyboard from the cheapest session to the cost
 - **THEN** the cheapest session is read, for example "Fix the flaky invoice export test, started Nov 2, 09:05 AM: $0.85, 41 tool calls, 2 commits. Cheap, much done."
 
 ### Requirement: Write a session's cost on the session plot
-A session's cost SHALL read as the app writes a cost, with "$0" for a true zero. A positive cost under a cent SHALL read "under $0.01" in the sentence and "<$0.01" in the tooltip and the table; with unpriced requests it SHALL read "more than $0".
+A session's cost SHALL read as the app writes a cost, with "$0" for a true zero. A positive cost under a cent SHALL read "under $0.01" in the sentence and "<$0.01" in the tooltip and the table; with unpriced requests it SHALL read "more than $0". A cost tick under a millionth of a dollar, or from a quadrillion, SHALL read in powers of ten.
 
 #### Scenario: A cost under a cent
 - **WHEN** the session read cost $0.003 and all its requests are priced
 - **THEN** its sentence says "under $0.01" and its tooltip "<$0.01"
+
+#### Scenario: A cost too small to write in decimals
+- **WHEN** a custom price list gives a session a cost of about $1e-126
+- **THEN** its dot and the cost axis are drawn, the axis's lowest tick reads "$1e-126", and its tooltip says "<$0.01"
 
 #### Scenario: Sessions in one place
 - **WHEN** three sessions sit within 4px of each other and the pointer reads one of them

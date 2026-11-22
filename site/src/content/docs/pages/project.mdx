@@ -171,6 +171,7 @@ See [Windows](/ai-ledger/concepts/windows/) for how limit windows work.
 - A **filled** dot made at least one commit. A **hollow** dot made none. Shape tells them apart, so it holds in forced colors.
 - A session with a cost and some unpriced requests is a dot at its known cost; its sentence says "at least". A session with no known cost has no dot, and a line under the plot counts it: "2 sessions with no known cost are left out." A session whose cost is below $0, from a custom price list with a negative rate, has no place on a log axis: it has no dot either, and the same line counts it ("1 session with a negative cost is left out").
 - A session at $0.00 or at 0 tool calls sits in a short lane at the start of its axis, labelled "$0" or "0". The lane shows only when a session needs it.
+- A custom price list can give a cost far under a cent. Its sentence and tooltip say "under $0.01" or "\<$0.01", and a cost tick under a millionth of a dollar, or from a quadrillion, is written in powers of ten, such as "$1e-126".
 - Dots are not moved apart. Dots at nearly the same place read darker, and the tooltip counts them ("and 2 more sessions here").
 
 **The medians and the four names.** With three dots or more, two dashed lines mark the median cost and the median tool calls of the dots shown. A dot is *costly* when its cost is above the median cost, else *cheap*. It is *much done* when its tool calls are above the median, else *little done*. A dot on a line counts as cheap, or as little done. The four quadrants are:
@@ -180,13 +181,13 @@ See [Windows](/ai-ledger/concepts/windows/) for how limit windows work.
 | Above the median tool calls | Cheap, much done | Costly, much done |
 | At or below it | Cheap, little done | Costly, little done |
 
-Each name sits in its corner of the plot, when it fits there. A list under the plot gives all four names with their counts, so a name that does not fit is still on screen. Medians are not means: one expensive session does not move them. The names say "done" and not "won": they describe tool calls and cost, not a result.
+Each name sits in its corner of the plot, when its quadrant has room for it both across and up. A median on the plot's edge, such as 0 tool calls for most sessions, leaves the quadrants on that side no room, so their names are not drawn. A list under the plot gives all four names with their counts, so a name that does not fit is still on screen. Medians are not means: one expensive session does not move them. The names say "done" and not "won": they describe tool calls and cost, not a result.
 
 **Few sessions and cut-offs**
 
 - With one or two dots the plot shows them without lines, names or list, and says "2 sessions: too few to split at a median." (or "1 session: …").
 - With no dot, the block says "No session in this view has a known cost, so none can be placed." and shows no plot.
-- The usage request lists the newest 300 sessions of the view. When the view holds more, a line above the plot says it, such as "The newest 300 of 412 sessions in this view; the medians are theirs."
+- The usage request lists the newest 300 sessions of the view. When the view holds more, a line above the plot says it, such as "The newest 300 of 412 sessions in this view; the medians are theirs." With fewer than three dots there is no median, and the line ends at "in this view." With no dot, the block names the sample instead of the view: "No session in the newest 300 has a known cost, so none can be placed." An older session may still have one.
 
 **Reading the plot**
 
