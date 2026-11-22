@@ -5,6 +5,14 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Project and Context (one project): "What loads before your first prompt" ranks the snapshot's categories and every MCP server, memory file, custom agent and skill. It shows how often Claude Code called each server and skill in the view, and a name opens its sheet.
+
+### Changed
+
+- `/api/context` `overhead` has `items`, `calls` and `before_view` in place of `top`.
+
 ## [0.7.0] - 2026-11-22
 
 ### Added
@@ -17,7 +25,6 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - `/api/usage` has `cost_flow`: the cost of each project and model pair, and of each model by token kind and its reported cost.
 - Project: "Sessions by cost and tool calls" plots each session as a dot, split at the medians into four named quadrants. Read it with the arrow keys; a dot opens its session. A filled dot made a commit.
 - `/api/usage` `sessions` rows carry a `title`.
-- Project and Context (one project): "What loads before your first prompt" ranks the snapshot's categories and every MCP server, memory file, custom agent and skill. It shows how often Claude Code called each server and skill in the view, and a name opens its sheet.
 
 ### Changed
 
@@ -36,7 +43,6 @@ and versions follow [Semantic Versioning](https://semver.org/).
   - The rate chart keeps the point you are reading and the zoom when older data arrives or a folded stretch changes, so Space still clears the selection.
 - Cost's daily chart and Activity's work chart keep the day you are reading and the zoom when older days arrive or a rolling range moves on a day. The outcome trend keeps the week you are reading when a week joins it.
 - `/api/live/session` no longer returns `limits` or `cwd`, and `/api/live` no longer returns `latest`, each session's newest call.
-- `/api/context` `overhead` has `items`, `calls` and `before_view` in place of `top`.
 
 ### Fixed
 
