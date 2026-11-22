@@ -105,7 +105,9 @@ export function spansLayout(tl: TimelineModel | null, calls: readonly SpanCall[]
   // A clipped span's point: in the timeline's right margin, as the svg scales it.
   const tip = (tl.m.l + tl.iw + tl.m.r) * k - TIP;
 
-  // The span of each call the timeline places (by start_ts, else end_ts), its lane and row still to come.
+  // The span of each call the timeline places (by start_ts, else end_ts), its lane and row still to come. until: where the
+  // call's row is free again; a tick or ring holds its instant's millisecond, so a bar starting there takes another row
+  // whatever their ids' order, and a call starting where a bar ends still shares its row.
   interface Placed { span: Span; at: number; until: number; group: string }
   const placed: Placed[] = [];
   for (const c of calls) {
@@ -119,7 +121,7 @@ export function spansLayout(tl: TimelineModel | null, calls: readonly SpanCall[]
     const kind: SpanKind = !timed ? (start != null && !c.end_ts && c.is_error == null ? "open" : "still") : c.is_error ? "failed" : "ok";
     const xs = spanX(tl, width, at), xe = timed ? spanX(tl, width, end!) : xs, clipped = timed && end! > tl.end;
     placed.push({
-      at, until: timed ? end! : at, group: sub === 0 ? "main" : sub == null ? "apart" : `sub-${sub}`,
+      at, until: timed ? end! : at + 1, group: sub === 0 ? "main" : sub == null ? "apart" : `sub-${sub}`,
       span: {
         id: c.id, tool: c.tool ?? "Unknown tool", known: c.tool != null, input: c.input ?? "", lane: 0, row: 0, sub,
         x0: clipped ? Math.min(xs - .5, tip - CLIPPED) : xs - .5, x1: clipped ? tip : Math.max(xe, xs) + .5, kind, failed: c.is_error === true, clipped,

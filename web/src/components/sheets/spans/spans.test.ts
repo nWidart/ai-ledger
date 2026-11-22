@@ -108,6 +108,9 @@ describe("spansLayout", () => {
   it.each([
     ["three calls at once", [[0, 5], [1, 6], [2, 7]], [0, 1, 2], 3, 0],
     ["two calls in sequence", [[0, 1], [1, 2]], [0, 0], 1, 0],
+    ["a tick where a bar ends", [[0, 1], [1, 1]], [0, 0], 1, 0],
+    ["a tick at a bar's start, the tick's id first", [[1, 1], [1, 5]], [0, 1], 2, 0],
+    ["a tick at a bar's start, the bar's id first", [[1, 5], [1, 1]], [0, 1], 2, 0],
     ["a fifth call at once on the main thread, drawn over its last row", [[0, 9], [1, 9], [2, 9], [3, 9], [4, 9]], [0, 1, 2, 3, 3], 4, 1],
   ] as const)("packs %s", (_, times, rows, count, over) => {
     const calls = times.map(([a, b]) => call(a, b)), { l } = layout([...calls, call(20, 21)]);
