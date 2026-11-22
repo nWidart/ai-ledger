@@ -2,7 +2,7 @@
 // firing, before and after "Show N more" expands the strip; that Activity's work chart (its whole box, waited for until its
 // first bar is drawn) and workbench tab list are, over 30 days (bars by day, with the zoom slider under them) and all time
 // (bars by week); and that the first chart of Cost, Errors, Limits, the Judgments view and Live starts
-// there, with its first plotted mark wholly on it. The jsdom tests cannot lay a page out; this can. It runs locally, not in
+// there, with its first plotted mark wholly on it: for Cost and Errors, ECharts' charts, the first bar drawn. The jsdom tests cannot lay a page out; this can. It runs locally, not in
 // CI. It needs the demo server and the pinned Playwright:
 //   cd web && npm ci && npm run build;  cd tools/demo && npm ci && uv run seed.py && uv run serve.py   (DEMO_PORT moves it)
 //   node firstscreen.mjs        exits 1, naming what falls outside the window
@@ -33,9 +33,16 @@ const COST_BAR = '#spend .echart-plot svg > g > path:not([fill="none"]):not([fil
  *  leaves both out. The rate line sits in a clipped group of its own; its dots, drawn after it, are scaled symbols, which
  *  `:not([transform])` leaves out as well as `:not(g ~ path)` does. The slider comes after the rate line's group. */
 const WORK_BAR = '#work .echart-plot svg > g > path:not([fill="none"]):not([fill^="url("]):not([fill-opacity]):not([transform]):not(g ~ path)';
+/** Errors' rate chart is ECharts' SVG with the same rule for its bars, the rate track above them. The no-activity bands are
+ *  translucent paths drawn before the bars, the selected bucket's frame one among them, the reading band one after them,
+ *  and a segment dimmed by a selected type is translucent too: `:not([fill-opacity])` leaves them all out. The rate line's
+ *  dots are drawn after the bars, outside any group, as one large arc each (" 0 1 1 "), which no bar segment has: its
+ *  round corners are small arcs. The slider's hidden totals line is the first series but is drawn after the bars, in a
+ *  group, with the bridge, the rate line and the slider: `:not(g ~ path)` leaves out what follows them. */
+const ERRORS_BAR = '.chart-card .echart-plot svg > g > path:not([fill="none"]):not([fill^="url("]):not([fill-opacity]):not([d*=" 0 1 1 "]):not(g ~ path)';
 const FIRST = [
   ["Cost's daily cost chart", "/cost?range=30", "#spend .echart", COST_BAR],
-  ["Errors' rate chart", "/errors?range=30", ".chart-card", ".chart-card .bars rect"],
+  ["Errors' rate chart", "/errors?range=30", ".chart-card", ERRORS_BAR],
   ["Limits' first open window chart", "/limits?range=30", ".lim-grid .lim-chart", ".lim-grid .lim-chart :is(.meas, .meas-one)"],
   ["the Judgments view's Outcomes ledger", "/usage?view=judgments&range=30", "#outcomes", "#outcomes .mixbar i"],
   ["Live's first stream event", "/live?session=s1", ".pg-live .stream .ev", null],
