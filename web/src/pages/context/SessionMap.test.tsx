@@ -1,9 +1,10 @@
 import { act, fireEvent, screen, within } from "@testing-library/react";
 import { renderApp } from "../../testing";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { SessionPoint } from "../../api";
 import { setOrder } from "../../colors";
+import { drawn } from "../../components/echart/testing";
 import { useState } from "react";
 import type { Quad } from "./context";
 import { mapFit, mapModel } from "./mapDots";
@@ -39,10 +40,17 @@ function Map({ map, start = null, view = "v" }: { map: Parameters<typeof Session
 }
 
 beforeEach(() => { history.replaceState(null, "", location.pathname); setOrder(["foo", "bar"]); });
+afterEach(() => setOrder([]));
 
 describe("SessionMap", () => {
-  it("states the count, and the newest N of M when the view has more", () => {
+  it("states the count, and the newest N of M when the view has more, and draws again in a new project order", async () => {
     const { rerender } = renderApp(<Map map={{ total: 3, points }} />);
+    // jsdom resolves every var() to one color, so the fills cannot tell two orders apart: a new order is a new drawing.
+    const chart = await drawn(), draws = chart.options.length;
+    rerender(<Map map={{ total: 3, points }} />);
+    expect(chart.options.length).toBe(draws); // the same drawing
+    act(() => setOrder(["bar"])); // foo loses its hue, with the same payload
+    expect(chart.options.length).toBe(draws + 1);
     expect(screen.getByText(/^3 sessions\./)).toBeTruthy();
     rerender(<Map map={{ total: 3412, points }} />);
     expect(screen.getByText(/Showing the newest 3 of 3,412 sessions/)).toBeTruthy();

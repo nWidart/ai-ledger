@@ -75,8 +75,14 @@ export function SessionMap({ map, quad, onQuad, view }: { map: SessionsMap; quad
   const env = useChartEnv(width, 0), s = env.textScale;
   const model = useMemo(() => mapModel(map.points), [map.points]);
   const fit = useMemo(() => mapFit(model, width, s, (t, w) => labelWidth(env, t, w)), [model, width, s, env]);
-  const option = useCallback((e: ChartEnv) => mapOption(fit, { ...e, textScale: s }, { quad, color }), [fit, s, quad, color]);
   const pts = model.points, counts = model.counts;
+  // The projects' hues, as the dots read them: the page and the nav's status poll set the order, which can come after the
+  // payload, so the option is made again then. A new drawing of the same view: the reading stays.
+  const hues = useMemo(() => [...new Set(pts.map(p => p.project))], [pts]).map(color).join(" ");
+  const option = useCallback((e: ChartEnv) => mapOption(fit, { ...e, textScale: s }, { quad, color }),
+    // hues: a new project order is a new drawing
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fit, s, quad, color, hues]);
   const order = useMemo(() => new Map(pts.map((p, i) => [p.session_id, i])), [pts]);
 
   // The reading, held by the session's id. A new view ends it, and so do newer figures without its session, in the render
