@@ -24,8 +24,8 @@ const layout = (calls: SpanCall[], width = 600, ts = 1) => {
 const span = (l: ReturnType<typeof layout>["l"], c: SpanCall) => l.spans.find(s => s.id === c.id)!;
 
 describe("spanX", () => {
-  // Starts at 0, 2 and 42: a squeezed gap from 2 to 42; keep is 30 s (2 minutes active).
-  const long = call(2, 30), short = call(2, 2.25), past = call(42, 50), calls = [call(0, 1), long, short, past];
+  // Starts at 0, 2, 42 and 45: a squeezed gap from 2 to 42 before the axis's end; keep is 30 s (5 minutes active).
+  const long = call(2, 30), short = call(2, 2.25), past = call(42, 50), calls = [call(0, 1), long, short, past, call(45, 45.5)];
   const { tl, l } = layout(calls);
   const g = tl.gaps[0]!;
 
