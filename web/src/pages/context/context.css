@@ -86,6 +86,7 @@
 .pg-context .legend i.band { background: var(--text-secondary); opacity: .25; }
 .pg-context .axis-note, .pg-context .caption { margin-top: 2px; }
 .pg-context .tip .row { display: flex; gap: 16px; justify-content: space-between; }
+.pg-context .tip i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 6px; }
 /* The scale under a range column's heading, shared by the start ranges and the contributors */
 .pg-context :is(.rng-head .scale, .ctr-scale) { display: flex; justify-content: space-between; gap: 6px; font-weight: 400; font-size: .6875rem; color: var(--text-muted); margin-top: 2px; }
 
