@@ -175,7 +175,9 @@
 .pg-live .strip .now { padding: 1px 8px; border-radius: 999px; background: var(--surface-2); white-space: normal; }
 .pg-live .strip .now.warn { background: var(--warning-soft); }
 .pg-live .strip .now.ended { background: none; outline: 1px dashed var(--text-muted); outline-offset: -1px; }
-.pg-live .strip .now .det { font-size: .75rem; }
+/* The detail (a long tool name) wraps inside the pill, so a phone's strip stays inside the page. */
+.pg-live .strip .now { max-width: 100%; }
+.pg-live .strip .now .det { min-width: 0; font-size: .75rem; overflow-wrap: anywhere; }
 .pg-live .strip .inf.tt { font-weight: 400; color: var(--text-muted); font-size: inherit; }
 .pg-live .strip .ctx .meter { width: 100%; height: 8px; margin: 0; }
 /* Pulse: the context's step line and the calls' ticks, a ✓ upright, a ✕ crossed, at its box's full width. --text-primary,
@@ -222,7 +224,11 @@
 .pg-live .tile.st-you { border-color: var(--good); }
 .pg-live .tile.st-ended { border: 1px dashed var(--text-muted); }
 .pg-live .tile .top { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; margin: 0; height: 1.25rem; font-weight: 600; color: var(--text-primary); }
-.pg-live .tile .top .state { margin-right: auto; }
+/* A long state (an MCP tool's name) shrinks with an ellipsis, its dot kept in line; the errors' ✕N and the Pinned mark never
+   shrink, so they stay inside the tile. */
+.pg-live .tile .top .state { display: block; flex: 0 1 auto; min-width: 0; margin-right: auto; overflow: hidden; text-overflow: ellipsis; }
+.pg-live .tile .top .state i { margin-right: 5px; vertical-align: 0; }
+.pg-live .tile .errs, .pg-live .tile .pin-mark { flex: none; }
 .pg-live .tile .errs { font-size: .75rem; }
 .pg-live .tile .ttl { font-size: .8125rem; font-weight: 600; line-height: 1.25rem; height: 2.5rem; color: var(--text-primary); overflow: hidden; overflow-wrap: anywhere;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }

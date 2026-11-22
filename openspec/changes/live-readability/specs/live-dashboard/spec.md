@@ -180,15 +180,15 @@ A tile in *your turn*, *thinking* or *idle* SHALL show how long the session has 
 - **THEN** its tile has a border and shows how long the session has waited
 
 ### Requirement: Filter the stream
-The stream SHALL offer filters, in a bar above it, that change what it draws and nothing it holds. A Failed calls only toggle SHALL filter the stream to failed tool rows; while the stream holds failed rows, its label SHALL give their count, such as "Failed calls only (2)". It SHALL be the page's only control that filters to failed rows: the status strip's error count SHALL NOT be a control. A Main thread only toggle SHALL hide every lane. A Hide read-only toggle SHALL hide the rows the app marks read-only: `Read`, `Grep`, `Glob`, and shell calls whose every command only reads or searches. It SHALL NOT hide a failed row.
+The stream SHALL offer filters, in a bar above it, that change what it draws and nothing it holds. A Failed calls only toggle SHALL filter the stream to failed tool rows; while the session has failed calls, its label SHALL give their total, such as "Failed calls only (2)". That total is the session's, which can exceed the failed rows the loaded events hold; when none of the loaded events failed, the filtered stream SHALL say no failed calls are in the events held. It SHALL be the page's only control that filters to failed rows: the status strip's error count SHALL NOT be a control. A Main thread only toggle SHALL hide every lane. A Hide read-only toggle SHALL hide the rows the app marks read-only: `Read`, `Grep`, `Glob`, and shell calls whose every command only reads or searches. It SHALL NOT hide a failed row.
 
 #### Scenario: Filter to failed rows
 - **WHEN** the user turns on Failed calls only while the stream holds two failed rows among forty
 - **THEN** the stream shows the two failed rows, and turning it off shows all rows
 
 #### Scenario: Failed calls count
-- **WHEN** the stream holds two failed rows
-- **THEN** the toggle reads "Failed calls only (2)", and with no failed row it reads "Failed calls only"
+- **WHEN** the session has two failed calls
+- **THEN** the toggle reads "Failed calls only (2)", and with no failed call it reads "Failed calls only"; if the session has five failed calls and the loaded events hold two, it reads "(5)" and the filtered stream shows two rows; if they hold none, it says no failed calls are in the events held
 
 #### Scenario: Errors count pressed
 - **WHEN** the session has two failed calls

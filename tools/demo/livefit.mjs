@@ -5,7 +5,8 @@
 // Follow off, the Full text warning moves nothing and is gone after 7 s, and the pulse's readout stays on the screen with
 // no horizontal scroll. On desktop the 10 min pulse is at least 200px wide; at 1440 x 900 the stream is wider than 798px
 // and the rail holds the sessions without scrolling; at 390 x 844 the page has no horizontal scroll and the first event is
-// on the first screen. On the Wall it pins two sessions and measures them. It runs locally, not in CI.
+// on the first screen, and the strip of the session running the long MCP tool does not scroll it either. On every Wall
+// no part of a tile's top row, pinned or not, passes the tile. On the Wall it pins two sessions and measures them. It runs locally, not in CI.
 // It needs the demo server and the pinned Playwright:
 //   cd web && npm ci && npm run build;  cd tools/demo && npm ci && uv run seed.py && uv run serve.py   (DEMO_PORT moves it)
 //   node livefit.mjs        prints the figures, and exits 1 naming a check that fails
@@ -189,6 +190,33 @@ try {
     const tiles = await heights(wall, ".pg-live .tile");
     console.log(`${at} wall: ${n} tiles ${tiles.join("px, ")}px high`);
     if (tiles.length !== 1) fails.push(`wall tiles of ${tiles.length} heights at ${at}`);
+
+    // A tile's top row, pinned or not: nothing in it passes the tile's right edge. s6 runs the long MCP tool and is pinned;
+    // the others are not.
+    const pinnedWall = await open(b, width, height, "/live?view=wall&pin=s6", ".pg-live .tile");
+    const topOver = await pinnedWall.evaluate(() => {
+      const r = { checked: 0, pinned: 0, over: [] };
+      for (const t of document.querySelectorAll(".pg-live .tile")) {
+        const edge = t.getBoundingClientRect().right, pinned = t.classList.contains("pinned");
+        for (const c of t.querySelector(".top").children) {
+          r.checked++;
+          if (c.getBoundingClientRect().right > edge + 0.5) r.over.push(`${t.dataset.session}${pinned ? " (pinned)" : ""}: ${c.className}`);
+        }
+        if (pinned) r.pinned++;
+      }
+      return r;
+    });
+    console.log(`${at} wall: ${topOver.checked} top-row parts checked, ${topOver.pinned} pinned tile; ${topOver.over.length ? `PAST THE TILE: ${topOver.over.join(" | ")}` : "none past a tile"}`);
+    if (!topOver.pinned) fails.push(`no pinned tile to check at ${at}`);
+    if (topOver.over.length) fails.push(`tile top-row parts pass the tile at ${at}: ${topOver.over.join(", ")}`);
+
+    // A strip whose state is the long MCP tool keeps the phone's page from scrolling sideways.
+    if (phone) {
+      const long = await open(b, width, height, "/live?session=s6");
+      const lm = await measure(long);
+      console.log(`${at}, s6 strip (long tool): page ${lm.scrollWidth}px wide in ${lm.clientWidth}px`);
+      if (lm.hscroll) fails.push(`the strip of a session running a long tool scrolls the page sideways at ${at}`);
+    }
   }
 
   const wall = await open(b, 1440, 900, "/live?view=wall&pin=s1,s2", ".pg-live .pin .stream .ev");

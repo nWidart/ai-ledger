@@ -3,7 +3,7 @@ import { compiler, RuleType, type MarkdownToJSX } from "markdown-to-jsx/react";
 
 /** The only places a link may lead: the web and mail. Any other href (a script, data, a path in the app) is dropped. */
 const SAFE = /^(?:https?|mailto):/i;
-const safe = (href: string | null | undefined) => (href != null && SAFE.test(href.trim()) ? href : undefined);
+const safe = (href: string | null | undefined) => (href != null && SAFE.test(href.trim()) ? href.trim() : undefined);
 const OUT = { target: "_blank", rel: "noreferrer noopener" } as const;
 
 /** A link that opens apart from the page; one whose href was dropped keeps its text, as text. */
