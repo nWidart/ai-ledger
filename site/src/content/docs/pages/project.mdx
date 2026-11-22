@@ -169,7 +169,7 @@ See [Windows](/ai-ledger/concepts/windows/) for how limit windows work.
 
 - **Tool calls** count what the session did: reads, edits, commands and searches. They do not measure what it produced. A session can make 200 calls and achieve nothing. Tool calls are recorded for Claude Code, Codex and Grok alike. Commits are not the vertical axis, because most sessions make none, and the plot would show most dots on the floor.
 - A **filled** dot made at least one commit. A **hollow** dot made none. Shape tells them apart, so it holds in forced colors.
-- A session with a cost and some unpriced requests is a dot at its known cost; its sentence says "at least". A session with no known cost has no dot, and a line under the plot counts it: "2 sessions with no known cost are left out."
+- A session with a cost and some unpriced requests is a dot at its known cost; its sentence says "at least". A session with no known cost has no dot, and a line under the plot counts it: "2 sessions with no known cost are left out." A session whose cost is below $0, from a custom price list with a negative rate, has no place on a log axis: it has no dot either, and the same line counts it ("1 session with a negative cost is left out").
 - A session at $0.00 or at 0 tool calls sits in a short lane at the start of its axis, labelled "$0" or "0". The lane shows only when a session needs it.
 - Dots are not moved apart. Dots at nearly the same place read darker, and the tooltip counts them ("and 2 more sessions here").
 

@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Show the project's sessions by cost and tool calls
-The page SHALL show a block "Sessions by cost and tool calls": one dot per session of the project in the view with a known cost, its estimated cost across and its tool calls up, both on log scales. The range, source and automated filters SHALL apply to it, as to every usage block. The block SHALL link to Activity filtered to the project.
+The page SHALL show a block "Sessions by cost and tool calls": one dot per session of the project in the view with a known cost, its estimated cost across and its tool calls up, both on log scales. The range, source and automated filters SHALL apply to it, as to every usage block. The block SHALL link to Activity filtered to the project. Its tick labels and axis names SHALL lie inside the block, none over another, however many digits the labels have.
 
 #### Scenario: A project's sessions
 - **WHEN** the user views `foo` for the last 30 days and `foo` has 93 sessions with a known cost
@@ -14,6 +14,10 @@ The page SHALL show a block "Sessions by cost and tool calls": one dot per sessi
 #### Scenario: A source filter
 - **WHEN** the user picks Codex in the source filter
 - **THEN** the block shows Codex sessions only
+
+#### Scenario: Wide labels
+- **WHEN** one session of the view made 120,000 tool calls and another cost $1,500
+- **THEN** the margins widen so that every tick label and both axis names lie inside the block, apart
 
 ### Requirement: Mark the sessions that made a commit
 On the session plot, a dot SHALL be filled when the session made a commit and hollow when it made none, so that a commit is told by shape and not by color alone.
@@ -56,7 +60,7 @@ With one or two dots, the block SHALL draw them with no median lines, no quadran
 - **THEN** the block says no session in this view has a known cost, and shows no plot
 
 ### Requirement: Say which sessions the session plot leaves out
-When the view holds more sessions than the usage payload lists, the block SHALL say that it shows the newest of them and that the medians are theirs. It SHALL say how many sessions it leaves out because their cost is unknown. A session with a cost and some unpriced requests SHALL be a dot at its known cost, read as "at least" that cost.
+When the view holds more sessions than the usage payload lists, the block SHALL say that it shows the newest of them and that the medians are theirs. It SHALL say how many sessions it leaves out because their cost is unknown. A session whose cost is below $0 (a custom price list may hold negative rates) SHALL have no dot either, and the same line SHALL count it. A session with a cost and some unpriced requests SHALL be a dot at its known cost, read as "at least" that cost.
 
 #### Scenario: More than 300 sessions
 - **WHEN** the view holds 412 sessions of `foo`
@@ -65,6 +69,10 @@ When the view holds more sessions than the usage payload lists, the block SHALL 
 #### Scenario: Unknown costs
 - **WHEN** two sessions of the view are on unpriced models alone
 - **THEN** the block says two sessions with no known cost are left out
+
+#### Scenario: A cost below $0
+- **WHEN** a custom price list gives one session of the view a cost below $0
+- **THEN** that session has no dot, and the block says one session with a negative cost is left out
 
 ### Requirement: Show a zero on the session plot's log axes
 A session at $0, or with no tool call, SHALL be drawn in a lane at the start of that axis, labelled "$0" on the cost axis and "0" on the tool-call axis. The lane SHALL lie under the power of ten at or below the axis's lowest value and span at most one decade. The lane SHALL be drawn only when a shown session needs it; an axis with no positive value SHALL take a fallback decade with a lane.
