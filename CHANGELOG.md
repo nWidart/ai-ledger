@@ -9,6 +9,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 - Prices for OpenAI `gpt-6.2-sol` and `gpt-6.2-astra`, so Codex sessions on those models show an estimated cost.
 
+### Fixed
+
+- The wheel scrolls the page again with the pointer over the tabs on Context and Activity. The tab strip scrolled a pixel up and down and held the wheel.
+
 ## [0.5.0] - 2026-11-21
 
 ### Added
