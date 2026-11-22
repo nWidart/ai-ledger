@@ -624,12 +624,14 @@ export function EChart({
   // It runs after the draw above and again after each one, and after a zoom: a redraw drops ECharts' band, and a redraw
   // or a zoom can move the points. A key's tooltip goes with the band, so the two never sit over different points.
   // A pointer's tooltip goes with it too once the point read is no longer under the pointer (a redraw or a zoom moved
-  // it away): the pointer's place is forgotten, and the next move reads the point under it, as ever.
+  // it away, or moved the grid from under the pointer, by what `under()` holds to be inside): the pointer's place is
+  // forgotten, and the next move reads the point under it, as ever.
   const banded = useRef(false);
   useEffect(() => {
     if (!chart) return;
     if (at != null) {
-      if (pointer.current && Number(chart.convertFromPixel(X_AXIS, pointer.current.x)) !== at) pointer.current = null;
+      const p = pointer.current;
+      if (p && (!chart.containPixel(GRID, [p.x, p.y]) || Number(chart.convertFromPixel(X_AXIS, p.x)) !== at)) pointer.current = null;
       const [x, y] = drawnAt(chart, at, env.height);
       chart.dispatchAction({ type: "updateAxisPointer", currTrigger: "mousemove", x, y });
       place(at);

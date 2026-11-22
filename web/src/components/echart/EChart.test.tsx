@@ -485,6 +485,10 @@ describe("EChart reading", () => {
     act(() => setTheme("light"));
     expect(chart.band).toBe(1);
     expect([tooltip()!.style.left, tooltip()!.style.top]).toEqual(["386px", "22px"]); // over the band, as a key's
+    chart.fire("mousemove", [450, 60]);
+    chart.grid = { left: 200, top: 80, width: 400, height: 200 }; // a larger text size: the grid's top is under the pointer
+    act(() => setTheme("dark"));
+    expect([tooltip()!.style.left, tooltip()!.style.top]).toEqual(["386px", "90px"]); // over the band, not over the margin
   });
 
   it("shows a hand over a point that a click activates, and the default cursor elsewhere", async () => {
