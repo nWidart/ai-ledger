@@ -78,13 +78,13 @@ export function alongside(l: SpansLayout, id: string): number | undefined {
   return s && l.spans.filter(o => o !== s && overlap(s, o)).length;
 }
 
-/** A time in words; with its date on a timeline over 20 hours (the layout's long, the timeline's rule). */
-const clock = (l: SpansLayout, t: number) => new Date(t).toLocaleTimeString(undefined,
+/** A time in words, with seconds; with its date on a timeline over 20 hours (the layout's long, the timeline's rule). */
+export const clock = (l: SpansLayout, t: number) => new Date(t).toLocaleTimeString(undefined,
   { ...(l.long ? { month: "short", day: "numeric" } : {}), hour: "2-digit", minute: "2-digit", second: "2-digit" } as const);
-/** A duration in one unit: dur() from a second, ms() under one. */
-const length = (v: number) => (Math.round(v) < 1000 ? ms(v) : dur(v / 1000));
+/** A duration in ms, in one unit: dur() from a second, ms() under one. */
+export const length = (v: number) => (Math.round(v) < 1000 ? ms(v) : dur(v / 1000));
 /** The call's own thread: a call of the folded lane keeps its subagent's number. */
-const thread = (s: Span) => (s.sub === 0 ? "Main thread" : s.sub == null ? "Subagents, not told apart" : `Subagent ${s.sub}`);
+export const thread = (s: Span) => (s.sub === 0 ? "Main thread" : s.sub == null ? "Subagents, not told apart" : `Subagent ${s.sub}`);
 const on = (s: Span) => (s.sub === 0 ? "the main thread" : s.sub == null ? "a subagent not told apart" : `subagent ${s.sub}`);
 
 /** The call's time in words: [the sentence's, the tooltip's]. */

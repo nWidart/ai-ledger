@@ -6,7 +6,7 @@
 // draws it), so they work before the drawing has loaded and when it fails to.
 import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import type { SessionDetail } from "../../../api";
-import { dur, ms, num } from "../../../format";
+import { num } from "../../../format";
 import { textScale, tipAt, useWidth } from "../../chart";
 import { ChartTable } from "../../DataTable";
 import { EChart } from "../../echart/EChart";
@@ -16,7 +16,8 @@ import { Table, type Column, type RowPick } from "../../table/Table";
 import { openToolSheet, timelineModel } from "../session";
 import { spansLayout, type Span, type SpansLayout } from "./spans";
 import { spanBox, spansOption } from "./spansOption";
-import { groupLabel, noteLines, readSpan, spanAt, stepSpan, tipRows } from "./spansReading";
+// The table's words are the sentence's and the tooltip's.
+import { clock, groupLabel, length, noteLines, readSpan, spanAt, stepSpan, thread, tipRows } from "./spansReading";
 import "./spans.css";
 
 /** The call read, by its id: whether a key read it, its sentence as last said, what was said in its place (Enter on a call
@@ -31,12 +32,6 @@ const MARK = 3, MARK_R = 6;
 /** Between a key's tooltip and the span it reads. */
 const TIP_GAP = 4;
 
-// The table's words, as the sentence and the tooltip write them (spansReading.ts): times with seconds, with the date on a
-// timeline over 20 hours; durations in one unit, ms() under a second.
-const clock = (l: SpansLayout, t: number) => new Date(t).toLocaleTimeString(undefined,
-  { ...(l.long ? { month: "short", day: "numeric" } : {}), hour: "2-digit", minute: "2-digit", second: "2-digit" } as const);
-const length = (v: number) => (Math.round(v) < 1000 ? ms(v) : dur(v / 1000));
-const thread = (c: Span) => (c.sub === 0 ? "Main thread" : c.sub == null ? "Subagents, not told apart" : `Subagent ${c.sub}`);
 const at = (c: Span) => (c.start ?? c.end)!;
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 /** Longest first; the calls with no duration or no result after the timed ones, by start; ties by start, then id. */
