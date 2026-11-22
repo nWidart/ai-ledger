@@ -32,6 +32,11 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - The wheel scrolls the page again with the pointer over the tabs on Context and Activity. The tab strip scrolled a pixel up and down and held the wheel.
+### Added
+
+- Activity:
+  - A calendar of the last 53 weeks under the tabs, a cell per day shaded by the work chart's measure and read with the arrow keys. Select a day to narrow the tabs; a day outside the range widens it first.
+  - `/api/calendar` serves its days.
 
 ## [0.5.0] - 2026-11-21
 

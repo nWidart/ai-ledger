@@ -41,7 +41,7 @@ A selected day or week is cleared in the same step as any change of project, ran
 
 ## Layout
 
-The page reads top to bottom: the view switch, the heading with the prompts interrupted line, Needs attention, the work chart, Work health, then the [tabs](#tabs) that hold the tables. At 1440×900 the work chart and the tab list fit in the first screen. The page has no section index and no drawers.
+The page reads top to bottom: the view switch, the heading with the prompts interrupted line, Needs attention, the work chart, Work health, then the [tabs](#tabs) that hold the tables, then the [Activity calendar](#activity-calendar). At 1440×900 the work chart and the tab list fit in the first screen. The page has no section index and no drawers.
 
 ## Panels
 
@@ -228,6 +228,37 @@ Two lists side by side, each headed with its count, each showing its five newest
 **Failed test runs** are the test and build runs that failed. The count is every failed run in the view.
 
 **Columns** Session (opens the session sheet), When, Project, Command, and an "Open in Errors" link to the failure on Errors.
+
+## Activity calendar
+
+**Shows** the last 53 weeks as a grid under the tabs: a column per week, a row per weekday from Monday, a cell per day. It answers "when do I work with agents, and which days stand out?". It follows the project, source and Include automated sessions, not the time range: changing the range leaves the calendar as it is.
+
+**Figures**
+
+- A cell is one day. The span runs from the Monday 52 weeks before this week's Monday to today.
+- The shade is the work chart's measure, Commits, Prompts or Sessions. The calendar has no switch: change the measure on the work chart. The heading line and the key name it.
+- A wide window shows all 53 weeks. A narrower one shows the newest weeks that fit, 26 in a 343px box, and never scrolls sideways. The cells keep their size at a larger browser text size.
+- The shade is a step. Steps are cut at the median, the 80th and the 95th percentile of the days with any of the measure, over all 53 weeks, so a day has the same shade at every width. Agent work comes in bursts, so the darkest step holds about one active day in twenty. There are up to four steps, and fewer when the days have few distinct values.
+- The key above the grid gives each step's numbers, such as "1–2", "3–8", "9+". A step that holds one value shows that number.
+- A day with none of the measure is an empty cell. A day before the first recorded day under the same filters has no cell. When that first day is inside the weeks shown, the key ends with "Recording starts Sep 8, 2026".
+- Weekday labels (Mon, Wed, Fri) sit left of the grid and month names above it. A month name that would touch the next one, or run past the box, is left out.
+- With none of the measure in the weeks shown but some in the year, the label reads "No commits in the last 26 weeks."; with none at all, "No commits yet."
+- Under forced colors a shade is a size: a square in the system text color that grows with the step, and an empty day is an unfilled square. The key's swatches follow.
+
+**Controls**
+
+- Point at a cell, or focus the calendar and use the arrow keys, to read a day in a tooltip: the weekday and date, then its commits, prompts and sessions, whatever the measure, with the shade's swatch on the chosen one. An idle day reads "No activity". With three or more steps, a day in the darkest step adds "Among the busiest days for commits." A screen reader hears the same as one sentence: "Tuesday, Nov 4, 2026: 12 commits, 40 prompts, 6 sessions."
+- Left and Right move a week, Up and Down a day, Home and End go to the first and last day. With nothing read, Right and Down read the first day and Left and Up the last. The keys stop at the ends. Up and Down do not scroll the page. See [Keyboard and screen reader](/ai-ledger/everywhere/keyboard-screen-reader/).
+- Select a day with a click, a tap, or Enter on the day read. Only a day with activity can be selected; Enter on an idle day does nothing and keeps the reading.
+- A selection works as on the work chart: `day=` in the URL, every tab narrowed to that day, the session search, near-limit filter and Sessions sort dropped. The work chart's chip names the day, and a chart by day frames its bar. A selected week from the work chart is framed as one column. A selection the calendar shows no cell for draws no frame.
+- After a pick the page scrolls to the tabs and moves the focus to the selected tab's panel, which names the day and offers "Show the whole range".
+- Escape ends a reading. With nothing read, Escape clears the selection. Escape closes a tooltip the pointer opened even when the focus is elsewhere.
+- While a new view loads, or newer figures for the calendar load, a pick does nothing. Newer figures keep the day you read.
+- If the calendar cannot load, its section reads "Could not load the calendar" with the reason and a **Retry** button.
+
+**The range.** The tabs count only the days in the range, so a pick outside it first widens it. The page sets the smallest of 7, 14, 30 or 90 days that holds the day, or All. Only a day with activity says so: its tooltip and its sentence add "Outside the last 30 days; selecting it sets the range to the last 90 days." After the pick, a screen reader hears "Mar 3, 2026 selected; the range is now the last 90 days, and the tabs show its figures." A day inside the range says "Nov 4, 2026 selected; the tabs show its figures." Back restores the earlier range. Escape on a selection says "Selection cleared; the tabs show the whole range."
+
+**Show data table** opens a named table under the grid, such as "Commits per day, by week": a row per week shown, "Week of Nov 2, 2026" (", so far" for this week), a column per weekday from Mon to Sun, and Total. A day with no cell shows a dash. It follows the measure and is closed on every page load.
 
 ## Sheets
 

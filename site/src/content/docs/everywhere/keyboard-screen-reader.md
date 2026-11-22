@@ -22,6 +22,11 @@ Every page works from the keyboard and with a screen reader. This page lists the
 | Enter (Space on Errors) | A focused chart that selects a bucket | Select or clear the point you are reading. |
 | Left, Right, Home, End | A focused tab on Activity's workbench or on Context | Move to the previous, next, first or last tab, wrapping. Context selects it at once; on Activity, Enter or Space selects it. |
 | Tab | A focused tab | Move to the selected tab's panel. |
+| Left, Right | The focused Activity calendar | Read the day a week earlier or later; stop at the first and last day. |
+| Up, Down | The focused Activity calendar | Read the day before or after, so Down from a Sunday reads the next Monday; stop at the first and last day. They do not scroll the page. |
+| Home, End | The focused Activity calendar | Read the first or last day. |
+| Enter | The focused Activity calendar, with a day read | Select a day with activity and move the focus to the tabs' panel. A day with none selects nothing. |
+| Esc | The focused Activity calendar | End the reading. With none read, clear the selected day or week. |
 
 Charts with this keyboard reading: the Activity work chart, the outcome trend of Activity's Judgments view, the Cost chart, the Errors chart, the Context charts, the Limits chart and Live's 10-minute pulse. A tooltip that a chart opens closes with Esc without changing the selected point.
 
