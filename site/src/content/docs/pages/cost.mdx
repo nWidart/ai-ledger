@@ -168,16 +168,18 @@ On a phone, the table keeps Project, Spend and the change.
 - **Columns.** Project, Model and Token kind. Each column adds up to the page's estimated cost, and a band is as wide at both ends. A node's label shows its name and, when the node is tall enough, its cost. A model's name drops the `claude-` prefix.
 - **One project selected.** The graph has two columns, Model and Token kind, since the heading already names the project. The hint and the label say "on" and the project.
 - **Token kinds.** Input, Output + thinking, Cache write (both lifetimes) and Cache read, as the Tokens and cache drawer bills them. A kind with no cost has no node.
-- **Reported.** A fifth kind, for the cost an agent reported with no split by kind, as Grok does. It holds each model's cost less its kinds. A view of Grok alone goes from its models to Reported alone.
+- **Reported.** A fifth kind, for the cost an agent reported with no split by kind, as Grok does. It holds each model's reported costs, however small: a Grok request of one USD tick ($0.0000000001) still has its band. A view of Grok alone goes from its models to Reported alone.
+- **A model with no name.** Grok stores a turn with no breakdown by model with no model name. Its node is "(no model name)", and its cost goes to Reported.
 - **Other.** A column keeps its five costliest names that hold at least 1% of the cost; the rest go to one grey node, "Other (N)". Other always holds two names or more: a lone name that would fold keeps its own node. Its tooltip and sentence list its three costliest names, then "and N more". A name that costs $0.00 has no node.
 - **Colors.** A band takes its source's color. A project has its color from the daily chart, or grey. A model has its color from the daily chart stacked by model. Kinds and Reported are neutral. Every node has a label, or a name in the key, so color is never alone.
 - **Labels and key.** When a column has no room for labels, its nodes are named in a key under the graph, each with a swatch and its cost. A label that would overlap a costlier one is left out, and its node is still read by the pointer and the keys. A name too long for its room ends with "…".
 - **Unpriced models.** Their requests are not drawn, since their cost is unknown. A line under the graph names the models and the number of requests, and the "+?" chip follows the total in How measured.
 - **Empty views.** The section says so in place of the graph: "No usage in this view, so no cost to follow.", "No request in this view is priced, so there is no cost to follow." (with the unpriced line), or "The priced requests in this view cost $0.00, so there is no cost to follow."
+- **Costs below zero.** A price below zero in `prices.json` gives costs below zero, and no band can be drawn for them. The section then says so in place of the graph and keeps Show data table, with every cost and its sign ("−$1.00"); each step of the table adds up to the heading's estimated cost.
 
 **Controls**
 
-- **Pointer or touch.** Move over a node or a band to read it. A tooltip gives a node's cost and share with its three largest bands (or Other's names), and a band's source, target, cost, share of the cost and share of its source. A project's node shows a hand cursor. Leaving the graph ends the reading.
+- **Pointer or touch.** Move over a node or a band to read it. A tooltip gives a node's cost and share with its three largest bands (or Other's names), and a band's source, target, cost, share of the cost and share of its source. The tooltip stays inside the graph: on a narrow screen a long name wraps, and each figure keeps its line. A project's node shows a hand cursor. Leaving the graph ends the reading.
 - **Keys**, with the graph focused:
 
   | Key | On a node | On a band | Nothing read |
@@ -197,7 +199,7 @@ On a phone, the table keeps Project, Spend and the change.
 
 - Newer data keeps the item you read, and a key's reading is said again when its figures change. The reading ends when its item is gone or the view changes (range, project, source, Include automated sessions).
 - The drawing never animates, in any setting: a band does not grow or move when the figures change. When new figures land for a view change, after **Refresh** or after a failed load, the section fades in like the page's other panels, unless your system asks for reduced motion. Figures an ingest brings in the background swap in without a fade. In forced-colors modes, nodes and labels use the text color, bands are outlines, and the mark on the item read uses the highlight color.
-- The graph's total equals the heading's estimated cost, as every column adds up to it.
+- The graph's total equals the heading's estimated cost, as every column adds up to it. The page reads all its figures in one snapshot of the store, so an ingest that lands while the page loads cannot set them apart.
 
 ### What stands out
 
