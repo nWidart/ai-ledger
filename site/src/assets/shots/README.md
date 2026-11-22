@@ -17,6 +17,7 @@ Only the shots a page shows are kept: a shot no page references is deleted, and 
 | `cost-overview` | The heading, the filters and the plan gauge. | Cost |
 | `cost-spend` | "Estimated cost per day", stacked by project, with the 7-day average and the zoom slider under the day labels. | Cost |
 | `cost-projects` | "Project spend and change": trend, spend, change, cost per commit and cache hit per project. | Cost |
+| `cost-flow` | "Where the cost goes": estimated cost from project to model to token kind, each band as wide as its cost, with nothing read and the data table closed. | Cost |
 | `cost-highlights` | "What stands out": the insight cards. | Cost |
 | `cost-models` | "Models and effort": spend by model and effort level. | Cost, Spend less |
 | `cost-tokens` | "Tokens and cache" drawer, open: each kind's share of tokens beside its share of cost. | Cost |

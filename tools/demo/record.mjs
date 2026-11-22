@@ -317,7 +317,7 @@ const SHOT_PAGES = {
   activity: { url: "/usage?range=30", panels: [
     ["attention", "#attention"], ["vitals", "#vitals"], ["work", "#work"]] },
   cost: { url: "/cost?range=30", panels: [
-    ["overview", "#overview"], ["spend", "#spend"], ["projects", "#projects"], ["highlights", "#insights"],
+    ["overview", "#overview"], ["spend", "#spend"], ["projects", "#projects"], ["flow", "#flow"], ["highlights", "#insights"],
     ["models", ".split > section.panel"], ["tokens", "#d-tokens", { drawer: "d-tokens" }]] },
   context: { url: "/context?range=30", panels: [
     ["tips", "#tips"], ["starting", "#starting"], ["grids", "#grids"], ["pressure", "#pressure"],

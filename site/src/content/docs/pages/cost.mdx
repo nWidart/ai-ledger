@@ -19,6 +19,8 @@ import spend from "../../../assets/shots/cost-spend.png";
 import spendLight from "../../../assets/shots/cost-spend-light.png";
 import projects from "../../../assets/shots/cost-projects.png";
 import projectsLight from "../../../assets/shots/cost-projects-light.png";
+import flow from "../../../assets/shots/cost-flow.png";
+import flowLight from "../../../assets/shots/cost-flow-light.png";
 import models from "../../../assets/shots/cost-models.png";
 import modelsLight from "../../../assets/shots/cost-models-light.png";
 
@@ -156,6 +158,8 @@ On a phone, the table keeps Project, Spend and the change.
 - Every sort says what it did to a screen reader: "Sorted by spend, highest first". That includes Compare projects, Sort by cost again, the same sort twice and the reset a new range makes.
 
 ### Where the cost goes
+
+<ThemedImage dark={flow} light={flowLight} alt="Cost's Where the cost goes flow: five projects on the left, five models and Other in the middle and five token kinds on the right, each band in its project's or model's color and as wide as its cost, with Show data table under it." />
 
 **Shows** the estimated cost of the view followed from project to model to token kind, in three columns of nodes joined by bands. A band is the estimated cost that went from one node to the next, and its width is that cost, never tokens. The graph sits after the project table; with one project selected it follows the daily chart. The hint beside the title says "From project to model to token kind, each band as wide as its cost; small ones in Other. Arrow keys follow the bands."
 
