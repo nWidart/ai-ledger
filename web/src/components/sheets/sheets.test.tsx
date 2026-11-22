@@ -50,14 +50,17 @@ describe("SessionSheet", () => {
   it("says so when the tool-call chart's chunk fails to load, and the rest of the sheet works", async () => {
     vi.resetModules();
     vi.doMock("./spans/SessionSpans", () => { throw new Error("chunk blocked"); });
-    const [{ UsageSheets: Sheets }, { mockApi: mock }, { renderApp: render }] = await Promise.all([import("./UsageSheets"), import("./testing"), import("../../testing")]);
-    mock({ "/api/session": () => session });
-    at("?range=30&session=s1");
-    render(<Sheets />);
-    expect(await sheet().findByText("The tool-call chart could not be loaded. Reload the page to try again.")).toBeTruthy();
-    expect(sheet().getByRole("group", { name: /^Session timeline/ })).toBeTruthy();
-    expect(sheet().getByRole("link", { name: "Open in Errors" })).toBeTruthy();
-    vi.doUnmock("./spans/SessionSpans");
+    try {
+      const [{ UsageSheets: Sheets }, { mockApi: mock }, { renderApp: render }] = await Promise.all([import("./UsageSheets"), import("./testing"), import("../../testing")]);
+      mock({ "/api/session": () => session });
+      at("?range=30&session=s1");
+      render(<Sheets />);
+      expect(await sheet().findByText("The tool-call chart could not be loaded. Reload the page to try again.")).toBeTruthy();
+      expect(sheet().getByRole("group", { name: /^Session timeline/ })).toBeTruthy();
+      expect(sheet().getByRole("link", { name: "Open in Errors" })).toBeTruthy();
+    } finally {
+      vi.doUnmock("./spans/SessionSpans");
+    }
   });
 
   it("leaves modified keys to the browser on the timeline, but for Shift+Left and Shift+Right, its ten-request step", async () => {
