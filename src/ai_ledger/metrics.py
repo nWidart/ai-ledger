@@ -491,7 +491,7 @@ def usage_payload(cur, project, range_days, session, prices, today, automated, s
                work_projects=daily_work(cur, rq, rp, W, fp, by, by_project=True), speed_trend=speed_trend(cur, rq, rp, by),
                unpriced=unpriced, models=models, by_project=by_project, **tool_rates(cur, W, fp),
                error_loops=titles.with_titles(cur, loops[:50]), failed_tests=titles.with_titles(cur, failed_tests),
-               sessions=sorted(sess, key=lambda x: x["first_ts"] or "", reverse=True)[:300],
+               sessions=titles.with_titles(cur, sorted(sess, key=lambda x: x["first_ts"] or "", reverse=True)[:300]),
                top_sessions=titles.with_titles(cur, sorted(sess, key=lambda x: -(x["cost"] or 0))[:50]),
                near_limit=sorted((x for x in sess if x["near_limit"]), key=lambda x: -x["context_share"]),
                previous=previous_period(cur, project, range_days, prices, today, automated, source, af["projects"]))

@@ -75,7 +75,7 @@ export interface SessionRow {
   unpriced: number; thinking_ms: number; tool_calls: number; errors: number; commits: number; tests_passed: number; tests_failed: number;
   prompts: number; interrupted: number; context_limit: number | null; context_share: number | null; near_limit: boolean;
   tokens_per_prompt: number | null; error_loops: number;
-  /** From the first prompt; set on top_sessions and /api/sessions rows only. */
+  /** From the first prompt; set on sessions, top_sessions and /api/sessions rows. */
   title?: string | null;
 }
 export interface TitledSessionRow extends SessionRow { title: string | null }
