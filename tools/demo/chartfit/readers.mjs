@@ -48,9 +48,11 @@ export function readers(root) {
       s.remove();
       return tri(c);
     },
-    /** The legend's color keys: not a line's, the hatch, or the keys of a hollow dot (.low) and a half-width bar (.few). */
-    keys: () => [...document.querySelectorAll(`${root} .legend i:not(.line):not(.hatch):not(.low):not(.few)`)]
-      .map(i => ({ name: i.parentElement.textContent.trim(), css: i.style.background, color: tri(getComputedStyle(i).backgroundColor) })),
+    /** The legend's color keys: not a line's, the hatch, the keys of a hollow dot (.low) and a half-width bar (.few), or the
+     *  key of a toggle that is off (Context's "Cache reads"), whose parts are not drawn until it is on. css is the key's
+     *  inline color, or its computed one where a class sets it (Context's cache chart). */
+    keys: () => [...document.querySelectorAll(`${root} .legend i:not(.line):not(.hatch):not(.low):not(.few):not(.toggle[aria-pressed=false] i)`)]
+      .map(i => ({ name: i.parentElement.textContent.trim(), css: i.style.background || getComputedStyle(i).backgroundColor, color: tri(getComputedStyle(i).backgroundColor) })),
     /** The left edge of each point's bar drawn, in order. */
     points: () => [...new Set(bars().map(b => Math.round(b.l)))].sort((a, b) => a - b),
     /** Each point's column of bar segments, left first: its edges and its centre. A stack's segments share their edges;
@@ -95,14 +97,22 @@ export function readers(root) {
       return (x + .05) / (y + .05);
     },
     texts: () => top().filter(e => e.tagName === "text").map(e => ({ text: e.textContent, fill: tri(fill(e)), size: parseFloat(getComputedStyle(e).fontSize), ...rect(e) })),
+    /** The tooltip, open, with the point it names: its .muted line, or the .head of the cache chart's. */
     tip: () => {
       const t = $(".echart .tip");
-      return t && getComputedStyle(t).display !== "none" ? { day: t.querySelector(".muted")?.textContent ?? "", ...rect(t) } : null;
+      return t && getComputedStyle(t).display !== "none" ? { day: t.querySelector(".muted, .head")?.textContent ?? "", ...rect(t) } : null;
     },
     readout: () => $(".echart + .sr")?.textContent ?? "",
     box: () => rect($(".echart")),
-    /** The panel's background color, behind the chart. */
-    panel: () => tri(getComputedStyle(document.querySelector(root)).backgroundColor),
+    /** The panel's background color, behind the chart: the root's, or its nearest ancestor's when the root has none, as
+     *  Context's charts, which sit in a panel with no background of their own. */
+    panel: () => {
+      for (let e = document.querySelector(root); e; e = e.parentElement) {
+        const c = getComputedStyle(e).backgroundColor;
+        if (!/^(rgba\(.*, 0\)|transparent)$/.test(c)) return tri(c);
+      }
+      return tri(getComputedStyle(document.body).backgroundColor);
+    },
     /** The largest font size of the plot's texts, in px. */
     textSize: () => Math.max(...[...document.querySelectorAll(`${root} .echart-plot svg text`)].map(t => parseFloat(getComputedStyle(t).fontSize) || 0)),
     /** The live region's texts from now on. One observer per page: listening again starts the list afresh. */
