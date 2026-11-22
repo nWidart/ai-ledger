@@ -40,7 +40,8 @@ const byDuration = (a: Span, b: Span) => Number(a.ms == null) - Number(b.ms == n
 const columnsOf = (l: SpansLayout): Column<Span>[] => [
   { id: "started", header: "Started", cell: c => (c.start != null ? clock(l, c.start) : "–") },
   { id: "thread", header: "Thread", cell: thread },
-  { id: "tool", header: "Tool", cell: c => (c.known ? <button type="button" className="cellbtn">{c.tool}</button> : c.tool) },
+  // A long MCP tool name wraps, as in the tool sheet's tables (sheets.css: .name).
+  { id: "tool", header: "Tool", cellProps: () => ({ className: "name" }), cell: c => (c.known ? <button type="button" className="cellbtn">{c.tool}</button> : c.tool) },
   { id: "input", header: "Input", cellProps: () => ({ className: "spans-input" }), cell: c => c.input },
   { id: "duration", header: "Duration", align: "num", cell: c => (c.ms != null ? length(c.ms) : "–") },
   { id: "result", header: "Result", cell: c => (c.failed ? "Failed" : c.kind === "open" ? "No result" : "Succeeded") },
