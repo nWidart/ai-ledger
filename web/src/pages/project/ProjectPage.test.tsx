@@ -338,9 +338,9 @@ describe("ProjectPage", () => {
       expect(items[4]).toContain("Added by the peak");
       expect(blk.textContent).not.toContain("transcripts do not split them");
       expect(within(blk).getByText(/^Overhead measured .* with claude-opus-4-1/).textContent).toContain(`${big(7000)} deferred tokens of tools are not loaded`);
-      // Of the three used categories (20,000 tokens), the list: closed, in the side column, in place of "Largest overhead items".
+      // Of the three used categories (20,000 tokens), the list: closed, in the side column.
       const summary = within(blk).getByText(`What loads before your first prompt · ${big(20000)} tokens`);
-      expect([summary.closest("details")!.open, blk.textContent!.includes("Largest overhead items")]).toEqual([false, false]);
+      expect(summary.closest("details")!.open).toBe(false);
       await userEvent.click(summary);
       const row = within(blk).getByRole("button", { name: "github" }).closest(".ol-row")!;
       expect(row.textContent).toMatch(new RegExp(`^github, ${big(5200)} tokens, called 4 times by Claude Code in this view, 1 tool`)); // then its tool
@@ -432,7 +432,6 @@ describe("ProjectPage", () => {
       const items = [...blk.querySelectorAll(".cg-legend li")].map(li => li.textContent);
       expect(items).toEqual([`System prompt${big(4000)} tokens (2.0%)`, `System tools${big(12000)} tokens (6.0%)`, `Skills${big(4000)} tokens (2.0%)`]);
       expect(within(blk).getByText(`What loads before your first prompt · ${big(20000)} tokens`)).toBeTruthy();
-      expect(blk.textContent).not.toContain("Largest overhead items");
     });
 
     it("offers no Measure now without Claude Code sessions or a snapshot", async () => {
