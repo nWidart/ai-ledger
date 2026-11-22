@@ -214,15 +214,18 @@ function Overview({ views }: { views: ReactNode }) {
   const calRetrying = !!calFail && calFail.error === calRetry && !cal.error;
   const retryCal = () => { setCalRetry(calFail!.error); cal.retry(); };
   // A Retry that brings the calendar removes its button. Only when that button held the focus as it went, its own request
-  // running, does the focus, left on nothing, go to the calendar; in every other case it stays where the user put it. The
-  // ref's cleanup runs before React removes the button, while the focus is still on it.
-  const retryHeld = useRef(false);
-  const retryRef = (el: HTMLButtonElement) => () => { retryHeld.current = calRetrying && document.activeElement === el; };
+  // running, and the filters are still the ones it was pressed on, does the focus, left on nothing, go to the calendar. A
+  // change of filters cancels the Retry, and an answer to the page's own refetch removes the button too: in both the focus
+  // falls to the page. The ref's cleanup runs before React removes the button, while the focus is still on it; it keeps the
+  // key of the failed request the Retry asked again for.
+  const retryHeld = useRef<string | null>(null);
+  const retryRef = (el: HTMLButtonElement) => () => { retryHeld.current = calRetrying && document.activeElement === el ? calFail.key : null; };
   useLayoutEffect(() => {
     if (calFail || !retryHeld.current) return;
-    retryHeld.current = false;
-    if (calCurrent) document.getElementById("activity-calendar")?.focus();
-  }, [calFail, calCurrent]);
+    const key = retryHeld.current;
+    retryHeld.current = null;
+    if (calCurrent && key === calKey) document.getElementById("activity-calendar")?.focus();
+  }, [calFail, calCurrent, calKey]);
   // A week in the URL that the view does not reach is dropped, once the view's own figures are in.
   useEffect(() => {
     if (d && current && search.week && !reaches(search.week, d)) setSearch({ week: null }, { push: false });

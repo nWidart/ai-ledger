@@ -501,13 +501,19 @@ describe("activity calendar", () => {
     click(52, 2);
     expect(location.search).toBe("?range=30&source=codex&day=2026-11-04");
 
-    // An ingest's request fails; Retry asks again and fails again: the same alert says it once more.
+    // An ingest's request fails; Retry empties the alert while it runs, then fails again: the same alert says it once more.
     codex = () => undefined;
     ingested(client);
     const failed = await region().findByRole("alert");
     const asked = () => fetched().filter(u => String(u).startsWith("/api/calendar?source=codex")).length, n = asked();
+    let refail!: (e: Error) => void;
+    const refailed = new Promise<never>((_, reject) => { refail = reject; });
+    codex = () => refailed;
     await userEvent.click(region().getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(asked()).toBe(n + 1));
+    expect(failed.textContent).toBe("");
+    codex = () => undefined;
+    await act(async () => { refail(new Error("HTTP 404")); await refailed.catch(() => {}); });
     await waitFor(() => expect(failed.textContent).toBe("Could not load the calendar (HTTP 404). Still showing the last one loaded."));
     expect(region().getByRole("alert")).toBe(failed);
 
@@ -523,6 +529,20 @@ describe("activity calendar", () => {
     await act(async () => { late.resolve(calendar); await late.p; });
     await waitFor(() => expect(region().queryByRole("alert")).toBeNull());
     expect(document.activeElement).toBe(document.body);
+
+    // Grok's calendar fails; Retry runs with the focus; Back returns to Codex's calendar, cached. The Retry was cancelled,
+    // not answered: the focus does not go to the calendar.
+    codex = () => undefined;
+    act(() => setSearch({ source: "grok" }));
+    await region().findByRole("alert");
+    const cancelled = held<typeof calendar>();
+    codex = () => cancelled.p;
+    const pressed = region().getByRole("button", { name: "Retry" });
+    await userEvent.click(pressed);
+    expect(document.activeElement === pressed && pressed.textContent).toBe("Retrying…");
+    act(() => history.back());
+    await waitFor(() => expect(region().queryByRole("alert")).toBeNull());
+    expect(document.activeElement).not.toBe(screen.getByRole("group", { name: /^Commits per day as a calendar/ }));
   });
 });
 
