@@ -31,8 +31,8 @@ export interface QuadrantModel {
   split: { cost: number; calls: number } | null;
   /** The dots in each quadrant; null with no split. */
   counts: Record<Quadrant, number> | null;
-  /** Rows with no known cost: no dot. */
-  leftOut: number;
+  /** Rows with no known cost, and rows with a cost below $0 (a custom price list may hold negative rates): no dot. */
+  leftOut: number; negative: number;
   /** The rows given, and the sessions of the view; cut when the view holds more sessions than the rows. */
   rows: number; total: number; cut: boolean;
   x: Extent; y: Extent;
@@ -63,7 +63,9 @@ const byReading = (a: Dot, b: Dot) =>
 
 /** rows: the view's sessions as the usage payload lists them (the newest, cut); totalSessions: the view's count before the cut. */
 export function quadrantModel(rows: readonly QuadRow[], totalSessions: number): QuadrantModel {
-  const dots: Dot[] = rows.filter(r => r.cost != null)
+  // A log axis holds no value below 0, and the zero lane reads "$0": a session below $0 has no true place on either.
+  const negative = rows.filter(r => r.cost != null && r.cost < 0).length;
+  const dots: Dot[] = rows.filter(r => r.cost != null && r.cost >= 0)
     .map(row => ({ row, cost: row.cost!, calls: row.tool_calls, filled: row.commits > 0, quadrant: null as Quadrant | null }))
     .sort(byReading);
   let split: QuadrantModel["split"] = null, counts: QuadrantModel["counts"] = null;
@@ -77,7 +79,7 @@ export function quadrantModel(rows: readonly QuadRow[], totalSessions: number): 
     }
   }
   return {
-    dots, split, counts, leftOut: rows.length - dots.length, rows: rows.length, total: Math.max(totalSessions, rows.length), cut: totalSessions > rows.length,
+    dots, split, counts, leftOut: rows.length - dots.length - negative, negative, rows: rows.length, total: Math.max(totalSessions, rows.length), cut: totalSessions > rows.length,
     x: extent(dots.map(d => d.cost), 0.01), y: extent(dots.map(d => d.calls), 1),
   };
 }
@@ -222,11 +224,14 @@ export function groupLabel(model: QuadrantModel, project: string): string {
 /** The block's lines around the plot, each null when it does not apply. none: in place of the plot; few: in place of the split;
  *  cut: above the plot; leftOut: under it. */
 export function notes(model: QuadrantModel) {
-  const n = model.dots.length, out = model.leftOut;
+  const n = model.dots.length, out = model.leftOut, neg = model.negative;
+  const one = (k: number, what: string) => `${plural(k, "session")} with ${what} ${k === 1 ? "is" : "are"} left out.`;
   return {
-    none: n ? null : "No session in this view has a known cost, so none can be placed.",
+    none: n ? null : `No session in this view has a known cost${neg ? " of $0 or more" : ""}, so none can be placed.`,
     few: n && !model.split ? few(n) : null,
     cut: model.cut ? `The newest ${num(model.rows)} of ${num(model.total)} sessions in this view; the medians are theirs.` : null,
-    leftOut: n && out ? `${plural(out, "session")} with no known cost ${out === 1 ? "is" : "are"} left out.` : null,
+    leftOut: !n || !(out + neg) ? null
+      : out && neg ? `${plural(out + neg, "session")} are left out: ${num(out)} with no known cost and ${num(neg)} with a negative cost.`
+      : out ? one(out, "no known cost") : one(neg, "a negative cost"),
   };
 }

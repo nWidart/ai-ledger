@@ -43,6 +43,12 @@ describe("quadrantModel", () => {
     expect(notes(one)).toMatchObject({ cut: "The newest 4 of 412 sessions in this view; the medians are theirs.", leftOut: "1 session with no known cost is left out." });
     // None known: the plot's place says so, and no left-out line repeats it.
     expect(notes(model([row(null, 1), row(null, 2)]))).toEqual({ none: "No session in this view has a known cost, so none can be placed.", few: null, cut: null, leftOut: null });
+    // A custom price list may hold negative rates: a session below $0 has no place on a log axis, nor in the zero lane.
+    const below = model([row(-0.5, 3), row(-0.001, 1), row(1, 1), row(2, 2), row(3, 3), row(null, 4)]);
+    expect([below.dots.map(d => d.cost), below.leftOut, below.negative, below.x.zero]).toEqual([[1, 2, 3], 1, 2, false]);
+    expect(notes(below).leftOut).toBe("3 sessions are left out: 1 with no known cost and 2 with a negative cost.");
+    expect(notes(model([row(1, 1), row(-2, 2)])).leftOut).toBe("1 session with a negative cost is left out.");
+    expect(notes(model([row(-1, 1), row(null, 2)])).none).toBe("No session in this view has a known cost of $0 or more, so none can be placed.");
   });
 
   it("reads cheapest first, then by tool calls, start and id, whatever the rows' order", () => {
