@@ -277,12 +277,17 @@ export async function errors(h) {
   const overLine = (what, o) => line(`${what}: each rate point sits over its bar's centre, within 1px`, o.n > 0 && o.worst <= 1, `${o.n} rate points over ${o.cols} columns, the farthest ${o.worst.toFixed(2)}px off`);
   /** The svg as tall as the box, and the pointer on a bar's column reading that day. */
   const fills = async (page, what, want, k, first = 0) => {
+    // The chart first draws while the page's web font loads; its swap moves the chart (27px up on /errors?range=7), so
+    // the chart is measured once the fonts are in.
+    await ev(page, () => document.fonts.ready.then(() => true));
     const b = await ev(page, () => window.errfit.boxes());
-    const cols = await ev(page, () => window.chartfit.columns()), g = await ev(page, () => window.chartfit.grid());
-    // A pointer that lands on a chart drawn a moment ago can go unheard: it moves again, a pixel up, up to three times.
+    let cols = await ev(page, () => window.chartfit.columns()), g = await ev(page, () => window.chartfit.grid());
+    // A pointer that lands on a chart drawn a moment ago can go unheard: it moves again, a pixel up, up to three times,
+    // on the chart where it is then.
     const ok = s => named(s.readout) === first + k && Math.abs(mid(s.band) - cols[k].x) <= 1;
     let s;
     for (let n = 0; n < 3 && !(s && ok(s)); n++) {
+      if (n) [cols, g] = [await ev(page, () => window.chartfit.columns()), await ev(page, () => window.chartfit.grid())];
       await page.mouse.move(cols[k].x, g.b - 4 - n);
       s = await until(() => mine(page), ok);
     }
