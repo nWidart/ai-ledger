@@ -95,7 +95,7 @@ Requests from unpriced models SHALL NOT be drawn, since their cost is unknown, a
 - **THEN** the section says "No usage in this view, so no cost to follow."
 
 ### Requirement: Read the cost flow along its bands
-On the focused cost flow, Up and Down SHALL move to the next or the previous item: a node in its column, or a band among the bands of the node it was entered from. Right SHALL read a node's top band out, and on a band, the node it reaches; Left the same in the other direction. Home and End SHALL read the first and the last item in the same way. A move past an end SHALL keep the item and say it again. Escape and blur SHALL end the reading.
+On the focused cost flow, Up and Down SHALL move to the next or the previous item: a node in its column, or a band among the bands of the node it was entered from. Right SHALL read a node's top band out, and on a band, the node it reaches; Left the same in the other direction. Home and End SHALL read the first and the last item in the same way. A move past an end SHALL keep the item and say it again. Escape, the focus leaving the flow and the pointer leaving it SHALL end the reading.
 
 #### Scenario: Follow the money
 - **WHEN** the user focuses the flow and presses Right three times
@@ -110,7 +110,7 @@ On the focused cost flow, Up and Down SHALL move to the next or the previous ite
 - **THEN** Cache read is still read, and its sentence is said again
 
 ### Requirement: Say what a node or band of the cost flow holds
-The pointer SHALL read the node or the band under it, the one drawn on top where bands cross. One tooltip and one polite sentence SHALL give the item's cost and its share of the total; for a band, also its share of its source; for a node, its three largest bands on each side, with "and N more". Newer figures SHALL keep the item read; newer figures without it SHALL end the reading with no sentence, tooltip or mark.
+The pointer SHALL read the node or the band under it, the one drawn on top where bands cross. One tooltip and one polite sentence SHALL give the item's cost and its share of the total; for a band, also its share of its source; for a node, its three largest bands on each side, and how many more it has. Newer figures SHALL keep the item read; newer figures without it SHALL end the reading with no sentence, tooltip or mark.
 
 #### Scenario: A model's sentence
 - **WHEN** the user reads the model opus-4-5
@@ -159,7 +159,7 @@ The cost flow SHALL fit its box at every width and text size, and the page SHALL
 - **THEN** the tooltip and the sentence give its whole name
 
 ### Requirement: Offer the cost flow as a table
-Under the cost flow, a "Show data table" button SHALL expose `aria-expanded` and, when expanded, show every flow of the view, unfolded: one row per project and model, then one row per model and token kind, each with its step, its source, its target, its cost to the cent and its share of the cost. The rows of each step SHALL add up to the total. The table SHALL be closed on every page load and SHALL NOT be rendered while closed.
+Under the cost flow, a "Show data table" button SHALL expose `aria-expanded` and, when expanded, show every flow of the view, unfolded: one row per project and model, $0.00 ones too, then one row per model and token kind with a cost, each with its step, its source, its target, its cost to the cent and its share of the cost. The rows of each step SHALL add up to the total. The table SHALL be closed on every page load and SHALL NOT be rendered while closed.
 
 #### Scenario: A project inside Other
 - **WHEN** delta is folded into Other on the graph and the user shows the data table
