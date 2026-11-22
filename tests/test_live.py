@@ -3,6 +3,7 @@ import os
 import shutil
 import unittest
 from datetime import datetime, timedelta, timezone
+from unittest import mock
 
 from ai_ledger import live, store
 from test_codex import CodexCase, LIVE, NAME, THREAD, meta, meta_at
@@ -26,6 +27,17 @@ def events(text, source="claude", lane_file=None):
         d = json.loads(raw)
         rows.append((f"k{i}", lane_file or "/x/a.jsonl", d.get("timestamp"), lane_file is not None, source, raw))
     return live.assemble(rows)[0]
+
+
+def reads(call, source="claude"):
+    """call()'s answer, the sorted keys of the lines whose stored JSON a Lines read for it, and how many lines of the
+    source it parsed into live items."""
+    src = store.SOURCES[source]
+    parse = mock.Mock(wraps=src.live_items)
+    with mock.patch.object(live.Lines, "fetch", autospec=True, side_effect=live.Lines.fetch) as fetch, \
+            mock.patch.dict(store.SOURCES, {source: src._replace(live_items=parse)}):
+        got = call()
+    return got, sorted(k for c in fetch.call_args_list for k in c.args[2]), parse.call_count
 
 
 def codex_line(ordinal, seconds, kind, **payload):
@@ -224,6 +236,22 @@ class SessionsTest(LiveCase):
         self.assertEqual([s["session_id"] for s in got["sessions"]], ["s1", "s2"])
         s1 = got["sessions"][0]
         self.assertEqual((s1["state"]["kind"], s1["window"], s1["requests"]), ("tool", 1000000, 1))
+        listed = lambda lines=None: live.sessions(self.cur(), now=NOW, prices=PRICES, lines=lines)
+        kept = live.Lines()
+        self.assertEqual(listed(kept), got)
+        # Three new lines: a repeated read parses those only, and answers as a read with nothing kept.
+        self.write("s1.jsonl", result("r1", at(41), "t1", "x") + assistant("a2", "m2", at(42), [dict(type="text", text="ok")])
+                   + prompt("u2", at(43), "p2", "more"))
+        self.ingest()
+        again, fetched, parsed = reads(lambda: listed(kept))
+        self.assertEqual((again, fetched, parsed, again["sessions"][0]["state"]["kind"]), (listed(), ["a2", "r1", "u2"], 3, "thinking"))
+        # Past either bound, kept lines are dropped: a read that needs them reads them again, and answers the same.
+        for bound in ("KEPT_BYTES", "KEPT_LINES"):
+            with self.subTest(bound=bound), mock.patch.object(live, bound, 1):
+                kept = live.Lines()
+                listed(kept)
+                got, fetched, _ = reads(lambda: listed(kept))
+                self.assertEqual((got, bool(fetched)), (again, True))
 
     def test_start_time_is_the_first_line(self):
         got = live.sessions(self.cur(), now=NOW, prices=PRICES)
@@ -337,13 +365,16 @@ class SessionTest(LiveCase):
     def test_first_load_and_catch_up(self):
         self.write("s1.jsonl", prompt("u1", at(0), "p1", "SECRET prompt") + assistant("a1", "m1", at(1), [tool_use("t1", "Bash", command="ls")]))
         self.ingest()
-        first = self.run_session()
+        kept = live.Lines()
+        first = self.run_session(lines=kept)
         self.assertEqual([e["k"] for e in first["events"]], ["prompt", "tool"])
         self.assertFalse(first["truncated"])
         self.write("s1.jsonl", result("r1", at(3), "t1", "a\nb") + assistant("a2", "m2", at(4), [tool_use("t2", "Read", file_path="x"),
                                                                                                  tool_use("t3", "Grep", pattern="y")]))
         self.ingest()
-        later = self.run_session(after=first["cursor"])
+        # With the lines kept, the state and the window parse only the 2 new lines, from the text the catch-up read.
+        later, fetched, parsed = reads(lambda: self.run_session(after=first["cursor"], lines=kept))
+        self.assertEqual((later, fetched, parsed), (self.run_session(after=first["cursor"]), [], 2))
         tools = [e for e in later["events"] if e["k"] == "tool"]
         self.assertEqual([(t["id"], t["end"] is not None) for t in tools], [("t1", True), ("t2", False), ("t3", False)])
         self.write("s1.jsonl", assistant("a3", "m3", at(200), [tool_use("t4", "Read", file_path="z")]))
@@ -355,12 +386,16 @@ class SessionTest(LiveCase):
         self.write("s1/subagents/agent-a7.jsonl", line(type="assistant", uuid="x1", timestamp=at(20), message=dict(
             id="sm1", model="claude-opus-5-5", content=[tool_use("st1", "Grep", pattern="x")]), **dict(S, isSidechain=True, agentId="a7")))
         self.ingest()
-        first = self.run_session()
+        kept = live.Lines()
+        first = self.run_session(lines=kept)
         self.assertEqual(first["cursor"], at(20))
         self.write("s1.jsonl", result("r1", at(4), "t1", "ok"))  # stamped before the cursor, stored after it
         self.ingest()
         t1, = [e for e in self.run_session(after=first["cursor"])["events"] if e["id"] == "t1"]
         self.assertEqual(t1["end"], "2026-11-10T10:00:04.000Z")
+        listed = lambda lines=None: live.sessions(self.cur(), automated=True, now=NOW, prices=PRICES, lines=lines)["sessions"]
+        got, fetched, _ = reads(lambda: listed(kept))  # the active list reads it, with lines kept
+        self.assertEqual((got, len(got), fetched), (listed(), 1, ["r1"]))
 
     def test_call_finishing_with_a_failure_is_sent_again(self):
         # The call is older than the cursor; its result, a failure, comes after it. The catch-up sends the call again, under its own key.
@@ -578,15 +613,20 @@ class CodexSessionTest(CodexCase):
                    + codex_line(2, 2, "response_item", type="function_call", name="exec_command", call_id="c1", arguments=json.dumps(dict(cmd="sleep 600")))
                    + codex_line(3, 70, "event_msg", type="agent_message", message="still going"))
         self.ingest()
-        cur = self.con.cursor()
-        first = live.session(cur, THREAD, now=NOW, prices=PRICES)
+        cur, kept = self.con.cursor(), live.Lines()
+        first = live.session(cur, THREAD, now=NOW, prices=PRICES, lines=kept)
         self.assertEqual([e["end"] for e in first["events"] if e["k"] == "tool"], [None])
         self.place(NAME, codex_line(4, 80, "event_msg", type="turn_aborted", turn_id="t1", reason="interrupted"), mode="a")
         self.ingest()
-        for got in (live.session(cur, THREAD, now=NOW, prices=PRICES), live.session(cur, THREAD, after=first["cursor"], now=NOW, prices=PRICES)):
+        for after in ("", first["cursor"]):
+            got = live.session(cur, THREAD, after=after, now=NOW, prices=PRICES, lines=kept)
             ev, = [e for e in got["events"] if e["k"] == "tool"]
             self.assertEqual((ev["id"], ev["end"], ev["failed"], ev["error"]), ("c1", at(80), True, live.INTERRUPTED))
             self.assertEqual(got["state"]["kind"], "you")
+        # The marks the list reads, and the turn start before a cut that open_before reads: the same with the lines kept.
+        marks = lambda **kw: sorted(live.turn_mark_rows(cur, [THREAD], store.SOURCES["codex"].turns, **kw))
+        for kw, n in ((dict(), 2), (dict(starts=True, before=at(80)), 1)):
+            self.assertEqual((marks(lines=kept, **kw), len(marks(**kw))), (marks(**kw), n))
 
     def test_window_the_same_on_a_first_load_a_catch_up_and_the_list(self):
         # An unpriced model: only the turn's start states the window, and it is older than a catch-up's one-minute overlap.
@@ -665,6 +705,9 @@ class CodexSessionTest(CodexCase):
         self.assertEqual(marks(got), [("turn_start", None), ("prompt", None), ("tool", None), ("turn_end", None),
                                       ("turn_start", thread), ("tool", thread)])
         self.assertEqual(live.session(self.con.cursor(), THREAD, after=at(0), now=NOW, prices=PRICES)["events"], got["events"])
+        kept = live.Lines()
+        self.assertEqual(live.forked(self.con.cursor(), [THREAD], kept), {thread: 5})
+        self.assertEqual(reads(lambda: live.forked(self.con.cursor(), [THREAD], kept), "codex")[:2], ({thread: 5}, []))  # read once
 
     def prompted(self, text=""):
         return codex_line(1, 1, "event_msg", type="item_completed", turn_id="t1", item=dict(type="UserMessage", content=[dict(type="text", text="go")]))

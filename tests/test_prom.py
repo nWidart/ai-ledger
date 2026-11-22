@@ -266,7 +266,7 @@ class EndpointTest(unittest.TestCase):
     def test_active_sessions_include_automated_ones(self):
         with mock.patch.object(live, "states", return_value=[]) as states:
             self.get()
-        self.assertEqual(states.call_args.kwargs, dict(automated=True))
+        self.assertEqual(states.call_args.kwargs, dict(automated=True, lines=self.app.lines))  # the lines the Live routes keep
 
 
 if __name__ == "__main__":

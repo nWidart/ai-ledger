@@ -500,8 +500,13 @@ class SubagentTest(GrokCase):
         self.ingest()  # the child alone: a session of its own until its parent's spawn line is stored
         self.assertEqual(self.q("SELECT session_id FROM sessions"), [(CHILD,)])
         self.assertGreater(self.q("SELECT count(*) FROM requests WHERE session_id = ?", CHILD)[0][0], 0)
+        from ai_ledger import live
+        cur, kept = self.con.cursor(), live.Lines()
+        listed = lambda lines=None: live.sessions(cur, now=live.aware(self.q("SELECT max(last_ts) FROM sessions")[0][0]), prices={}, lines=lines)
+        self.assertEqual([s["session_id"] for s in listed(kept)["sessions"]], [CHILD])  # its lines kept as a session's own
         shutil.move(aside, parent)
         self.ingest()
+        self.assertEqual(listed(kept), listed())  # moved, they are placed as a read with nothing kept places them
         self.assertOneSession(parent)
         self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines WHERE file <> ?", parent), [(SESSION["probe"], True)])
         healed = {t: self.q(f"SELECT * FROM {t} ORDER BY ALL") for t in store.DERIVED}

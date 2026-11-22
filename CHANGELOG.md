@@ -20,6 +20,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - Hovering a "?" no longer moves the text around it.
+- An open Live page no longer keeps the app busy on several CPU cores while many sessions run. The app keeps what it read of each transcript line, and reads only new lines on each refresh.
 
 ## [0.6.0] - 2026-11-22
 

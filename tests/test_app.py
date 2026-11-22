@@ -264,7 +264,7 @@ class AppTest(unittest.TestCase):
         with mock.patch.object(app.live, "sessions", wraps=app.live.sessions) as listed:
             self.assertEqual(self.get("/api/live?text=1")[0], 200)
             self.assertEqual(self.get("/api/live")[0], 200)
-        self.assertEqual([c.kwargs["text"] for c in listed.call_args_list], [True, False])
+        self.assertEqual([(c.kwargs["text"], c.kwargs["lines"]) for c in listed.call_args_list], [(True, self.app.lines), (False, self.app.lines)])
         status, _, body = self.get("/api/live/session?id=s1")
         self.assertEqual((status, json.loads(body)["session_id"]), (200, "s1"))
         self.assertEqual(self.get("/api/live/session?id=s1&after=yesterday")[0], 400)
@@ -675,7 +675,7 @@ class LimitsAlertTest(unittest.TestCase):
         # The server answers each request on its own thread: five pages asking at once, with nothing kept yet, cost one read.
         callers, gate, out = 5, threading.Barrier(5), []
 
-        def slow(_cur):
+        def slow(_cur, **_):
             time.sleep(0.05)  # long enough for every caller to reach the cache while the first fills it
             return 3
 
