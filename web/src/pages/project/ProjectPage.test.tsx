@@ -339,9 +339,18 @@ describe("ProjectPage", () => {
       expect(blk.textContent).not.toContain("transcripts do not split them");
       expect(within(blk).getByText(/^Overhead measured .* with claude-opus-4-1/).textContent).toContain(`${big(7000)} deferred tokens of tools are not loaded`);
       // Of the three used categories (20,000 tokens), the list: closed, in the side column.
-      const summary = within(blk).getByText(`What loads before your first prompt · ${big(20000)} tokens`);
-      expect(summary.closest("details")!.open).toBe(false);
-      await userEvent.click(summary);
+      const title = `What loads before your first prompt · ${big(20000)} tokens`;
+      const list = () => within(block("Context")).getByText(title).closest("details")!;
+      expect(list().open).toBe(false);
+      // Another project's list starts closed, even when that project's Context is already fetched: open bar's, back to foo's.
+      act(() => { history.pushState(null, "", "/project?project=bar&range=30"); });
+      await screen.findByRole("heading", { level: 1, name: "bar" });
+      await userEvent.click(await within(block("Context")).findByText(title));
+      expect(list().open).toBe(true);
+      act(() => { history.pushState(null, "", "/project?project=foo&range=30"); });
+      await loaded();
+      expect(list().open).toBe(false);
+      await userEvent.click(within(blk).getByText(title));
       const row = within(blk).getByRole("button", { name: "github" }).closest(".ol-row")!;
       expect(row.textContent).toMatch(new RegExp(`^github, ${big(5200)} tokens, called 4 times by Claude Code in this view, 1 tool`)); // then its tool
       // Enter on the server's name opens its tool sheet by the key its calls are stored under, not by its name.
