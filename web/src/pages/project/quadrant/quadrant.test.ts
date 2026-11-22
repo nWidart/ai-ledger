@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { when } from "../../../format";
-import { dotAt, groupLabel, notes, quadrantFit, quadrantModel, readDot, stepDot, tipRows, type QuadRow } from "./quadrant";
+import { costLabel, dotAt, groupLabel, notes, quadrantFit, quadrantModel, readDot, stepDot, tipRows, type QuadRow } from "./quadrant";
 
 let n = 0;
 const row = (cost: number | null, tool_calls: number, extra: Partial<QuadRow> = {}): QuadRow =>
@@ -122,12 +122,22 @@ describe("quadrantFit", () => {
 
   it.each([
     ["no dot", []], ["one dot", [[2, 7]]], ["equal dots", [[2, 7], [2, 7], [2, 7]]], ["all at 0", [[0, 0], [0, 0], [0, 0]]], ["a 0 cost", [[0, 3], [1, 3], [4, 8]]],
-  ] as [string, [number, number][]][])("keeps every figure finite with %s", (_, pts) => {
+    // A custom price list takes any finite rate: a cost may be far under a cent, or past any real bill.
+    ["a tiny cost", [[1e-126, 3]]], ["a tiny cost among others", [[0, 3], [1e-126, 3], [4, 8]]], ["the smallest cost", [[5e-324, 1], [1, 2], [3, 3]]],
+    ["a huge cost and count", [[1e30, 1e15], [1, 0], [2, 2]]], ["the largest cost", [[Number.MAX_VALUE, 9], [1, 1], [2, 2]]],
+  ] as [string, [number, number][]][])("keeps every figure finite, and every dot in the plot, with %s", (_, pts) => {
     for (const w of [0, 343]) for (const s of [1, 2]) {
-      const m = model(pts.map(([c, t]) => row(c, t)));
-      expect([finite(m), finite(quadrantFit(m, w, s))]).toEqual([true, true]);
+      const m = model(pts.map(([c, t]) => row(c, t))), f = quadrantFit(m, w, s);
+      expect([finite(m), finite(f)]).toEqual([true, true]);
+      for (const d of f.dots) expect([d.px >= f.plot.x && d.px <= f.plot.x + f.plot.w, d.py >= f.plot.y && d.py <= f.plot.y + f.plot.h]).toEqual([true, true]);
+      // The axis's ends as labelled, and the dots' and the median's words: none says NaN or Infinity.
+      const texts = [costLabel(m.x.lo), costLabel(f.x.max), ...m.dots.map((_, i) => readDot(m, i) + tipRows(m, f, i).rows.join()), groupLabel(m, "p")];
+      expect(texts.filter(t => /NaN|Infinity|∞/.test(t))).toEqual([]);
     }
   });
+
+  it.each([[1e-126, "$1e-126"], [2e-7, "$2e-7"], [5e-6, "$0.000005"], [1e30, "$1e+30"], [1e14, "$100,000,000,000,000"]])("labels a cost tick of %d as %s", (v, want) =>
+    expect(costLabel(v)).toBe(want));
 
   it("draws a corner name only where it fits", () => {
     const m = model([row(0.1, 1), row(1, 10), row(10, 100)]);

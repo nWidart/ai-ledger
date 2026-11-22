@@ -50,9 +50,12 @@ const roundUp = (v: number): number => {
   const p = 10 ** Math.floor(Math.log10(v));
   return p * STEPS.find(m => m * p >= v * (1 - 1e-9))!;
 };
+/** The values an axis spans: a custom price list takes any finite rate, but past these a power of ten under or over a value
+ *  is 0 or Infinity. A dot past them sits at the axis's end. */
+const LOWEST = 1e-300, HIGHEST = 1e300;
 /** The round ends around the positive values; equal ends span a decade. With no positive value, the fallback decade. */
 function extent(values: number[], fallback: number): Extent {
-  const pos = values.filter(v => v > 0), zero = values.some(v => v <= 0);
+  const pos = values.filter(v => v > 0).map(v => Math.min(Math.max(v, LOWEST), HIGHEST)), zero = values.some(v => v <= 0);
   if (!pos.length) return { lo: fallback, hi: fallback * 10, zero };
   const lo = roundDown(Math.min(...pos)), hi = roundUp(Math.max(...pos));
   return { lo, hi: hi > lo ? hi : lo * 10, zero };
@@ -87,7 +90,7 @@ export function quadrantModel(rows: readonly QuadRow[], totalSessions: number): 
 
 /** An axis as drawn: min is under lo by the zero lane when the axis has one. */
 export interface FitAxis { min: number; max: number; lane: boolean }
-/** A dot as drawn: its axis values (a 0 moved to the lane's min) and its pixel in the box. */
+/** A dot as drawn: its axis values (a 0 moved to the lane's min, a value past an end to that end) and its pixel in the box. */
 export interface FitDot { x: number; y: number; px: number; py: number; filled: boolean }
 /** A quadrant name that fits its corner: its anchor in the box, and how the text sits on it. */
 export interface FitName { quadrant: Quadrant; label: string; px: number; py: number; align: "left" | "right"; verticalAlign: "top" | "bottom" }
@@ -119,8 +122,10 @@ const NAME_GAP = 42, NAME_PAST = 12;
 /** The axes' names. */
 export const COST_NAME = "Estimated cost (log scale)", CALLS_NAME = "Tool calls (log scale)";
 
-/** A cost tick: "$" and the value, with the decimals a 1, 2 or 5 times a power of ten needs ("$0.02", "$0.1", "$10"). */
-export const costLabel = (v: number) => "$" + num(v, Math.max(0, Math.ceil(-Math.log10(v) - 1e-9)));
+/** A cost tick: "$" and the value, with the decimals a 1, 2 or 5 times a power of ten needs ("$0.02", "$0.1", "$10"); under a
+ *  millionth or from a quadrillion, in powers of ten ("$2e-7", "$1e+15"): toLocaleString takes at most 100 decimals. */
+export const costLabel = (v: number) =>
+  "$" + (v < 1e-6 || v >= 1e15 ? v.toExponential(0) : num(v, Math.max(0, Math.ceil(-Math.log10(v) - 1e-9))));
 /** The room the texts take at text scale s, measured as zrender lays them out: the widest tool-call label (the top end's,
  *  or the power of ten under it, which has as many digits), the cost axis's last, at the plot's right end, and its name. */
 function textRoom(model: QuadrantModel, s: number) {
@@ -158,7 +163,7 @@ export function quadrantFit(model: QuadrantModel, width: number, s: number): Qua
   const costNameShift = Math.max(0, Math.min(plot.x + plot.w / 2 + room.name / 2 - width, plot.x + plot.w / 2 - room.name / 2));
   const x = fitAxis(model.x, plot.w, LANE_X * s), y = fitAxis(model.y, plot.h, LANE_Y * s);
   const at = (cost: number, calls: number) => {
-    const vx = Math.max(cost, x.min), vy = Math.max(calls, y.min);
+    const vx = Math.min(Math.max(cost, x.min), x.max), vy = Math.min(Math.max(calls, y.min), y.max);
     return { x: vx, y: vy, px: plot.x + frac(vx, x) * plot.w, py: plot.y + plot.h - frac(vy, y) * plot.h };
   };
   const guides = model.split && at(model.split.cost, model.split.calls);
