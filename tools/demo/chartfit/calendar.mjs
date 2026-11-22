@@ -32,7 +32,8 @@
 // - in a 343px box the tooltip of a busy day outside the range is no wider than the box and inside it, its long sentence
 //   wraps, its figures keep a line each, and the page does not scroll sideways;
 // - a touch tap in a 343px box selects a day;
-// - Escape with the focus on another control closes a tooltip the pointer opened, also an Escape the moment it shows;
+// - Escape with the focus on another control closes a tooltip the pointer opened, also an Escape the moment it shows (once
+//   the observer marks that it saw the tooltip open and sent the Escape);
 // - newer figures keep the day read with the keys, and say nothing; with motion on no cell animates, on the first drawing,
 //   on newer figures or on a theme change;
 // - after a filter change answered 500: "Could not load the calendar (…)." with Retry, and the kept calendar takes no pick;
@@ -469,18 +470,23 @@ export async function calendar(h) {
     // the page paints. On a loaded machine a key press can come that soon.
     await away(page);
     await until(() => reading(page), r => !r.tip);
+    // The observer marks that it saw the tooltip open and sent the Escape: without the mark, no tooltip proves nothing.
     await ev(page, () => {
+      window.__escaped = false;
       const tip = document.querySelector("#calendar .cal-box .tip");
       const o = new MutationObserver(() => {
         if (getComputedStyle(tip).display === "none") return;
         o.disconnect();
+        window.__escaped = true;
         document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
       });
       o.observe(tip, { attributes: true, attributeFilter: ["style"] });
     });
     await page.mouse.move(c.x, c.y);
-    const soon = await until(() => reading(page), r => !r.tip && !r.ring);
-    line("an Escape the moment the pointer's tooltip shows closes it", !soon.tip && !soon.ring, `${soon.tip ? "tooltip open" : "no tooltip"}, ${soon.ring ? "ring drawn" : "no ring"}`);
+    const shut = async () => ({ ...(await reading(page)), escaped: await ev(page, () => window.__escaped) });
+    const soon = await until(shut, r => r.escaped && !r.tip && !r.ring);
+    line("an Escape the moment the pointer's tooltip shows closes it", soon.escaped && !soon.tip && !soon.ring,
+      `${soon.escaped ? "opened, Escape sent" : "NEVER OPENED, no Escape sent"}; ${soon.tip ? "tooltip open" : "no tooltip"}, ${soon.ring ? "ring drawn" : "no ring"}`);
     await page.done();
   }
 
