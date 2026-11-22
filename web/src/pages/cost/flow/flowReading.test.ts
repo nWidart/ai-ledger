@@ -99,6 +99,8 @@ describe("flowAt", () => {
     expect(at(mid, 79.9)).toEqual(src("C|D"));
     expect(at(mid, 69.9)).toBeNull();
     expect(at(mid, 80.1)).toBeNull();
+    // Near its source, the band drawn first lies alone (its top is about y 20.5 at x 120).
+    expect(at(120, 25)).toEqual(src("A|B"));
   });
 
   it("reads nothing between the columns off a band, or in the title margin", () => {

@@ -1,5 +1,6 @@
 /* Cost's flow (CostFlow.tsx). The box holds the chart, the mark and the tooltip over it, from one layout; it never draws
-   past its width, so the page does not scroll sideways. Nothing animates. */
+   past its width, so the page does not scroll sideways. The drawing never animates; the section fades in with the page's
+   other panels (CostPage.tsx). */
 .flow-box { position: relative; }
 /* A named project's node opens its sheet. zrender writes `cursor: default` inline on an element of the plot on each move,
    which only an important rule outranks. */
