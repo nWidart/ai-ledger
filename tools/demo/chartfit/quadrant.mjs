@@ -269,7 +269,7 @@ export async function quadrant(h) {
     const said = await ev(page, () => window.__said);
     await page.keyboard.press("ArrowRight");
     const next = r.on(await r.reach(k + 1), k + 1);
-    line(`${how}: after the sheet closes the focus is on the plot, nothing was said, and Right reads dot ${k + 2}`, !shut.open && shut.back && !said.length && next.ok,
+    line(`${how}: after the sheet closes the focus is on the plot, nothing was said, and Right reads dot ${k + 2}`, s.open && !shut.open && shut.back && !said.length && next.ok,
       `${shut.open ? "still open" : "closed"}, focus ${shut.back ? "on the plot" : "elsewhere"}, said ${JSON.stringify(said)}; ${next.at}`);
   }
 
@@ -403,12 +403,13 @@ export async function quadrant(h) {
     line("keys: at the cheapest and the costliest dot the tooltip sits beside the dot, inside the box", edgeKeys.every(s => besideIn(s, s.mark?.x)),
       edgeKeys.map(s => `${tipAt(s)}, mark at ${s.mark ? px(s.mark.x - s.box.l) : "none"}`).join("; "));
 
-    // Escape on the focused plot ends the reading, and the focus stays.
+    // Escape on the focused plot ends the reading End made, and the focus stays.
+    const read = on(edgeKeys.at(-1), N - 1);
     await page.keyboard.press("Escape");
     const esc = await until(() => state(page), s => !s.tip && !s.mark && !s.live);
     const focus = await ev(page, sel => document.activeElement === document.querySelector(sel), `${ROOT} ${PLOT}`);
-    line("Escape on the focused plot ends the reading: no tooltip, mark or sentence, the focus kept", !esc.tip && !esc.mark && !esc.live && focus,
-      `${esc.tip ? "tooltip" : "no tooltip"}, ${esc.mark ? "mark" : "no mark"}, said "${esc.live}", focus ${focus ? "on the plot" : "elsewhere"}`);
+    line("Escape on the focused plot ends the reading on the costliest dot: no tooltip, mark or sentence, the focus kept", read.ok && !esc.tip && !esc.mark && !esc.live && focus,
+      `before: ${read.ok ? "read" : read.at}; then ${esc.tip ? "tooltip" : "no tooltip"}, ${esc.mark ? "mark" : "no mark"}, said "${esc.live}", focus ${focus ? "on the plot" : "elsewhere"}`);
 
     // Enter on the dot read.
     const K = 5;
@@ -709,8 +710,8 @@ export async function quadrant(h) {
     await sleep(400);
     const s = await state(page), heard = await ev(page, () => window.__said), errors = page.errors.slice();
     line(`newer figures without session ${K + 1}: ${N - 1} dots drawn, the reading ends, no tooltip, mark or sentence, and no page error`,
-      dots === N - 1 && !s.tip && !s.mark && !s.live && !heard.length && !errors.length,
-      `${dots} dots, ${s.tip ? `tooltip "${s.tip.name}"` : "no tooltip"}, ${s.mark ? "mark" : "no mark"}, live "${s.live}", said ${JSON.stringify(heard)}${errors.length ? `; ${errors.join("; ")}` : ""}`);
+      kept.ok && dots === N - 1 && !s.tip && !s.mark && !s.live && !heard.length && !errors.length,
+      `${kept.ok ? "read before" : "not read before"}; ${dots} dots, ${s.tip ? `tooltip "${s.tip.name}"` : "no tooltip"}, ${s.mark ? "mark" : "no mark"}, live "${s.live}", said ${JSON.stringify(heard)}${errors.length ? `; ${errors.join("; ")}` : ""}`);
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await page.done();
   }
