@@ -12,7 +12,7 @@ const LIMITS = {
   CostPage: 20,
   ActivityPage: 31, // 28.3 kB with the activity calendar's section (its loading and failure states), plus 2.7 kB of room
   ErrorsPage: 26,
-  SessionSpans: 9, // 6.4 kB: the session sheet's tool-call chart (layout, option, reading and table), loaded when a sheet opens
+  SessionSpans: 9, // 6.5 kB: the session sheet's tool-call chart (layout, option, reading and table), loaded when a sheet opens
   ProjectPage: 11, // 9.3 kB: the page, its blocks and the session quadrant (model, fit, reading, option); catches a static import of ECharts
   // The `<EChart>` wrapper (6.3 kB), which Cost, Activity, Errors and Project load. Project draws a chart but does not zoom,
   // so the build moved the wrapper out of `zoomReset` into its own shared chunk.
