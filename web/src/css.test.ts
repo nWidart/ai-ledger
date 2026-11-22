@@ -55,7 +55,7 @@ const SPACING = [
   "6px", "72px", "7px", "8px", "9px", "calc(var(--vpad) * -1)", "var(--vpad)",
 ];
 /** Raw colors outside theme.css, as "file: value". The same rule: entries may be removed, never added. */
-const RAW_COLORS = ["pages/context/CacheChart.css: #000"];
+const RAW_COLORS: string[] = [];
 /** Page-list gates (`:is(.pg-a, .pg-b, …)`) per file today. A file may lose gates, never gain one: a rule several pages
     share belongs on the component's own class. */
 const PAGE_GATES: Record<string, number> = {
@@ -348,7 +348,6 @@ describe("forced-colors rules", () => {
       ".pg-activity .tablist [role=tab][aria-selected=true]",
       ".pg-context .tablist [role=tab][aria-selected=true]",
       '.pg-limits .lim-toggle[aria-pressed="true"]',
-      ".pg-context .cache-chart svg .seg",
     ];
     expect(required.filter((r) => !has(r))).toEqual([]);
   });

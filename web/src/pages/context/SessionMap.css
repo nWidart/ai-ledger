@@ -1,6 +1,5 @@
 .session-map { margin-top: 8px; }
 .session-map .smcount { margin: 0 0 6px; font-size: .8125rem; color: var(--text-primary); }
-.session-map .hit { cursor: pointer; }
 .session-map .tip .tname { max-width: 18rem; overflow-wrap: anywhere; }
 /* The box around the chart (components/echart) is the origin of every pixel of the fit: the chart sits at its top left, the
    ring and the tooltip over it. */
@@ -11,11 +10,7 @@
 /* The ring around the dot read, over the drawing: it needs no redraw of the dots, and takes no pointer. */
 .session-map .map-mark { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
 .session-map .map-mark circle { fill: none; stroke: var(--text-primary); stroke-width: 1.5; }
-/* Quadrants: their names in the plot's corners, the selected one washed, the sessions outside it dimmed */
-.session-map .quad-label { fill: var(--text-muted); pointer-events: none; }
-.session-map .quad-label.on { fill: var(--text-primary); }
-.session-map .quad-on { fill: var(--surface-2); }
-.session-map .pt.out { opacity: .2; }
+/* Quadrants: the buttons under the plot that select one */
 .session-map .quads { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 8px 0 0; }
 .session-map .quads button:not(.clear) { font: inherit; font-size: .78125rem; color: var(--text-secondary); background: var(--surface-1); cursor: pointer;
   border: 1px solid var(--control-border); border-radius: 6px; padding: 4px 8px; display: inline-flex; flex-wrap: wrap; gap: 2px 6px; align-items: baseline; text-align: left; }

@@ -1,5 +1,4 @@
 /* Growth chart: the strip under the axis, the mode switch and the legend's project buttons. */
-.pg-context .growth .chart svg.growth-svg { height: auto; }
 .pg-context .growth .growth-mode { margin-bottom: 4px; }
 .pg-context .growth .legend button.key { background: none; border: 0; border-radius: 6px; padding: 2px 6px; margin: 0 -6px; cursor: pointer; font: inherit; font-size: .75rem; box-shadow: none; }
 .pg-context .growth .legend button.key:hover { background: var(--surface-2); }

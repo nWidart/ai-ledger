@@ -1,25 +1,11 @@
-/* Cache chart: the tokens not read from the cache, the breaks strip and the hit-ratio track over the same slots.
-   Each fill is at least 3:1 against the surface in both themes; stacked fills are not 3:1 against each other, so each segment after
-   the first is inset 1px and the surface shows between. The light theme's break fills are darker than series-3 and warning, which
-   fall under 3:1 on its surface. */
-.pg-context .cache-chart { --cc-input: var(--accent); --cc-write: var(--series-1); --cc-read: var(--track);
-  --cc-model_switch: light-dark(color-mix(in srgb, var(--series-3) 75%, #000), var(--series-3));
-  --cc-expired: light-dark(var(--warning-text), var(--warning)); --cc-other: var(--text-muted); }
-.pg-context .cache-chart .seg-input { fill: var(--cc-input); }
-.pg-context .cache-chart .seg-write { fill: var(--cc-write); }
-.pg-context .cache-chart .seg-read { fill: var(--cc-read); stroke: var(--text-muted); stroke-width: 1; }
-.pg-context .cache-chart .seg-model_switch { fill: var(--cc-model_switch); }
-.pg-context .cache-chart .seg-expired { fill: var(--cc-expired); }
-.pg-context .cache-chart .seg-other { fill: var(--cc-other); }
-.pg-context .cache-chart i.seg-input { background: var(--cc-input); }
-.pg-context .cache-chart i.seg-write { background: var(--cc-write); }
-.pg-context .cache-chart i.seg-read { background: var(--cc-read); border: 1px solid var(--text-muted); }
-.pg-context .cache-chart i.seg-model_switch { background: var(--cc-model_switch); }
-.pg-context .cache-chart i.seg-expired { background: var(--cc-expired); }
-.pg-context .cache-chart i.seg-other { background: var(--cc-other); }
-/* The bucket being read: its bars keep their fills and are outlined, with the cursor through them; the others stay as they are, so
-   every bar keeps its contrast. */
-.pg-context .cache-chart svg g.on .seg { stroke: var(--text-primary); stroke-width: 1.5; }
+/* Cache chart: the legend's swatches, which read the tokens the drawing reads (cacheTracks.ts), the tooltip rows and the cache reads
+   toggle. The drawing itself is the shared chart's (components/echart). */
+.pg-context .cache-chart i.seg-input { background: var(--accent); }
+.pg-context .cache-chart i.seg-write { background: var(--series-1); }
+.pg-context .cache-chart i.seg-read { background: var(--track); border: 1px solid var(--text-muted); }
+.pg-context .cache-chart i.seg-model_switch { background: var(--cache-switch); }
+.pg-context .cache-chart i.seg-expired { background: var(--cache-expired); }
+.pg-context .cache-chart i.seg-other { background: var(--text-muted); }
 .pg-context .cache-chart .tip .head { font-weight: 600; margin-bottom: 4px; }
 .pg-context .cache-chart .tip .row.sum b { color: var(--text-primary); }
 /* The cache reads switch sits in the legend, as a key that toggles */
@@ -29,15 +15,8 @@
 .pg-context .cache-chart .legend .toggle[aria-pressed="true"]::after { content: "✓"; margin-left: 2px; }
 .pg-context .cache-chart .legend .toggle:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; }
 
-/* Forced colors: the fills stay, each framed in CanvasText; reads go to Canvas and the ratio line to CanvasText */
+/* Forced colors: the swatches keep their fills, each framed in CanvasText */
 @media (forced-colors: active) {
-  .pg-context .cache-chart svg .seg { forced-color-adjust: none; stroke: CanvasText; stroke-width: 1; }
-  .pg-context .cache-chart svg .seg-read { fill: Canvas; }
-  .pg-context .cache-chart svg g.on .seg { stroke: Highlight; stroke-width: 2; }
-  .pg-context .cache-chart svg .cursor { stroke: Highlight; }
-  .pg-context .cache-chart svg .ratio { stroke: CanvasText; }
-  .pg-context .cache-chart svg .ratio-halo { stroke: Canvas; }
-  .pg-context .cache-chart svg .ratio-dot { fill: CanvasText; stroke: Canvas; }
   .pg-context .cache-chart .legend i { forced-color-adjust: none; outline: 1px solid CanvasText; }
   .pg-context .cache-chart .legend .toggle { border-color: ButtonText; color: ButtonText; }
   /* Its pressed state is in theme.css's forced-colors block, with the other pressed toggles. */
