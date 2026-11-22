@@ -56,6 +56,36 @@
 //   the median in three parts, a hollow and a solid dot; the keys and the pointer read an empty week, its tooltip says
 //   "No session started", the live region says its sentence once; the week of 2 sessions rests on few sessions;
 // - Shift+Tab onto the chart draws its focus ring; with motion on the line draws in, with reduced motion nothing moves.
+//
+// The session map on /context?range=30 (#pressure .session-map) mounts the wrapper with no points: the wrapper reads
+// nothing, so none of the shared checks apply. The map reads itself (its keys, pointer, ring, tooltip and live region on
+// div.map-box), and mapReaders() reads its drawing. Every page's answer puts three sessions in Heavy and full, three
+// compacted and one peak over its window; a session's pixel is read from the drawn axes (the x labels' anchors, log, and
+// the y grid lines), never from the map's fit. Its own lines:
+// - at 1440px, in the PHONE window, at 32px text in both, at a device pixel ratio of 2 and after a resize: every session's
+//   dot at its pixel on the drawn axes within 1px, each compacted one ringed; the guides at 30k and 80%; each quadrant's
+//   name inside its quadrant, wrapped where needed; the "80% of window" label inside the plot, on the side said; the x
+//   labels at 1, 2 and 5 times a power of ten, none overlapping, the hidden ones said; both axis titles inside the box;
+// - the box 320px at 16px text and 380px at 32px, the plot 260px in both;
+// - the keys: Right from no reading reads the oldest session, the ring centred on its dot, the tooltip and the live region
+//   naming it; Right through every session; Enter opens its sheet and closing it returns the focus to the map;
+// - the pointer: on each dot's centre the ring is on that dot within 1px, also after the page scrolls, in the PHONE
+//   window, at 32px text and at a device pixel ratio of 2; 11px off a lone dot reads it, 13px off nothing; a dot is read
+//   from outside the plot (a known difference from the old chart, measured); the hand over a dot and over the plot, not
+//   over the axis labels; a click opens the dot's sheet, the cursor and the focus around it said; the tooltip at the
+//   plot's four outermost dots inside the window and the box from side to side, its bottom said;
+// - a click in the top right away from any dot selects Heavy and full: its wash, the other dots at 20%, the bars above
+//   counting its sessions, its list; a second click clears it; a quadrant selected by its button keeps the pointer's
+//   reading on its session; Escape on another control closes the pointer's tooltip and keeps the quadrant; one Escape on
+//   the map ends a key's reading and clears the quadrant;
+// - newer figures with an older session added keep a key's reading on its session and say nothing; with 1,000 sessions
+//   the first drawing and a quadrant's redraw are timed, printed, and each under 100ms, and newer figures that push the
+//   session read off the map end the reading;
+// - light and dark: the dots' edges the surface, the guides --text-muted, the ring --text-primary, the wash --surface-2,
+//   the dots' colors changing with the theme; forced colors: each dot's edge and each compacted ring CanvasText, the
+//   guides and the texts system colors, the selected quadrant a 2px Highlight frame with no fill over the grid lines and
+//   under the dots, the ring around the dot read Highlight;
+// - with motion on and with reduced motion the dots draw at once; Shift+Tab onto the map draws its focus ring.
 import { LOCALE, PHONE, W, line, sleep, until } from "./harness.mjs";
 import { chart, root32 } from "./checks.mjs";
 
@@ -83,6 +113,7 @@ export async function context(h) {
   await cache(h);
   await growth(h);
   await weeks(h);
+  await sessionMap(h);
 }
 
 /** The cache chart's own readers, installed in every page before its scripts as window.cachefit, beside window.chartfit.
@@ -1266,4 +1297,776 @@ async function weeks(h) {
   }
   await c.refreshRead();
   await motionLines(c, "weekly start", "draws the line in");
+}
+
+/** The session map's readers, installed in every page before its scripts as window.mapfit. This function runs in the page:
+ *  it uses nothing from this module. The marks it tells apart are ECharts' SVG elements under the map's box, in paint order:
+ *  - a dot: a path drawn as one arc of radius 4; a compacted session's ring: one of radius 7.5;
+ *  - the grid lines: stroked, unfilled, undashed paths; the y axis's are horizontal, the plot's top and bottom;
+ *  - the guides: the dashed paths; the selected quadrant: the one other path wider and taller than 1px, filled, or framed
+ *    2px wide under forced colors;
+ *  - the texts, each line its own element: its anchor (its x and y through its transform), its halo (a stroke) and weight.
+ *  Colors are "r,g,b", a system color named in an attribute probed to its "r,g,b". */
+function mapReaders() {
+  const R = "#pressure .session-map";
+  const q = s => document.querySelector(`${R} ${s}`);
+  const tri = c => (String(c).match(/[\d.]+/g) || []).slice(0, 3).map(n => Math.round(Number(n))).join(",");
+  const col = c => (c && /^[a-z]+$/i.test(c) && !["none", "transparent"].includes(c) ? window.chartfit.probe(c) : tri(c));
+  const rect = e => { const r = e.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height, x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2 }; };
+  const svg = () => q(".echart-plot svg");
+  const a = (e, k) => e.getAttribute(k);
+  const paths = () => [...(svg()?.querySelectorAll("path") ?? [])].filter(e => !e.closest("clipPath, defs"));
+  const screen = (e, x, y) => new DOMPoint(x, y).matrixTransform(e.getScreenCTM());
+  /** A circle's radius and its centre on the screen: the renderer writes it as an arc from its rightmost point. */
+  const circle = e => {
+    const m = /^M(-?[\d.]+) (-?[\d.]+)A([\d.]+) \3 0 1 1 /.exec(a(e, "d") ?? "");
+    if (!m) return null;
+    const r = Number(m[3]), p = screen(e, Number(m[1]) - r, Number(m[2]));
+    return { r, x: p.x, y: p.y };
+  };
+  const stroked = e => !["none", "transparent", null].includes(a(e, "stroke")) && a(e, "stroke-opacity") !== "0";
+  const filled = e => !["none", "transparent", null].includes(a(e, "fill"));
+  const circles = r => paths().map((e, i) => ({ e, i, c: circle(e) })).filter(x => x.c && Math.abs(x.c.r - r) < .01);
+  addEventListener("mousemove", e => { window.__moved = { x: e.clientX, y: e.clientY }; }, true);
+  window.mapfit = {
+    /** The plot, from the grid lines: the horizontal ones' extent; their colors; the last one's place in the paint order. */
+    frame() {
+      const lines = paths().map((e, i) => ({ e, i })).filter(({ e }) => !circle(e) && !filled(e) && stroked(e) && !a(e, "stroke-dasharray"))
+        .map(({ e, i }) => ({ i, stroke: col(a(e, "stroke")), ...rect(e) })).filter(r => (r.h < 1 && r.w > 1) || (r.w < 1 && r.h > 1));
+      const hz = lines.filter(r => r.h < 1);
+      if (!hz.length) return null;
+      return { l: Math.min(...hz.map(r => r.l)), r: Math.max(...hz.map(r => r.r)), t: Math.min(...hz.map(r => r.y)), b: Math.max(...hz.map(r => r.y)),
+        strokes: [...new Set(lines.map(r => r.stroke))], last: Math.max(...lines.map(r => r.i)) };
+    },
+    dots: () => circles(4).map(({ e, i, c }) => ({ i, x: c.x, y: c.y, fill: col(a(e, "fill")), stroke: col(a(e, "stroke")), so: Number(a(e, "stroke-opacity") ?? 1) })),
+    rings: () => circles(7.5).map(({ e, i, c }) => ({ i, x: c.x, y: c.y, stroke: col(a(e, "stroke")), so: Number(a(e, "stroke-opacity") ?? 1) })),
+    guides: () => paths().map((e, i) => ({ e, i })).filter(({ e }) => a(e, "stroke-dasharray")).map(({ e, i }) => ({ i, dash: a(e, "stroke-dasharray"), stroke: col(a(e, "stroke")), ...rect(e) })),
+    /** The selected quadrant's wash, or its frame under forced colors. */
+    wash: () => paths().map((e, i) => ({ e, i })).filter(({ e }) => !circle(e) && !a(e, "stroke-dasharray") && rect(e).w > 1 && rect(e).h > 1 && (filled(e) || a(e, "stroke-width") === "2"))
+      .map(({ e, i }) => ({ i, fill: filled(e) ? col(a(e, "fill")) : "none", stroke: stroked(e) ? col(a(e, "stroke")) : "none", width: Number(a(e, "stroke-width") ?? 0), ...rect(e) }))[0] ?? null,
+    texts: () => [...(svg()?.querySelectorAll("text") ?? [])].map(e => {
+      const p = screen(e, Number(a(e, "x") ?? 0), Number(a(e, "y") ?? 0)), cs = getComputedStyle(e);
+      return { text: e.textContent, ax: p.x, ay: p.y, anchor: a(e, "text-anchor") ?? "start", fill: col(a(e, "fill")), halo: stroked(e) ? col(a(e, "stroke")) : null,
+        size: parseFloat(cs.fontSize), weight: Number(cs.fontWeight), ...rect(e) };
+    }),
+    /** The ring around the dot read: its centre, its radius and its stroke as computed. */
+    mark: () => {
+      const c = q(".map-mark circle");
+      if (!c) return null;
+      const cs = getComputedStyle(c);
+      return { ...rect(c), r: Number(a(c, "r")), stroke: tri(cs.stroke), width: parseFloat(cs.strokeWidth) };
+    },
+    tip: () => {
+      const t = q(".map-box > .tip");
+      return t && getComputedStyle(t).display !== "none" && t.getBoundingClientRect().width ? { name: t.querySelector(".tname")?.textContent ?? "", ...rect(t) } : null;
+    },
+    live: () => q(".map-live")?.textContent ?? "",
+    /** The chart's box, the origin of the map's pixels. */
+    box: () => rect(q(".map-box .echart")),
+    svgWidth: () => Number(a(svg(), "width")),
+    hand: () => !!q(".map-box.hand"),
+    cursor: (x, y) => { const e = document.elementFromPoint(x, y); return e ? `${getComputedStyle(e).cursor} on ${e.tagName.toLowerCase()}${typeof e.className === "string" && e.className ? `.${e.className.split(" ")[0]}` : ""}` : "nothing"; },
+    quad: () => q(".quads button[aria-pressed=true]")?.dataset.quad ?? null,
+    /** What the quadrant narrows: the note over the bars, the sessions the bars count, the list's items. */
+    narrowed: () => ({
+      note: document.querySelector("#pressure .quad-note")?.textContent ?? "",
+      bars: [...document.querySelectorAll("#pressure .pressure .prow .pw")].reduce((s, e) => s + Number((/· ([\d,]+) session/.exec(e.textContent)?.[1] ?? "0").replace(/,/g, "")), 0),
+      list: document.querySelectorAll(`${R} .qlist li`).length,
+    }),
+    /** The focused element: "map" for the map's box, else its id, tag and class. */
+    focus: () => {
+      const e = document.activeElement;
+      if (!e || e === document.body) return "body";
+      if (e === q(".map-box .echart")) return "map";
+      return e.id ? `#${e.id}` : `${e.tagName.toLowerCase()}${typeof e.className === "string" && e.className ? `.${e.className.split(" ")[0]}` : ""}`;
+    },
+    sheet: () => { const d = document.querySelector("dialog.sheet[open]"); return { open: !!d, focus: !!d && d.contains(document.activeElement), session: new URLSearchParams(location.search).get("session") }; },
+    /** The dots' places in the box, in one string: what an animation frame would change, and a scroll would not. */
+    signature: () => { const b = q(".map-box .echart")?.getBoundingClientRect(); return b ? circles(4).map(({ c }) => `${(c.x - b.left).toFixed(1)},${(c.y - b.top).toFixed(1)}`).join(" ") : ""; },
+    /** A text's width at px and a weight in the plot's font, as a canvas measures it. */
+    measure: (text, px, weight = 600) => {
+      const ctx = (window.__mapCtx ??= document.createElement("canvas").getContext("2d")), t = svg()?.querySelector("text");
+      ctx.font = `${weight} ${px}px ${t ? getComputedStyle(t).fontFamily : getComputedStyle(document.body).fontFamily}`;
+      return ctx.measureText(text).width;
+    },
+    /** The last pointer move's clientX and clientY, as the page got them. */
+    moved: () => window.__moved ?? { x: NaN, y: NaN },
+    /** The live region's sentences from now on. */
+    listen: () => {
+      window.__mapSaid = [];
+      if (window.__mapListening) return;
+      window.__mapListening = true;
+      new MutationObserver(() => { const t = q(".map-live").textContent; if (t) window.__mapSaid.push(t); }).observe(q(".map-live"), { childList: true, characterData: true, subtree: true });
+    },
+    said: () => window.__mapSaid ?? [],
+  };
+}
+
+/** An init script that keeps every distinct place of the dots, from the first frame on, as window.__dotDrawings. */
+function watchDots() {
+  window.__dotDrawings = [];
+  const tick = () => {
+    const s = window.mapfit?.signature();
+    if (s && s !== window.__dotDrawings.at(-1)) window.__dotDrawings.push(s);
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+// The map's rules for the payload's sessions, as context.ts and mapDots.ts give them.
+const START_LARGE = 30000, NEAR = .8;
+const NAMES = { lean: "Lean", heavy: "Heavy start", full: "Grew full", both: "Heavy and full" };
+/** The sessions on the map, oldest first. */
+const mapRows = d => d.sessions_map.points.slice().sort((a, b) => (a.first_ts ?? "").localeCompare(b.first_ts ?? "") || a.session_id.localeCompare(b.session_id));
+const sessName = p => p.title || `#${p.session_id.slice(0, 8)}`;
+const quadOf = p => (p.start >= START_LARGE ? (p.peak / p.window >= NEAR ? "both" : "heavy") : (p.peak / p.window >= NEAR ? "full" : "lean"));
+const roundDown = v => { const p = 10 ** Math.floor(Math.log10(v)); return p * [10, 5, 2, 1].find(m => m * p <= v * (1 + 1e-9)); };
+const roundUp = v => { const p = 10 ** Math.floor(Math.log10(v)); return p * [1, 2, 5, 10].find(m => m * p >= v * (1 - 1e-9)); };
+const startDomain = starts => {
+  const a = roundDown(Math.max(1, Math.min(START_LARGE, ...starts))), b = roundUp(Math.max(START_LARGE, ...starts));
+  return [a, b > a ? b : a * 10];
+};
+const startTicks = ([lo, hi]) => {
+  const out = [];
+  for (let p = 10 ** Math.floor(Math.log10(lo)); p <= hi * (1 + 1e-9); p *= 10)
+    for (const m of [1, 2, 5]) if (m * p >= lo * (1 - 1e-9) && m * p <= hi * (1 + 1e-9)) out.push(m * p);
+  return out;
+};
+/** A tick label as a number: "2k", "1M", "500". */
+const tickValue = t => { const m = /^([\d.]+)([kMB]?)$/.exec(t); return m ? Number(m[1]) * { "": 1, k: 1e3, M: 1e6, B: 1e9 }[m[2]] : NaN; };
+/** The dots' successive places (watchDots), each after the first as how many dots it had and how far they moved: a place
+ *  in the box is read to a tenth of a pixel, so a box at a fractional place in the window can put a dot 0.1px off. */
+const moves = ds => ds.slice(1).map((s, i) => {
+  const a = ds[i].split(" ").map(p => p.split(",").map(Number)), b = s.split(" ").map(p => p.split(",").map(Number));
+  const shift = b.map((p, k) => (a[k] ? Math.hypot(p[0] - a[k][0], p[1] - a[k][1]) : Infinity));
+  return { n: b.length, was: a.length, moved: shift.filter(x => x > .25).length, most: Math.max(...shift) };
+});
+/** Whether the dots were drawn once: no later place has another count of dots or a dot more than 0.25px off; and the line. */
+const once = ds => {
+  const ms = moves(ds);
+  return { ok: ds.length > 0 && ms.every(m => m.n === m.was && !m.moved), at: `${ds.length} distinct places of the dots${ms.length ? `: ${ms.map(m => `${m.was} dots, then ${m.n}, ${m.moved} moved more than 0.25px, the most by ${m.most.toFixed(2)}px`).join("; ")}` : ""}` };
+};
+const round125 = v => { const p = 10 ** Math.floor(Math.log10(v) + 1e-9), m = v / p; return [1, 2, 5].some(x => Math.abs(m - x) < 1e-6); };
+const tickText = v => (v >= 1e6 ? `${v / 1e6}M` : v >= 1e3 ? `${v / 1e3}k` : String(v));
+/** The WCAG contrast ratio of two "r,g,b" colors. */
+const ratio = (a, c) => {
+  const lum = t => t.split(",").map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }).reduce((s, v, i) => s + v * [.2126, .7152, .0722][i], 0);
+  const [x, y] = [lum(a), lum(c)].sort((p, q) => q - p);
+  return (x + .05) / (y + .05);
+};
+
+/** The store's sessions with the map's cases: three in Heavy and full, three compacted, one peak over its window. */
+const mapCases = d => {
+  const ps = mapRows(d), n = ps.length, at = f => ps[Math.min(n - 1, Math.floor(n * f))];
+  [.3, .5, .7].forEach((f, k) => { const p = at(f); p.start = 45000 + 7000 * k; p.peak = Math.round(p.window * (.86 + .04 * k)); });
+  for (const f of [.2, .45, .65]) at(f).compactions = Math.max(1, at(f).compactions);
+  at(.85).peak = Math.round(at(.85).window * 1.1);
+  return d;
+};
+/** 1,000 sessions, a minute apart up to the store's newest, their starts and peaks spread over the plot; every ninth
+ *  compacted, a third untitled. */
+const thousand = d => {
+  const base = d.sessions_map.points, end = Math.max(...base.map(p => Date.parse(p.first_ts ?? "") || 0), Date.now() - 864e5);
+  const frac = x => x - Math.floor(x);
+  d.sessions_map = { total: 1000, points: Array.from({ length: 1000 }, (_, k) => {
+    const p = base[k % base.length];
+    return { ...p, session_id: `m${String(k).padStart(4, "0")}-chartfit-map`, title: k % 3 ? `Map session ${k}` : null, first_ts: new Date(end - (999 - k) * 6e4).toISOString(),
+      start: Math.round(2000 * 100 ** frac(k * .618034)), peak: Math.round(p.window * (.05 + frac(k * .371))), compactions: k % 9 ? 0 : 1 };
+  }) };
+  return d;
+};
+
+async function sessionMap(h) {
+  const ROOT = "#pressure .session-map", PATH = "/context?range=30";
+  const store = await h.json("/api/context?range=30");
+  const ev = (page, f, arg) => page.evaluate(f, arg);
+  const away = page => page.mouse.move(2, 2);
+  const box = page => page.locator(`${ROOT} .map-box .echart`);
+  const shot = (page, what) => h.shot(page, ROOT, `context-map-${what}`);
+  const p1 = n => Math.round(n * 10) / 10;
+  /** A page of the map with the payload answer(payload) (the map's cases by default), drawn once its dots are, the map
+   *  scrolled into view. answer may close over a change made later: the status is answered too, so a window focus asks
+   *  for the payload again, as a background ingest does. */
+  const open = async (name, { answer = mapCases, path = PATH, options = {}, init = null, ready = null } = {}) => {
+    const want = mapRows(answer(structuredClone(store))).length;
+    let bump = 0;
+    const page = await h.open({ path, root: ROOT, setup: mapReaders, data: DATA, answer,
+      ready: ready ?? (async p => {
+        await until(() => p.evaluate(() => window.mapfit.dots().length), n => n === want);
+        await p.locator(`${ROOT} .map-box`).scrollIntoViewIfNeeded();
+      }) }, `map ${name}`, options, init);
+    page.newer = async () => {
+      bump++;
+      await page.route(/\/api\/status/, route => h.answer(route, s => ({ ...s, last_change: `chartfit map ${bump}` })));
+      await ev(page, () => window.dispatchEvent(new Event("visibilitychange")));
+    };
+    return page;
+  };
+  const drawing = page => ev(page, () => ({ frame: window.mapfit.frame(), dots: window.mapfit.dots(), rings: window.mapfit.rings(), guides: window.mapfit.guides(),
+    texts: window.mapfit.texts(), box: window.mapfit.box() }));
+  const state = page => ev(page, () => ({ mark: window.mapfit.mark(), tip: window.mapfit.tip(), live: window.mapfit.live(), box: window.mapfit.box(), win: innerWidth }));
+
+  /** Where the drawn axes put each session (rows, oldest first): x through the anchors of the two farthest x labels, log; y
+   *  from the grid lines, 0 to 100%, a peak over the window at 100%. Null when fewer than two x labels are drawn. */
+  const placesOf = (dr, rows) => {
+    const f = dr.frame;
+    const xs = f ? dr.texts.filter(t => !t.halo && t.ay > f.b + 1 && tickValue(t.text) > 0).sort((a, b) => tickValue(a.text) - tickValue(b.text)) : [];
+    if (xs.length < 2) return null;
+    const lo = xs[0], hi = xs.at(-1), [vl, vh] = [tickValue(lo.text), tickValue(hi.text)], low = startDomain(rows.map(r => r.start))[0];
+    const x = v => lo.ax + (Math.log(Math.max(v, low)) - Math.log(vl)) / (Math.log(vh) - Math.log(vl)) * (hi.ax - lo.ax);
+    const y = s => f.b - Math.min(1, s) * (f.b - f.t);
+    return { x, y, xs, at: rows.map(r => ({ x: x(r.start), y: y(r.peak / r.window) })) };
+  };
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const nearest = (p, ds) => ds.reduce((m, d) => Math.min(m, dist(p, d)), Infinity);
+  /** The ring's centre in px from the box's top left, or null. */
+  const markIn = s => s.mark && { x: s.mark.x - s.box.l, y: s.mark.y - s.box.t };
+  /** The window's pixel of p, in px from the box's top left, wherever the box is now. */
+  const abs = async (page, p) => { const b = await ev(page, () => window.mapfit.box()); return { x: b.l + p.x, y: b.t + p.y }; };
+  /** Moves the pointer to p (from the box's top left), off by dx, dy; gives the window's pixel. */
+  const move = async (page, p, dx = 0, dy = 0) => { const a = await abs(page, { x: p.x + dx, y: p.y + dy }); await page.mouse.move(a.x, a.y); return a; };
+
+  /** The reading of a page: its drawing, each session's pixel on the drawn axes, and the checks that use them. */
+  async function reading(page, rows) {
+    const dr = await drawing(page), pl = placesOf(dr, rows), B = dr.box, rel = p => ({ x: p.x - B.l, y: p.y - B.t });
+    // In px from the box's top left: the page may scroll after the reading.
+    const at = pl ? pl.at.map(rel) : rows.map(() => ({ x: NaN, y: NaN })), dots = dr.dots.map(rel);
+    const frame = dr.frame && { l: dr.frame.l - B.l, r: dr.frame.r - B.l, t: dr.frame.t - B.t, b: dr.frame.b - B.t };
+    /** Whether the reading is on session k: the ring centred within 1px on a drawn dot and on k's pixel, the tooltip and the
+     *  live region naming k. */
+    const on = (s, k) => {
+      const m = markIn(s), off = m ? dist(m, at[k]) : Infinity, drawnOff = m ? nearest(m, dots) : Infinity;
+      const ok = off <= 1 && drawnOff <= 1 && s.tip?.name === sessName(rows[k]) && s.live.startsWith(`${sessName(rows[k])}:`);
+      return { ok, off, drawnOff, at: `session ${k + 1}: ring ${m ? `${p1(m.x)},${p1(m.y)}` : "none"} for ${p1(at[k].x)},${p1(at[k].y)} (${drawnOff.toFixed(2)}px from a drawn dot); tooltip "${s.tip?.name ?? "none"}"; said "${s.live.split(":")[0]}"` };
+    };
+    // After a session the reading missed, the next ones are looked at once: a reading that never shows must not take 4s each.
+    let missing = false;
+    const reach = async k => {
+      const s = missing ? await sleep(120).then(() => state(page)) : await until(() => state(page), x => on(x, k).ok);
+      missing ||= !on(s, k).ok;
+      return s;
+    };
+    /** The drawn dots no other dot comes within 30px of, farthest from the plot's edges first. */
+    const edge = d => Math.min(d.x - frame.l, frame.r - d.x, d.y - frame.t, frame.b - d.y);
+    const alone = dots.filter(d => nearest(d, dots.filter(o => o !== d)) > 30).sort((a, b) => edge(b) - edge(a));
+    /** The session whose pixel a drawn dot is on. */
+    const sessionAt = d => at.findIndex(p => dist(p, d) <= 1);
+    return { dr, pl, at, dots, frame, on, reach, alone, sessionAt };
+  }
+
+  /** The drawing's lines: the dots at their pixels, the rings, the guides, the names, the "80% of window" label, the x
+   *  labels, the axis titles, no text out of the box or over another. */
+  async function layout(page, rows, what) {
+    const r = await reading(page, rows), { dr, pl } = r, f = dr.frame, at = pl?.at ?? rows.map(() => ({ x: NaN, y: NaN }));
+    // The dots are drawn in the sessions' order, oldest first: the k-th drawn is session k's.
+    const misses = at.map((p, k) => ({ k, e: dr.dots[k] ? dist(p, dr.dots[k]) : Infinity })).filter(x => !(x.e <= 1));
+    line(`${what}: every session's dot sits at its start and peak share on the drawn axes, within 1px`, !!pl && dr.dots.length === rows.length && !misses.length,
+      pl ? `${dr.dots.length} dots for ${rows.length} sessions; ${misses.length ? `${misses.length} off: ${misses.slice(0, 3).map(x => `session ${x.k + 1} drawn at ${p1(dr.dots[x.k]?.x - dr.box.l)},${p1(dr.dots[x.k]?.y - dr.box.t)} for ${p1(at[x.k].x - dr.box.l)},${p1(at[x.k].y - dr.box.t)}`).join(", ")}` : `the farthest ${Math.max(...at.map((p, k) => dist(p, dr.dots[k]))).toFixed(2)}px off`}` : "fewer than two x labels drawn");
+    const comp = rows.map((p, k) => ({ p, k })).filter(x => x.p.compactions > 0), ringOff = comp.map(x => nearest(at[x.k], dr.rings));
+    line(`${what}: each compacted session's dot has its ring, and no other dot one`, comp.length > 0 && dr.rings.length === comp.length && ringOff.every(e => e <= 1),
+      `${dr.rings.length} rings for ${comp.length} compacted sessions, the farthest ${Math.max(0, ...ringOff).toFixed(2)}px off its dot`);
+    const v = dr.guides.filter(g => g.w < 1 && g.h > 1), hz = dr.guides.filter(g => g.h < 1 && g.w > 1);
+    const x30 = pl?.x(START_LARGE), y80 = pl?.y(NEAR);
+    line(`${what}: the dashed guides sit at 30k and at 80%, across the plot`, !!pl && v.length === 1 && hz.length === 1 && dr.guides.every(g => g.dash === "5,4") && Math.abs(v[0].x - x30) <= 1 && Math.abs(hz[0].y - y80) <= 1
+      && Math.abs(v[0].t - f.t) <= 1 && Math.abs(v[0].b - f.b) <= 1 && Math.abs(hz[0].l - f.l) <= 1 && Math.abs(hz[0].r - f.r) <= 1,
+      `vertical ${v.map(g => `${g.dash} at ${p1(g.x - dr.box.l)}`).join(", ") || "none"} for ${p1(x30 - dr.box.l)}, horizontal ${hz.map(g => `${g.dash} at ${p1(g.y - dr.box.t)}`).join(", ") || "none"} for ${p1(y80 - dr.box.t)}`);
+    // The quadrants, from the guides as drawn.
+    const gx = v[0]?.x ?? NaN, gy = hz[0]?.y ?? NaN;
+    const quads = { lean: { l: f.l, r: gx, t: gy, b: f.b }, heavy: { l: gx, r: f.r, t: gy, b: f.b }, full: { l: f.l, r: gx, t: f.t, b: gy }, both: { l: gx, r: f.r, t: f.t, b: gy } };
+    const em = t => ({ l: t.l, r: t.r, t: t.y - t.size / 2, b: t.y + t.size / 2 });
+    const inside = (t, q) => { const e = em(t); return e.l >= q.l - .5 && e.r <= q.r + .5 && e.t >= q.t - .5 && e.b <= q.b + .5; };
+    // Each name's lines: the left names' and the right names' share an anchor; top to bottom, the upper name's then the lower's.
+    const lines = dr.texts.filter(t => t.halo && t.weight >= 600), named = {};
+    for (const [anchor, upper, lower] of [["start", "full", "lean"], ["end", "both", "heavy"]]) {
+      const ls = lines.filter(t => t.anchor === anchor).sort((a, b) => a.ay - b.ay);
+      // Either name may be left out: then the other has all the lines.
+      for (let k = 0; ls.length && k <= ls.length; k++) {
+        const up = ls.slice(0, k), down = ls.slice(k);
+        if ((!up.length || up.map(t => t.text).join(" ") === NAMES[upper]) && (!down.length || down.map(t => t.text).join(" ") === NAMES[lower])) {
+          if (up.length) named[upper] = up;
+          if (down.length) named[lower] = down;
+          break;
+        }
+      }
+    }
+    // A name is left out only where it cannot fit: its longest word, at 80% of the labels' size, wider than the room beside the
+    // 30k line, or its words wrapped to that room at the labels' size taller than its quadrant.
+    const s = await ev(page, () => parseFloat(getComputedStyle(document.documentElement).fontSize) / 16), size = 11 * s, room = {};
+    const width = (t, px, weight) => ev(page, ([t, px, weight]) => window.mapfit.measure(t, px, weight), [t, px, weight]);
+    for (const q of Object.keys(NAMES)) {
+      const w = (q === "heavy" || q === "both" ? f.r - gx : gx - f.l) - 12, h = (q === "full" || q === "both" ? gy - f.t : f.b - gy) - 4 * s, wrapped = [];
+      for (const word of NAMES[q].split(" ")) {
+        const joined = wrapped.length ? `${wrapped.at(-1)} ${word}` : null;
+        if (joined && await width(joined, size) <= w) wrapped[wrapped.length - 1] = joined;
+        else wrapped.push(word);
+      }
+      const word = Math.max(...await Promise.all(NAMES[q].split(" ").map(x => width(x, size * .8))));
+      room[q] = { w, h, word, lines: (await width(NAMES[q], size)) <= w ? 1 : wrapped.length };
+    }
+    const noRoom = q => room[q].word > room[q].w + .5 || room[q].lines * size * 1.15 > room[q].h + .5;
+    const nameAt = q => named[q] ? `"${NAMES[q]}" in ${named[q].length} line${named[q].length > 1 ? "s" : ""} at ${p1(named[q][0].size)}px${named[q].every(t => inside(t, quads[q])) ? "" : ` OUT of its quadrant (${named[q].map(t => `${p1(t.l - dr.box.l)}..${p1(t.r - dr.box.l)} x ${p1(t.y - t.size / 2 - dr.box.t)}..${p1(t.y + t.size / 2 - dr.box.t)}`).join(", ")} for ${p1(quads[q].l - dr.box.l)}..${p1(quads[q].r - dr.box.l)} x ${p1(quads[q].t - dr.box.t)}..${p1(quads[q].b - dr.box.t)})`}`
+      : `"${NAMES[q]}" not drawn: its longest word ${p1(room[q].word)}px at 80% for ${p1(room[q].w)}px of room, ${room[q].lines} line${room[q].lines > 1 ? "s" : ""} ${p1(room[q].lines * size * 1.15)}px tall for ${p1(room[q].h)}px`;
+    line(`${what}: each quadrant's name is inside its quadrant, wrapped where it needs to be, and left out only where it cannot fit`,
+      Object.keys(NAMES).every(q => (named[q] ? named[q].every(t => inside(t, quads[q])) : noRoom(q))) && lines.length === Object.values(named).flat().length,
+      `${Object.keys(NAMES).map(nameAt).join("; ")}; ${lines.length} name lines drawn`);
+    const near = dr.texts.find(t => t.text === "80% of window"), start = dr.texts.find(t => t.text === "30k start");
+    const side = near ? (near.r <= gx + .5 ? "left" : near.l >= gx - .5 ? "right" : "ACROSS") : "none";
+    // Left out only where it fits on neither side of the 30k line, 4px from it and 2px from the plot's edge.
+    const nearW = await width("80% of window", size, 400), noSide = gx - 4 - nearW < f.l + 2 - .5 && gx + 4 + nearW > f.r - 2 + .5;
+    // "30k start" starts right of its line; it may run on into the margin, the box's (the texts' line below).
+    line(`${what}: the "80% of window" label is inside the plot under its line, beside the 30k line, or left out where neither side has room; "30k start" right of the line`,
+      (near ? near.l >= f.l - .5 && near.r <= f.r + .5 && em(near).t >= gy - .5 && em(near).b <= f.b + .5 && side !== "ACROSS" : noSide) && !!start && start.l >= gx - .5,
+      `${near ? `"80% of window" ${p1(near.l - dr.box.l)}..${p1(near.r - dr.box.l)}px, ${side} of the 30k line at ${p1(gx - dr.box.l)}` : `"80% of window" not drawn, ${p1(nearW)}px wide for ${p1(gx - 4 - f.l - 2)}px left of the 30k line and ${p1(f.r - 2 - gx - 4)}px right of it`}; "30k start" ${start ? `${p1(start.l - dr.box.l)}..${p1(start.r - dr.box.l)}px${start.r > f.r + .5 ? `, ${p1(start.r - f.r)}px past the plot` : ""}` : "none"}; plot ${p1(f.l - dr.box.l)}..${p1(f.r - dr.box.l)}px`);
+    const ticks = startTicks(startDomain(rows.map(p => p.start))), xs = pl?.xs ?? [];
+    const overlap = xs.some((t, k) => k && t.l < xs[k - 1].r);
+    const hidden = ticks.filter(v => !xs.some(t => tickValue(t.text) === v));
+    line(`${what}: the x labels are at 1, 2 and 5 times a power of ten, at their ticks, none overlapping`, xs.length >= 2 && xs.every(t => round125(tickValue(t.text)) && ticks.includes(tickValue(t.text)) && Math.abs(t.ax - pl.x(tickValue(t.text))) <= .5) && !overlap,
+      `drawn ${xs.map(t => t.text).join(", ")}; hidden ${hidden.map(tickText).join(", ") || "none"}`);
+    const titles = [dr.texts.find(t => /^Starting context/.test(t.text)), dr.texts.find(t => /^Peak share/.test(t.text))], b = dr.box;
+    line(`${what}: both axis titles are drawn inside the box`, titles.every(t => t && t.l >= b.l - .5 && t.r <= b.r + .5 && t.t >= b.t - .5 && t.b <= b.b + .5),
+      titles.map((t, k) => (t ? `"${t.text}" ${p1(t.l - b.l)}..${p1(t.r - b.l)} x ${p1(t.t - b.t)}..${p1(t.b - b.t)}` : `${k ? "y" : "x"} title not drawn`)).join("; ") + ` in ${p1(b.w)}x${p1(b.h)}`);
+    // Texts out of the box or over one another, by their em boxes: a rotated title's is its size by its length.
+    const box2 = t => (t.h > 2 * t.size ? { ...t, l: t.x - t.size / 2, r: t.x + t.size / 2 } : { ...t, ...em(t) });
+    const ems = dr.texts.map(box2), out = ems.filter(t => t.l < b.l - .5 || t.r > b.r + .5 || t.t < b.t - .5 || t.b > b.b + .5), over = [];
+    ems.forEach((p, k) => ems.slice(k + 1).forEach(c => { if (p.l < c.r - .5 && c.l < p.r - .5 && p.t < c.b - .5 && c.t < p.b - .5) over.push(`"${p.text}" and "${c.text}"`); }));
+    line(`${what}: no text leaves the box or overlaps another`, ems.length > 0 && !out.length && !over.length,
+      [...out.map(t => `out: "${t.text}"`), ...over.map(x => `overlap: ${x}`)].slice(0, 6).join("; ") || `${ems.length} texts`);
+    return r;
+  }
+
+  /** The pointer on each drawn dot's centre (every step-th): the ring is on that dot within 1px, and the tooltip names the
+   *  session at that pixel. */
+  async function pointAll(page, r, rows, what, step = 1) {
+    const bad = [], beside = [];
+    let n = 0, worst = 0;
+    // Chromium gives the page a mouse event's place in whole pixels, cut down: the map reads the session whose pixel is nearest
+    // that place, which between two dots under 2px apart can be the other one. The ring must be on one of the nearest.
+    const read = x => {
+      if (!x.mark || !x.tip) return null;
+      const m = markIn(x), seen = { x: x.moved.x - x.box.l, y: x.moved.y - x.box.t }, near = Math.min(...r.at.map(p => dist(p, seen)));
+      const k = r.at.findIndex((p, i) => dist(p, m) <= 1 && dist(p, seen) <= near + .75 && x.tip.name === sessName(rows[i]));
+      return { m, seen, k, drawnOff: nearest(m, r.dots) };
+    };
+    for (const [j, d] of r.dots.entries()) {
+      if (j % step) continue;
+      const a = await move(page, d);
+      const x = await until(() => ev(page, () => ({ mark: window.mapfit.mark(), tip: window.mapfit.tip(), box: window.mapfit.box(), moved: window.mapfit.moved() })),
+        x => Math.abs(x.moved.x - Math.floor(a.x)) < 1.01 && read(x)?.k >= 0 && read(x).drawnOff <= 1);
+      const got = read(x);
+      n++;
+      if (got) worst = Math.max(worst, got.drawnOff);
+      if (!got || got.k < 0 || !(got.drawnOff <= 1)) {
+        const m = got?.m;
+        bad.push(`dot ${j + 1} at ${p1(d.x)},${p1(d.y)}, the pointer at ${p1(a.x - x.box.l)},${p1(a.y - x.box.t)}, the page saw ${got ? `${p1(got.seen.x)},${p1(got.seen.y)}` : `${x.moved.x},${x.moved.y} in the window`}: ring ${m ? `${p1(m.x)},${p1(m.y)}` : "none"}, tooltip "${x.tip?.name ?? "none"}"`);
+      } else if (dist(got.m, d) > 1) beside.push(`dot ${j + 1} at ${p1(d.x)},${p1(d.y)}: the page saw ${p1(got.seen.x)},${p1(got.seen.y)}, the ring on the dot at ${p1(got.m.x)},${p1(got.m.y)}`);
+      if (bad.length > 3) break;
+    }
+    line(`${what}: the pointer on each dot's centre puts the ring on a drawn dot within 1px, the session's nearest the pointer the page saw, and the tooltip names it`, n > 0 && !bad.length,
+      bad.join("; ") || `${n} dots of ${r.dots.length}, the ring at most ${worst.toFixed(2)}px off a drawn dot; ${beside.length ? `${beside.length} read a neighbour under 2px away, as the page saw the pointer in whole pixels: ${beside.slice(0, 2).join("; ")}` : "each read its own dot"}`);
+  }
+
+  /** The tooltip at the plot's leftmost, rightmost, topmost and bottommost dots, by the pointer: inside the window, and inside
+   *  the box from side to side. Its bottom is said: tipAt places it from the pointer down, as the old chart did. */
+  async function tipEdges(page, r, what) {
+    const pick = [["leftmost", (a, b) => a.x - b.x], ["rightmost", (a, b) => b.x - a.x], ["topmost", (a, b) => a.y - b.y], ["bottommost", (a, b) => b.y - a.y]];
+    const got = [];
+    for (const [name, by] of pick) {
+      const d = [...r.dots].sort(by)[0];
+      await away(page);
+      await move(page, d);
+      const s = await until(() => state(page), s => s.tip && s.mark && dist(markIn(s), d) <= 1);
+      got.push({ name, s, ok: !!s.tip && s.tip.l >= -.5 && s.tip.r <= s.win + .5, past: s.tip ? Math.max(0, s.box.l - s.tip.l, s.tip.r - s.box.r) : 0 });
+    }
+    const past = got.filter(x => x.past > .5);
+    line(`${what}: the tooltip at the plot's leftmost, rightmost, topmost and bottommost dot is inside the window`, got.every(x => x.ok),
+      got.map(({ name, s }) => (s.tip ? `${name} ${p1(s.tip.l - s.box.l)}..${p1(s.tip.r - s.box.l)} x ${p1(s.tip.t - s.box.t)}..${p1(s.tip.b - s.box.t)}` : `${name} no tooltip`)).join("; ")
+        + ` of a ${p1(got[0]?.s.box.w ?? 0)}x${p1(got[0]?.s.box.h ?? 0)}px box; ${past.length ? `past the box's side at the ${past.map(x => `${x.name} by ${p1(x.past)}px`).join(", ")}` : "inside the box from side to side"}`);
+  }
+
+  const rows = mapRows(mapCases(structuredClone(store))), N = rows.length;
+  const inQuad = q => rows.filter(p => quadOf(p) === q).length;
+  /** The box's and the plot's heights and the box's width, in px. */
+  const sizes = page => ev(page, () => { const f = window.mapfit.frame(), b = window.mapfit.box(); return { box: Math.round(b.h), plot: f ? Math.round(f.b - f.t) : 0, w: Math.round(b.w) }; });
+  let size16;
+  /** A pixel of the quadrant Heavy and full, from the box's top left, 14px from every dot and from its edges. */
+  const topRight = r => {
+    const f = r.frame, gx = r.pl.x(START_LARGE) - r.dr.box.l, gy = r.pl.y(NEAR) - r.dr.box.t;
+    for (let x = f.r - 14; x > gx + 14; x -= 5) for (let y = f.t + 14; y < gy - 14; y += 5) if (nearest({ x, y }, r.dots) > 14) return { x, y };
+    return null;
+  };
+
+  // ---------- 1440px: the layout, the keys, the pointer, the sheet, a scroll, the focus ring, a resize ----------
+  {
+    const page = await open("1440px", { init: watchDots });
+    await settle(page);
+    const size = size16 = await sizes(page);
+    const r = await layout(page, rows, `${W}px, a ${size.w}px box`);
+    await shot(page, "light");
+    const dw = once(await ev(page, () => window.__dotDrawings));
+    line("with reduced motion, the dots are drawn at once: one place for every dot from the first frame on", dw.ok, dw.at);
+
+    // The keys: Right from no reading reads the oldest; then every session in turn.
+    await away(page);
+    await box(page).focus();
+    await ev(page, () => window.mapfit.listen());
+    await page.keyboard.press("ArrowRight");
+    const first = r.on(await r.reach(0), 0);
+    const s0 = await state(page);
+    line("Right from no reading reads the oldest session: the ring centred on its dot, the tooltip and the live region naming it", first.ok && !!s0.mark && Math.abs(s0.mark.r - (rows[0].compactions ? 10.5 : 8)) < .01, first.at);
+    await shot(page, "read");
+    const wrong = [];
+    let worst = 0;
+    for (let k = 1; k < N; k++) {
+      await page.keyboard.press("ArrowRight");
+      const o = r.on(await r.reach(k), k);
+      worst = Math.max(worst, o.off, o.drawnOff);
+      if (!o.ok) wrong.push(o.at);
+    }
+    line(`Right steps through all ${N} sessions oldest to newest: the ring on each session's dot within 1px, the tooltip and the live region naming it`, first.ok && !wrong.length,
+      wrong.slice(0, 3).join("; ") || `the ring at most ${worst.toFixed(2)}px off`);
+    // Enter opens the session read; closing the sheet returns the focus to the map.
+    const K = Math.min(5, N - 1);
+    await page.keyboard.press("Home");
+    for (let k = 0; k < K; k++) await page.keyboard.press("ArrowRight");
+    await r.reach(K);
+    await page.keyboard.press("Enter");
+    const sh = await until(() => ev(page, () => window.mapfit.sheet()), x => x.open && x.focus && x.session === rows[K].session_id);
+    await page.keyboard.press("Escape");
+    const back = await until(() => ev(page, () => ({ ...window.mapfit.sheet(), focus: window.mapfit.focus() })), x => !x.open && x.focus === "map");
+    const after = await state(page);
+    line(`Enter on session ${K + 1} opens its sheet, which takes the focus; closing it returns the focus to the map`, sh.open && sh.focus && sh.session === rows[K].session_id && !back.open && back.focus === "map",
+      `sheet ${sh.open ? `open on ${sh.session}` : "not open"}, focus ${sh.focus ? "in it" : "outside"}; after Escape ${back.open ? "still open" : "closed"}, focus on ${back.focus}, the reading ${after.mark ? "kept" : "ended"}`);
+    await page.keyboard.press("Escape");
+    await ev(page, () => document.activeElement?.blur());
+
+    // The pointer: every dot; a lone dot's 12px; a dot from outside the plot; the hand; the tooltip at the edges.
+    await pointAll(page, r, rows, `${W}px`);
+    if (!r.alone.length) line("the map has a dot 30px from any other", false);
+    const J = r.alone[0];
+    if (J) {
+      await away(page);
+      const read = async (dx, dy) => { await move(page, J, dx, dy); await sleep(150); return state(page); };
+      const c0 = await read(0, 0), c11 = await read(0, -11), c13 = await read(0, -13);
+      const onJ = s => !!s.mark && dist(markIn(s), J) <= 1 && !!s.tip;
+      line("pointer: on a lone dot and 11px off it the ring is on that dot; 13px off nothing is read", onJ(c0) && onJ(c11) && !c13.mark && !c13.tip,
+        `centre ${onJ(c0) ? "read" : "not read"}, 11px ${onJ(c11) ? "read" : "not read"}, 13px ${c13.mark || c13.tip ? `read "${c13.tip?.name}"` : "nothing"}`);
+      // The hand over a dot and over the plot away from any dot; not over an x label in the margin.
+      const f = r.frame, x0 = r.pl?.xs[Math.floor((r.pl?.xs.length ?? 0) / 2)], label = x0 && { text: x0.text, x: x0.x - r.dr.box.l, y: x0.y - r.dr.box.t };
+      let empty = null;
+      for (let x = f.l + 10; !empty && x < f.r - 10; x += 7) for (let y = f.t + 10; !empty && y < f.b - 10; y += 7) if (nearest({ x, y }, r.dots) > 20) empty = { x, y };
+      const cursorAt = async p => { const a = await move(page, p); await sleep(120); return ev(page, ([x, y]) => window.mapfit.cursor(x, y), [a.x, a.y]); };
+      const hand = await cursorAt(J), plot = await cursorAt(empty), margin = await cursorAt(label);
+      line("the pointer is a hand over a dot and over the plot away from any dot, and not over the x labels under it", hand.startsWith("pointer ") && plot.startsWith("pointer ") && !margin.startsWith("pointer "),
+        `over a dot: ${hand}; over the plot at ${p1(empty.x)},${p1(empty.y)}: ${plot}; over "${label.text}": ${margin}`);
+      // A dot read from outside the plot: the one nearest an edge, the pointer 11.5px from it past that edge.
+      const edges = r.dots.map(d => ({ d, e: [["left", d.x - f.l], ["right", f.r - d.x], ["top", d.y - f.t], ["bottom", f.b - d.y]].sort((a, b) => a[1] - b[1])[0] })).sort((a, b) => a.e[1] - b.e[1]);
+      const { d: E, e: [edge, gap] } = edges[0];
+      const out = { left: { x: E.x - 11.5, y: E.y }, right: { x: E.x + 11.5, y: E.y }, top: { x: E.x, y: E.y - 11.5 }, bottom: { x: E.x, y: E.y + 11.5 } }[edge];
+      await away(page);
+      const ao = await move(page, out);
+      const so = await until(() => state(page), s => s.mark);
+      const past = 11.5 - Math.max(0, gap), curOut = await ev(page, ([x, y]) => window.mapfit.cursor(x, y), [ao.x, ao.y]);
+      await page.mouse.click(ao.x, ao.y);
+      const opened = await until(() => ev(page, () => window.mapfit.sheet()), x => x.open);
+      line(`a known difference from the old chart: the pointer outside the plot's ${edge} edge reads the dot at that edge, from up to 12px, and a click there opens its sheet`, past > 0 && !!so.mark && dist(markIn(so), E) <= 1 && opened.open,
+        `the pointer ${p1(past)}px past the edge, 11.5px from the dot ${p1(Math.max(0, gap))}px inside it: ${so.mark ? `ring on the dot ${dist(markIn(so), E).toFixed(2)}px off` : "nothing read"}, cursor ${curOut}; a click ${opened.open ? `opened ${opened.session}` : "opened nothing"}`);
+      if (opened.open) { await page.keyboard.press("Escape"); await until(() => ev(page, () => window.mapfit.sheet()), x => !x.open); }
+      await tipEdges(page, r, `${W}px`);
+      // A click on the lone dot: its sheet; the cursor while it is open and after it closes; where the focus goes.
+      await away(page);
+      await ev(page, () => document.activeElement?.blur());
+      const k = r.sessionAt(J), aj = await abs(page, J);
+      await page.mouse.click(aj.x, aj.y);
+      const cs = await until(() => ev(page, () => window.mapfit.sheet()), x => x.open && x.focus);
+      const curOpen = await ev(page, ([x, y]) => `${window.mapfit.cursor(x, y)}, the box ${window.mapfit.hand() ? "with" : "without"} its hand`, [aj.x, aj.y]);
+      await page.keyboard.press("Escape");
+      const cb = await until(() => ev(page, () => ({ ...window.mapfit.sheet(), focus: window.mapfit.focus() })), x => !x.open);
+      const curAfter = await ev(page, ([x, y]) => `${window.mapfit.cursor(x, y)}, the box ${window.mapfit.hand() ? "with" : "without"} its hand`, [aj.x, aj.y]);
+      line("a click on a dot opens its sheet; after the sheet closes the focus is on the map", cs.open && k >= 0 && cs.session === rows[k].session_id && !cb.open && cb.focus === "map",
+        `sheet ${cs.open ? `open on ${cs.session}` : "not open"} for ${k >= 0 ? rows[k].session_id : "no session"}; cursor while open ${curOpen}; after Escape focus on ${cb.focus}, cursor ${curAfter}`);
+      await page.keyboard.press("Escape");
+    }
+    // Escape with the focus on another control closes a tooltip the pointer opened.
+    if (J) {
+      await ev(page, () => document.activeElement?.blur());
+      await away(page);
+      await page.locator("#navTheme").focus();
+      await page.locator(`${ROOT} .map-box`).scrollIntoViewIfNeeded();
+      await move(page, J);
+      const shown = await until(() => state(page), s => s.tip);
+      await page.keyboard.press("Escape");
+      const gone = await until(() => state(page), s => !s.tip && !s.mark);
+      const stays = await ev(page, () => window.mapfit.focus());
+      line("Escape with the focus on another control closes the pointer's tooltip and ring, and leaves the focus there", !!shown.tip && !gone.tip && !gone.mark && stays === "#navTheme",
+        `${shown.tip ? "opened" : "never opened"}; then ${gone.tip ? "tooltip open" : "no tooltip"}, ${gone.mark ? "ring" : "no ring"}, focus on ${stays}`);
+    }
+
+    // A scroll: the box moves in the window; the pointer still reads the dot under it.
+    await away(page);
+    const y0 = await ev(page, () => scrollY);
+    await page.mouse.wheel(0, 60);
+    let y1 = await until(() => ev(page, () => scrollY), y => y !== y0);
+    if (y1 === y0) { await page.mouse.wheel(0, -60); y1 = await until(() => ev(page, () => scrollY), y => y !== y0); }
+    // The dots are where they were in the box: the reading taken before the scroll still holds, from the box's new place.
+    await pointAll(page, r, rows, `after the page scrolls ${y1 - y0}px`, Math.max(1, Math.ceil(N / 40)));
+
+    // The focus ring: Shift+Tab from the first quadrant button onto the map.
+    await page.locator(`${ROOT} .quads button >> nth=0`).focus();
+    await page.keyboard.press("Shift+Tab");
+    const ring = await ev(page, () => { const e = document.activeElement, s = getComputedStyle(e); return { map: window.mapfit.focus() === "map", visible: e.matches(":focus-visible"), style: s.outlineStyle, width: parseFloat(s.outlineWidth), color: window.chartfit.tri(s.outlineColor) }; });
+    line("Shift+Tab from the first quadrant button onto the map draws its focus ring", ring.map && ring.visible && ring.style !== "none" && ring.width >= 2, `${ring.map ? "the map" : "not the map"}, focus-visible ${ring.visible}, outline ${ring.style} ${ring.width}px rgb(${ring.color})`);
+    await shot(page, "focus");
+    await ev(page, () => document.activeElement?.blur());
+
+    // A resize: each frame's drawing against its box, then the settled drawing.
+    await ev(page, () => {
+      window.__frames = [];
+      window.__framing = true;
+      const tick = () => {
+        const f = window.mapfit.frame(), b = window.mapfit.box();
+        window.__frames.push({ box: Math.round(b.w), svg: window.mapfit.svgWidth(), right: f ? Math.round((f.r - b.l) * 10) / 10 : null, first: window.mapfit.dots()[0]?.x - b.l });
+        if (window.__framing) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    await page.setViewportSize({ width: 900, height: 900 });
+    await sleep(800);
+    const fs = await ev(page, () => { window.__framing = false; return window.__frames; });
+    const wrongFrames = fs.filter(x => x.svg !== x.box || x.right == null || Math.abs(x.right - (x.box - 16)) > 1);
+    await page.locator(`${ROOT} .map-box`).scrollIntoViewIfNeeded();
+    const rz = await layout(page, rows, "resized to a 900px window");
+    const sz = await ev(page, () => ({ svg: window.mapfit.svgWidth(), box: Math.round(window.mapfit.box().w), right: window.mapfit.frame().r - window.mapfit.box().l }));
+    line("after the resize settles, the drawing is the box's width and the plot ends 16px from its right", sz.svg === sz.box && Math.abs(sz.right - (sz.box - 16)) <= 1 && rz.dr.dots.length === N,
+      `svg ${sz.svg}px in a ${sz.box}px box, the plot's right at ${p1(sz.right)}px; during the resize ${wrongFrames.length} of ${fs.length} frames drew in another width than the box's${wrongFrames.length ? `: ${wrongFrames.slice(0, 3).map(x => `svg ${x.svg}px, box ${x.box}px, plot's right ${x.right}px, first dot at ${p1(x.first)}px`).join("; ")}` : ""}`);
+    await pointAll(page, rz, rows, "resized to a 900px window", Math.max(1, Math.ceil(N / 40)));
+    await page.done();
+  }
+
+  // ---------- a quadrant: by a click on the plot, by its button with the pointer's reading, Escape; newer figures ----------
+  {
+    let change = null;
+    const answer = d => (change ? change(mapCases(d)) : mapCases(d));
+    const page = await open("quadrant", { answer });
+    await settle(page);
+    const r = await reading(page, rows), f = r.frame;
+    const gx = r.pl.x(START_LARGE) - r.dr.box.l, gy = r.pl.y(NEAR) - r.dr.box.t, both = inQuad("both"), spot = topRight(r);
+    const before = await ev(page, () => window.mapfit.narrowed());
+    const look = () => ev(page, () => ({ quad: window.mapfit.quad(), wash: window.mapfit.wash(), dots: window.mapfit.dots(), rings: window.mapfit.rings(), box: window.mapfit.box(), ...window.mapfit.narrowed() }));
+    const as = await abs(page, spot);
+    await page.mouse.click(as.x, as.y);
+    const sel = await until(look, x => x.quad === "both" && x.wash);
+    // The k-th dot drawn is session k's, and the j-th ring the j-th compacted session's.
+    const w = sel.wash && { l: sel.wash.l - sel.box.l, r: sel.wash.r - sel.box.l, t: sel.wash.t - sel.box.t, b: sel.wash.b - sel.box.t, fill: sel.wash.fill };
+    const strong = sel.dots.map((d, k) => [d.so > .5, quadOf(rows[k]) === "both"]), comp = rows.filter(p => p.compactions > 0);
+    const wrongDots = strong.filter(([a, b]) => a !== b).length, wrongRings = sel.rings.filter((x, j) => !comp[j] || (x.so > .5) !== (quadOf(comp[j]) === "both")).length;
+    line("a click in the top right away from any dot selects Heavy and full: its wash fills that quadrant, the other dots and their rings at 20%",
+      !!w && Math.abs(w.l - gx) <= 1 && Math.abs(w.r - f.r) <= 1 && Math.abs(w.t - f.t) <= 1 && Math.abs(w.b - gy) <= 1 && sel.dots.length === N && !wrongDots && sel.rings.length === comp.length && !wrongRings && sel.dots.every(d => d.so > .5 || Math.abs(d.so - .2) < .01),
+      `wash ${w ? `${p1(w.l)}..${p1(w.r)} x ${p1(w.t)}..${p1(w.b)} in rgb(${w.fill})` : "none"} for ${p1(gx)}..${p1(f.r)} x ${p1(f.t)}..${p1(gy)}; ${sel.dots.filter(d => d.so > .5).length} dots at full strength for ${both} in the quadrant, ${wrongDots} dots and ${wrongRings} rings at the wrong strength`);
+    line("Heavy and full selected: the bars above count its sessions alone, and its list shows", before.bars === N && sel.bars === both && sel.note.startsWith("Narrowed to Heavy and full:") && sel.list === Math.min(20, both),
+      `bars count ${before.bars}, then ${sel.bars} for ${both} in the quadrant; note "${sel.note}"; ${sel.list} sessions listed`);
+    await shot(page, "quadrant");
+    // The screenshot may have scrolled the page: the same pixel of the box, from where the box is now.
+    const again = await abs(page, spot);
+    await page.mouse.click(again.x, again.y);
+    const cleared = await until(look, x => !x.quad && !x.wash);
+    line("a second click there clears the quadrant: no wash, no dot dimmed, the bars count every session", !cleared.quad && !cleared.wash && cleared.dots.every(d => d.so > .5) && cleared.bars === N && !cleared.note,
+      `${cleared.quad ?? "no quadrant"}, ${cleared.wash ? "wash drawn" : "no wash"}, ${cleared.dots.filter(d => d.so < .5).length} dimmed, the bars count ${cleared.bars}`);
+
+    // The pointer's reading kept through a quadrant selected by its button; Escape on another control keeps the quadrant.
+    const J = r.alone[0];
+    await ev(page, () => document.activeElement?.blur());
+    await away(page);
+    await move(page, J);
+    const s1 = await until(() => state(page), s => s.mark && dist(markIn(s), J) <= 1 && s.tip);
+    await page.locator(`${ROOT} .quads button[data-quad="both"]`).focus();
+    await page.keyboard.press("Space");
+    const s2 = await until(async () => ({ ...(await look()), ...(await state(page)) }), x => x.quad === "both" && x.wash);
+    line("a quadrant selected by its button, the pointer at rest on a dot: the wash drawn, the others dimmed, the ring and the tooltip still on that session",
+      !!s1.tip && !!s2.wash && s2.dots.filter(d => d.so < .5).length === N - both && !!s2.mark && dist(markIn(s2), J) <= 1 && s2.tip?.name === s1.tip.name,
+      `before: "${s1.tip?.name ?? "none"}"; after: ${s2.wash ? "wash" : "no wash"}, ${s2.dots.filter(d => d.so < .5).length} dimmed, ring ${s2.mark ? `${dist(markIn(s2), J).toFixed(2)}px off` : "none"}, tooltip "${s2.tip?.name ?? "none"}"`);
+    await shot(page, "quadrant-read");
+    await page.locator("#navTheme").focus();
+    await page.keyboard.press("Escape");
+    const s3 = await until(async () => ({ ...(await look()), ...(await state(page)) }), x => !x.tip && !x.mark);
+    line("Escape with the focus on another control closes the pointer's tooltip and keeps the quadrant", !!s2.tip && !s3.tip && !s3.mark && s3.quad === "both" && !!s3.wash,
+      `the tooltip ${s2.tip ? "open" : "NOT open"} before; then ${s3.tip ? "tooltip open" : "no tooltip"}, ${s3.mark ? "ring" : "no ring"}; quadrant ${s3.quad ?? "cleared"}, ${s3.wash ? "wash drawn" : "no wash"}`);
+    // One Escape on the map ends a key's reading and clears the quadrant.
+    await box(page).focus();
+    await page.keyboard.press("ArrowRight");
+    const s4 = r.on(await r.reach(0), 0);
+    await page.keyboard.press("Escape");
+    const s5 = await until(async () => ({ ...(await look()), ...(await state(page)) }), x => !x.mark && !x.quad);
+    line("one Escape on the map ends a key's reading and clears the quadrant", s4.ok && !s5.mark && !s5.tip && !s5.live && !s5.quad && !s5.wash && s5.bars === N,
+      `before: ${s4.ok ? "the oldest read, Heavy and full selected" : s4.at}; then ${s5.mark ? "ring" : "no ring"}, ${s5.tip ? "tooltip" : "no tooltip"}, said "${s5.live}", quadrant ${s5.quad ?? "cleared"}, the bars count ${s5.bars}`);
+
+    // Newer figures that add a session older than all: the indexes move, the reading stays on its session, nothing is said.
+    const K = Math.min(7, N - 1);
+    await page.keyboard.press("Home");
+    for (let k = 0; k < K; k++) await page.keyboard.press("ArrowRight");
+    await r.reach(K);
+    await ev(page, () => window.mapfit.listen());
+    const oldest = rows[0];
+    change = d => { const p = d.sessions_map.points[0]; d.sessions_map.points.push({ ...p, session_id: "chartfit-map-older", title: "An older session", first_ts: new Date(Date.parse(oldest.first_ts) - 36e5).toISOString(), start: 12000, peak: Math.round(p.window * .4), compactions: 0 }); d.sessions_map.total++; return d; };
+    await page.newer();
+    await until(() => ev(page, () => window.mapfit.dots().length), n => n === N + 1);
+    await sleep(400);
+    const rows2 = mapRows(answer(structuredClone(store))), k2 = rows2.findIndex(p => p.session_id === rows[K].session_id);
+    const r2 = await reading(page, rows2), kept = r2.on(await state(page), k2), said = await ev(page, () => window.mapfit.said());
+    line(`newer figures with a session older than all: the key's reading stays on session ${K + 1}, now the ${k2 + 1}th, and nothing is said`, k2 === K + 1 && kept.ok && !said.length,
+      `${kept.at}; said ${JSON.stringify(said)}`);
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    await page.done();
+  }
+
+  // ---------- the PHONE window, 32px text, a device pixel ratio of 2 ----------
+  {
+    const p32 = await open("32px root", { init: root32 });
+    await settle(p32);
+    const size = await sizes(p32);
+    line("the plot is 260px at 16px text and at 32px; the box 320px, then 380px", size16.plot === 260 && size.plot === 260 && size16.box === 320 && size.box === 380,
+      `plot ${size16.plot}px, then ${size.plot}px; box ${size16.box}px, then ${size.box}px`);
+    const r32 = await layout(p32, rows, `${W}px at 32px text`);
+    await pointAll(p32, r32, rows, `${W}px at 32px text`, Math.max(1, Math.ceil(N / 40)));
+    await shot(p32, "32px");
+    await p32.done();
+    for (const [what, options, init] of [[`the ${PHONE}px window`, {}, null], [`the ${PHONE}px window at 32px text`, {}, root32], [`the ${PHONE}px window at a device pixel ratio of 2`, { deviceScaleFactor: 2 }, null]]) {
+      const page = await open(what, { options: { viewport: { width: PHONE, height: 900 }, ...options }, init });
+      await settle(page);
+      const bw = await ev(page, () => Math.round(window.mapfit.box().w));
+      const r = await layout(page, rows, `${what}, a ${bw}px box`);
+      await pointAll(page, r, rows, `${what}, a ${bw}px box`, Math.max(1, Math.ceil(N / 40)));
+      if (!init && !options.deviceScaleFactor) {
+        await tipEdges(page, r, `${what}, a ${bw}px box`);
+        await shot(page, "343px");
+      }
+      if (init) await shot(page, "343px-32px");
+      await page.done();
+    }
+    // 1,000 sessions from 2k to 200k: seven x ticks, where a 343px box at 32px text has no room for all their labels.
+    const big = mapRows(thousand(structuredClone(store)));
+    const page = await open(`the ${PHONE}px window at 32px text, 1,000 sessions`, { answer: thousand, options: { viewport: { width: PHONE, height: 900 } }, init: root32 });
+    await settle(page);
+    const r = await layout(page, big, `the ${PHONE}px window at 32px text, 1,000 sessions`);
+    await pointAll(page, r, big, `the ${PHONE}px window at 32px text, 1,000 sessions`, 25);
+    await shot(page, "343px-32px-1000");
+    await page.done();
+  }
+
+  // ---------- colors: light and dark; forced colors with a quadrant selected and a dot read ----------
+  {
+    const page = await open("colors");
+    await settle(page);
+    const theme = async want => { for (let i = 0; i < 3 && (await page.locator("#navTheme").getAttribute("aria-label")) !== `Theme: ${want}`; i++) await page.locator("#navTheme").click(); };
+    const r = await reading(page, rows), spot = await abs(page, topRight(r));
+    await page.mouse.click(spot.x, spot.y);
+    const got = [];
+    for (const scheme of ["light", "dark"]) {
+      // The theme's button takes the focus, which ends the reading: the oldest session is read again after it.
+      await theme(scheme);
+      await box(page).focus();
+      await page.keyboard.press("Home");
+      const want = await ev(page, () => Object.fromEntries(["--surface-1", "--surface-2", "--text-muted", "--text-primary"].map(k => [k, window.chartfit.probe(`var(${k})`)])));
+      const s = await until(() => ev(page, () => ({ dots: window.mapfit.dots(), guides: window.mapfit.guides(), wash: window.mapfit.wash(), mark: window.mapfit.mark() })), x => x.dots.every(d => d.stroke === want["--surface-1"]) && x.wash?.fill === want["--surface-2"] && x.mark);
+      got.push({ scheme, want, s, fills: [...new Set(s.dots.map(d => d.fill))].sort() });
+    }
+    const ok = ({ want, s }) => s.dots.length === N && s.dots.every(d => d.stroke === want["--surface-1"]) && s.guides.length === 2 && s.guides.every(g => g.stroke === want["--text-muted"]) && s.wash?.fill === want["--surface-2"] && s.mark?.stroke === want["--text-primary"];
+    line("light and dark: the dots' edges are the surface, the guides --text-muted, the wash --surface-2, the ring --text-primary; the dots' colors change with the theme",
+      got.every(ok) && got[0].want["--surface-1"] !== got[1].want["--surface-1"] && got[0].fills.join() !== got[1].fills.join(),
+      got.map(({ scheme, want, s, fills }) => `${scheme}: edges ${[...new Set(s.dots.map(d => `rgb(${d.stroke})`))].join(", ")} for rgb(${want["--surface-1"]}), guides ${[...new Set(s.guides.map(g => `rgb(${g.stroke})`))].join(", ")}, wash ${s.wash ? `rgb(${s.wash.fill})` : "none"}, ring ${s.mark ? `rgb(${s.mark.stroke})` : "none"}, ${fills.length} dot colors`).join("; "));
+    await shot(page, "dark");
+    await page.done();
+  }
+  {
+    const page = await open("forced colors", { options: { forcedColors: "active" } });
+    await settle(page);
+    const r = await reading(page, rows), spot = await abs(page, topRight(r));
+    await page.mouse.click(spot.x, spot.y);
+    await box(page).focus();
+    await page.keyboard.press("ArrowRight");
+    const { sys, name } = await sysColors(ev, page);
+    const got = await until(() => ev(page, () => ({ dots: window.mapfit.dots(), rings: window.mapfit.rings(), guides: window.mapfit.guides(), wash: window.mapfit.wash(), frame: window.mapfit.frame(), texts: window.mapfit.texts(), mark: window.mapfit.mark() })), x => x.wash && x.mark);
+    const say = c => name[c] ?? `NOT A SYSTEM COLOR rgb(${c})`, uniq = xs => [...new Set(xs)].map(say).join(", ");
+    const contrast = c => (c ? ratio(sys.Canvas, c) : 0);
+    line("forced colors: each dot's edge and each compacted session's ring is CanvasText", got.dots.length === N && got.dots.every(d => d.stroke === sys.CanvasText) && got.rings.length > 0 && got.rings.every(x => x.stroke === sys.CanvasText),
+      `edges ${uniq(got.dots.map(d => d.stroke))}; ${got.rings.length} rings ${uniq(got.rings.map(x => x.stroke))}; ${[...new Set(got.dots.map(d => d.fill))].length} dot colors kept`);
+    line("forced colors: the guides, the grid lines and every text are system colors, each 3:1 on Canvas at least",
+      got.guides.length === 2 && got.guides.every(g => name[g.stroke]) && got.frame.strokes.every(c => name[c]) && got.texts.every(t => name[t.fill] && (!t.halo || name[t.halo]))
+        && [...got.guides.map(g => g.stroke), ...got.texts.map(t => t.fill)].every(c => contrast(c) >= 3),
+      `guides ${uniq(got.guides.map(g => g.stroke))} (${contrast(got.guides[0]?.stroke).toFixed(1)}:1); grid ${uniq(got.frame.strokes)}; texts ${uniq(got.texts.map(t => t.fill))}, halos ${uniq(got.texts.filter(t => t.halo).map(t => t.halo))}`);
+    const w = got.wash, dotsFrom = Math.min(...got.dots.map(d => d.i));
+    line("forced colors: the selected quadrant is a 2px Highlight frame with no fill, drawn over the grid lines and under the dots",
+      !!w && w.stroke === sys.Highlight && w.width === 2 && w.fill === "none" && w.i > got.frame.last && w.i < dotsFrom,
+      w ? `frame ${say(w.stroke)} ${w.width}px, fill ${w.fill === "none" ? "none" : say(w.fill)}; painted ${w.i + 1}th, after the last grid line (${got.frame.last + 1}th) and before the first dot (${dotsFrom + 1}th)` : "no frame");
+    line("forced colors: the ring around the dot read is Highlight", !!got.mark && got.mark.stroke === sys.Highlight, `ring ${got.mark ? say(got.mark.stroke) : "none"} ${got.mark?.width ?? 0}px`);
+    await shot(page, "forced-colors");
+    await page.done();
+  }
+
+  // ---------- motion on: the dots drawn at once ----------
+  {
+    const page = await open("motion on", { options: { reducedMotion: "no-preference" }, init: watchDots });
+    await sleep(1200);
+    const dw = once(await ev(page, () => window.__dotDrawings));
+    line("with motion on, the dots are drawn at once: one place for every dot from the first frame on", dw.ok, dw.at);
+    await page.done();
+  }
+
+  // ---------- 1,000 sessions: the first drawing and a quadrant's redraw, timed; the session read pushed off the map ----------
+  {
+    let change = null;
+    const answer = d => (change ? change(thousand(d)) : thousand(d));
+    const big = mapRows(thousand(structuredClone(store))), both = big.filter(p => quadOf(p) === "both").length;
+    const page = await open("1,000 sessions", { answer, path: "/context?range=30&tab=growth",
+      ready: async p => { await p.waitForFunction(() => document.querySelector(".growth .echart-plot svg path")); } });
+    await settle(page);
+    const first = await ev(page, () => new Promise(resolve => {
+      const t0 = performance.now();
+      let mount = null;
+      const mo = new MutationObserver(() => {
+        const now = performance.now();
+        mount ??= document.querySelector("#pressure .session-map") ? now : null;
+        if (window.mapfit.dots().length < 1000) return;
+        mo.disconnect();
+        requestAnimationFrame(() => resolve({ mount: mount - t0, drawn: now - t0, painted: performance.now() - t0 }));
+      });
+      mo.observe(document.body, { childList: true, subtree: true });
+      document.querySelector("#ctab-overhead").click();
+    }));
+    line("1,000 sessions: the first drawing takes under 100ms", first.drawn < 100,
+      `from the tab's click: the map mounted at ${first.mount.toFixed(1)}ms, its 1,000 dots in the SVG at ${first.drawn.toFixed(1)}ms, the next frame at ${first.painted.toFixed(1)}ms`);
+    await page.locator(`${ROOT} .map-box`).scrollIntoViewIfNeeded();
+    await settle(page);
+    const redraw = await ev(page, want => new Promise(resolve => {
+      let t0 = 0, done = false;
+      const check = () => {
+        if (done || window.mapfit.dots().filter(d => d.so < .5).length !== 1000 - want || !window.mapfit.wash()) return;
+        done = true;
+        const t = performance.now() - t0;
+        requestAnimationFrame(() => resolve({ drawn: t, painted: performance.now() - t0 }));
+      };
+      const mo = new MutationObserver(check);
+      mo.observe(document.querySelector("#pressure .session-map .echart-plot"), { childList: true, subtree: true, attributes: true });
+      t0 = performance.now();
+      document.querySelector('#pressure .session-map .quads button[data-quad="both"]').click();
+      check();
+    }), both);
+    line("1,000 sessions: a quadrant's redraw takes under 100ms", redraw.drawn < 100,
+      `from the button's click: ${1000 - both} dots dimmed and the wash drawn at ${redraw.drawn.toFixed(1)}ms, the next frame at ${redraw.painted.toFixed(1)}ms`);
+    await shot(page, "1000");
+    // The oldest session read, then newer figures that push it off the map: the reading ends, with nothing said.
+    await page.locator(`${ROOT} .quads button[data-quad="both"]`).click();
+    await box(page).focus();
+    await page.keyboard.press("ArrowRight");
+    const s0 = await until(() => state(page), s => s.tip?.name === sessName(big[0]));
+    await ev(page, () => window.mapfit.listen());
+    change = d => { const ps = d.sessions_map.points, last = ps.at(-1); ps.shift(); ps.push({ ...last, session_id: "chartfit-map-newest", title: "The newest session", first_ts: new Date(Date.parse(last.first_ts) + 6e4).toISOString() }); return d; };
+    await page.newer();
+    const s1 = await until(() => state(page), s => !s.tip && !s.mark);
+    await sleep(400);
+    const said = await ev(page, () => window.mapfit.said()), n = await ev(page, () => window.mapfit.dots().length);
+    line("1,000 sessions: newer figures that push the session read off the map end the reading, with nothing said", !!s0.tip && !s1.tip && !s1.mark && !s1.live && !said.length && n === 1000,
+      `${s0.tip ? `read "${s0.tip.name}"` : "not read"}; then ${n} dots, ${s1.tip ? `tooltip "${s1.tip.name}"` : "no tooltip"}, ${s1.mark ? "ring" : "no ring"}, live "${s1.live}", said ${JSON.stringify(said)}`);
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    await page.done();
+  }
 }
