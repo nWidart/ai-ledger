@@ -115,21 +115,27 @@ describe("tool calls by thread: what it shows", () => {
 describe("tool calls by thread: reading", () => {
   it("reads the main thread's first call on Right with its sentence, its tooltip shown and the mark around its bar", () => {
     focused();
-    expect(press("ArrowRight")).toBe(false); // prevented: the sheet does not scroll
-    expect(live().textContent).toBe(`Read on the main thread, ${clock(0)} to ${clock(.05)}, 3s: src/app.ts. 1 other call ran during it.`);
-    expect(tipText()).toEqual(["Read", "src/app.ts", "Main thread", `${clock(0)} to ${clock(.05)}`, "3s", "Succeeded", "and 1 other call at the same time"]);
-    const c = spanOf("m1");
-    expect(markAt()).toEqual([c.x0 - 3, L.lanes[c.lane]!.top + c.row * 10 - 3, c.x1 - c.x0 + 6, 14]);
-  });
-
-  it("changes lane on Down to the nearest call, and says it again at the bottom lane", () => {
-    focused();
-    press("ArrowRight");
-    expect(press("ArrowDown")).toBe(false);
-    expect(live().textContent).toBe(said("s1"));
-    const once = live().firstChild;
-    expect(press("ArrowDown")).toBe(false); // the bottom lane: the same call, said again
-    expect([live().textContent, live().firstChild === once]).toEqual([said("s1"), false]);
+    // A 100px tooltip; the box at the window's top: no room above the call, the tooltip goes below it.
+    const sizes = [vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(120),
+      vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(100), vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(W)];
+    const rect = vi.spyOn(box(), "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, W, L.height));
+    try {
+      expect(press("ArrowRight")).toBe(false); // prevented: the sheet does not scroll
+      expect(live().textContent).toBe(`Read on the main thread, ${clock(0)} to ${clock(.05)}, 3s: src/app.ts. 1 other call ran during it.`);
+      expect(tipText()).toEqual(["Read", "src/app.ts", "Main thread", `${clock(0)} to ${clock(.05)}`, "3s", "Succeeded", "and 1 other call at the same time"]);
+      const c = spanOf("m1"), y = L.lanes[c.lane]!.top + c.row * 10;
+      expect(markAt()).toEqual([c.x0 - 3, y - 3, c.x1 - c.x0 + 6, 14]);
+      expect(parseFloat(tip()!.style.top)).toBe(y + 8 + 4);
+      // The box 500px down the window: room above the call, though not inside the box. Left at the lane's first call
+      // reads it again and says it again.
+      rect.mockReturnValue(new DOMRect(0, 500, W, L.height));
+      const once = live().firstChild;
+      expect(press("ArrowLeft")).toBe(false);
+      expect([live().textContent, live().firstChild === once]).toEqual([said("m1"), false]);
+      expect(parseFloat(tip()!.style.top)).toBe(y - 4 - 100);
+    } finally {
+      [...sizes, rect].forEach(s => s.mockRestore());
+    }
   });
 
   it("reads the call under the pointer with a hand over it, nothing in empty space, and ends on leaving", () => {
