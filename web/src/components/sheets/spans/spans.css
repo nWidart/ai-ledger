@@ -31,8 +31,10 @@
 .spans-key .k-failed { width: 12px; height: 8px; border: 1.5px solid var(--critical); }
 .spans-key .k-open { width: 7px; height: 7px; border: 1.5px solid var(--text-muted); border-radius: 50%; }
 
-/* The input column wraps, as the tooltip does. */
+/* The input column wraps, as the tooltip does. The tool column keeps room for a few characters a line, by the text's
+   size: a long MCP name wraps onto a few lines, not one character a line, and the input gives up the room. */
 .spans .spans-input { white-space: normal; overflow-wrap: anywhere; }
+.spans :is(td, th).name { min-width: 8ch; }
 
 @media (forced-colors: active) {
   .spans-mark :is(rect, circle) { stroke: Highlight; }
