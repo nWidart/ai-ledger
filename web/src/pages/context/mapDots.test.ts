@@ -69,6 +69,8 @@ describe("mapFit", () => {
     expect([fit().height, fit().plot]).toEqual([320, { x: 52, y: 14, width: 732, height: 260 }]);
     expect([fit(points, 800, 2).height, fit(points, 800, 2).plot]).toEqual([380, { x: 104, y: 28, width: 664, height: 260 }]);
     expect([fit().yTitle, fit(points, 800, 2).yTitle]).toEqual(["Peak share of the window", "Peak share"]);
+    // The long x title, 36 characters at 6px a character times the titles' size: 452px at twice the text, past a 343px box.
+    expect([fit(points, 343).xTitle, fit(points, 343, 2).xTitle]).toEqual(["Starting context (tokens, log scale)", "Starting context"]);
   });
 
   it("wraps a name to its room by the measure, and moves the 80% label right of the 30k line in a narrow plot", () => {

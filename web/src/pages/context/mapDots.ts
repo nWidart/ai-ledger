@@ -104,6 +104,8 @@ export interface MapFit {
   startLabel: TextPlace;
   nearLabel: TextPlace;
   names: Record<Quad, NamePlace>;
+  /** The x axis's title, centred under the plot: the long form, or "Starting context" when the box is too narrow for it. */
+  xTitle: string;
   /** The y axis's title: the long form, or "Peak share" when the plot is too short for it. */
   yTitle: string;
 }
@@ -137,6 +139,8 @@ export function mapFit(model: MapModel, width: number, textScale: number, measur
     startLabel: { x: x30 + 4, y: y(.5), align: "left", verticalAlign: "bottom" },
     nearLabel: { x: nearLeft ? x30 - 4 : x30 + 4, y: y80 + 4 * s, align: nearLeft ? "right" : "left", verticalAlign: "top" },
     names,
+    // The titles' size over the labels': the measure is at the labels' size. Centred under the plot, half the title on each side.
+    xTitle: measure(X_TITLE, 400) * TITLE / LABEL / 2 <= Math.min(plot.x + plot.width / 2, width - plot.x - plot.width / 2) ? X_TITLE : "Starting context",
     // The long title takes about 6.5px a character, times the text scale, along the axis.
     yTitle: Y_TITLE.length * 6.5 * s <= PLOT_HEIGHT ? Y_TITLE : "Peak share",
   };
@@ -268,7 +272,7 @@ export function mapOption(fit: MapFit, env: OptionEnv, { quad, color }: { quad: 
       axisTick: { show: false, customValues: [...model.ticks] },
       axisLabel: { customValues: [...model.ticks], color: env.ink.muted, fontSize: LABEL * s, margin: 8 * s, hideOverlap: true, formatter: (v: number) => short(v) },
       splitLine: { show: true, lineStyle: { color: env.ink.grid } },
-      name: X_TITLE, nameLocation: "middle", nameGap: 30 * s, nameMoveOverlap: false, nameTextStyle: title,
+      name: fit.xTitle, nameLocation: "middle", nameGap: 30 * s, nameMoveOverlap: false, nameTextStyle: title,
     },
     yAxis: {
       ...valueAxis(env, { max: 1, step: .2, format: v => `${Math.round(v * 100)}%` }),
