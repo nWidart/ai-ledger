@@ -123,10 +123,13 @@ export function rateModel(m: Model, v: View, f: Filtered, vt: ViewTypes, fixes: 
   };
 }
 
-/** The margins at the default text size: room for the value labels on the left (a count of six digits) and the bucket labels below. */
-const MARGIN = { t: 18, r: 10, b: 24, l: 52 };
-/** Both tracks keep their height at any text size; the gap between them holds the bars' title and grows with the text. */
-const RATE = 100, BARS = 152, GAP = 26;
+/** The margins at the default text size: room for the rate track's title above (its text box, as the browser draws it,
+ *  is 1.3 times the text size tall and ends 2px under the title's place, 7px over the track: 20px holds it, where 18px
+ *  started it 1.3px above the box), the value labels on the left (a count of six digits) and the bucket labels below. */
+const MARGIN = { t: 20, r: 10, b: 24, l: 52 };
+/** Both tracks keep their height at any text size; the gap between them holds the bars' title and grows with the text.
+ *  It gives the top margin the 2px it gained, so the box keeps 320px. */
+const RATE = 100, BARS = 152, GAP = 24;
 
 /** The box: the rate track above the bars. 320px at the default text size, SLIDER_ROOM more with the slider. */
 export const rateLayout = (m: RateModel, textScale: number): TrackLayout => trackLayout(textScale, {

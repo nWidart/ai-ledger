@@ -221,7 +221,7 @@ it("draws a fold's mark on its band", async () => {
   await waitFor(() => expect(segments()).toHaveLength(60));
   const mark = texts("//");
   expect(mark.map(textX)).toEqual([expect.closeTo(at(5, 21), 1)]);
-  expect(Number(mark[0]!.getAttribute("y"))).toBeCloseTo(18 + 278, 1); // the frame's bottom line: its top, plus both tracks and the gap
+  expect(Number(mark[0]!.getAttribute("y"))).toBeCloseTo(20 + 276, 1); // the frame's bottom line: its top, plus both tracks and the gap
   expect(idleBands().map(p => d(p).cx)).toEqual([expect.closeTo(at(5, 21), 1)]);
 });
 

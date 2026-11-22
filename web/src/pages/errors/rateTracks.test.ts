@@ -168,9 +168,9 @@ describe("rateLayout", () => {
   it("holds 320px with both tracks fixed, 348 with the slider from 14 points, 388 at twice the text", () => {
     const q = model(quiet), l = rateLayout(q, 1);
     expect([l.height, l.left, l.right]).toEqual([320, 52, 10]);
-    expect(l.tracks).toEqual([{ top: 18, height: 100 }, { top: 144, height: 152 }]);
+    expect(l.tracks).toEqual([{ top: 20, height: 100 }, { top: 144, height: 152 }]);
     expect(rateLayout(q, 2).height).toBe(388);
-    expect(rateLayout(q, 2).tracks.map(t => t.height)).toEqual([100, 152]);
+    expect(rateLayout(q, 2).tracks).toEqual([{ top: 40, height: 100 }, { top: 188, height: 152 }]); // the title's room grows with the text
     expect(rateLayout(model(long), 1).height).toBe(348);
     expect(model(payload(long.calls.slice(7).map(c => [c[0], c[2], { x: 1 }] as Row))).zoom).toBe(false); // 13 points
     expect(model(payload(long.calls.slice(6).map(c => [c[0], c[2], { x: 1 }] as Row))).zoom).toBe(true); // 14
