@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CacheBucket, ContextPayload } from "../../api";
-import { CacheChart, cacheSlots, ratioFloor, stack } from "./CacheChart";
+import { CacheChart, stack } from "./CacheChart";
 
 type Series = ContextPayload["cost"]["series"];
 const b = (day: string, o: Partial<CacheBucket> = {}): CacheBucket => ({ day, input: 0, cache_read: 0, cache_write: 0, model_switch: 0, expired: 0, other: 0, ...o });
@@ -18,26 +18,6 @@ const DAY = { cache_read: 900_000, cache_write: 60_000, input: 40_000 };
 
 beforeEach(() => {
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 800, bottom: 300, width: 800, height: 300, x: 0, y: 0, toJSON: () => ({}) });
-});
-
-describe("cacheSlots", () => {
-  it("leaves a day with no row as an empty slot", () => {
-    const s = cacheSlots(daily(b("2026-11-01", { input: 1 }), b("2026-11-03", { input: 1 })));
-    expect(s.map(x => x.day)).toEqual(["2026-11-01", "2026-11-02", "2026-11-03"]);
-    expect(s.map(x => x.row == null)).toEqual([false, true, false]);
-  });
-  it("steps a week at a time", () => {
-    const s = cacheSlots({ bucket: "week", rows: [b("2026-11-02", { input: 1 }), b("2026-11-16", { input: 1 })] });
-    expect(s.map(x => x.day)).toEqual(["2026-11-02", "2026-11-09", "2026-11-16"]);
-  });
-});
-
-describe("ratioFloor", () => {
-  it("starts the ratio track at 90%, or lower at the lowest ratio's tenth", () => {
-    expect(ratioFloor([.93, .97])).toBe(.9);
-    expect(ratioFloor([.62, .97])).toBe(.6);
-    expect(ratioFloor([0])).toBe(0);
-  });
 });
 
 describe("cache chart", () => {

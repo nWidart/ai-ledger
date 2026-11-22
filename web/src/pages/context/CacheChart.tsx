@@ -3,14 +3,14 @@ import type { CacheBucket, ContextPayload } from "../../api";
 import { dayAxis, scaleMargins, stackHeights, textScale, tipAt, useWidth } from "../../components/chart";
 import { ChartTable } from "../../components/DataTable";
 import { Table, type Column } from "../../components/table/Table";
-import { dayLabel, dayRange, niceStep, num, pct, plural } from "../../format";
+import { dayLabel, niceStep, num, pct, plural } from "../../format";
+import { hitRatio, ratioFloor, type Slot, waste } from "./cacheTracks";
+import { calendarSlots } from "./chartParts";
 import { BREAK_CAUSES, causesText, short } from "./context";
 import { modified } from "../../components/keys";
 import "./CacheChart.css";
 
 type Series = ContextPayload["cost"]["series"];
-/** One place on the calendar axis: the bucket's first day, and its row (null when nothing happened that day or week). */
-export interface Slot { day: string; row: CacheBucket | null }
 
 /** The tracks' plot heights at the default text size: the waste bars, the breaks strip and the hit-ratio line. */
 const WASTE = 180, STRIP = 48, RATIO = 44;
@@ -24,27 +24,14 @@ const MIN_H = 2, SEP = 1;
 const prompt = (r: { input: number; cache_read: number; cache_write: number }) => r.input + r.cache_read + r.cache_write;
 /** A rough width of a label in px: wide enough for the digits and lowercase of these titles at their font size. */
 const textWidth = (s: string, fs: number, bold = false) => s.length * fs * (bold ? .62 : .56);
-/** The prompt tokens not read from the cache: uncached input and cache writes, the part that costs full price or more. */
-export const waste = (r: { input: number; cache_write: number }) => r.input + r.cache_write;
-/** cache_read over the prompt tokens, null when the bucket has none. */
-export const hitRatio = (r: { input: number; cache_read: number; cache_write: number }): number | null => {
-  const t = r.input + r.cache_read + r.cache_write;
-  return t ? r.cache_read / t : null;
-};
 const breaks = (r: CacheBucket) => r.model_switch + r.expired + r.other;
-/** The ratio track's low end: 90%, or the lowest ratio rounded down to a tenth when it is lower, so the usual 85-98% spread is readable. */
-export const ratioFloor = (ratios: number[]): number => Math.max(0, Math.min(.9, Math.floor(Math.min(...ratios, 1) * 10 + 1e-9) / 10));
 
 /** Every bucket's place by date from the first to the last row: a day (or week) with no row is an empty slot. */
-export function cacheSlots(series: Series): Slot[] {
+function cacheSlots(series: Series): Slot[] {
   const rows = series.rows;
   if (!rows.length) return [];
-  const by = new Map(rows.map(r => [r.day, r])), first = rows[0]!.day, last = rows[rows.length - 1]!.day;
-  const days = series.bucket === "week"
-    ? Array.from({ length: Math.floor((+new Date(last + "T00:00:00Z") - +new Date(first + "T00:00:00Z")) / (7 * 864e5)) + 1 },
-      (_, i) => new Date(+new Date(first + "T00:00:00Z") + i * 7 * 864e5).toISOString().slice(0, 10))
-    : dayRange(first, last);
-  return days.map(day => ({ day, row: by.get(day) ?? null }));
+  const by = new Map(rows.map(r => [r.day, r]));
+  return calendarSlots(rows[0]!.day, rows[rows.length - 1]!.day, series.bucket).map(day => ({ day, row: by.get(day) ?? null }));
 }
 
 const CAUSE_NAME = Object.fromEntries(BREAK_CAUSES.map(([k, n]) => [k, n])) as Record<string, string>;
