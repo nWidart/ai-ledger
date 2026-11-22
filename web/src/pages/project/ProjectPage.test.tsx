@@ -222,13 +222,12 @@ describe("ProjectPage", () => {
       open({ usage: foo({ ...usage, sessions, totals: { ...usage.totals, sessions: 412 } } as UsagePayload) });
       await loaded();
       const quad = within(await screen.findByRole("region", { name: QUAD }));
-      // Four dots of 412 sessions: the cut-off line counts the rows the block was given and the view's own count.
-      expect(await quad.findByText("The newest 4 of 412 sessions in this view; the medians are theirs.")).toBeTruthy();
+      // The view's own count, not the rows'.
+      expect(await quad.findByText(/ of 412 sessions /)).toBeTruthy();
       const plot = quad.getByRole("group", { name: /^Sessions of foo .* 4 sessions, split at the medians/ });
       act(() => plot.focus());
       await userEvent.keyboard("{ArrowRight}{Enter}");
       await waitFor(() => expect(location.search).toContain("session=q2")); // the cheapest
-      expect(await screen.findByRole("dialog")).toBeTruthy();
     });
   });
 

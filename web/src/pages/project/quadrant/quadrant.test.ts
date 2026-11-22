@@ -151,11 +151,11 @@ describe("sentences", () => {
     expect(readDot(m, 1)).toBe(`#demo-012, started ${t}: at least $1.10, 30 tool calls, 1 commit. Cheap, much done.`);
     expect(readDot(m, at("Ship"))).toBe(`Ship, started ${t}: $5.00, 1 tool call, 1 commit. Costly, little done.`);
     const few = model([row(0, 0, { session_id: "zero0000-x", first_ts: null })]);
-    expect(readDot(few, 0)).toBe("#zero0000, started –: $0.00, no tool call, no commit.");
+    expect(readDot(few, 0)).toBe("#zero0000, started –: $0, no tool call, no commit.");
     expect(tipRows(m, quadrantFit(m, 343, 1), 1)).toEqual({ name: "#demo-012", unpriced: true, quadrant: "Cheap, much done", more: null,
       rows: [["Started", t], ["Est. cost", "at least $1.10"], ["Tool calls", "30"], ["Commits", "1"]] });
-    expect(tipRows(few, quadrantFit(few, 343, 1), 0)).toMatchObject({ unpriced: false, quadrant: null, rows: [["Started", "–"], ["Est. cost", "$0.00"], ["Tool calls", "0"], ["Commits", "0"]] });
-    // A positive cost that rounds to $0.00 is not the zero lane's $0.00; with unpriced requests it is a floor.
+    expect(tipRows(few, quadrantFit(few, 343, 1), 0)).toMatchObject({ unpriced: false, quadrant: null, rows: [["Started", "–"], ["Est. cost", "$0"], ["Tool calls", "0"], ["Commits", "0"]] });
+    // A positive cost that rounds to $0.00 is not the zero lane's $0; with unpriced requests it is a floor.
     const tiny = model([row(0.003, 2, { title: "Tiny" }), row(0.002, 1, { title: "Floor", unpriced: 1 })]), tf = quadrantFit(tiny, 343, 1);
     expect(tiny.dots.map((_, i) => [readDot(tiny, i).split(": ")[1], tipRows(tiny, tf, i).rows[1]![1]])).toEqual([
       ["more than $0, 1 tool call, no commit.", "more than $0"], ["under $0.01, 2 tool calls, no commit.", "<$0.01"]]);

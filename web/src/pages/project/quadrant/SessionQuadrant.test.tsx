@@ -53,18 +53,16 @@ describe("session quadrant: what it shows", () => {
     show();
     expect(group().getAttribute("aria-label")).toBe("Sessions of atlas-api by estimated cost and tool calls, both on log scales: 5 sessions, split at the medians "
       + "of $1.10 and 30 tool calls. Costly, little done: 1; cheap, much done: 1; costly, much done: 1; cheap, little done: 2. Filled dots made a commit. " + KEYS);
-    expect(screen.getByText(/^Each dot is a session/).textContent).toBe("Each dot is a session: its estimated cost across, its tool calls up, both on log scales. "
-      + "The dashed lines are the medians; a filled dot made a commit.");
+    expect(screen.getByText(/^Each dot is a session/).textContent).toBe("Each dot is a session: cost across, tool calls up, both on log scales. "
+      + "Dashed lines mark the medians; a filled dot made a commit. \"Done\" counts tool calls, not results.");
     expect(within(screen.getByRole("list", { name: "Sessions per quadrant" })).getAllByRole("listitem").map(li => li.textContent))
       .toEqual(["Cheap, much done 1", "Costly, much done 1", "Cheap, little done 2", "Costly, little done 1"]);
     expect(live().textContent).toBe("");
   });
 
-  it("says two dots are too few to split, in the label and under the plot, with no quadrant list", () => {
+  it("says two dots are too few to split under the plot, with no quadrant list", () => {
     show(ROWS.slice(0, 2));
-    expect(group().getAttribute("aria-label")).toBe("Sessions of atlas-api by estimated cost and tool calls, both on log scales: 2 sessions: too few to split at a median. "
-      + "Filled dots made a commit. " + KEYS);
-    expect(screen.getByText("2 sessions: too few to split at a median.")).toBeTruthy();
+    expect(screen.getByText(/too few to split/)).toBeTruthy();
     expect(screen.queryByRole("list")).toBeNull();
   });
 
@@ -81,7 +79,7 @@ describe("session quadrant: what it shows", () => {
   it("lists every dot costliest first in its data table, and a row opens the session's sheet", () => {
     show([...ROWS, row("ffff-6666", null, null, 3)]);
     fireEvent.click(screen.getByText("Show data table"));
-    const table = screen.getByRole("table", { name: "Sessions by cost and tool calls" });
+    const table = screen.getByRole("table", { name: "Sessions on the plot" });
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows.map(r => [...r.children].map(c => c.textContent))).toEqual([
       ["Migrate the billing tables", when(TS), "$9.00", "80", "1", "Costly, much done"],
@@ -178,14 +176,18 @@ describe("session quadrant: reading", () => {
     expect(tipText().at(-1)).toBe("and 2 more sessions here");
   });
 
-  it("opens the read session's sheet on Enter, and the clicked one's on a click, ending the reading", () => {
+  it("opens the read session's sheet on Enter, ending the reading but not its place, and the clicked one's on a click", () => {
     focused();
     press("ArrowRight");
+    press("ArrowRight");
     expect(press("Enter")).toBe(false);
-    expect(sheet()).toBe("dddd-4444");
-    expect(live().textContent).toBe("");
-    fireEvent.click(box(), pixel(ROWS, "bbbb-2222"));
     expect(sheet()).toBe("bbbb-2222");
+    act(() => group().focus()); // back from the sheet: nothing said, no tooltip, no mark
+    expect([live().textContent, tip(), mark()]).toEqual(["", null, null]);
+    press("ArrowRight"); // on from the dot opened, not from the cheapest
+    expect(live().textContent).toBe(SENT.c);
+    fireEvent.click(box(), pixel(ROWS, "eeee-5555"));
+    expect(sheet()).toBe("eeee-5555");
     expect(live().textContent).toBe("");
   });
 

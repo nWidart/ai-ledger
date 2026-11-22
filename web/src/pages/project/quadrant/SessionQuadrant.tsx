@@ -14,7 +14,7 @@ import { modified } from "../../../components/keys";
 import { openSessionSheet, sessName } from "../../../components/sheets/session";
 import { Table, type Column, type RowPick } from "../../../components/table/Table";
 import { num, when } from "../../../format";
-import { dollars, dotAt, groupLabel, notes, QUADRANT_LABEL, QUADRANTS, quadrantFit, quadrantModel, readDot, stepDot, tipRows, type Dot, type QuadRow } from "./quadrant";
+import { costText, dotAt, groupLabel, notes, QUADRANT_LABEL, QUADRANTS, quadrantFit, quadrantModel, readDot, stepDot, tipRows, type Dot, type QuadRow } from "./quadrant";
 import { quadrantOption } from "./quadrantOption";
 import "./quadrant.css";
 
@@ -22,7 +22,6 @@ import "./quadrant.css";
  *  say it again. */
 interface Reading { id: string; keyed: boolean; text: string; n: number }
 
-const NAME = "Sessions by cost and tool calls";
 const unpricedChip = <> <span className="chip warn">Unpriced</span></>;
 
 // The data table: one row per dot, costliest first; the session's name is a button, and the row opens its sheet.
@@ -30,7 +29,7 @@ const COLUMNS: Column<Dot>[] = [
   { id: "session", header: "Session", cellProps: () => ({ className: "sess" }), cell: d =>
     <button type="button" className="cellbtn" data-session={d.row.session_id} title={d.row.title || d.row.session_id}>{sessName(d.row)}</button> },
   { id: "started", header: "Started", cell: d => when(d.row.first_ts) },
-  { id: "cost", header: "Est. cost", align: "num", cell: d => <>{dollars(d.cost)}{d.row.unpriced > 0 && unpricedChip}</> },
+  { id: "cost", header: "Est. cost", align: "num", cell: d => <>{costText(d, { bare: true })}{d.row.unpriced > 0 && unpricedChip}</> },
   { id: "calls", header: "Tool calls", align: "num", cell: d => num(d.calls) },
   { id: "commits", header: "Commits", align: "num", cell: d => num(d.row.commits) },
   { id: "quadrant", header: "Quadrant", cell: d => (d.quadrant ? QUADRANT_LABEL[d.quadrant] : null) },
@@ -57,6 +56,8 @@ export function SessionQuadrant({ rows, totalSessions, project, view }: { rows: 
   // back later brings nothing back. A reading a key made is said again when newer figures change its words; the pointer's
   // is not, and its tooltip shows the newer figures.
   const [reading, setReading] = useState<Reading | null>(null);
+  // The session whose sheet a dot opened: the keys go on from it when the focus is back. A new view or reading drops it.
+  const [opened, setOpened] = useState<string | null>(null);
   const [seen, setSeen] = useState(view);
   const i = reading && seen === view ? order.indexOf(reading.id) : -1;
   const at = i >= 0 ? i : null, shown = at != null ? reading : null;
@@ -64,6 +65,7 @@ export function SessionQuadrant({ rows, totalSessions, project, view }: { rows: 
   if (seen !== view) {
     setSeen(view);
     setReading(null);
+    setOpened(null);
   } else if (reading && at == null) setReading(null);
   else if (reading?.keyed && text !== reading.text) setReading({ ...reading, text: text!, n: reading.n + 1 });
 
@@ -71,11 +73,14 @@ export function SessionQuadrant({ rows, totalSessions, project, view }: { rows: 
   const read = (j: number | null, keyed = false) => {
     if (j == null) return setReading(null);
     const id = order[j]!, t = readDot(model, j);
+    setOpened(null);
     setReading(was => ({ id, keyed, text: t, n: (was?.n ?? 0) + 1 }));
   };
-  /** Enter or a click on dot j: the reading ends and the session's sheet opens, which takes the focus and says its name. */
+  /** Enter or a click on dot j: the reading ends and the session's sheet opens, which takes the focus and says its name. The
+   *  place stays: back on the plot, Right and Left go on from dot j, and nothing is said until a key reads. */
   const open = (j: number) => {
     read(null);
+    setOpened(order[j]!);
     openSessionSheet(order[j]!);
   };
 
@@ -119,7 +124,7 @@ export function SessionQuadrant({ rows, totalSessions, project, view }: { rows: 
       ev.preventDefault();
       return open(at);
     }
-    const id = stepDot(order, shown?.id ?? null, ev.key);
+    const id = stepDot(order, shown?.id ?? opened, ev.key);
     if (id == null) return; // Up and Down scroll the page
     ev.preventDefault();
     pointer.current = null;
@@ -145,8 +150,8 @@ export function SessionQuadrant({ rows, totalSessions, project, view }: { rows: 
 
   return (
     <div className="quad">
-      <div className="hint">Each dot is a session: its estimated cost across, its tool calls up, both on log scales. The dashed lines are the medians;
-        a filled dot made a commit.</div>
+      <div className="hint">Each dot is a session: cost across, tool calls up, both on log scales. Dashed lines mark the medians; a filled dot made
+        a commit. &quot;Done&quot; counts tool calls, not results.</div>
       {note.cut && <p className="hint quad-note">{note.cut}</p>}
       <div ref={box} className={hand ? "quad-box hand" : "quad-box"} onKeyDown={onKey} onMouseMove={onMove} onMouseLeave={onLeave} onClick={onClick}
         onBlur={ev => { if (!box.current?.contains(ev.relatedTarget as Node | null)) read(null); }}>
@@ -168,8 +173,8 @@ export function SessionQuadrant({ rows, totalSessions, project, view }: { rows: 
         {QUADRANTS.map(q => <li key={q.id}><b>{q.label}</b> {num(model.counts![q.id])}</li>)}
       </ul>}
       {note.leftOut && <p className="hint quad-note">{note.leftOut}</p>}
-      {/* The graph's text alternative: one row per dot. */}
-      {!note.none &&<ChartTable><Table name={NAME} region="scroll tall" rows={costliest} columns={COLUMNS} rowId={d => d.row.session_id} pick={PICK} /></ChartTable>}
+      {/* The graph's text alternative: one row per dot, under a name of its own (the block's region has the block's). */}
+      {!note.none &&<ChartTable><Table name="Sessions on the plot" region="scroll tall" rows={costliest} columns={COLUMNS} rowId={d => d.row.session_id} pick={PICK} /></ChartTable>}
     </div>
   );
 }

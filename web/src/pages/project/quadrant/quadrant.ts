@@ -4,7 +4,7 @@
 // reading (the dot under a pointer, the dot a key reads) and its sentences.
 import type { SessionRow } from "../../../api";
 import { sessName } from "../../../components/sheets/session";
-import { median, num, plural, usd, when } from "../../../format";
+import { median, num, plural, usd0, when } from "../../../format";
 
 /** The part of a usage session row the graph reads. */
 export type QuadRow = Pick<SessionRow, "session_id" | "title" | "first_ts" | "cost" | "unpriced" | "tool_calls" | "commits">;
@@ -91,9 +91,7 @@ export interface FitName { quadrant: Quadrant; label: string; px: number; py: nu
 export interface QuadrantFit {
   /** The box: width as measured, height 210 + 54 × s, rounded. */
   width: number; height: number;
-  /** The grid's margins in px, for an ECharts grid with outerBoundsMode "none". */
-  grid: { left: number; right: number; top: number; bottom: number };
-  /** The plot's rectangle in the box. */
+  /** The plot's rectangle in the box: the ECharts grid, with outerBoundsMode "none". */
   plot: { x: number; y: number; w: number; h: number };
   x: FitAxis; y: FitAxis;
   /** In the model's order. */
@@ -125,8 +123,7 @@ const frac = (v: number, a: FitAxis) => (Math.log(Math.max(v, a.min)) - Math.log
 
 /** width: the box's width in px; s: the text scale (textScale()). */
 export function quadrantFit(model: QuadrantModel, width: number, s: number): QuadrantFit {
-  const grid = { left: M.left * s, right: M.right * s, top: M.top * s, bottom: M.bottom * s };
-  const plot = { x: grid.left, y: grid.top, w: Math.max(0, width - grid.left - grid.right), h: PLOT_H };
+  const plot = { x: M.left * s, y: M.top * s, w: Math.max(0, width - (M.left + M.right) * s), h: PLOT_H };
   const x = fitAxis(model.x, plot.w, LANE_X * s), y = fitAxis(model.y, plot.h, LANE_Y * s);
   const at = (cost: number, calls: number) => {
     const vx = Math.max(cost, x.min), vy = Math.max(calls, y.min);
@@ -144,7 +141,7 @@ export function quadrantFit(model: QuadrantModel, width: number, s: number): Qua
     }
   }
   return {
-    width, height: Math.round(PLOT_H + (M.top + M.bottom) * s), grid, plot, x, y,
+    width, height: Math.round(PLOT_H + (M.top + M.bottom) * s), plot, x, y,
     dots: model.dots.map(d => ({ ...at(d.cost, d.calls), filled: d.filled })), guides, names,
   };
 }
@@ -178,12 +175,13 @@ export function stepDot(order: readonly string[], at: string | null, key: string
 }
 
 const subCent = (n: number) => n > 0 && n < .005;
-/** A cost as usd() writes it, except a positive cost that rounds to $0.00: "<$0.01", or "under $0.01" in a sentence, so it
- *  does not read as the zero lane's $0.00. */
-export const dollars = (n: number, sentence = false) => (subCent(n) ? (sentence ? "under $0.01" : "<$0.01") : usd(n));
-/** A dot's cost; with unpriced requests it is a floor: "at least $1.10", or "more than $0" under a cent. */
-const costText = (d: Dot, sentence = false) =>
-  !d.row.unpriced ? dollars(d.cost, sentence) : subCent(d.cost) ? "more than $0" : "at least " + usd(d.cost);
+/** A cost as usd0() writes it, "$0" as the zero lane reads, except a positive cost that rounds to $0.00: "<$0.01", or "under
+ *  $0.01" in a sentence. */
+const dollars = (n: number, sentence = false) => (subCent(n) ? (sentence ? "under $0.01" : "<$0.01") : usd0(n));
+/** A dot's cost; with unpriced requests it is a floor: "at least $1.10" ("$1.10" bare, beside an Unpriced chip), or "more
+ *  than $0" under a cent. */
+export const costText = (d: Dot, { sentence = false, bare = false } = {}) =>
+  !d.row.unpriced ? dollars(d.cost, sentence) : subCent(d.cost) ? "more than $0" : (bare ? "" : "at least ") + usd0(d.cost);
 const count = (n: number, one: string) => (n ? plural(n, one) : `no ${one}`);
 /** A median of counts is a whole number or a half; plural() rounds to a whole number, so it would say "23" for 22.5. */
 const calls = (n: number) => `${num(n, n % 1 ? 1 : 0)} ${n === 1 ? "tool call" : "tool calls"}`;
@@ -191,7 +189,7 @@ const calls = (n: number) => `${num(n, n % 1 ? 1 : 0)} ${n === 1 ? "tool call" :
 /** Dot i in one sentence, as the live region says it. */
 export function readDot(model: QuadrantModel, i: number): string {
   const d = model.dots[i]!;
-  return `${sessName(d.row)}, started ${when(d.row.first_ts)}: ${costText(d, true)}, ${count(d.calls, "tool call")}, ${count(d.row.commits, "commit")}.`
+  return `${sessName(d.row)}, started ${when(d.row.first_ts)}: ${costText(d, { sentence: true })}, ${count(d.calls, "tool call")}, ${count(d.row.commits, "commit")}.`
     + (d.quadrant ? ` ${QUADRANT_LABEL[d.quadrant]}.` : "");
 }
 
