@@ -134,18 +134,22 @@ class ReportedCostTest(unittest.TestCase):
         self.assertEqual([t[f"cost_{k}"] for k in metrics.PRICE_KINDS], [None] * 5)
 
     def test_reported_cost_beside_an_estimate_and_an_unpriced_request(self):
-        u = self.usage([("m-unknown", 0.134844), ("m-a", None), ("m-other", None)])
+        # The None model: a Grok turn with no breakdown by model, stored with no model name and the turn's reported cost.
+        u = self.usage([("m-unknown", 0.134844), ("m-a", None), ("m-other", None), (None, 0.05)])
         est = (60 * 1 + 10 * 10) / 1e6
-        self.assertAlmostEqual(u["totals"]["cost"], 0.134844 + est)
+        self.assertAlmostEqual(u["totals"]["cost"], 0.184844 + est)
         self.assertAlmostEqual(u["totals"]["cost_input"], 60 / 1e6)  # the priced request's kinds only
         self.assertEqual([r["model"] for r in u["unpriced"]], ["m-other"])
-        # In the cost flow the reported-only model has its cost and no kinds, and the reported part of each model (its cost
-        # less its kinds) adds up to the view's (the total less its kinds); the unpriced m-other has no row.
+        # In the cost flow the reported-only models have their cost and no kinds, a model with no name a row and a pair of
+        # its own in both grouping sets, and the reported part of each model (its cost less its kinds) adds up to the view's
+        # (the total less its kinds); the unpriced m-other has no row.
         models = {r["model"]: r for r in u["cost_flow"]["models"]}
-        self.assertEqual(set(models), {"m-unknown", "m-a"})
+        self.assertEqual(set(models), {"m-unknown", "m-a", None})
         self.assertEqual({r["model"] for r in u["cost_flow"]["pairs"]}, set(models))
         self.assertAlmostEqual(models["m-unknown"]["cost"], 0.134844, 9)
-        self.assertEqual([models["m-unknown"][f"cost_{k}"] for k in metrics.PRICE_KINDS], [None] * 5)
+        self.assertAlmostEqual(models[None]["cost"], 0.05, 9)
+        for m in ("m-unknown", None):
+            self.assertEqual([models[m][f"cost_{k}"] for k in metrics.PRICE_KINDS], [None] * 5)
         kinds = lambda r: sum(r[f"cost_{k}"] or 0 for k in metrics.PRICE_KINDS)
         self.assertAlmostEqual(sum(r["cost"] - kinds(r) for r in models.values()), u["totals"]["cost"] - kinds(u["totals"]), 9)
 

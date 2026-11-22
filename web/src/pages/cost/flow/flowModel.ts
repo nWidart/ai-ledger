@@ -19,7 +19,8 @@ export interface FlowInput {
 
 export type FlowColumnKey = "project" | "model" | "kind";
 export interface FlowNode {
-  /** p:<project> ("p:" with no project), m:<model>, k:<kind>; Other is the bare letter ("p", "m"), which no name gives. */
+  /** p:<project> ("p:" with no project), m:<model> ("m?" with no model name), k:<kind>; Other is the bare letter ("p",
+   *  "m"). No name gives "m?" or a bare letter. */
   id: string;
   /** The index of its column. */
   column: number;
@@ -61,8 +62,10 @@ const KINDS: { id: string; label: string; of: (m: FlowModel) => number }[] = [
 export const REPORTED = "k:reported";
 /** A model's cost less its kinds under this is float leftovers, not a reported cost (as costDays' guard). */
 const EPS = 1e-9;
-/** A model's name as its node says it. */
-const short = (model: string) => model.replace(/^claude-/, "");
+/** A model's node id before folding: "m?" for a model with no name (Grok stores so a turn with no breakdown by model). */
+const modelKey = (model: string | null) => (model == null ? "m?" : "m:" + model);
+/** A model's name as its node says it, as the unpriced line under the graph names a model with no name. */
+const short = (model: string | null) => (model == null ? "(no model name)" : model.replace(/^claude-/, ""));
 const KIND_COLOR = "var(--text-secondary)";
 const FOLD = { keep: 5, floor: .01 };
 
@@ -91,13 +94,14 @@ export function flowModel(d: FlowInput): FlowGraph {
   const total = pairs.reduce((s, p) => s + p.cost, 0);
   if (!(total > 0)) return none("The priced requests in this view cost $0.00, so there is no cost to follow.");
 
-  // Models: folded on their cost in the view, colored as the daily chart stacked by model colors them.
-  const modelCost = new Map<string, number>();
-  for (const p of pairs) add(modelCost, p.model, p.cost);
+  // Models, by their key: folded on their cost in the view, colored as the daily chart stacked by model colors them. Keys
+  // rank as the raw names do ("m:" before each), a model with no name after the named ones on a tie.
+  const modelCost = new Map<string, number>(), modelName = new Map<string, string | null>();
+  for (const p of pairs) { add(modelCost, modelKey(p.model), p.cost); modelName.set(modelKey(p.model), p.model); }
   const modelColor = new Map(costKinds({ project: d.project, by_project: [], daily_models: [...modelCost].map(([model, cost]) => ({ day: "", model, cost })) }, "model")
     .map(k => [k.k, k.c]));
-  const models = fold([...modelCost].map(([m, value]) => ({ key: m, label: short(m), value })), total);
-  const modelId = new Map<string, string>([...models.kept.map(m => [m.key, "m:" + m.key] as const), ...models.rest.map(m => [m.key, "m"] as const)]);
+  const models = fold([...modelCost].map(([key, value]) => ({ key, label: short(modelName.get(key)!), value })), total);
+  const modelId = new Map<string, string>([...models.kept.map(m => [m.key, m.key] as const), ...models.rest.map(m => [m.key, "m"] as const)]);
 
   const columns: FlowColumn[] = [];
   const bands = new Map<string, FlowBand>(), rows: FlowGraph["rows"] = { pairs: [], kinds: [] };
@@ -120,26 +124,26 @@ export function flowModel(d: FlowInput): FlowGraph {
       ...projects.kept.map(p => ({ id: "p:" + p.key, column: 0, label: p.label, value: p.value, color: color(p.key), ...(p.key ? { project: p.key } : {}) })),
       ...other("p", 0, projects.rest),
     ] });
-    for (const p of pairs) flow(projectId.get(p.project ?? "")!, modelId.get(p.model)!, p.cost);
+    for (const p of pairs) flow(projectId.get(p.project ?? "")!, modelId.get(modelKey(p.model))!, p.cost);
     // The table lists the $0.00 pairs too.
-    rows.pairs = d.cost_flow.pairs.map(p => ({ id: `p|${p.project ?? ""}|${p.model}`, from: p.project || "(no project)", to: short(p.model), value: p.cost }));
+    rows.pairs = d.cost_flow.pairs.map(p => ({ id: `p|${p.project ?? ""}|${modelKey(p.model)}`, from: p.project || "(no project)", to: short(p.model), value: p.cost }));
   }
   const mc = columns.length, kc = mc + 1;
   columns.push({ key: "model", title: TITLE.model, nodes: [
-    ...models.kept.map(m => ({ id: "m:" + m.key, column: mc, label: m.label, value: m.value, color: modelColor.get("m:" + m.key) ?? color("") })),
+    ...models.kept.map(m => ({ id: m.key, column: mc, label: m.label, value: m.value, color: modelColor.get("m:" + m.key) ?? color("") })),
     ...other("m", mc, models.rest),
   ] });
 
   // Kinds: each model's estimated cost per kind, and what is left of its cost, reported with no split by kind.
   const kindCost = new Map<string, number>();
   for (const m of d.cost_flow.models) {
-    const id = modelId.get(m.model);
+    const id = modelId.get(modelKey(m.model));
     if (!id) continue; // no cost in the view: no node, no band
     let est = 0;
     const kind = (k: string, label: string, v: number) => {
       flow(id, k, v);
       add(kindCost, k, v);
-      rows.kinds.push({ id: `m|${m.model}|${k}`, from: short(m.model), to: label, value: v });
+      rows.kinds.push({ id: `${modelKey(m.model)}|${k}`, from: short(m.model), to: label, value: v });
     };
     for (const k of KINDS) { const v = k.of(m); est += v; if (v > 0) kind(k.id, k.label, v); }
     const reported = m.cost - est;

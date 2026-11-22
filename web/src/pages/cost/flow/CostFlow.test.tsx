@@ -12,12 +12,13 @@ import { flowFit, flowLayout, flowModel } from "./flowModel";
 const SPLIT: Record<string, [number, number, number]> = {
   "claude-opus-4-5": [.4, .5, .1], "claude-sonnet-4-5": [.5, .5, 0], "gpt-5.1-codex": [1, 0, 0], "claude-haiku-4-5": [0, 1, 0],
 };
-type Pair = [string | null, string, number];
+type Pair = [string | null, string | null, number];
+/** A model not in SPLIT, or with no name, has its cost reported. */
 function view(pairs: Pair[], over: Partial<CostFlowProps["d"]> = {}): CostFlowProps["d"] {
-  const cost = new Map<string, number>();
+  const cost = new Map<string | null, number>();
   for (const [, m, c] of pairs) cost.set(m, (cost.get(m) ?? 0) + c);
   const models = [...cost].map(([model, c]) => {
-    const [i, o, r] = SPLIT[model]!;
+    const [i, o, r] = SPLIT[model ?? ""] ?? [0, 0, 0];
     return { model, cost: c, cost_input: c * i, cost_output: c * o, cost_cache_read: c * r, cost_cache_5m: 0, cost_cache_1h: 0 };
   });
   const sum = (f: (m: (typeof models)[number]) => number) => models.reduce((s, m) => s + f(m), 0);
@@ -164,6 +165,18 @@ describe("cost flow: what it shows", () => {
     document.documentElement.style.fontSize = "32px";
     show();
     expect(within(screen.getByRole("list", { name: "Model" })).getAllByRole("listitem")[0]!.textContent).toBe("opus-4-5 $100");
+  });
+
+  it("reads a model with no name and lists it in the data table, its cost under Reported", () => {
+    const v = view([...PAIRS, ["atlas-api", null, 20]]);
+    show(v);
+    const n = flowLayout(flowModel(v), flowFit(800, 1, 3))!.columns[1]!.nodes.find(x => x.label === "(no model name)")!;
+    fireEvent.mouseMove(group(), { clientX: n.x + 4, clientY: n.y + n.height / 2 });
+    expect(live()).toBe("Model (no model name): $20, 8.7% of $230. From atlas-api $20. To Reported $20.");
+    expect(tipRows().slice(0, 2)).toEqual(["Model", "(no model name)$20"]);
+    fireEvent.click(screen.getByRole("button", { name: "Show data table" }));
+    const rows = within(screen.getByRole("table", { name: "Estimated cost from project to model to token kind" })).getAllByRole("row");
+    expect(rows.map(r => r.textContent)).toEqual(expect.arrayContaining(["Project to modelatlas-api(no model name)$20.008.7%", "Model to token kind(no model name)Reported$20.008.7%"]));
   });
 
   it("lists every pair of a project folded into Other in the data table, to the cent", () => {

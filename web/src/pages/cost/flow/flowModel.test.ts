@@ -11,12 +11,13 @@ const env = (over: Partial<OptionEnv> = {}): OptionEnv => ({ color: s => s, ink,
 
 /** A model's kinds: input, output, cache read, cache write 5m, cache write 1h; null: none estimated (all reported). */
 type Split = [number, number, number, number, number] | null;
-/** A view of (project, model, cost) pairs. Each model's cost is all input unless `split` names its kinds. */
-function view(pairs: [string | null, string, number][], split: Record<string, Split> = {}, project = ""): FlowInput {
-  const cost = new Map<string, number>();
+/** A view of (project, model, cost) pairs. Each model's cost is all input unless `split` names its kinds; a model with no
+ *  name (null) has its cost reported, as Grok stores a turn with no breakdown by model. */
+function view(pairs: [string | null, string | null, number][], split: Record<string, Split> = {}, project = ""): FlowInput {
+  const cost = new Map<string | null, number>();
   for (const [, m, c] of pairs) cost.set(m, (cost.get(m) ?? 0) + c);
   const models = [...cost].map(([model, c]) => {
-    const k = model in split ? split[model]! : [c, 0, 0, 0, 0];
+    const k = model == null ? null : model in split ? split[model]! : [c, 0, 0, 0, 0];
     return { model, cost: c, cost_input: k?.[0] ?? null, cost_output: k?.[1] ?? null, cost_cache_read: k?.[2] ?? null, cost_cache_5m: k?.[3] ?? null, cost_cache_1h: k?.[4] ?? null };
   });
   const sum = (f: (m: (typeof models)[number]) => number | null) => models.reduce((s, m) => s + (f(m) ?? 0), 0);
@@ -68,6 +69,14 @@ describe("flowModel", () => {
     expect(m.columns[2]!.nodes.map(n => [n.label, n.value])).toEqual([["Output + thinking", 2.2], ["Input", 1.1], ["Cache write", 0.5], ["Reported", 9]]);
     expect(ids(m, 2)).toEqual(["k:output", "k:input", "k:write", "k:reported"]);
     expect(m.bands.filter(b => b.to === "k:reported").map(b => b.from)).toEqual(["m:grok"]);
+  });
+
+  it("names a model with no name apart from every named model and Other, its cost under Reported", () => {
+    const m = flowModel(view([["a", null, 6], ["a", "m", 3]]));
+    expect(m.columns[1]!.nodes.map(n => [n.id, n.label, n.color])).toEqual([["m?", "(no model name)", "var(--series-1)"], ["m:m", "m", "var(--series-2)"]]);
+    expect(m.bands.filter(b => b.from === "m?").map(b => [b.to, b.value])).toEqual([["k:reported", 6]]);
+    expect(m.rows.pairs.find(r => r.value === 6)).toMatchObject({ from: "a", to: "(no model name)" });
+    expect(m.rows.kinds.find(r => r.value === 6)).toMatchObject({ from: "(no model name)", to: "Reported" });
   });
 
   it("adds every column up to the priced cost, and every node's bands in up to its bands out", () => {

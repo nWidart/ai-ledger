@@ -35,12 +35,13 @@ export interface DailyProjectRow { day: Day; project: string | null; cost: numbe
 export interface DailyModelRow { day: Day; model: string; cost: number }
 export interface DailySourceRow { day: Day; source: Source; cost: number }
 /** The cost flow's rows (cost_flow), from the view's priced or reported requests only, so they add up to totals.cost.
- *  A pair: a project (null for sessions with no project) and a model, costliest first. */
-export interface FlowPair { project: string | null; model: string; cost: number }
+ *  A pair: a project (null for sessions with no project) and a model, costliest first. A model is null for Grok's requests
+ *  with no breakdown by model, which carry a reported cost. */
+export interface FlowPair { project: string | null; model: string | null; cost: number }
 /** A model's cost and its estimate split by kind, which add up to the totals' kinds. A kind is null when no request of
  *  the model is estimated; cost less the kinds is the part an agent reported with no split by kind. */
 export interface FlowModel {
-  model: string; cost: number; cost_input: number | null; cost_output: number | null; cost_cache_read: number | null;
+  model: string | null; cost: number; cost_input: number | null; cost_output: number | null; cost_cache_read: number | null;
   cost_cache_5m: number | null; cost_cache_1h: number | null;
 }
 /** Work per day (or per week, named by its Monday, in work): sessions with a request in it, each counted once, prompts,
