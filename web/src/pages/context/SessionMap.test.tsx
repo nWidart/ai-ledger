@@ -6,7 +6,8 @@ import type { SessionPoint } from "../../api";
 import { setOrder } from "../../colors";
 import { useState } from "react";
 import type { Quad } from "./context";
-import { QUAD_LIST_MAX, SessionMap, drawnShare, fitLines, logFraction, startDomain, startTicks } from "./SessionMap";
+import { drawnShare } from "./mapDots";
+import { QUAD_LIST_MAX, SessionMap } from "./SessionMap";
 
 const pt = (id: string, o: Partial<SessionPoint> = {}): SessionPoint =>
   ({ session_id: id, project: "foo", source: "claude", first_ts: "2026-11-04T10:00:00.000Z", start: 10_000, peak: 50_000, window: 200_000, turns: 8, compactions: 0, title: null, ...o });
@@ -26,18 +27,6 @@ function Map({ map, start = null }: { map: Parameters<typeof SessionMap>[0]["map
 }
 
 beforeEach(() => { history.replaceState(null, "", location.pathname); setOrder(["foo", "bar"]); });
-
-describe("log scale", () => {
-  it("gives equal distances to equal ratios", () => {
-    const d = startDomain([1_000, 100_000]);
-    expect(d).toEqual([1_000, 100_000]);
-    expect(logFraction(2_000, d) - logFraction(1_000, d)).toBeCloseTo(logFraction(20_000, d) - logFraction(10_000, d));
-  });
-  it("rounds the domain out, always spanning 30k, and ticks inside it", () => {
-    expect(startDomain([4_000, 8_000])).toEqual([2_000, 50_000]);
-    expect(startTicks([1_000, 20_000])).toEqual([1_000, 2_000, 5_000, 10_000, 20_000]);
-  });
-});
 
 describe("SessionMap", () => {
   it("puts a 60k start peaking at 90% right of the 30k line and above the 80% line", () => {
@@ -143,15 +132,6 @@ describe("SessionMap", () => {
       "Grew full 11 session, a light start and a peak at 80% or more", "Heavy and full 11 session, a heavy start and a peak at 80% or more"]);
     // The visible count is hidden from the name, which says it once with its noun.
     expect(screen.getByRole("button", { name: "Heavy and full 1 session, a heavy start and a peak at 80% or more" })).toBeTruthy();
-  });
-
-  it("wraps a quadrant's name to the room beside the 30k line", () => {
-    expect(fitLines("Grew full", 200, 11)).toEqual({ lines: ["Grew full"], fs: 11 });
-    expect(fitLines("Grew full", 40, 11)).toEqual({ lines: ["Grew", "full"], fs: 11 });
-    expect(fitLines("Heavy and full", 50, 11).lines).toEqual(["Heavy", "and", "full"]);
-    const tight = fitLines("Heavy and full", 30, 11);
-    expect(tight.fs).toBeLessThan(11);
-    expect(tight.fs).toBeGreaterThanOrEqual(11 * .8);
   });
 
   it("lists only the newest 20 sessions of a selected quadrant, and counts the rest", async () => {

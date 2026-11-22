@@ -10,6 +10,7 @@ import { openSessionSheet, sessName, shortId } from "../../components/sheets/ses
 import { Table, type Column, type RowPick } from "../../components/table/Table";
 import { num, plural, when } from "../../format";
 import { Proj, SourceName } from "./cells";
+import { drawnShare, fitLines, logFraction, startDomain, startTicks } from "./mapDots";
 import { NEAR_LIMIT, QUADS, quadAt, quadOf, START_LARGE_TOKENS, share, short, windowLabel, type Quad } from "./context";
 import { SOURCE_LABELS } from "../../components/Filters";
 import { modified } from "../../components/keys";
@@ -20,57 +21,13 @@ const H = 320, M0 = { t: 14, r: 16, b: 46, l: 52 }; // the margins at the defaul
 /** A pointer picks the nearest dot within this many pixels. */
 const PICK_PX = 12;
 const R = 4, RING = 7.5;
-const STEPS = [1, 2, 5, 10];
 /** The most sessions a selected quadrant lists. */
 export const QUAD_LIST_MAX = 20;
-
-/** The round value (1, 2, 5 times a power of ten) at or below v. */
-export function roundDown(v: number): number {
-  const p = 10 ** Math.floor(Math.log10(v));
-  return p * [...STEPS].reverse().find(m => m * p <= v * (1 + 1e-9))!;
-}
-/** The round value at or above v. */
-export function roundUp(v: number): number {
-  const p = 10 ** Math.floor(Math.log10(v));
-  return p * STEPS.find(m => m * p >= v * (1 - 1e-9))!;
-}
-/** The x domain: round values around the starts, always spanning the 30k line. */
-export function startDomain(starts: number[]): [number, number] {
-  const lo = Math.max(1, Math.min(START_LARGE_TOKENS, ...starts)), hi = Math.max(START_LARGE_TOKENS, ...starts);
-  const a = roundDown(lo), b = roundUp(hi);
-  return [a, b > a ? b : a * 10];
-}
-/** Where a start sits on the log axis, 0 at the domain's low end and 1 at its high end. */
-export const logFraction = (v: number, [lo, hi]: [number, number]): number => (Math.log(Math.max(v, lo)) - Math.log(lo)) / (Math.log(hi) - Math.log(lo));
-/** The round ticks (1, 2, 5 times a power of ten) inside the domain. */
-export function startTicks([lo, hi]: [number, number]): number[] {
-  const out: number[] = [];
-  for (let p = 10 ** Math.floor(Math.log10(lo)); p <= hi * (1 + 1e-9); p *= 10)
-    for (const m of [1, 2, 5]) if (m * p >= lo * (1 - 1e-9) && m * p <= hi * (1 + 1e-9)) out.push(m * p);
-  return out;
-}
-/** A point's share of its window as drawn: a peak over the window sits at 100%. */
-export const drawnShare = (p: SessionPoint): number => Math.min(1, p.peak / p.window);
 
 /** A point in one sentence, as the readout says it (the tooltip carries the same fields). */
 export const readPoint = (p: SessionPoint): string =>
   `${sessName(p)}: ${p.project ?? "(no project)"}, ${SOURCE_LABELS[p.source]}, started ${when(p.first_ts)}: starting context ${short(p.start)} tokens, peak ${short(p.peak)} tokens, `
   + `${share(p.peak / p.window)} of a ${windowLabel(p.window)} window, ${plural(p.turns, "turn")}, ${plural(p.compactions, "compaction")}`;
-
-/** A quadrant's name as lines that fit room px at font size fs: one line when it fits, else its words wrapped, at a smaller size
- *  (down to 80%) when even its longest word does not fit. Widths are estimated for the semibold label font. */
-export function fitLines(label: string, room: number, fs: number): { lines: string[]; fs: number } {
-  const w = (s: string, f = fs) => s.length * f * .62;
-  if (w(label) <= room) return { lines: [label], fs };
-  const words = label.split(" "), lines: string[] = [];
-  for (const word of words) {
-    const last = lines.at(-1);
-    if (last != null && w(`${last} ${word}`) <= room) lines[lines.length - 1] = `${last} ${word}`;
-    else lines.push(word);
-  }
-  const longest = Math.max(...lines.map(l => w(l)));
-  return { lines, fs: longest <= room ? fs : Math.max(fs * .8, fs * room / longest) };
-}
 
 const byDate = (a: SessionPoint, b: SessionPoint) => (a.first_ts ?? "").localeCompare(b.first_ts ?? "") || a.session_id.localeCompare(b.session_id);
 const QUAD = Object.fromEntries(QUADS.map(q => [q.id, q])) as Record<Quad, typeof QUADS[number]>;
@@ -167,7 +124,7 @@ export function SessionMap({ map, quad, onQuad }: { map: SessionsMap; quad: Quad
   // Each quadrant's name in its outer corner, wrapped to the room between the plot's edge and the 30k line.
   const x30 = x(START_LARGE_TOKENS);
   const corner = (q: typeof QUADS[number]) => {
-    const { lines, fs } = fitLines(q.label, Math.max(1, (q.heavy ? W - M.r - x30 : x30 - M.l) - 12), 11 * ts), lh = fs * 1.15;
+    const { lines, fs } = fitLines(q.label, Math.max(1, (q.heavy ? W - M.r - x30 : x30 - M.l) - 12), 11 * ts, s => s.length * 11 * ts * .62), lh = fs * 1.15;
     return { x: q.heavy ? W - M.r - 6 : M.l + 6, y: q.full ? M.t + 13 * ts : M.t + ih - 7 * ts - (lines.length - 1) * lh, anchor: q.heavy ? "end" as const : "start" as const, lines, fs, lh };
   };
   const halo = { stroke: "var(--surface-1)", strokeWidth: 3, paintOrder: "stroke" } as const;
