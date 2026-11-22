@@ -407,6 +407,17 @@ def run_rate(cur, project, prices, today, automated=False, source="", user_proje
 
 
 def usage(cur, project="", range_days=0, session="", prices=None, today=None, automated=False, source=""):
+    """The usage payload, every figure read in one transaction: an ingest that commits while it is built changes none of
+    them, so the heading's total, the cost flow, the charts and the tables agree. The transaction only reads: it takes no
+    lock, the ingest's writes go on, and it is rolled back at the end."""
+    cur.execute("BEGIN")
+    try:
+        return usage_payload(cur, project, range_days, session, prices, today, automated, source)
+    finally:
+        cur.execute("ROLLBACK")
+
+
+def usage_payload(cur, project, range_days, session, prices, today, automated, source):
     prices = load_prices() if prices is None else prices
     today = today or local_today(cur)
     # The user automated file, read once so the whole payload leaves out the same projects.

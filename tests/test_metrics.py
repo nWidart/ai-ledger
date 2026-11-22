@@ -160,6 +160,27 @@ class ReportedCostTest(unittest.TestCase):
         self.assertEqual([(r["project"], r["model"], round(r["cost"], 12)) for r in f["pairs"]], [("foo", "m-a", est), (None, "m-a", est)])
         self.assertEqual([(r["model"], round(r["cost"], 12), round(r["cost_input"], 12)) for r in f["models"]], [("m-a", 2 * est, 120 / 1e6)])
 
+    def test_one_snapshot_for_the_whole_payload(self):
+        # An ingest that commits a priced request after the payload's first query changes none of its figures: the daily
+        # chart, the heading's total and the cost flow agree.
+        real, done = metrics.rows, []
+
+        def rows(cur, *a, **k):
+            out = real(cur, *a, **k)
+            if not done:
+                done.append(1)
+                store.insert(cur.cursor(), "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
+                                                        "cache_read", "cache_5m", "cache_1h", "thinking_ms", "reported_cost"],
+                             [("late", "s0", "2026-11-05 09:20:00", "m-a", False, 0, 0, 0, 0, 0, 0, 0, 1.0)])
+            return out
+
+        with mock.patch.object(metrics, "rows", rows):
+            u = self.usage([("m-a", 0.5)])
+        self.assertTrue(done)
+        self.assertAlmostEqual(u["daily"][0]["cost"], 0.5)
+        self.assertAlmostEqual(u["totals"]["cost"], 0.5)
+        self.assertAlmostEqual(sum(r["cost"] for r in u["cost_flow"]["pairs"]), 0.5)
+
     def test_kind_costs_leave_out_a_reported_cost(self):
         # The reported cost wins over the estimate. Rates for its model (a user can add some for a Grok model) give the request
         # no kind costs: the web reads the kinds as the estimated part of cost and the rest as the reported part.
