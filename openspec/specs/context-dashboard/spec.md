@@ -542,6 +542,24 @@ On Overhead and pressure, the page SHALL draw the Project page's window grid as 
 - **WHEN** the user selects project `foo`, which has sessions with a measured start, a known window and a peak
 - **THEN** the page draws `foo`'s full grid, with its legend, and no small grids
 
+### Requirement: Show the overhead list with one project selected
+With a project selected that has a context snapshot, the page SHALL show the Project page's list of what loads before the first prompt: in the project's full grid, or with the snapshot alone when there is no grid to draw, as the Project page does. No small grid SHALL carry the list. Selecting another project SHALL draw that project's list closed.
+
+#### Scenario: One project with a snapshot
+- **WHEN** the user selects project `foo`, which has a context snapshot
+- **THEN** `foo`'s full grid carries the closed list "What loads before your first prompt", as on the Project page, and no small grid has one
+
+#### Scenario: Another project selected
+- **WHEN** the list of `foo` is open and the user selects project `bar`, which has a snapshot
+- **THEN** `bar`'s list is closed
+
+### Requirement: Keep the previous project's overhead list closed and inert
+While the page still shows the previous project's figures, the selected project's payload loading or failed, the overhead list it shows SHALL start closed, and every name in it SHALL be plain text, opening neither a sheet nor a menu.
+
+#### Scenario: Another project still loading
+- **WHEN** the list of `foo` is open and the user selects project `bar`, whose figures are still loading or failed to load
+- **THEN** the list the page still shows is closed, and opened, no server or skill name in it is a button
+
 ### Requirement: Name sessions by their title on the map
 The session map's tooltip, readout and data table, the quadrant lists and the peak-fill lists SHALL name a session by its title, else by its short id. In a table, a titled session's short id SHALL show under its title.
 
