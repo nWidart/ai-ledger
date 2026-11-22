@@ -26,6 +26,12 @@
 //   the models go to the key under the graph, which wraps inside its panel;
 // - no sideways page scroll at 1440px, at a 375px window and at 1280px with 32px text, and the box ends inside its panel;
 // - one project selected: two columns, model and token kind, and the table named for that project;
+// - a model with no name (a Grok turn with no breakdown by model) is drawn as its own node, read as "(no model name)", its
+//   cost in one band to Reported, with no page error;
+// - a cost below zero (a price below zero) shows the sentence in place of the graph, draws nothing, and the data table
+//   lists the signed rows, each step adding up to the heading's total;
+// - in a 343px box the tooltip of a project with a very long name, and of its band, fits inside the box: the name wraps,
+//   each figure stays on one line, and the page does not scroll sideways;
 // - nothing in the drawing animates with motion on, on the first drawing, newer figures or a view change, and under
 //   reduced motion nothing in the section animates on a view change.
 import { H, PHONE, line, sleep, until } from "./harness.mjs";
@@ -166,9 +172,13 @@ const slots = order => {
 };
 const KINDS = [["k:input", "Input", m => m.cost_input ?? 0], ["k:output", "Output + thinking", m => m.cost_output ?? 0],
   ["k:write", "Cache write", m => (m.cost_cache_5m ?? 0) + (m.cost_cache_1h ?? 0)], ["k:read", "Cache read", m => m.cost_cache_read ?? 0]];
-const short = m => m.replace(/^claude-/, "");
+/** A model's node id before folding, "m?" with no name, and its name as said. */
+const mkey = m => (m == null ? "m?" : "m:" + m);
+const short = m => (m == null ? "(no model name)" : m.replace(/^claude-/, ""));
 const ranked = m => [...m].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
 const add = (m, k, v) => m.set(k, (m.get(k) ?? 0) + v);
+/** A band's id: its ends' ids, "\" and "|" escaped, joined by "|". */
+const bandId = (from, to) => [from, to].map(s => s.replace(/[\\|]/g, "\\$&")).join("|");
 
 /** The columns of nodes, top first, each with its id, name, cost, color token and the start of its sentence; the bands. */
 function graph(d) {
@@ -182,29 +192,28 @@ function graph(d) {
     return { kept: on.slice(0, n), rest: on.slice(n) };
   };
   const other = (id, rest, word) => (rest.length > 1 ? [{ id, label: `Other (${rest.length})`, value: rest.reduce((s, r) => s + r[1], 0), token: "--proj-other", head: `Other, ${rest.length} ${word}s:` }] : []);
-  const modelCost = new Map();
-  for (const p of pairs) add(modelCost, p.model, p.cost);
+  // Models by their node id, which ranks ties as the raw names do.
+  const modelCost = new Map(), name = new Map();
+  for (const p of pairs) { add(modelCost, mkey(p.model), p.cost); name.set(mkey(p.model), p.model); }
   const series = new Map(ranked(modelCost).slice(0, 6).map(([m], i) => [m, `--series-${i + 1}`]));
-  const models = fold(modelCost), modelId = new Map([...models.kept.map(([m]) => [m, "m:" + m]), ...models.rest.map(([m]) => [m, "m"])]);
+  const models = fold(modelCost), modelId = new Map([...models.kept.map(([m]) => [m, m]), ...models.rest.map(([m]) => [m, "m"])]);
   const columns = [], bands = new Map();
-  const flow = (from, to, v) => { if (v > 0) { const id = `${from}|${to}`; bands.set(id, { id, from, to, value: (bands.get(id)?.value ?? 0) + v }); } };
+  const flow = (from, to, v) => { if (v > 0) { const id = bandId(from, to); bands.set(id, { id, from, to, value: (bands.get(id)?.value ?? 0) + v }); } };
   if (!d.project) {
     const cost = new Map();
     for (const p of pairs) add(cost, p.project ?? "", p.cost);
     const projects = fold(cost), id = new Map([...projects.kept.map(([p]) => [p, "p:" + p]), ...projects.rest.map(([p]) => [p, "p"])]);
     columns.push({ key: "project", nodes: [...projects.kept.map(([p, value]) => ({ id: "p:" + p, label: p || "(no project)", value, project: p || null,
       token: slot.has(p) ? `--proj-${slot.get(p) + 1}` : "--proj-other", head: `Project ${p || "(no project)"}:` })), ...other("p", projects.rest, "project")] });
-    for (const p of pairs) flow(id.get(p.project ?? ""), modelId.get(p.model), p.cost);
+    for (const p of pairs) flow(id.get(p.project ?? ""), modelId.get(mkey(p.model)), p.cost);
   }
-  columns.push({ key: "model", nodes: [...models.kept.map(([m, value]) => ({ id: "m:" + m, label: short(m), value, token: series.get(m) ?? "--proj-other", head: `Model ${short(m)}:` })),
+  columns.push({ key: "model", nodes: [...models.kept.map(([m, value]) => ({ id: m, label: short(name.get(m)), value, token: series.get(m) ?? "--proj-other", head: `Model ${short(name.get(m))}:` })),
     ...other("m", models.rest, "model")] });
   const kinds = new Map();
   for (const m of d.cost_flow.models) {
-    const id = modelId.get(m.model);
+    const id = modelId.get(mkey(m.model));
     if (!id) continue;
-    let est = 0;
-    for (const [k, , of] of KINDS) { const v = of(m); est += v; if (v > 0) { flow(id, k, v); add(kinds, k, v); } }
-    if (m.cost - est > 1e-9) { flow(id, "k:reported", m.cost - est); add(kinds, "k:reported", m.cost - est); }
+    for (const [k, , of] of [...KINDS, ["k:reported", "Reported", x => x.cost_reported ?? 0]]) { const v = of(m); if (v > 0) { flow(id, k, v); add(kinds, k, v); } }
   }
   const label = new Map([...KINDS.map(([k, l]) => [k, l]), ["k:reported", "Reported"]]);
   columns.push({ key: "kind", nodes: [...ranked([...kinds].filter(([k]) => k !== "k:reported")).sort((a, b) => b[1] - a[1] || (label.get(a[0]) < label.get(b[0]) ? -1 : 1)),
@@ -231,7 +240,8 @@ const withPairs = (d, f) => {
 };
 /** A kind of a few cents in a view of hundreds of dollars: Input is 3 cents, all of it one model's; the rest of the input
  *  cost is reported. */
-const tiny = d => ({ ...d, cost_flow: { ...d.cost_flow, models: d.cost_flow.models.map((m, i) => (m.cost_input == null ? m : { ...m, cost_input: i ? 0 : .03 })) } });
+const tiny = d => ({ ...d, cost_flow: { ...d.cost_flow, models: d.cost_flow.models.map((m, i) => (m.cost_input == null ? m
+  : { ...m, cost_input: i ? 0 : .03, cost_reported: (m.cost_reported ?? 0) + m.cost_input - (i ? 0 : .03) })) } });
 /** The costliest project under a long name. */
 const long = d => {
   const top = d.cost_flow.pairs.reduce((m, p) => add(m, p.project, p.cost), new Map()), first = ranked(top)[0][0];
@@ -258,7 +268,7 @@ function match(dr, g) {
   for (const b of dr.bands) {
     b.src = touch(b.x0, b.y0 + b.h / 2, true);
     const t = touch(b.x1, b.y1 + b.h / 2, false);
-    b.want = b.src?.want && t?.want ? g.bands.find(w => w.id === `${b.src.want.id}|${t.want.id}`) : null;
+    b.want = b.src?.want && t?.want ? g.bands.find(w => w.id === bandId(b.src.want.id, t.want.id)) : null;
   }
   const loose = dr.bands.filter(b => !b.want).length;
   if (loose) bad.push(`${loose} bands drawn join no two nodes of a band of the payload`);
@@ -772,7 +782,91 @@ export async function flow(h) {
     await page.done();
   }
 
-  // 9. Motion: nothing in the drawing animates; under reduced motion nothing in the section does.
+  // 9. A model with no name, a cost below zero, and a long name's tooltip in a 343px box. These pages may draw nothing:
+  // each is ready once the section shows a graph or a sentence, or after 8s, so a page that crashes still gets its line.
+  const show = (name, answer, options = {}) => h.open({ path: PATH, root: ROOT, setup: flowReaders, data: DATA, answer,
+    ready: async page => {
+      await page.waitForFunction(r => document.querySelector(`${r} .echart-plot svg path`) || document.querySelector(`${r} .flow-box > .empty`), ROOT, { timeout: 8000 }).catch(() => {});
+      await page.locator(ROOT).scrollIntoViewIfNeeded({ timeout: 2000 }).catch(() => {});
+    } }, `flow ${name}`, options);
+  /** The costliest project of a payload. */
+  const costliest = d => ranked(d.cost_flow.pairs.reduce((m, p) => add(m, p.project, p.cost), new Map()))[0][0];
+  {
+    // A Grok turn with no breakdown by model: no model name, a third of the view's cost, all of it reported.
+    const unnamed = d => {
+      const cost = d.totals.cost / 3, none = { cost_input: null, cost_output: null, cost_cache_read: null, cost_cache_5m: null, cost_cache_1h: null };
+      return { ...d, totals: { ...d.totals, cost: d.totals.cost + cost }, cost_flow: { pairs: [...d.cost_flow.pairs, { project: costliest(d), model: null, cost }],
+        models: [...d.cost_flow.models, { model: null, cost, ...none, cost_reported: cost }] } };
+    };
+    const page = await show("model with no name", unnamed), payload = unnamed(usage);
+    const m = await matched(page, payload), node = m.nodes.find(n => n.want?.id === "m?"), out = m.bands.filter(b => b.want?.from === "m?");
+    let r = null;
+    if (node) {
+      const p = nodeAt(m, (await drawing(page)).plot, node);
+      await page.mouse.move(p.X, p.Y);
+      r = await until(() => reading(page), x => x.live.startsWith("Model (no model name):") && x.tip);
+    }
+    line("a model with no name: the page draws the payload's graph, the model's own node reads as \"(no model name)\", all its cost in one band to Reported",
+      m.ok && !!node && out.length === 1 && out[0].want.to === "k:reported" && Math.abs(out[0].want.value - node.want.value) < 1e-6 && !!r?.live.includes(" To Reported ") && !!r?.tip?.text.includes("(no model name)"),
+      `${m.bad.join("; ") || `${m.nodes.length} nodes, ${m.bands.length} bands`}; ${node ? `its node $${node.want.value.toFixed(2)}, bands to ${out.map(b => b.want.to).join(", ") || "nothing"}` : "no node of its own"}; ` +
+      `said "${r?.live ?? "nothing"}"`);
+    await page.done();
+  }
+  {
+    // A price below zero: the smallest pair costs −$1.00, its model's input with it.
+    const signed = d => {
+      const last = d.cost_flow.pairs.at(-1), delta = -1 - last.cost;
+      return { ...d, totals: { ...d.totals, cost: d.totals.cost + delta, cost_input: (d.totals.cost_input ?? 0) + delta },
+        cost_flow: { pairs: d.cost_flow.pairs.map(p => (p === last ? { ...p, cost: -1 } : p)),
+          models: d.cost_flow.models.map(m => (m.model === last.model ? { ...m, cost: m.cost + delta, cost_input: (m.cost_input ?? 0) + delta } : m)) } };
+    };
+    const page = await show("cost below zero", signed), total = signed(usage).totals.cost;
+    const s = await ev(page, r => ({ text: document.querySelector(`${r} .flow-box > .empty`)?.textContent ?? "", drawn: !!document.querySelector(`${r} .echart`),
+      heading: document.querySelector("#lede .amt")?.textContent ?? "" }), ROOT);
+    const button = page.locator(`${ROOT} .chart-table button`);
+    if (await button.count()) await button.click();
+    const rows = await ev(page, r => [...document.querySelectorAll(`${r} table tbody tr`)].map(tr => [...tr.cells].map(c => c.textContent)), ROOT);
+    const steps = {};
+    for (const r of rows) steps[r[0]] = (steps[r[0]] ?? 0) + Number(r[3].replace(/[$,]/g, "").replace("−", "-"));
+    const sums = Object.entries(steps), cents = `$${total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    line("a cost below zero: the section says why in place of the graph, draws nothing, and its table lists the signed rows, each step adding up to the heading's total",
+      s.text.startsWith("Some costs in this view are below zero") && s.text.endsWith(`: ${cents} in all.`) && !s.drawn && rows.some(r => r[3] === "−$1.00") && sums.length === 2 &&
+        sums.every(([, v]) => Math.abs(v - total) <= .005 * rows.length) && `$${Math.round(total).toLocaleString("en-US")}` === s.heading,
+      `"${s.text || "no sentence"}"; ${s.drawn ? "a graph drawn" : "no graph"}; ${rows.length} rows, ${rows.filter(r => r[3].startsWith("−")).length} below zero; ` +
+      `${sums.map(([k, v]) => `${k} $${v.toFixed(2)}`).join(", ") || "no table"}; heading ${s.heading}, total ${cents}`);
+    await page.done();
+  }
+  {
+    // A 343px box: the tooltip of the long-named project and of its top band fits the box, the name wraps, each figure a line.
+    const page = await show("long name tooltip", long, { viewport: { width: PHONE, height: 900 } }), payload = long(usage);
+    const m = await matched(page, payload), plot = (await drawing(page)).plot, g = graph(payload);
+    const node = m.cols[0]?.find(n => n.want?.label === LONG), band = m.bands.find(b => b.want && b.want.id === g.out(node?.want.id ?? "")[0]?.id);
+    const tips = [];
+    for (const [what, item] of [["node", node], ["band", band]]) {
+      if (!item) { tips.push({ ok: false, at: `${what}: not drawn` }); continue; }
+      const p = item.x0 == null ? nodeAt(m, plot, item) : await ev(page, i => window.flowfit.spot(i), item.i);
+      if (!p) { tips.push({ ok: false, at: `${what}: no point of its own` }); continue; }
+      await page.mouse.move(p.X, p.Y);
+      await until(() => reading(page), r => r.tip?.text.includes(LONG));
+      const t = await ev(page, r => {
+        const tip = document.querySelector(`${r} .flow-box > .tip`), box = document.querySelector(`${r} .flow-box`).getBoundingClientRect();
+        if (!tip) return null;
+        const lines = e => { const g = document.createRange(); g.selectNodeContents(e); return new Set([...g.getClientRects()].map(x => Math.round(x.top))).size; };
+        const name = [...tip.querySelectorAll(".tname")].find(e => e.textContent === "atlas-api-billing-invoicing-and-reconciliation-service");
+        const figures = [...tip.querySelectorAll(".row > span, .row > b")].filter(e => !e.querySelector(".tname"));
+        const rt = tip.getBoundingClientRect();
+        return { l: rt.left - box.left, r: rt.right - box.left, w: box.width, name: name ? lines(name) : 0, figures: figures.map(e => [e.textContent, lines(e)]), page: document.documentElement.scrollWidth, win: innerWidth };
+      }, ROOT);
+      const ok = !!t && t.l >= -.5 && t.r <= t.w + .5 && t.name > 1 && t.figures.every(([, n]) => n === 1) && t.page <= t.win;
+      tips.push({ ok, at: t ? `${what}: tooltip ${Math.round(t.l)}..${Math.round(t.r)}px of ${Math.round(t.w)}px, the name on ${t.name} lines, ` +
+        `${t.figures.filter(([, n]) => n !== 1).map(([f, n]) => `"${f}" on ${n}`).join(", ") || "each figure on one line"}, page ${t.page}px in ${t.win}px` : `${what}: no tooltip` });
+    }
+    line(`in a ${Math.round(plot?.w ?? 0)}px box the tooltip of a project with a very long name, and of its band, fits inside the box, the name wraps, each figure a line, and the page does not scroll sideways`,
+      tips.every(t => t.ok), tips.map(t => t.at).join("; "));
+    await page.done();
+  }
+
+  // 10. Motion: nothing in the drawing animates; under reduced motion nothing in the section does.
   for (const motion of ["no-preference", "reduce"]) {
     const page = await open(`motion ${motion}`, { options: { reducedMotion: motion }, init: watchDrawing });
     let change = 0;
