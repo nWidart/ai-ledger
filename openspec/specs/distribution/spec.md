@@ -44,7 +44,7 @@ The package SHALL contain the built frontend and the price table, so an installe
 - **THEN** the Cost page prices requests with the price table from that package's version
 
 ### Requirement: Choose the port
-The `serve` command SHALL accept `--port <number>`, default `8765`, and SHALL listen on `127.0.0.1` at that port and answer requests addressed to that port only. When the port is in use, the app SHALL exit with a message naming the port and the `--port` option.
+The `serve` command SHALL accept `--port <number>`, default `8765`, and SHALL listen on `127.0.0.1` at that port and answer requests addressed to that port only, besides the host names `--proxy-host` and `--metrics-host` add. When the port is in use, the app SHALL exit with a message naming the port and the `--port` option.
 
 #### Scenario: Second instance beside a running app
 - **WHEN** the app serves on 8765 and the user runs `ai-ledger --db <copy> --port 8766`
