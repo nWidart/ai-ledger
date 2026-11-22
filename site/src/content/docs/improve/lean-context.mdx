@@ -38,7 +38,7 @@ Find out which of four causes you have. All steps but step 3 are on Context. The
    Then, in **Starting context**, read the project's row in **Starting context by project**. Compare **10th percentile** with **Median**. The 10th percentile approximates the fixed overhead: what every session reads before your first prompt.
    - If the 10th percentile is close to the median, the overhead is the problem. Go to step 3. Rule of thumb: "close" is three quarters of the median or more.
    - If the 10th percentile is far under the median, the first prompts are large (pasted logs, long attached files). Go to [Start a new session for each task](#start-a-new-session-for-each-task).
-3. Split the overhead. Open the project's [Project page](/ai-ledger/pages/project/#open-the-page) and go to **Context**. Select **Measure now**. It runs `claude -p "/context"` in the project's folder: it calls no model, but it starts the project's MCP servers and hooks as a new session does. The grid's legend then lists the overhead by category, such as **Memory files** and **MCP tools**, and **Largest overhead items** names the five largest MCP servers, memory files and skills. Note the largest category and its tokens.
+3. Split the overhead. Open the project's [Project page](/ai-ledger/pages/project/#open-the-page) and go to **Context**. Select **Measure now**. It runs `claude -p "/context"` in the project's folder: it calls no model, but it starts the project's MCP servers and hooks as a new session does. The grid's legend then lists the overhead by category, such as **Memory files** and **MCP tools**, and the disclosure **What loads before your first prompt** ranks the categories by tokens. Open it. Under each category it ranks the MCP servers, memory files, custom agents and skills, and shows how often Claude Code called each server and skill in the view. Note the largest category and its tokens.
    - A Codex project has no **Measure now**: Codex records no `/context`. Use step 4 for its MCP servers, and read its `AGENTS.md` yourself. The same holds for a Grok project: `/context` is a Claude Code command.
 4. Back on Context, read the evidence line **MCP servers called (fewest calls first)** on the tip **Sessions start with a large context**. Set the range to **90d** first. The line lists only the servers that the sessions called. Compare it with the servers you configured:
 
@@ -71,7 +71,7 @@ More than one cause can apply. Fix the largest category first.
 
 ### Trim CLAUDE.md or AGENTS.md
 
-The file to edit is under **Largest overhead items**, **Memory files** (hover a name for its path). Every line of it is read at the start of every session.
+The file to edit is under **Memory files** in **What loads before your first prompt**. The line under each file gives its folder. Every line of it is read at the start of every session.
 
 1. Delete what the agent can read in the repository when it needs it: file listings, copied API documentation, code samples that exist in the code.
 2. Delete the rules that a formatter, a linter or a test already enforces.
@@ -85,7 +85,7 @@ The file to edit is under **Largest overhead items**, **Memory files** (hover a 
 
 4. In Claude Code, move the rules for one directory into a `CLAUDE.md` in that directory. Claude Code loads it only when it works on files there.
 
-If **Skills** or **Custom agents** is the largest category instead, remove the skills, plugins or agents you do not use. **Largest overhead items** names the largest skills.
+If **Skills** or **Custom agents** is the largest category instead, remove the skills, plugins or agents you do not use. Under **Skills**, the list ranks the skills by tokens and says how often Claude Code called each.
 
 Then select **Measure now** again. **Memory files** shows the new size at once.
 
