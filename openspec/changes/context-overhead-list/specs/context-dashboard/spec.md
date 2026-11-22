@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Draw each project's window as a grid
-On Overhead and pressure, the page SHALL draw the Project page's window grid as a small grid for each of the six projects with the most sessions that have a measured start, a known window and a peak. Each grid SHALL draw, and state as shares, the median start, median peak and free space of those same sessions, with its project and window. With a project selected, the page SHALL draw that project's one full grid with its legend instead and, when the project has a context snapshot, the Project page's list of what loads before the first prompt.
+On Overhead and pressure, the page SHALL draw the Project page's window grid as a small grid for each of the six projects with the most sessions that have a measured start, a known window and a peak. Each grid SHALL draw, and state as shares, the median start, median peak and free space of those same sessions, with its project and window. With a project selected, the page SHALL draw that project's one full grid with its legend instead and, when the project has a context snapshot, the Project page's list of what loads before the first prompt. Selecting another project SHALL draw that project's list closed, even while the page still shows the previous project's figures.
 
 #### Scenario: Several projects
 - **WHEN** eight projects have such sessions, and `p0`, with the most, starts at a median 10% of a 200k window and peaks at 40%
@@ -22,3 +22,7 @@ On Overhead and pressure, the page SHALL draw the Project page's window grid as 
 #### Scenario: One project with a snapshot
 - **WHEN** the user selects project `foo`, which has a context snapshot
 - **THEN** `foo`'s full grid carries the closed list "What loads before your first prompt", as on the Project page, and no small grid has one
+
+#### Scenario: Another project selected
+- **WHEN** the list of `foo` is open and the user selects project `bar`, which has a snapshot
+- **THEN** `bar`'s list is closed
