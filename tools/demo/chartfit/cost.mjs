@@ -23,7 +23,10 @@ export async function cost(h) {
   const DAYS = [];
   for (let t = Date.parse(usage.start + "T00:00:00Z"); t <= Date.parse(usage.end + "T00:00:00Z"); t += 864e5) DAYS.push(new Date(t).toISOString().slice(0, 10));
   const label = (day, long = false) => new Date(day + "T00:00:00Z").toLocaleDateString(LOCALE, { month: "short", day: "numeric", timeZone: "UTC", ...(long ? { year: "numeric" } : {}) });
-  /** The view's first n days left out: the view starts later, and has no rows before it. */
+  /** The view's first n days left out: the view starts later, and has no rows before it. The server never sends this for
+   *  range=30, whose 30 days only move on together at midnight; it moves `start` the way an all-time view's first day
+   *  moves when older transcripts are ingested. To the chart the two are one case: its `view` leaves out the first day, so
+   *  either is a redraw of the same view with days joining at its front, through the same `pointKeys` path. */
   const fewer = (d, n) => {
     d.start = DAYS[n];
     for (const k of LISTS) if (Array.isArray(d[k])) d[k] = d[k].filter(r => r.day >= DAYS[n]);

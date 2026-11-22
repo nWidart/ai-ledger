@@ -586,6 +586,8 @@ export async function activity(h) {
     const proven = !!w && was.length > 0 && was[0] === day(DAYS[w.from]) && was.at(-1) === day(DAYS[w.to]);
     await ev(page, () => window.chartfit.listen());
     const redrawn = await fill();
+    // A late sentence would come after the drawing: the band and the tooltip on the bar first, then a while more.
+    await until(() => state(page), s => s.band && Math.abs(c.mid(s.band) - c.mid(s0.band)) <= 1.5 && named(s.tip?.day ?? "") === I);
     await sleep(400);
     const s = await state(page), now = await c.labels(page), all = await c.showAll(page).isVisible(), heard = await said(page);
     const at = c.mid(s.band), bar = (await ev(page, () => window.chartfit.columns())).find(b => Math.abs(b.x - at) <= 1);

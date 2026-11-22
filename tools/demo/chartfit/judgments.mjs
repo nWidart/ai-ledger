@@ -150,9 +150,11 @@ export async function judgments(h) {
     await ev(page, () => window.chartfit.listen());
     await c.watch(page);
     const redrawn = await fill();
+    // A late sentence would come after the drawing: the band and the tooltip on the week first, then a while more.
+    await until(() => state(page), s => s.band && Math.abs(c.mid(s.band) - centre(s.grid, I)) <= 1.5 && named(s.tip?.day ?? "") === I);
     await sleep(400);
     const fs = await c.framed(page), s = await state(page), heard = await ev(page, () => window.__said.filter(t => t !== ""));
-    const at = c.mid(s.band), want = centre(s.grid, I), bar = (await ev(page, () => window.chartfit.columns())).find(b => Math.abs(b.x - at) <= 1), f = c.steady(fs, I);
+    const at = c.mid(s.band), want = centre(s.grid, I), bar = (await ev(page, () => window.chartfit.columns())).find(b => Math.abs(b.x - at) <= 1), f = c.steady(fs, I, { newest: true });
     line(`a new newest week while week ${I + 1} is read: the band, the tooltip and the readout stay on it, at its new place, on every frame, and nothing is said`,
       redrawn && Math.abs(at - want) <= 1.5 && !!bar && named(s.tip?.day ?? "") === I && named(s.readout) === I && c.beside(s, at) && f.ok && !heard.length,
       `${redrawn ? "redrawn" : "NOT REDRAWN"}; band at ${c.px(at)}, want ${c.px(want)}, bar at ${c.px(bar?.x)}; tooltip "${s.tip?.day ?? "none"}", readout "${s.readout.split(":")[0]}"; ${f.at}; said ${JSON.stringify(heard)}`);
