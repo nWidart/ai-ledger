@@ -1,11 +1,18 @@
 // Activity's calendar on /usage?range=30, by the Commits measure, its own checks: the calendar has no band, no x axis and no
-// zoom, so none of checks.mjs' shared blocks fits it. The demo store holds 75 days; /api/calendar is answered with them
-// carried back over the 53 weeks (each day takes the figures of the store's day as many days back, modulo the store's
-// span), so every week has work; one page gets the store's own payload. It checks:
+// zoom, so none of checks.mjs' shared blocks fits it. The demo store holds 75 days, 11 weeks. Every page but one gets
+// /api/calendar carried back over the 53 weeks (each day takes the figures of the store's day as many days back, modulo the
+// store's span, and recording starts 53 weeks back), so every week has work and the calendar shows all the weeks that fit.
+// The page "the store's own payload" gets the server's answer as it is, so the calendar shows 13 weeks. Every line but
+// that page's is on the payload carried back. It checks:
 // - at 1440px, 53 columns; in a 343px box, 26; at a 375px window the page does not scroll sideways, and at 1280px with a
 //   32px root nothing of the calendar reaches past the window (the nav does there: its defect, not the calendar's);
-// - the cells drawn are the readable days: every day of the weeks shown up to today, and with the store's own payload none
-//   before its first recorded day;
+// - the cells drawn are the readable days: every day of the weeks shown up to today;
+// - with the store's own payload: a cell for each day from its first recorded one to today, none before; the hint says "last 13
+//   weeks"; 13 columns laid out, measured from the Mon label (which ends 6px before the first column) to the newest cell,
+//   by the pitch, since the cells drawn cannot show empty columns; the leading columns before the first recorded week hold
+//   no cell; the first cell is in the model's column and row; the block starts at the 30px left margin; the month labels
+//   name only months of the weeks shown; the key says "Recording starts" with the first day; the data table has 13 week
+//   rows; Home reads the first recorded day and End today;
 // - each cell is drawn in its step's key color, in light, in dark and after an OS flip with no reload; each shade has 1.3:1
 //   with the next and the first with the empty cell, by the page's computed colors, in both themes;
 // - forced colors: the steps are CanvasText squares whose sides grow with the step, an empty day is an unfilled square with
@@ -204,6 +211,47 @@ export async function calendar(h) {
     line(`the store's own payload: a cell for each day from the first recorded one, ${dayLong(own.first)}, to today, and none before`,
       days.length === want.length && want.every(k => days.includes(k)) && !days.some(k => k < own.first || k > END),
       `${days.length} cells for ${want.length} days, first ${days.sort()[0]}, last ${days.at(-1)}`);
+    // The weeks of decision 2: from the first recorded day's week to this week, at least 13. The demo store's 11 weeks show 13,
+    // so the leading columns hold no cell, and the cells do not tell how many columns there are: the block's start is read
+    // from the Mon label, which ends 6px before the first column, and its end from the newest cell, which is in the last.
+    const recorded = between(monday(own.first), monday(END)) / 7 + 1, weeks = Math.max(13, recorded);
+    const from = plus(monday(END), -7 * (weeks - 1)), col = Math.floor(between(from, own.first) / 7), row = between(from, own.first) % 7;
+    const { hint, legend, box, texts } = await ev(page, () => ({ hint: document.querySelector("#calendar p.hint")?.textContent ?? "",
+      legend: [...document.querySelectorAll("#calendar .legend .key")].map(e => e.textContent), box: window.cal.box(), texts: window.cal.texts() }));
+    line(`the store's own payload: the hint names the weeks shown, "last ${weeks} weeks"`, hint.includes(`, last ${weeks} weeks.`), `"${hint.split(".")[0]}."`);
+    const mon = texts.find(t => t.text === "Mon"), cell = got.cells[0]?.w ?? NaN, gap = got.pitch - cell;
+    const left = (mon?.r ?? NaN) + 6, newest = Math.max(...got.cells.map(c => c.r));
+    const laid = (newest + gap - left) / got.pitch;
+    line(`the store's own payload (${recorded} weeks recorded): ${weeks} columns laid out, by the box and the pitch`, Math.abs(laid - weeks) < .1,
+      `${laid.toFixed(2)} columns of ${px(got.pitch)} from ${px(left - box.l)} to ${px(newest + gap - box.l)}; ${got.columns} of them drawn`);
+    const early = got.cells.filter(c => c.l < left + col * got.pitch - .5);
+    line(`the store's own payload: the ${col} leading columns, before the first recorded week, hold no cell`, !early.length,
+      early.length ? `${early.length} cells there, first ${early[0].day}` : `none left of ${px(left + col * got.pitch - box.l)}`);
+    const c0 = got.cells.find(c => c.day === own.first);
+    const placedRight = !!c0 && Math.abs(c0.l - (left + col * got.pitch)) <= .5 && Math.abs(c0.t - (mon.t + mon.b) / 2 - row * got.pitch + cell / 2) <= 1;
+    line(`the store's own payload: ${dayLong(own.first)} sits in column ${col + 1} of ${weeks}, row ${row + 1}, as the model gives`, placedRight,
+      c0 ? `cell at ${px(c0.l - box.l)},${px(c0.t - box.t)}, column ${((c0.l - left) / got.pitch + 1).toFixed(2)}` : "no cell");
+    line("the store's own payload: the block starts at the left margin, 30px from the box's left", Math.abs(left - box.l - 30) <= .5, `first column at ${px(left - box.l)}`);
+    const names = new Set(Array.from({ length: weeks }, (_, i) => new Date(at(plus(from, 7 * i))).toLocaleDateString(LOCALE, { month: "short", timeZone: "UTC" })));
+    const months = texts.filter(t => !["Mon", "Wed", "Fri"].includes(t.text)).map(t => t.text);
+    line(`the store's own payload: the month labels name only months of the weeks shown (${[...names].join(", ")})`, months.length > 0 && months.every(n => names.has(n)),
+      months.join(" ") || "no month label");
+    const starts = `Recording starts ${dayLong(own.first)}`;
+    line(`the store's own payload: the key says "${starts}"`, legend.includes(starts), legend.join(" | "));
+    await page.locator(`${ROOT} .chart-table button`).click();
+    const weekRows = await until(() => ev(page, () => document.querySelectorAll("#calendar .chart-table tbody tr").length), n => n > 0);
+    line(`the store's own payload: the data table has ${weeks} week rows`, weekRows === weeks, `${weekRows} rows`);
+    await page.locator(`${ROOT} .chart-table button`).click();
+    await away(page);
+    await page.locator(BOX).focus();
+    const keyed = [];
+    for (const [key, k] of [["Home", own.first], ["End", END]]) {
+      await page.keyboard.press(key);
+      const r = await until(() => reading(page), r => r.tip?.day === dayName(k) && ringOn(r.ring, cellOf(got, k)));
+      keyed.push({ key, k, ok: r.tip?.day === dayName(k) && ringOn(r.ring, cellOf(got, k)), tip: r.tip?.day ?? "none" });
+    }
+    line(`the store's own payload: Home reads the first recorded day, ${dayLong(own.first)}, and End today`, keyed.every(x => x.ok),
+      keyed.map(x => `${x.key}: "${x.tip}"`).join(", "));
     await page.done();
   }
   for (const [what, width] of [["a 375px window", 375], ["a 1280px window at 32px text", 1280]]) {
