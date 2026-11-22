@@ -18,7 +18,10 @@
 // - the corner names: each drawn one inside its quadrant, its 3px surface halo painted under its fill (paint-order), and the
 //   list under the plot names all four with counts adding up to the dots;
 // - the guides, the corner names and the list are gone with one or two sessions, and the "too few" line says so; the "newest
-//   300 of N" line with more sessions in the totals than rows; sessions with no known cost left out and counted;
+//   300 of N" line with more sessions in the totals than rows; sessions with no known cost left out and counted; with the
+//   newest all unpriced and more in the totals, the block names the sample and the "newest" line no median; three sessions
+//   at 0 tool calls: no corner name across a guide, all four in the list; a session at $1e-126: no page error, every dot
+//   inside the plot, the cost axis in powers of ten, its tooltip "<$0.01";
 // - Right, Left, Home and End read the dots cheapest to costliest; at each one the tooltip shows, beside the dot and inside
 //   the box, and names its session (by title where the store has one), the mark sits on the drawn dot within 1px and the
 //   live region names it; Up and Down leave the reading alone and are the page's;
@@ -646,6 +649,60 @@ export async function quadrant(h) {
       dr.dots.length === rows.length && notes.includes(cut) && notes.includes(out), `${dr.dots.length} dots; notes ${JSON.stringify(notes)}`);
     placedLine(dr, rows, "with 2 sessions left out");
     await page.done();
+  }
+  {
+    // Every session of the newest unpriced, more in the totals: an older one may have a cost, so the block names the sample.
+    const answer = d => { edit(d, d.sessions.map(x => x.session_id), x => ({ ...x, cost: null })); d.totals = { ...d.totals, sessions: 412 }; return d; };
+    const page = await open("cut, none priced", { answer });
+    const n = base.sessions.length;
+    const got = await ev(page, () => ({ none: document.querySelector("#quadrant .quad-box .empty")?.textContent ?? null, notes: window.quad.notes() }));
+    const none = `No session in the newest ${n} has a known cost, so none can be placed.`, cut = `The newest ${n} of 412 sessions in this view.`;
+    line(`412 sessions in the totals, the newest ${n} all with no known cost: the block says none of the newest ${n} has one, and the "newest" line names no median`,
+      got.none === none && got.notes.includes(cut), `"${got.none}"; notes ${JSON.stringify(got.notes)}`);
+    await page.done();
+  }
+  {
+    // Three sessions with no tool call: the median of tool calls lies on the plot's bottom edge, and the lower quadrants
+    // have no height. No name may sit on the other side of a guide from its quadrant.
+    const keep = ROWS.slice(0, 3).map(x => x.session_id);
+    const answer = d => { d.sessions = d.sessions.filter(x => keep.includes(x.session_id)).map(x => ({ ...x, tool_calls: 0 })); d.totals = { ...d.totals, sessions: 3 }; return d; };
+    const page = await open("3 sessions at 0 tool calls", { answer });
+    const dr = await drawing(page), list = await ev(page, () => window.quad.list());
+    const g = { x: dr.guides.find(x => x.w < 1)?.x, y: dr.guides.find(x => x.h < 1)?.y }, named = dr.texts.filter(t => t.halo);
+    const wrong = named.filter(t => {
+      const left = t.text.startsWith("Cheap"), top = t.text.endsWith("much done");
+      return !((left ? t.r <= g.x + 1 : t.l >= g.x - 1) && (top ? t.b <= g.y + 1 : t.t >= g.y - 1));
+    });
+    const four = ["Cheap, much done", "Costly, much done", "Cheap, little done", "Costly, little done"].every((q, i) => list[i]?.startsWith(q));
+    line(`3 sessions at 0 tool calls in a ${px(dr.box.w)}px box: no corner name drawn across a guide, the list under the plot names all four`,
+      g.x != null && g.y != null && named.length > 0 && !wrong.length && list.length === 4 && four,
+      `${named.length} drawn: ${named.map(t => `"${t.text}" ${px(t.t)}..${px(t.b)}`).join(", ")}; the tool-call guide at ${px(g.y ?? NaN)}${wrong.length ? `; across a guide: ${wrong.map(t => t.text).join(", ")}` : ""}; list ${list.join("; ")}`);
+    await page.done();
+  }
+  {
+    // A custom price list takes any finite rate: a session at about $1e-126 is a dot, its tick in powers of ten.
+    const T = ROWS[0];
+    const answer = d => edit(d, [T.session_id], x => ({ ...x, cost: 1e-126, unpriced: 0 }));
+    const rows = dotsOf(answer(structuredClone(base))), k = rows.findIndex(x => x.session_id === T.session_id);
+    // A page the cost breaks may never draw: its line says so, and the run goes on.
+    let page;
+    try { page = await open("a tiny cost", { answer }); } catch (e) {
+      line("a session at $1e-126: the plot is drawn", false, String(e.message).split("\n")[0]);
+    }
+    if (page) {
+      const dr = await drawing(page);
+      const xs = dr.frame ? dr.texts.filter(t => !t.halo && !/log scale/.test(t.text) && t.ay > dr.frame.b + 1) : [];
+      await plot(page).focus();
+      await page.keyboard.press("Home");
+      for (let i = 0; i < k; i++) await page.keyboard.press("ArrowRight");
+      const tip = await until(() => ev(page, () => document.querySelector("#quadrant .quad-box .tip")?.textContent ?? ""), t => t.includes("Est. cost"));
+      const inside = dr.frame ? dr.dots.filter(d => d.x >= dr.frame.l - 1 && d.x <= dr.frame.r + 1 && d.y >= dr.frame.t - 1 && d.y <= dr.frame.b + 1).length : 0;
+      line(`a session at $1e-126: no page error, ${rows.length} dots drawn inside the plot, the cost axis in powers of ten, and its tooltip shows "<$0.01"`,
+        !page.errors.length && dr.dots.length === rows.length && inside === rows.length && xs.some(t => /^\$\de-\d+$/.test(t.text)) && xs.every(t => /^\$/.test(t.text))
+          && tip.includes(nameOf(T)) && tip.includes("Est. cost<$0.01"),
+        `${page.errors.join("; ") || "no page error"}; ${inside} of ${dr.dots.length} dots inside; cost ${xs.map(t => t.text).join(" ")}; tooltip "${tip.slice(0, 80)}"`);
+      await page.done();
+    }
   }
 
   // ---------- colors: light, dark, an OS flip with no reload ----------
