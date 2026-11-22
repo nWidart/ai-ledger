@@ -24,7 +24,7 @@
 // - a type from the legend: the other layers dim, the line takes the type's color and title, the zoom stays; a type
 //   closed by Back keeps the reading;
 // - forced colors with a day selected: a Highlight frame with no tint, a Highlight band with no frame, the line, dots and
-//   fix markers CanvasText, an idle band dashed with no fill, a dimmed segment keeps its edge;
+//   fix markers CanvasText, an idle band dashed with no fill, every stroke a system color, a dimmed segment keeps its edge;
 // - the box: the svg as tall as the box at 320px, 348px and at 32px text, the pointer reading the bar it is over; both
 //   tracks keep their height at 32px; the titles inside the plot, cut with "…" when wider at 343px and 32px; the value
 //   labels fit 52px with six-digit counts and two-decimal rates; the focus ring on the chart and on the message's box;
@@ -196,6 +196,18 @@ function errReaders() {
       return g ? top().filter(e => e.tagName === "path" && fill(e) !== "none" && at(e, "fill-opacity") === "0.2" && rect(e).b <= g.b + 1 && rect(e).w > 3)
         .map(e => ({ fill: tri(fill(e)), stroke: stroked(e) ? tri(at(e, "stroke")) : "none", so: Number(at(e, "stroke-opacity") ?? 1), sw: Number(at(e, "stroke-width") ?? 0) })) : [];
     },
+    /** Every visible stroke the chart draws, the slider's and the texts' halos included, by its color: how many, and one
+     *  such mark's tag, place and size. */
+    strokes() {
+      const s = svg(), box = s?.getBoundingClientRect(), out = {};
+      for (const e of s ? s.querySelectorAll("path, text") : []) {
+        if (e.closest("clipPath, defs") || !stroked(e) || at(e, "stroke") === "transparent" || at(e, "stroke-opacity") === "0") continue;
+        const k = tri(at(e, "stroke")), r = rect(e);
+        out[k] ??= { n: 0, e: `${e.tagName} at ${Math.round(r.l - box.left)},${Math.round(r.t - box.top)} ${Math.round(r.w)}x${Math.round(r.h)}` };
+        out[k].n++;
+      }
+      return out;
+    },
     /** A text's width in the font of the chart's texts at a size, as the canvas measures it. */
     measure(text, size) {
       const t = svg()?.querySelector("text");
@@ -323,6 +335,13 @@ export async function errors(h) {
       got.idle.map(x => `fill ${x.fill}, stroke rgb(${x.stroke}) dashed ${x.dash}, ${Math.round(x.w)}px wide`).join("; ") || "no idle band");
     const key = await ev(page, () => { const e = document.querySelector(".chart-card #legend .sw.low"); const s = e && getComputedStyle(e); return s ? { ring: window.chartfit.tri(s.borderTopColor), bg: window.chartfit.tri(s.backgroundColor) } : null; });
     line(`forced colors: the "Under 50 calls" key is a CanvasText ring on Canvas`, key?.ring === ct && key.bg === cv, key ? `ring rgb(${key.ring}) on rgb(${key.bg})` : "no key");
+    // Every stroke in a system color the chart uses: CanvasText, GrayText (grid lines, the idle frame; Chromium's emulated
+    // palette makes it a dark red, rgb(96,0,0)), Highlight and Canvas (the fix labels' halo).
+    const sys = { CanvasText: ct, GrayText: await probe(page, "GrayText"), Highlight: hl, Canvas: cv };
+    const sysName = Object.fromEntries(Object.entries(sys).map(([k, v]) => [v, k]));
+    const strokes = await ev(page, () => window.errfit.strokes()), odd = Object.keys(strokes).filter(k => !sysName[k]);
+    line("forced colors: every stroke in the chart is CanvasText, GrayText, Highlight or Canvas", Object.keys(strokes).length > 0 && !odd.length,
+      Object.entries(strokes).map(([k, x]) => `${sysName[k] ?? `NOT A SYSTEM COLOR rgb(${k})`} ${x.n}x, e.g. ${x.e}`).join("; "));
     await c.shot(page, "forced-colors-selected");
     // A type selected: its segments dimmed keep their edge.
     await page.locator("#legend button").nth(1).click();
