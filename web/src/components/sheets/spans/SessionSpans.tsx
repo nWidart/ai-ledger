@@ -139,7 +139,6 @@ export function SessionSpans({ s }: { s: SessionDetail }) {
       if (!shown) return; // with nothing read, the sheet's: it closes
       // The reading ends, and the sheet stays open: a prevented Escape is no close request for the dialog.
       ev.preventDefault();
-      ev.stopPropagation();
       return read(null);
     }
     if (ev.key === "Enter") {
@@ -155,17 +154,20 @@ export function SessionSpans({ s }: { s: SessionDetail }) {
   };
 
   // Escape ends a reading wherever the focus is in the sheet: the pointer can open one while the focus is elsewhere. A key
-  // from inside the box is the box's own. Capturing, as the wrapper's: a control that stops Escape would keep it from a
-  // listener on the way up. The key is the reading's: prevented, so the sheet's dialog stays open, and stopped. Attached
-  // as the tooltip is drawn, before the paint: an Escape pressed as it shows must find the listener.
+  // from inside the box is the box's own; one from outside the sheet's dialog (a control over it, the command palette) is
+  // not the reading's, nor one that ends an input method's composition. Capturing, as the wrapper's: a control that stops
+  // Escape would keep it from a listener on the way up. The key goes on to that control, prevented, so the sheet's dialog
+  // stays open. Outside a dialog the document is the scope. Attached as the tooltip is drawn, before the paint: an Escape
+  // pressed as it shows must find the listener.
   const reads = shown != null;
   const end = useEffectEvent(() => read(null));
   useLayoutEffect(() => {
     if (!reads) return;
     const escape = (ev: globalThis.KeyboardEvent) => {
-      if (ev.key !== "Escape" || modified(ev) || box.current?.contains(ev.target as Node)) return;
+      if (ev.key !== "Escape" || ev.isComposing || modified(ev)) return;
+      const t = ev.target as Node, sheet = box.current?.closest("dialog") ?? document;
+      if (box.current?.contains(t) || !sheet.contains(t)) return;
       ev.preventDefault();
-      ev.stopPropagation();
       end();
     };
     document.addEventListener("keydown", escape, true);

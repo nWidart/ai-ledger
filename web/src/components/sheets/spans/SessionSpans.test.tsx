@@ -173,10 +173,13 @@ describe("tool calls by thread: reading", () => {
   });
 
   it("ends a reading on Escape and keeps the key from the sheet; with nothing read, leaves Escape to the sheet", () => {
-    // The Escape keys that reach the document on their way up, as the sheet's dialog would see them.
-    const sheet = vi.fn<(ev: KeyboardEvent) => boolean>(ev => ev.key === "Escape");
+    // The Escape keys the sheet's dialog would close on: a prevented one is no cancel.
+    const sheet = vi.fn<(ev: KeyboardEvent) => boolean>(ev => ev.key === "Escape" && !ev.defaultPrevented);
     const escapes = () => sheet.mock.results.filter(r => r.value).length;
     document.addEventListener("keydown", sheet);
+    // A control over the sheet (the command palette, a popover) that the focus is in.
+    const other = document.body.appendChild(document.createElement("button")), own = vi.fn();
+    other.addEventListener("keydown", own);
     try {
       focused();
       press("ArrowRight");
@@ -190,8 +193,15 @@ describe("tool calls by thread: reading", () => {
       expect([live().textContent, tip(), mark(), escapes()]).toEqual(["", null, null, 1]);
       expect(fireEvent.keyDown(document.body, { key: "Escape" })).toBe(true);
       expect(escapes()).toBe(2);
+      // The key goes on to the control the focus is in; an Escape that ends a composition is the input method's.
+      fireEvent.mouseMove(box(), pixel("m2"));
+      expect(fireEvent.keyDown(document.body, { key: "Escape", isComposing: true })).toBe(true);
+      expect(live().textContent).toBe(said("m2"));
+      fireEvent.keyDown(other, { key: "Escape" });
+      expect([own.mock.calls.length, live().textContent]).toEqual([1, ""]);
     } finally {
       document.removeEventListener("keydown", sheet);
+      other.remove();
     }
   });
 
