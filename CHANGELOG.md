@@ -5,6 +5,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Errors' rate chart zooms in views of 14 points or more, with a slider or the plus and minus keys.
+
 ### Changed
 
 - Live is easier to read:
@@ -15,11 +19,16 @@ and versions follow [Semantic Versioning](https://semver.org/).
   - Follow turns back on when you scroll the stream to the bottom.
   - The Full text warning closes itself after 6 seconds, and waits while you hover or focus it.
   - With Full text on, prompts and replies render as Markdown. Raw HTML shows as text, links open in a new tab, and images show as links and are never loaded.
+- Errors:
+  - The rate chart uses the shared chart component. It frames the selected day or week and keeps the reading on it, so the same key clears it, keeps the point you are reading when new data lands, and keeps both panels' height at larger text sizes.
+  - The rate chart announces what a selection did from its own live region, and the sentence stays when the pointer leaves the chart.
+  - The rate chart draws its fix labels inside the plot, one under the other on a shared day. With many fixes on one day, labels that do not fit inside the chart are left out; every fix keeps its dashed line.
 - `/api/live/session` no longer returns `limits` or `cwd`, and `/api/live` no longer returns `latest`, each session's newest call.
 
 ### Fixed
 
 - Stacked bars on Cost, Activity, Judgments and Errors are never drawn taller than a bar with a larger total: a day with a few errors in several types no longer looks larger than a day with more in one.
+- Errors' rate axis no longer repeats a label at a 0.05 step: it reads "0.00%", "0.05%", "0.10%".
 - Hovering a "?" no longer moves the text around it.
 - An open Live page no longer keeps the app busy on several CPU cores while many sessions run. The app keeps what it read of each transcript line, and reads only new lines on each refresh.
 
@@ -33,20 +42,6 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - The wheel scrolls the page again with the pointer over the tabs on Context and Activity. The tab strip scrolled a pixel up and down and held the wheel.
-### Added
-
-- Errors' rate chart zooms in views of 14 points or more, with a slider or the plus and minus keys.
-
-### Changed
-
-- Errors:
-  - The rate chart uses the shared chart component. It frames the selected day or week and keeps the reading on it, so the same key clears it, keeps the point you are reading when new data lands, and keeps both panels' height at larger text sizes.
-  - The rate chart announces what a selection did from its own live region, and the sentence stays when the pointer leaves the chart.
-  - The rate chart draws its fix labels inside the plot, one under the other on a shared day.
-
-### Fixed
-
-- Errors' rate axis no longer repeats a label at a 0.05 step: it reads "0.00%", "0.05%", "0.10%".
 
 ## [0.5.0] - 2026-11-21
 

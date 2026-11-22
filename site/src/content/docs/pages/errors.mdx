@@ -74,7 +74,7 @@ On a narrow screen the vitals show two to a row. Every line and vital shows at e
 **Figures**
 
 - **Legend**: the five types with the most errors, each with its count, then **Other types**. The legend also names the rate line, **Under 50 calls** (a bucket with too few calls for a steady rate: a hollow dot, left out of the rate scale) and **No activity** (a band over buckets with no tool call; a stretch of 8 or more buckets with no call folds into a break marked `//`).
-- **Fix markers**: a dashed green line at the day a fix was marked, labelled with the type. The label sits right of the line, left of it near the right edge, and is left out when neither side has room. Fixes on one day stack their labels one under the other.
+- **Fix markers**: a dashed green line at the day a fix was marked, labelled with the type. The label sits right of the line, left of it near the right edge, and is left out when neither side has room, or when many fixes share a day and its row would not fit inside the chart; every fix keeps its dashed line. Fixes on one day stack their labels one under the other.
 - **Size**: the box is 320px tall at the default text size, 28px more with the zoom slider. At a larger browser text size the box grows and both panels keep their height.
 - **Reading**: a failed call counts on the day it started and its error on the day it ended, so a bucket can have errors and no calls; the reading says that no tool call started in it.
 
