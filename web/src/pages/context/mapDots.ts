@@ -121,9 +121,12 @@ export function mapFit(model: MapModel, width: number, textScale: number, measur
   const x = (v: number) => plot.x + logFraction(v, model.domain) * plot.width;
   const y = (share: number) => bottom - Math.min(1, share) * plot.height;
   const x30 = x(START_LARGE_TOKENS), y80 = y(NEAR_LIMIT);
-  // Each name in its outer corner, wrapped to the room between the plot's edge and the 30k line.
+  // Each name in its outer corner, wrapped to the room between the plot's edge and the 30k line. A name taller than its
+  // quadrant would cross the 80% line: it is left out, as one too wide is.
   const names = Object.fromEntries(QUADS.map(q => {
-    const { lines, fs } = fitLines(q.label, Math.max(1, (q.heavy ? right - x30 : x30 - plot.x) - 12), LABEL * s, t => measure(t, 600));
+    const fitted = fitLines(q.label, Math.max(1, (q.heavy ? right - x30 : x30 - plot.x) - 12), LABEL * s, t => measure(t, 600));
+    const tall = fitted.lines.length * fitted.fs * 1.15 > (q.full ? y80 - plot.y : bottom - y80) - 4 * s;
+    const { lines, fs } = tall ? { lines: [], fs: fitted.fs } : fitted;
     const place: NamePlace = {
       lines, size: fs, lineHeight: fs * 1.15,
       x: q.heavy ? right - 6 : plot.x + 6, align: q.heavy ? "right" : "left",

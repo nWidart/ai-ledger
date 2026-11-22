@@ -77,6 +77,8 @@ describe("mapFit", () => {
     const f = fit(points, 800, 1, t => t.length * 30); // the room right of the 30k line is 371px
     expect(f.names.both).toMatchObject({ lines: ["Heavy and", "full"], size: 11, align: "right", x: 784 - 6 });
     expect(f.names.lean).toMatchObject({ lines: ["Lean"], align: "left", x: 52 + 6, verticalAlign: "bottom" });
+    // At twice the text its two lines are 50.6px, and the quadrant over the 80% line 44px under the name's inset.
+    expect(fit(points, 800, 2, t => t.length * 30).names.both.lines).toEqual([]);
     const wide = [pt("a", { start: 20_000 }), pt("b", { start: 200_000 })];
     const w = fit(wide), n = fit(wide, 343);
     expect(w.nearLabel).toMatchObject({ x: w.x30 - 4, align: "right" });
