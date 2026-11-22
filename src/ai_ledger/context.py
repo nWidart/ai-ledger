@@ -1,11 +1,11 @@
 """The Context page's payload: how much context sessions start with, how it grows, what fills it, what that costs, and the
-tips the figures give. Everything comes from the derived tables and the price table, through metrics.view as the other pages
-do. Token figures from tool result sizes are estimates (bytes / BYTES_PER_TOKEN)."""
+tips the figures give, and the project's configuration overhead from its latest /context snapshot. Everything comes from the
+derived tables and the price table, through metrics.view as the other pages do, in one read transaction. Token figures from tool result sizes are estimates (bytes / BYTES_PER_TOKEN)."""
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Callable
 
-from . import metrics, titles
+from . import metrics, store, titles
 from .categorize import SHELL_TOOLS
 
 START_MIN_TOKENS = 2000  # a main-thread request with fewer prompt tokens is a side request, not a turn: it did not carry the context
@@ -603,15 +603,26 @@ def tips(ctx):
 
 # ---------- configuration overhead ----------
 
-def overhead(cur, project, source=""):
+OVERHEAD_ITEMS = ("mcp_tool", "memory_file", "agent", "skill")  # the part kinds overhead lists one by one; categories aside
+
+
+def overhead(cur, project, source, W, fp, start):
     """The project's latest /context snapshot (context_snapshots, by ts then uuid), whatever the range: overhead is the
     configuration's, not a session's. None without a project, for a view of another source than Claude Code (only Claude
-    Code records /context) or without a snapshot. categories keep the order /context lists them; top holds the OVERHEAD_TOP
-    largest MCP servers (their tools summed), memory files and skills."""
+    Code records /context) or without a snapshot. W, fp and start are the view's (metrics.view).
+
+    before_view: the snapshot was taken before the view's first day (false for all time or with no ts). categories keep
+    the order /context lists them. items: every part of an OVERHEAD_ITEMS kind, largest first, then by name (no name last),
+    then by seq, the part's ordinal and the item's identity; a NULL name or detail is kept, a negative token count reads 0.
+    An MCP tool's server is the key its calls are stored under (store.mcp_server_of its name, else its detail); None for
+    the other kinds. calls: Claude Code's calls in the view (main thread and subagents) of the snapshot's servers (mcp:
+    server, calls) and skills (skill: name, calls), sorted by key, only those called; lists, so any name is just a row.
+    top holds the OVERHEAD_TOP largest MCP servers (their tools summed), memory files and skills."""
     if not project or source not in ("", "claude"):
         return None
-    snap = metrics.rows(cur, """SELECT uuid, ts, session_id, model, version, context_window AS window FROM context_snapshots
-        WHERE project = ? ORDER BY ts DESC NULLS LAST, uuid DESC LIMIT 1""", [project])
+    snap = metrics.rows(cur, f"""SELECT uuid, ts, session_id, model, version, context_window AS window,
+        coalesce(ts < {metrics.day_start('CAST(? AS DATE)')}, false) AS before_view FROM context_snapshots
+        WHERE project = ? ORDER BY ts DESC NULLS LAST, uuid DESC LIMIT 1""", [start, project])
     if not snap:
         return None
     snap = snap[0]
@@ -619,14 +630,52 @@ def overhead(cur, project, source=""):
     snap["ts"] = metrics.iso(snap["ts"])
     snap["categories"] = metrics.rows(cur, """SELECT name, coalesce(tokens, 0) AS tokens, state FROM context_parts
         WHERE uuid = ? AND kind = 'category' AND name IS NOT NULL ORDER BY seq""", [uuid])
+    items = metrics.rows(cur, f"""SELECT seq, kind, name, detail, greatest(coalesce(tokens, 0), 0) AS tokens FROM context_parts
+        WHERE uuid = ? AND kind IN ({",".join("?" * len(OVERHEAD_ITEMS))}) ORDER BY tokens DESC, name NULLS LAST, seq""",
+                         [uuid, *OVERHEAD_ITEMS])
+    for x in items:
+        x["server"] = (store.mcp_server_of(x["name"]) or x["detail"]) if x["kind"] == "mcp_tool" else None
+    snap["items"] = [{k: x[k] for k in ("seq", "kind", "name", "detail", "server", "tokens")} for x in items]
+    snap["calls"] = overhead_calls(cur, items, W, fp)
     top = lambda kind, name: metrics.rows(cur, f"""SELECT {name} AS name, sum(coalesce(tokens, 0)) AS tokens FROM context_parts
         WHERE uuid = ? AND kind = ? AND {name} IS NOT NULL GROUP BY 1 ORDER BY tokens DESC, name LIMIT {OVERHEAD_TOP}""", [uuid, kind])
     snap["top"] = dict(mcp_servers=top("mcp_tool", "detail"), memory_files=top("memory_file", "name"), skills=top("skill", "name"))
     return snap
 
 
+def overhead_calls(cur, items, W, fp):
+    """overhead's calls: one statement for both kinds, skipped when the items hold no server key and no skill name. The
+    [""] placeholder of an empty list (DuckDB cannot type an empty list parameter) never counts: only the items' own keys
+    and names are kept."""
+    servers = sorted({x["server"] for x in items if x["server"] is not None})
+    skills = sorted({x["name"] for x in items if x["kind"] == "skill" and x["name"] is not None})
+    mcp, skill = {}, {}
+    if servers or skills:
+        for r in metrics.rows(cur, f"""SELECT t.mcp_server AS server, t.skill, count(*) AS calls
+                FROM tool_calls t JOIN sessions s USING (session_id)
+                WHERE {W('coalesce(t.start_ts, t.end_ts)')} AND coalesce(s.source, 'claude') = 'claude'
+                  AND (list_contains(?, t.mcp_server) OR list_contains(?, t.skill))
+                GROUP BY ALL""", fp + [servers or [""], skills or [""]]):
+            if r["server"] in servers:
+                mcp[r["server"]] = mcp.get(r["server"], 0) + r["calls"]
+            if r["skill"] in skills:
+                skill[r["skill"]] = skill.get(r["skill"], 0) + r["calls"]
+    return dict(mcp=[dict(server=k, calls=mcp[k]) for k in sorted(mcp)], skill=[dict(name=k, calls=skill[k]) for k in sorted(skill)])
+
+
 def payload(cur, project="", range_days=0, source="", automated=False, today=None, prices=None):
-    """The Context page payload (see design D9). Raises ValueError for a bad source or a negative range."""
+    """The Context page payload (see design D9), every figure read in one transaction: an ingest that commits while it is
+    built changes none of them, so the snapshot, its call counts and the page's other figures agree. The transaction only
+    reads: it takes no lock, the ingest's writes go on, and it is rolled back at the end. Never call it inside another
+    transaction (DuckDB refuses a nested BEGIN). Raises ValueError for a bad source or a negative range."""
+    cur.execute("BEGIN")
+    try:
+        return context_payload(cur, project, range_days, source, automated, today, prices)
+    finally:
+        cur.execute("ROLLBACK")
+
+
+def context_payload(cur, project, range_days, source, automated, today, prices):
     prices = metrics.load_prices() if prices is None else prices
     today = today or metrics.local_today(cur)
     af = metrics.automated_file()
@@ -645,7 +694,7 @@ def payload(cur, project="", range_days=0, source="", automated=False, today=Non
     brk = session_breaks(q)
     data["cost"] = dict(cost(q, today), break_sessions=len(brk), breaks=[{k: v for k, v in r.items() if k != "first_ts"} for r in brk[:BREAK_SESSIONS]])
     data["tips"] = tips(Ctx(cur, q, shared, rp, W, fp, prices, data, brk))
-    data["overhead"] = overhead(cur, project, source)
+    data["overhead"] = overhead(cur, project, source, W, fp, start)
     # One title lookup for every session row on the payload: it reads the first prompt of each session that has no title.
     titles.with_titles(cur, [*data["fills"]["largest"], *data["cost"]["breaks"], *(x for t in data["tips"] for x in t["sessions"]),
                              *data["sessions_map"]["points"]])

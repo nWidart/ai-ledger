@@ -597,7 +597,7 @@ class Deriver:
                 summary = summarize_input(name, inp)
                 shell = name in SHELL_TOOLS
                 self.uses[x["id"]] = dict(
-                    session_id=sid, tool=name, mcp_server=name[5:].rsplit("__", 1)[0] if name.startswith("mcp__") else None,
+                    session_id=sid, tool=name, mcp_server=mcp_server_of(name),
                     skill=inp.get("skill") if name == "Skill" and isinstance(inp, dict) else None,
                     input_summary=summary, start_ts=ts, subagent=self.sub or bool(d.get("isSidechain")),
                     is_commit=shell and GIT_COMMIT.search(summary) is not None,
@@ -749,6 +749,13 @@ RUN_FIGURES = {"api_ms": "totalAPIDuration", "tool_ms": "totalToolDuration", "li
 
 def text_or_none(v):
     return v if isinstance(v, str) else None
+
+
+def mcp_server_of(tool):
+    """The MCP server a Claude Code tool name mcp__<server>__<tool> belongs to (everything before its last "__"), the key
+    tool_calls.mcp_server stores; None for another name or a non-string. The Context payload keys a /context snapshot's
+    MCP tools by the same rule, so a snapshot's server and its calls cannot drift apart."""
+    return tool[5:].rsplit("__", 1)[0] if isinstance(tool, str) and tool.startswith("mcp__") else None
 
 
 def is_int(v):

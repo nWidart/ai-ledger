@@ -7,7 +7,7 @@ import unittest
 from datetime import date, datetime
 from unittest import mock
 
-from ai_ledger import metrics, store
+from ai_ledger import context, metrics, store
 from test_store import StoreCase, line
 
 S = dict(sessionId="s1", cwd="/nowhere/foo", gitBranch="main", entrypoint="cli", version="2.1")
@@ -433,6 +433,22 @@ class ContextSnapshotTest(StoreCase):
         self.assertEqual((self.snapshots(), self.parts()), (snaps, parts))
         store.rebuild(self.con)
         self.assertEqual((self.snapshots(), self.parts()), (snaps, parts))
+
+    def test_a_snapshot_tool_and_its_calls_have_one_server_key(self):
+        # /context names a tool's server in its own form (server_name); the calls are stored under the tool name's prefix.
+        # The Context payload keys the snapshot's tools by the parser's rule, so each tool's calls are counted.
+        names = ["mcp__My-Srv_x.y__do__it", "mcp__plugin_gh_github__get_pr"]  # a separator inside the tool's own name; a plugin's server
+        cu = dict(categories=[dict(name="MCP tools", tokens=9, kind="used")],
+                  mcp_tools=[dict(name=names[0], server_name="My-Srv.x.y", tokens=5), dict(name=names[1], server_name="github", tokens=4)])
+        self.write("a.jsonl", line(type="system", subtype="local_command", uuid="c1", timestamp="2026-11-10T10:00:00Z", contextUsage=cu, **S)
+                   + prompt("u1", "2026-11-10T10:00:30Z", "p1", "go")  # without a prompt the session is a helper: automated
+                   + assistant("a1", "m1", "2026-11-10T10:01:00Z", [tool_use(f"t{i}", n) for i, n in enumerate(names)]))
+        store.ingest(self.con, self.roots)
+        stored = dict(self.q("SELECT tool, mcp_server FROM tool_calls"))
+        self.assertEqual(stored, {names[0]: "My-Srv_x.y__do", names[1]: "plugin_gh_github"})
+        o = context.payload(self.con.cursor(), project="foo", today=date(2026, 11, 10))["overhead"]
+        self.assertEqual({x["name"]: x["server"] for x in o["items"]}, stored)
+        self.assertEqual(o["calls"]["mcp"], [dict(server=stored[n], calls=1) for n in names])
 
     def test_lines_without_context_usage_give_none(self):
         cmd = dict(type="system", subtype="local_command", timestamp="2026-11-10T10:00:00Z", **S)
