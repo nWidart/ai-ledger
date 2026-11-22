@@ -16,7 +16,7 @@ Activity's Overview SHALL show an activity calendar: one cell per day, weeks as 
 - **THEN** the last column holds Monday, Tuesday and Wednesday, and no cell for Thursday to Sunday
 
 ### Requirement: Fit the calendar's weeks to its box
-The calendar SHALL show the newest weeks that fit its box, 53 at most, and SHALL NOT make the page scroll sideways at any width or text size. A cell SHALL keep its size when the text grows; the labels SHALL grow with the text, stay inside the box and not overlap. A month label with no room SHALL be left out.
+The calendar SHALL show the newest weeks that fit its box, 53 at most, and SHALL NOT make the page scroll sideways at any width or text size. A cell's pitch SHALL be the largest, up to 20px, that fits all 53 weeks, and never below a smallest pitch that grows with the text so the weekday labels never touch. The labels SHALL grow with the text, stay inside the box and not overlap. A month label with no room SHALL be left out.
 
 #### Scenario: Desktop
 - **WHEN** the calendar's box is 1174px wide at the default text size
@@ -71,12 +71,12 @@ A day inside the recorded history with none of the measure SHALL be drawn as an 
 On the focused calendar, Left and Right SHALL read the day a week earlier or later, Up and Down the day before or after, and Home and End the first and the last day; a move past either end SHALL read that end. The pointer SHALL read the cell under it. One tooltip and one polite sentence SHALL give the day read. Escape and blur SHALL end the reading. A key with a modifier SHALL be left to the browser.
 
 #### Scenario: A week back
-- **WHEN** the user reads Tuesday, Nov 4 and presses Left
-- **THEN** Tuesday, Oct 28 is read
+- **WHEN** the user reads Wednesday, Nov 4 and presses Left
+- **THEN** Wednesday, Oct 28 is read
 
 #### Scenario: Across a week
-- **WHEN** the user reads Sunday, Nov 9 and presses Down
-- **THEN** Monday, Nov 10 is read
+- **WHEN** the user reads Sunday, Nov 8 and presses Down
+- **THEN** Monday, Nov 9 is read
 
 #### Scenario: First key
 - **WHEN** nothing is read and the user presses Left
@@ -94,12 +94,12 @@ On the focused calendar, Left and Right SHALL read the day a week earlier or lat
 The reading of a day SHALL give its weekday, its date and its commits, prompts and sessions, or "no activity" for a day with no session, prompt, commit or failed call. A day in the top step, when three steps or more are in use, SHALL be read as among the busiest days. A reading a key made SHALL be said again when newer data changes its words.
 
 #### Scenario: A busy day
-- **WHEN** the user reads Nov 4, 2026, a Tuesday with 12 commits, 40 prompts and 6 sessions
-- **THEN** the sentence is "Tuesday, Nov 4, 2026: 12 commits, 40 prompts, 6 sessions."
+- **WHEN** the user reads Nov 4, 2026, a Wednesday with 12 commits, 40 prompts and 6 sessions
+- **THEN** the sentence is "Wednesday, Nov 4, 2026: 12 commits, 40 prompts, 6 sessions."
 
 #### Scenario: An idle day
-- **WHEN** the user reads Sunday, Nov 9, 2026, which has nothing
-- **THEN** the sentence is "Sunday, Nov 9, 2026: no activity."
+- **WHEN** the user reads Sunday, Nov 8, 2026, which has nothing
+- **THEN** the sentence is "Sunday, Nov 8, 2026: no activity."
 
 #### Scenario: A day that stands out
 - **WHEN** the key shows four steps and the user reads a day in the darkest

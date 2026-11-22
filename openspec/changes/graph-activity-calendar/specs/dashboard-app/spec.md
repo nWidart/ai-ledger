@@ -9,7 +9,7 @@ A drawn chart that shows a value as one of a few shades of one color SHALL NOT r
 
 #### Scenario: The key matches
 - **WHEN** forced colors is on
-- **THEN** the calendar's key shows one square per step, at the sizes the cells have
+- **THEN** the calendar's key shows one square per step, in the cells' proportions
 
 #### Scenario: Turning forced colors off
 - **WHEN** the user turns forced colors off while the calendar is shown
