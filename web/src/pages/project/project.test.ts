@@ -96,7 +96,7 @@ describe("contextGrid with a snapshot", () => {
   const snap = (cats: [string, number, Cat["state"]?][], over: Partial<ContextOverhead> = {}): ContextOverhead => ({
     ts: "2026-11-10T09:30:00Z", session_id: "m1", model: "claude-opus-4-1", version: "2.1.0", window: 200000,
     categories: cats.map(([name, tokens, state]) => ({ name, tokens, state: state ?? "used" })),
-    top: { mcp_servers: [], memory_files: [], skills: [] }, ...over,
+    top: { mcp_servers: [], memory_files: [], skills: [] }, before_view: false, items: [], calls: { mcp: [], skill: [] }, ...over,
   });
   // S 40,000 tokens at 20% of a 200k window: 40 starting cells.
   const ctx = (overhead: ContextOverhead, median = 40000, startShare = .2) => ({

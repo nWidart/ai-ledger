@@ -599,12 +599,26 @@ export interface ContextPayload {
 
 /** A part of a /context snapshot: an MCP server (its tools' tokens summed), a memory file (its path) or a skill. */
 export interface OverheadPart { name: string; tokens: number }
+/** An item of a /context snapshot. seq: its identity, unique within the snapshot. name: the MCP tool's or skill's name, the
+ *  memory file's path or the agent's type; detail: the tool's server name, the file's type or the agent's or skill's source; both
+ *  null when the snapshot has none. server: the key the tool's calls are stored under (from the name's mcp__<server>__ prefix,
+ *  else detail); null for other kinds or when neither gives one. tokens: never negative. */
+export interface OverheadItem {
+  seq: number; kind: "mcp_tool" | "memory_file" | "agent" | "skill"; name: string | null; detail: string | null; server: string | null; tokens: number;
+}
 /** What /context measured in a session of the project: categories in the order /context lists them (state is the category's
  *  kind: used, deferred, buffer or free), and the five largest MCP servers, memory files and skills. */
 export interface ContextOverhead {
   ts: Ts; session_id: string; model: string | null; version: string | null; window: number | null;
   categories: { name: string; tokens: number; state: "used" | "deferred" | "buffer" | "free" }[];
   top: { mcp_servers: OverheadPart[]; memory_files: OverheadPart[]; skills: OverheadPart[] };
+  /** The snapshot was taken before the view's first day (false for all time). */
+  before_view: boolean;
+  /** Every MCP tool, memory file, custom agent and skill, by tokens (largest first), then name (none last), then seq. */
+  items: OverheadItem[];
+  /** Claude Code's calls in the view (main thread and subagents) per server key and skill name of the snapshot; only those
+   *  called, so a missing one is 0. Lists, not objects keyed by name: a skill named "constructor" stays a name. */
+  calls: { mcp: { server: string; calls: number }[]; skill: { name: string; calls: number }[] };
 }
 
 // URLs. automated: Activity and Cost leave automated sessions out unless asked (auto=1 in the page URL). source: "" is all.

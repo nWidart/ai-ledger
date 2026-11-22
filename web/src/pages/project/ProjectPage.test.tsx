@@ -318,6 +318,7 @@ describe("ProjectPage", () => {
         { name: "Skills", tokens: 4000, state: "used" }, { name: "Messages", tokens: 900, state: "used" }, { name: "MCP tools", tokens: 7000, state: "deferred" },
         { name: "Free space", tokens: 150000, state: "free" }],
       top: { mcp_servers: [{ name: "github", tokens: 5200 }], memory_files: [{ name: "/Users/me/foo/CLAUDE.md", tokens: 1800 }], skills: [] },
+      before_view: false, items: [], calls: { mcp: [], skill: [] },
     };
     const measured = (overhead: ContextOverhead | null, median = 40000) =>
       ({ ...withGrid({ ...context, starting: { ...context.starting, sessions: 9, median, window: 200000, window_share: median / 200000 } }, .4), overhead }) as ContextPayload;
