@@ -35,7 +35,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Activity:
-  - A calendar of the last 53 weeks under the tabs, a cell per day shaded by the work chart's measure and read with the arrow keys. Select a day to narrow the tabs; a day outside the range widens it first.
+  - A calendar of the weeks since recording started (13 to 53) under the tabs, a cell per day shaded by the work chart's measure and read with the arrow keys. Select a day to narrow the tabs; a day outside the range widens it first.
   - `/api/calendar` serves its days.
 
 ## [0.5.0] - 2026-11-21

@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Show a calendar of work per day
-Activity's Overview SHALL show an activity calendar: one cell per day, weeks as columns from Monday to Sunday and weekdays as rows, with the newest week last. It SHALL cover a fixed span that ends today and SHALL NOT follow the range. The project, the source and the automated-sessions filter SHALL apply to it. It SHALL label the months over the columns and Monday, Wednesday and Friday beside the rows. The work chart SHALL NOT change.
+Activity's Overview SHALL show an activity calendar: one cell per day, weeks as columns from Monday to Sunday and weekdays as rows, with the newest week last. It SHALL cover weeks that end today and SHALL NOT follow the range. The project, the source and the automated-sessions filter SHALL apply to it. It SHALL label the months over the columns and Monday, Wednesday and Friday beside the rows. The work chart SHALL NOT change.
 
 #### Scenario: The range does not move it
 - **WHEN** the user changes the range from 30 days to 7 days
@@ -16,19 +16,34 @@ Activity's Overview SHALL show an activity calendar: one cell per day, weeks as 
 - **THEN** the last column holds Monday, Tuesday and Wednesday, and no cell for Thursday to Sunday
 
 ### Requirement: Fit the calendar's weeks to its box
-The calendar SHALL show the newest weeks that fit its box, 53 at most, and SHALL NOT make the page scroll sideways at any width or text size. A cell's pitch SHALL be the largest, up to 20px, that fits all 53 weeks, and never below a smallest pitch that grows with the text so the weekday labels never touch. The labels SHALL grow with the text, stay inside the box and not overlap. A month label with no room SHALL be left out.
+The calendar SHALL show no more weeks than fit its box, 53 at most, and SHALL NOT make the page scroll sideways at any width or text size. A cell's pitch SHALL be the largest, up to 20px, that fits all 53 weeks, and never below a smallest pitch that grows with the text so the weekday labels never touch. The labels SHALL grow with the text, stay inside the box and not overlap. A month label with no room SHALL be left out.
 
 #### Scenario: Desktop
-- **WHEN** the calendar's box is 1174px wide at the default text size
+- **WHEN** recording began more than a year ago and the calendar's box is 1174px wide at the default text size
 - **THEN** it shows 53 weeks
 
 #### Scenario: Phone
-- **WHEN** the calendar's box is 343px wide at the default text size
+- **WHEN** recording began 30 weeks ago and the calendar's box is 343px wide at the default text size
 - **THEN** it shows the newest 26 weeks, and the page does not scroll sideways
 
 #### Scenario: Larger text on a phone
-- **WHEN** the box is 343px wide and the browser's default font size is 32px
+- **WHEN** recording began more than a year ago, the box is 343px wide and the browser's default font size is 32px
 - **THEN** it shows the newest 20 weeks, the labels are twice their default size, and no label overlaps another
+
+### Requirement: Show the calendar's recorded weeks
+The calendar SHALL show the weeks from the week of the first recorded day under the filters to the current week, at least 13, and no more than fit its box. With no recorded day, it SHALL show the newest weeks that fit. The hint, the calendar's label, the month labels and the table SHALL name only the weeks shown.
+
+#### Scenario: A short history
+- **WHEN** recording began 11 weeks ago and the calendar's box is 1174px wide at the default text size
+- **THEN** it shows 13 weeks from the left margin, with no cell in the first two, and the hint says "last 13 weeks"
+
+#### Scenario: A week old
+- **WHEN** recording began this week
+- **THEN** it shows 13 weeks, with cells only in the last
+
+#### Scenario: Never recorded
+- **WHEN** no day is recorded under the filters and the box is 1174px wide at the default text size
+- **THEN** it shows 53 weeks with no cell, and says "No activity yet."
 
 ### Requirement: Shade the calendar by the work chart's measure
 A cell's shade SHALL show the day's figure for the measure chosen on the work chart: commits, prompts or sessions. The calendar SHALL have no measure switch of its own. Its hint and its key SHALL name the measure. The tooltip and the reading of a day SHALL give all three figures, whatever the measure.
@@ -42,7 +57,7 @@ A cell's shade SHALL show the day's figure for the measure chosen on the work ch
 - **THEN** the tooltip gives Nov 4's commits, prompts and sessions
 
 ### Requirement: Cut the calendar's scale into steps
-The calendar SHALL shade the days that have any of the measure in at most four steps, not a continuous ramp. The steps SHALL be cut at the median, the 80th and the 95th percentile of those days over the whole span, with a last open step for values above. A cut that repeats SHALL make no empty step. A text key SHALL give each step's numbers.
+The calendar SHALL shade the days that have any of the measure in at most four steps, not a continuous ramp. The steps SHALL be cut at the median, the 80th and the 95th percentile of those days over all 53 weeks served, shown or not, with a last open step for values above. A cut that repeats SHALL make no empty step. A text key SHALL give each step's numbers.
 
 #### Scenario: One very busy day
 - **WHEN** most days have 1 to 8 commits and one day has 80

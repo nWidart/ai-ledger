@@ -65,10 +65,11 @@ Rules that follow:
 - The option holds no `grid`, `xAxis`, `yAxis` or `dataZoom`. The wrapper adds `axisPointer: { triggerOn: "none" }` and `dataZoom: []`; the spike drew such an option with no warning.
 - The option sets `animation: false`. A cell does not grow, and the spike shows a custom rect draws whole at once in any case.
 
-### 2. Span: 53 weeks from the server, as many as fit on screen
+### 2. Span: 53 weeks from the server, the recorded weeks that fit on screen
 
 - The server answers the 53 weeks that end with the current week: from the Monday 52 weeks before this week's Monday to today, 365 to 371 days. A whole year is always there, so the reader sees the same date last year.
-- The chart shows the newest `weeks` of them. `weeks` and the cell size come from the box's width and the text scale, by one pure function, `calendarFit(width, textScale)`:
+- The chart shows the newest weeks that hold recorded days: from the week of the first recorded day to this week, at least 13 and at most the `weeks` that fit (`shown = min(weeks, 53, max(13, recorded weeks))`; with no recorded day, `min(weeks, 53)`). `calendarModel()` owns the rule, so the hint, the label, the month labels, the table, the reading and the view key all follow one number. A store 11 weeks old would otherwise fill a fifth of a desktop box, with months labelled over empty columns; the floor of a quarter keeps a store a week old from being a sliver. The cells keep the fit's size and the block stays at the left margin, so a short history is a narrower block, not larger cells.
+- `weeks` and the cell size come from the box's width and the text scale, by one pure function, `calendarFit(width, textScale)`:
 
 | Name | Value |
 |---|---|
