@@ -45,6 +45,7 @@ Your goal is to complete the entire specification with maximum quality while min
 - All three sources (Claude Code, Codex, Grok) map onto the same derived tables. A parser change in `store.py`, `codex.py` or `grok.py` must keep that shape.
 - Plan features as OpenSpec changes in `openspec/changes/`; current specs live in `openspec/specs/`.
 - Give each OpenSpec change its own git worktree, on its own branch from `main`. Propose, apply and archive the change in that worktree, never in the main checkout or another change's branch. After archiving, remove the worktree.
+- Do not ask for a Sol review (`/review sol`) on a pull request that only archives an OpenSpec change. Ask for it on the pull request that builds the change.
 - Update `README.md` when user-visible behavior changes.
 - Update the docs site (`site/`) when user-visible behavior changes. Write its content with the `doc-coauthoring` skill.
 - Add user-visible changes to the `[Unreleased]` section of `CHANGELOG.md`.
