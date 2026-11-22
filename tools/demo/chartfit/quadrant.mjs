@@ -313,7 +313,7 @@ export async function quadrant(h) {
     line(`${what}: no tick label or axis name leaves the box or overlaps another`, ticks.length > 2 && !out.length && !over.length,
       [...out.map(x => `out: ${x}`), ...over.map(x => `overlap: ${x}`)].join("; ") || `${ticks.length} texts in ${px(box.w)}x${px(box.h)}`);
     const lanes = !zero || ((zero === "narrow" || xs.some(t => t.text === "$0")) && ys.some(t => t.text === "0") && ys.some(t => t.text === "1,000"));
-    const lane = zero === "narrow" ? ` and "0" are drawn (${xs.some(t => t.text === "$0") ? "\"$0\" too" : `"$0" gives way to "${xs[0]?.text}" in the narrow lane`}),` : zero ? "'s \"$0\" and \"0\" are drawn," : ",";
+    const lane = zero === "narrow" ? ` and "0" are drawn (${xs.some(t => t.text === "$0") ? "\"$0\" too" : `"$0" gives way to "${xs[0]?.text}" in the narrow lane`}),` : zero ? " \"$0\" and \"0\" are drawn," : ",";
     line(`${what}: the cost labels are dollars${zero ? `, the lanes${lane}` : ","} the tool-call labels${zero ? " (to \"1,000\")" : ""} sit in the left margin, both axis names are drawn`,
       xs.length >= 2 && dollars && ys.length >= 2 && !outside.length && axisNames.every(Boolean) && lanes,
       `cost ${xs.map(t => t.text).join(" ")}; tool calls ${ys.map(t => `${t.text} at ${px(t.l - box.l)}..${px(t.r - box.l)}`).join(", ")} (plot from ${px(dr.frame.l - box.l)}); axis names ${axisNames.filter(Boolean).length} of 2`);
