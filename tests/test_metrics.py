@@ -77,7 +77,7 @@ class FastPricingTest(unittest.TestCase):
 
 
 class SessionTitlesTest(unittest.TestCase):
-    def test_sessions_rows_past_the_top_sessions_cut_take_only_a_stored_title(self):
+    def test_sessions_rows_past_the_top_sessions_cut_take_a_first_prompt_title_only_for_one_project(self):
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp)
         con = store.open_store(os.path.join(tmp, "x.duckdb"))
@@ -98,6 +98,8 @@ class SessionTitlesTest(unittest.TestCase):
         named = {x["session_id"]: x["title"] for x in got["sessions"]}
         # s01's first prompt is stored, so a None title shows its first-prompt lookup never ran.
         self.assertEqual((named["s00"], named["s01"], named["s51"]), ("fix the build", None, "prompt of s51"))
+        one = {x["session_id"]: x["title"] for x in metrics.usage(con.cursor(), project="foo", prices=PRICES, today=TODAY)["sessions"]}
+        self.assertEqual(one["s01"], "prompt of s01")
 
 
 class UnpricedRatiosTest(unittest.TestCase):

@@ -470,9 +470,10 @@ def usage_payload(cur, project, range_days, session, prices, today, automated, s
     by_project = projects(cur, rq, rp, W, fp, loops)
     recent = sorted(sess, key=lambda x: x["first_ts"] or "", reverse=True)[:300]
     top = sorted(sess, key=lambda x: -(x["cost"] or 0))[:50]
-    # One lookup over both lists (they share rows). Only top_sessions may fall back to the first prompt, a raw-lines scan
-    # per session; the other sessions rows take a stored title or None.
-    titles.with_titles(cur, recent + top, prompts=[x["session_id"] for x in top])
+    # One lookup over both lists (they share rows). The fallback to the first prompt scans raw lines per session: for one
+    # project (the Project page names each sessions row) every row may take it; over all projects only top_sessions may,
+    # and the other sessions rows take a stored title or None.
+    titles.with_titles(cur, recent + top, prompts=True if project else [x["session_id"] for x in top])
 
     per = lambda a, b: a / b if b else None
     totals = dict(

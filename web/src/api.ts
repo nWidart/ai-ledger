@@ -75,7 +75,8 @@ export interface SessionRow {
   unpriced: number; thinking_ms: number; tool_calls: number; errors: number; commits: number; tests_passed: number; tests_failed: number;
   prompts: number; interrupted: number; context_limit: number | null; context_share: number | null; near_limit: boolean;
   tokens_per_prompt: number | null; error_loops: number;
-  /** From the first prompt; set on sessions, top_sessions and /api/sessions rows. */
+  /** A stored title, else one from the first prompt; set on sessions, top_sessions and /api/sessions rows. On a
+   * sessions row the first prompt is read only for one project's view or a top_sessions row; else it is a stored title or null. */
   title?: string | null;
 }
 export interface TitledSessionRow extends SessionRow { title: string | null }
