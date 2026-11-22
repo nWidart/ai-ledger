@@ -102,17 +102,22 @@ class UnpricedRatiosTest(unittest.TestCase):
 class ReportedCostTest(unittest.TestCase):
     """A request whose source reported its cost costs that amount; only a request with neither a price nor a reported cost is unpriced."""
 
-    def usage(self, rows, prices=PRICES):
+    def usage(self, rows, prices=PRICES, project="foo"):
+        """rows: one (model, reported cost) per request, or (model, reported cost, project) for a request of another session,
+        of that project (None: no project); the others are in one session of project."""
+        rows = [(r + (project,))[:3] for r in rows]
+        sids = {p: f"s{i}" for i, p in enumerate(dict.fromkeys(p for _, _, p in rows))}
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp)
         con = store.open_store(os.path.join(tmp, "x.duckdb"))
         self.addCleanup(con.close)
         c = con.cursor()
-        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts"], [("s", "foo", "2026-11-05 09:00:00", "2026-11-05 09:30:00")])
-        store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [("p", "s", "2026-11-05 09:00:00", False)])
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts"],
+                     [(s, p, "2026-11-05 09:00:00", "2026-11-05 09:30:00") for p, s in sids.items()])
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [(f"p{s}", s, "2026-11-05 09:00:00", False) for s in sids.values()])
         store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking", "cache_read",
                                      "cache_5m", "cache_1h", "thinking_ms", "reported_cost"],
-                     [(f"r{i}", "s", f"2026-11-05 09:0{i}:00", model, False, 60, 10, 0, 0, 0, 0, 0, cost) for i, (model, cost) in enumerate(rows)])
+                     [(f"r{i}", sids[p], f"2026-11-05 09:0{i}:00", model, False, 60, 10, 0, 0, 0, 0, 0, cost) for i, (model, cost, p) in enumerate(rows)])
         return metrics.usage(con.cursor(), prices=prices, today=TODAY)
 
     def test_unpriced_model_with_reported_costs_adds_them(self):
@@ -129,11 +134,55 @@ class ReportedCostTest(unittest.TestCase):
         self.assertEqual([t[f"cost_{k}"] for k in metrics.PRICE_KINDS], [None] * 5)
 
     def test_reported_cost_beside_an_estimate_and_an_unpriced_request(self):
-        u = self.usage([("m-unknown", 0.134844), ("m-a", None), ("m-other", None)])
+        # The None model: a Grok turn with no breakdown by model, stored with no model name and the turn's reported cost.
+        u = self.usage([("m-unknown", 0.134844), ("m-a", None), ("m-other", None), (None, 0.05)])
         est = (60 * 1 + 10 * 10) / 1e6
-        self.assertAlmostEqual(u["totals"]["cost"], 0.134844 + est)
+        self.assertAlmostEqual(u["totals"]["cost"], 0.184844 + est)
         self.assertAlmostEqual(u["totals"]["cost_input"], 60 / 1e6)  # the priced request's kinds only
         self.assertEqual([r["model"] for r in u["unpriced"]], ["m-other"])
+        # In the cost flow the reported-only models have their cost and no kinds, a model with no name a row and a pair of
+        # its own in both grouping sets, each model's kinds and reported cost add up to its cost, and the reported costs to
+        # the view's (the total less its kinds); the unpriced m-other has no row.
+        models = {r["model"]: r for r in u["cost_flow"]["models"]}
+        self.assertEqual(set(models), {"m-unknown", "m-a", None})
+        self.assertEqual({r["model"] for r in u["cost_flow"]["pairs"]}, set(models))
+        self.assertAlmostEqual(models["m-unknown"]["cost"], 0.134844, 9)
+        self.assertAlmostEqual(models[None]["cost"], 0.05, 9)
+        for m in ("m-unknown", None):
+            self.assertEqual([models[m][f"cost_{k}"] for k in metrics.PRICE_KINDS], [None] * 5)
+        self.assertIsNone(models["m-a"]["cost_reported"])
+        kinds = lambda r: sum(r[f"cost_{k}"] or 0 for k in metrics.PRICE_KINDS)
+        for r in models.values():
+            self.assertAlmostEqual(kinds(r) + (r["cost_reported"] or 0), r["cost"], 12)
+        self.assertAlmostEqual(sum(r["cost_reported"] or 0 for r in models.values()), u["totals"]["cost"] - kinds(u["totals"]), 9)
+
+    def test_cost_flow_keeps_a_session_with_no_project_apart_from_the_model_row(self):
+        u = self.usage([("m-a", None), ("m-a", None, None)])
+        est = (60 * 1 + 10 * 10) / 1e6
+        f = u["cost_flow"]
+        self.assertEqual([(r["project"], r["model"], round(r["cost"], 12)) for r in f["pairs"]], [("foo", "m-a", est), (None, "m-a", est)])
+        self.assertEqual([(r["model"], round(r["cost"], 12), round(r["cost_input"], 12)) for r in f["models"]], [("m-a", 2 * est, 120 / 1e6)])
+
+    def test_one_snapshot_for_the_whole_payload(self):
+        # An ingest that commits a priced request after the payload's first query changes none of its figures: the daily
+        # chart, the heading's total and the cost flow agree.
+        real, done = metrics.rows, []
+
+        def rows(cur, *a, **k):
+            out = real(cur, *a, **k)
+            if not done:
+                done.append(1)
+                store.insert(cur.cursor(), "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
+                                                        "cache_read", "cache_5m", "cache_1h", "thinking_ms", "reported_cost"],
+                             [("late", "s0", "2026-11-05 09:20:00", "m-a", False, 0, 0, 0, 0, 0, 0, 0, 1.0)])
+            return out
+
+        with mock.patch.object(metrics, "rows", rows):
+            u = self.usage([("m-a", 0.5)])
+        self.assertTrue(done)
+        self.assertAlmostEqual(u["daily"][0]["cost"], 0.5)
+        self.assertAlmostEqual(u["totals"]["cost"], 0.5)
+        self.assertAlmostEqual(sum(r["cost"] for r in u["cost_flow"]["pairs"]), 0.5)
 
     def test_kind_costs_leave_out_a_reported_cost(self):
         # The reported cost wins over the estimate. Rates for its model (a user can add some for a Grok model) give the request
@@ -154,6 +203,7 @@ class ReportedCostTest(unittest.TestCase):
         prices = metrics.load_prices(user=os.path.join(tmp, "prices.json"))  # the packaged file alone
         self.assertEqual(prices["grok-4.7-build"], {"context": 256000})
         u = self.usage([("grok-4.7-build", None), ("grok-4.7-build", 0.134844)], prices)
+        self.assertEqual([(r["model"], round(r["cost"], 9)) for r in u["cost_flow"]["models"]], [("grok-4.7-build", 0.134844)])
         self.assertAlmostEqual(u["totals"]["cost"], 0.134844)
         self.assertEqual([(r["model"], r["requests"]) for r in u["unpriced"]], [("grok-4.7-build", 1)])
         self.assertEqual([u["totals"][f"cost_{k}"] for k in metrics.PRICE_KINDS], [None] * 5)
@@ -300,6 +350,20 @@ class MetricsTest(unittest.TestCase):
         self.assertAlmostEqual(a["cost_cache_read"], 0.8 + 120 / 1e6)
         none = metrics.usage(self.con.cursor(), "foo", 1, prices=PRICES, today=TODAY)  # Nov 5 only: the unpriced request
         self.assertEqual([none["totals"][f"cost_{k}"] for k in metrics.PRICE_KINDS], [None] * 5)
+        self.assertEqual(none["cost_flow"], dict(pairs=[], models=[]))
+        # The cost flow adds up to the page: its pairs and its model rows to the total, each kind to its total, each project's
+        # pairs to its cost; the unpriced m-unknown adds no row.
+        self.assertEqual([(r["project"], r["model"], round(r["cost"], 9)) for r in self.all["cost_flow"]["pairs"]],
+                         [("foo", "m-a", 15.8), ("bar", "m-tier", 260 / 1e6)])
+        for v in (self.foo7, self.all):
+            t, f = v["totals"], v["cost_flow"]
+            for got in (f["pairs"], f["models"]):
+                self.assertAlmostEqual(sum(r["cost"] for r in got), t["cost"], 9)
+            for k in metrics.PRICE_KINDS:
+                self.assertAlmostEqual(sum(r[f"cost_{k}"] for r in f["models"]), t[f"cost_{k}"], 9)
+            for p in v["by_project"]:
+                self.assertAlmostEqual(sum(r["cost"] for r in f["pairs"] if r["project"] == p["project"]), p["cost"] or 0, 9)
+            self.assertNotIn("m-unknown", {r["model"] for r in f["pairs"] + f["models"]})
 
     def test_previous_period(self):
         # One day ending today (s2) against the day before it (s1); same project filter, nothing before all time.
@@ -1074,7 +1138,13 @@ class SourceFilterTest(unittest.TestCase):
             self.assertAlmostEqual(sum(r["cost"] for r in rows), cost["2026-11-05"])
         self.assertEqual({r["source"] for r in u["daily_sources"]}, {"claude", "codex"})  # the Codex session lands under codex
         self.assertEqual([r["model"] for r in u["daily_models"]], ["m-a"])
-        self.assertEqual({r["source"] for r in self.usage("codex")["daily_sources"]}, {"codex"})
+        codex = self.usage("codex")
+        self.assertEqual({r["source"] for r in codex["daily_sources"]}, {"codex"})
+        # The cost flow keeps the Codex request's cost only, in its pair and in its model's row and kinds.
+        rx = (50_000 * 1 + 30_000 * 10 + 120_000 * 0.1) / 1e6
+        self.assertEqual([(r["project"], r["model"], round(r["cost"], 12)) for r in codex["cost_flow"]["pairs"]], [("foo", "m-a", rx)])
+        self.assertEqual([(r["model"], round(r["cost"], 12)) for r in codex["cost_flow"]["models"]], [("m-a", rx)])
+        self.assertAlmostEqual(codex["cost_flow"]["models"][0]["cost_input"], codex["totals"]["cost_input"], 9)
 
     def test_each_source_alone(self):
         for source, sid, tokens, tool in (("claude", "c1", 1_000_000, "Bash"), ("codex", "x1", 200_000, "exec_command")):

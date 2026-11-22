@@ -1,0 +1,26 @@
+/* Cost's flow (CostFlow.tsx). The box holds the chart, the mark and the tooltip over it, from one layout; it never draws
+   past its width, so the page does not scroll sideways. The drawing never animates; the section fades in with the page's
+   other panels (CostPage.tsx). */
+.flow-box { position: relative; }
+/* A named project's node opens its sheet. zrender writes `cursor: default` inline on an element of the plot on each move,
+   which only an important rule outranks. */
+.flow-box.hand, .flow-box.hand .echart-plot * { cursor: pointer !important; }
+/* The tooltip is rendered only while an item is read; the charts' .tip is hidden until shown. It is no wider than the box:
+   a long name wraps, and the figures keep the app's nowrap, a line each. */
+.flow-box > .tip { display: block; max-width: 100%; }
+.flow-box > .tip .tname { white-space: normal; overflow-wrap: anywhere; }
+/* The item read, outlined on its own shape: a band's path or a node's bar grown by 2px. */
+.flow-mark { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.flow-mark :is(path, rect) { fill: var(--text-primary); fill-opacity: .08; stroke: var(--text-primary); stroke-width: 2; }
+/* The nodes of a column with no room for labels, named under the graph. It wraps; it never scrolls sideways. */
+.flow-key { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: 4px; font-size: .75rem; color: var(--text-secondary); }
+.flow-key-title { color: var(--text-muted); }
+.flow-key ul { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; list-style: none; }
+.flow-key li { display: inline-flex; align-items: baseline; gap: 6px; overflow-wrap: anywhere; }
+.flow-key i { flex: none; width: 10px; height: 10px; border-radius: 3px; display: inline-block; align-self: center; }
+.flow-unpriced { margin-top: 4px; }
+@media (forced-colors: active) {
+  .flow-mark :is(path, rect) { fill: none; stroke: Highlight; }
+  /* A hue is not a system color: the swatches are the nodes' CanvasText. */
+  .flow-key i { forced-color-adjust: none; background: CanvasText !important; }
+}

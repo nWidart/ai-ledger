@@ -11,6 +11,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
   - A calendar of the weeks since recording started (13 to 53) under the tabs, a cell per day shaded by the work chart's measure and read with the arrow keys. Select a day to narrow the tabs; a day outside the range widens it first.
   - `/api/calendar` serves its days.
 - Errors' rate chart zooms in views of 14 points or more, with a slider or the plus and minus keys.
+- Cost has a "Where the cost goes" flow after the project table: estimated cost from project to model to token kind, each band as wide as its cost. Arrow keys follow the bands, and Enter on a project opens its sheet.
+- `/api/usage` has `cost_flow`: the cost of each project and model pair, and of each model by token kind and its reported cost.
 
 ### Changed
 
@@ -34,6 +36,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - Errors' rate axis no longer repeats a label at a 0.05 step: it reads "0.00%", "0.05%", "0.10%".
 - Hovering a "?" no longer moves the text around it.
 - An open Live page no longer keeps the app busy on several CPU cores while many sessions run. The app keeps what it read of each transcript line, and reads only new lines on each refresh.
+- `/api/usage` reads all its figures in one snapshot of the store, so an ingest that lands while it runs can no longer give a page's heading one total and a chart or a table another.
 
 ## [0.6.0] - 2026-11-22
 

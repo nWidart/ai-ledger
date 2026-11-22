@@ -27,6 +27,9 @@ Every page works from the keyboard and with a screen reader. This page lists the
 | Home, End | The focused Activity calendar | Read the first or last day. |
 | Enter | The focused Activity calendar, with a day read | Select a day with activity and move the focus to the tabs' panel. A day with none selects nothing. |
 | Esc | The focused Activity calendar | End the reading. With none read, clear the selected day or week. |
+| Up, Down, Left, Right, Home, End | The focused Cost flow ("Where the cost goes") | Follow the cost along its [bands](/ai-ledger/pages/cost/#where-the-cost-goes): Up and Down move in a column, Right and Left follow a band to the next column. Up and Down do not scroll the page. |
+| Enter | The Cost flow, reading a named project | Open that project's sheet. |
+| Esc | The Cost flow, reading an item | End the reading. |
 
 Charts with this keyboard reading: the Activity work chart, the outcome trend of Activity's Judgments view, the Cost chart, the Errors chart, the Context charts, the Limits chart and Live's 10-minute pulse. A tooltip that a chart opens closes with Esc without changing the selected point.
 

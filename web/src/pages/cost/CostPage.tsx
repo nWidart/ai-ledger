@@ -7,7 +7,7 @@ import { useScopeProjects } from "../../components/ScopeBar";
 import { InsightCard, rankInsights } from "../../components/InsightCard";
 import type { SortBy } from "../../components/Sort";
 import { ModelLedger } from "../../components/sheets/ProjectSheet";
-import { openSessionSheet } from "../../components/sheets/session";
+import { openProjectSheet, openSessionSheet } from "../../components/sheets/session";
 import { DocsLink } from "../../components/DocsLink";
 import { preloadECharts } from "../../components/echart/load";
 import { PageSkeleton } from "../../components/PageSkeleton";
@@ -20,6 +20,7 @@ import { costDays, SCALES, STACKS, type Stack, type TokenScale } from "./cost";
 import { CostChart, type CostMetric } from "./CostChart";
 import { TokensDrawer, TopSessionsDrawer } from "./drawers";
 import { peakInsight, perCommitInsight, type CostActs } from "./insights";
+import { CostFlow } from "./flow/CostFlow";
 import { Lede } from "./Lede";
 import { MATRIX_SORT, type MatrixKey } from "./matrix";
 import { PlanGauge } from "./PlanGauge";
@@ -101,6 +102,7 @@ export function CostPage() {
         <CostChart d={d} metric={metric} onMetric={setMetric} hidden={hidden} onHidden={setHidden} scale={scale} onScale={setScale} onDay={showDay} stack={stack} onStack={setStack}
           onProject={p => set({ project: p, session: null, inspect: null })} onSource={s => set({ source: s, session: null, inspect: null })} />
         {table && <ProjectTable d={d} sort={sort} onSort={setSort} spot={spot} onSpot={setSpot} smallOpen={smallOpen} onSmallOpen={setSmallOpen} />}
+        <CostFlow d={d} onProject={openProjectSheet} />
         <div className={lead ? "split" : "split solo"}>
           {lead && <section className="insights sect" id="insights" aria-label="What stands out">
             <InsightCard insight={lead} primary />

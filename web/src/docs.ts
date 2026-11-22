@@ -68,6 +68,7 @@ export const DOCS = {
   "reference/storage": { path: "reference/storage/", title: "Data files and storage locations" },
   "reference/troubleshooting": { path: "reference/troubleshooting/", title: "Troubleshooting and FAQ" },
 
+  "pages/cost#where-the-cost-goes": { path: "pages/cost/", anchor: "where-the-cost-goes", title: "Cost" },
   "concepts/windows#the-context-window": { path: "concepts/windows/", anchor: "the-context-window", title: "Context windows and plan limit windows" },
   "concepts/windows#the-plan-limit-window": { path: "concepts/windows/", anchor: "the-plan-limit-window", title: "Context windows and plan limit windows" },
   "everywhere/filters#include-automated": { path: "everywhere/filters/", anchor: "include-automated", title: "Filters" },
