@@ -48,7 +48,7 @@ The settled picks (owner, 2026-11-22, from `.claude/plans/recommendation-treemap
 
 - One picture of where a session's wall-clock time went, on which thread, and what ran at once, on the timeline's own axis.
 - Every call reached by keyboard and by pointer, with its figures in words, and every call in a table.
-- Nothing new in the ECharts chunk; the entry chunk does not grow.
+- Nothing new in the ECharts chunk; the entry chunk grows by the lazy mount only (0.2 kB, decision 13).
 - No edit to the wrapper's files, `Timeline.tsx`, `session.ts` or `Table`; no parser change.
 
 **Non-Goals:**
@@ -65,19 +65,20 @@ The settled picks (owner, 2026-11-22, from `.claude/plans/recommendation-treemap
 Each call of `/api/session` gains `lane` and `input`, computed in the existing calls statement of `session_timeline()`, so the lanes and the calls come from one statement:
 
 - **`lane` = 0** for a main-thread call (`NOT coalesce(subagent, false)`: a NULL `subagent` counts as the main thread, the only reading the other columns allow).
-- **`lane` = k ≥ 1** for a subagent call whose `result_file` is a subagent file of the session: k is the file's rank among those files, by the file's first call (`min(coalesce(start_ts, end_ts))`), ties by its first `tool_use_id` (`row_number()`; a tool use id is unique, so no tie is left). Subagents are numbered in the order they started: "Subagent 1, 2, …".
+- **`lane` = k ≥ 1** for a subagent call whose `result_file` is a subagent file of the session: k is the file's rank among those files by its first call in the payload's own order. Each call of the session is numbered by `row_number()` over `coalesce(start_ts, end_ts)`, then `tool_use_id`, and each file is ranked by the smallest number among its calls. Two files whose first calls start at the same moment are ranked by those first calls' ids; a tool use id is unique, so no tie is left. Subagents are numbered in the order they started: "Subagent 1, 2, …".
 - **`lane` = null** for a subagent call whose agent cannot be told: its `result_file` is NULL (no result yet, or never), or it is one of the session's **main files**. The main files are the distinct `result_file` values of the session's main-thread calls. Old Claude Code transcripts wrote sidechain calls into the main file: those calls share it with the main thread and cannot be told from one another. All such calls go on one lane, "Subagents, not told apart".
 - **A session resumed into a second main file** (a Codex file that continues the main thread, `codex.py:5-6`; a Claude Code session whose results land in another main file) has two main files: both are main-thread work, lane 0. No special case: the rule reads the set.
-- **The 5,000 cap.** The ranks are computed over all of the session's calls, before the `LIMIT`, so a lane keeps its number when the cap cuts the list. Because ranks follow each file's first call and the cap keeps the first calls by start, the lanes left are always 1 to k with none missing; a lane whose calls run past the cap loses only its later calls. `truncated` says so, as today.
-- **Never the path.** The file path stays in the server; the browser gets only the rank.
+- **The 5,000 cap.** The ranks are computed over all of the session's calls, before the `LIMIT`, so a lane keeps its number when the cap cuts the list. Because ranks follow each file's first call and the cap keeps the first calls by start, the lanes left are always 1 to k with none missing; a lane whose calls run past the cap loses only its later calls. `truncated` says so, as today, and the payload gains `calls_truncated` beside it: true when the calls' own list reached the cap (`truncated` is also set by the requests' cap). The section's note reads `calls_truncated`.
+- **Never the result file's path.** The result file's path stays in the server; the browser gets only the rank. A call's `input` can hold a path (a Read call's file, for one): that is the call's input, sent by design.
 - **`input`** = `left(input_summary, 120)`, or `""` when NULL. It feeds the tooltip, the sentence and the table. It holds what `input_summary` holds: a command, a path, a search, a URL, a subagent's prompt, or an MCP call's JSON input; any of these can quote a secret the agent read or typed. The browser already gets the same text, longer, on the tool sheet (400) and on Errors (400); the session sheet now shows it too, and the docs page "Share your screen safely" says so (task 1.10). 120 is the cut the recommendation set: long enough for a command's start, short enough for a tooltip.
 
-Shape (a sketch, for the builder of step 1.1):
+Shape (as built in `session_timeline()`):
 
 ```sql
-WITH c AS (SELECT * FROM tool_calls WHERE session_id = ? AND coalesce(start_ts, end_ts) IS NOT NULL),
+WITH c AS (SELECT *, row_number() OVER (ORDER BY coalesce(start_ts, end_ts), tool_use_id) AS n
+           FROM tool_calls WHERE session_id = ? AND coalesce(start_ts, end_ts) IS NOT NULL),
 main AS (SELECT DISTINCT result_file FROM c WHERE NOT coalesce(subagent, false) AND result_file IS NOT NULL),
-agents AS (SELECT result_file, row_number() OVER (ORDER BY min(coalesce(start_ts, end_ts)), min(tool_use_id)) AS lane
+agents AS (SELECT result_file, row_number() OVER (ORDER BY min(n)) AS lane
            FROM c WHERE coalesce(subagent, false) AND result_file IS NOT NULL AND result_file NOT IN (SELECT result_file FROM main)
            GROUP BY result_file)
 SELECT c.tool_use_id AS id, c.tool, c.start_ts, c.end_ts, c.is_error, c.category, c.subagent,
@@ -109,11 +110,12 @@ The section calls `timelineModel(s, width, ts)` itself, with its own measured wi
 3. **Clamp** to the plot: `x = min(max(x, tl.m.l), tl.m.l + tl.iw)`; a time after `tl.end` is **clipped** (decision 3). No time of a call can come before `tl.start`: every call's `start_ts || end_ts` is one of the axis's times.
 4. **Scale** by `k = width / tl.W`: 1 when the box is 300px or wider, the timeline's own `viewBox` scale below (its svg is `width: 100%` over a `W` of at least 300).
 
-A call's bar runs from `spanX(start) − 0.5` to `max(spanX(end), spanX(start)) + 0.5`: at least 1px wide, and its left edge is the timeline tick's left edge for a successful call (`x(t) − 0.5`). Its centre at the start is the tick's centre for every call.
+A call's bar runs from `spanX(start) − 0.5` to `max(spanX(end), spanX(start)) + 0.5`: at least 1px wide, and its left edge is the timeline tick's left edge for a successful call (`x(t) − 0.5`). Its centre at the start is the tick's centre for every call. A clipped call's edges are decision 3's.
 
 - **No start** (`start_ts` null, `end_ts` known: a result whose use was never read): a tick at `spanX(end)`, the same x as the timeline's tick, which uses `start_ts || end_ts`. Its words say "start not recorded".
-- **No end** (`end_ts` null: no result): a ring at `spanX(start)` (decision 5). Its words say "no result recorded".
-- **No duration** (`end ≤ start`: a Codex call with no duration, a clock that jumped back): a tick at `spanX(start)`, as `latency()` treats `end ≤ start` as no timing (`metrics.py:164`), so the Tools table's p50 and this chart agree. Its words say "no duration recorded".
+- **No result** (neither an end nor an error flag: `end_ts` and `is_error` both null; every source sets both from the result): a ring at `spanX(start)` (decision 6). Its words say "no result recorded".
+- **No duration**: `end ≤ start` (a Codex call with no duration, a clock that jumped back), or a result with no end time (`is_error` set, `end_ts` null), or an `end_ts` present but unparseable. A tick at `spanX(start)`, as `latency()` treats `end ≤ start` as no timing (`metrics.py:164`), so the Tools table's p50 and this chart agree. Its words say "no duration recorded".
+- **No time the timeline can read** (`start_ts || end_ts` null or unparseable): no span, as the timeline draws no tick for it.
 
 **Same width as the timeline (point 3).** The section measures its own box with `useWidth(box, Math.min(640, innerWidth) − 40)` (`components/chart.ts:51-63`): `clientWidth`, read in a layout effect and on every resize, from the timeline's own initial width. Its box (`div.spans`) is a direct child of the sheet's body, as `div.tl` is: `SessionSheet` renders it in its fragment, and `Suspense` adds no element. Its CSS has vertical margins only, no horizontal margin, padding or border, as `dialog.sheet .tl` (`sheets.css:79`). So both read the same `clientWidth`, call `timelineModel` with the same width and text scale, and get the same `x()`. The browser check proves it to the pixel (step 1.11, check 2): for the `demo-spans` session, the sorted centres of the timeline's ticks equal the sorted start centres of the chart's bars and ticks within 0.5px, at the 40rem sheet, the Wide sheet, a 343px box and 32px text.
 
@@ -121,7 +123,7 @@ The two read `textScale()` in their own renders; a text-size change that does no
 
 ### 3. A call past the axis's end: clipped, with an open end
 
-The axis ends at the last start, request or compaction; a call's end takes no part. On the demo store 77% of sessions have such a call, up to 250px past the edge at a 552px plot (measured). The bar is clipped at the plot's right edge and its right end is a point (a chevron, the last 4px narrowing to the edge's middle), so it reads as "goes on". The sentence, the tooltip and the table give its true end and duration. The key line shows "▸ ran past the last event" when such a call is drawn. Drawn as is, it would cross the sheet's edge.
+The axis ends at the last start, request or compaction; a call's end takes no part. On the demo store 77% of sessions have such a call, up to 250px past the edge at a 552px plot (measured). The bar runs on into the plot's right margin and ends in a point (a polygon, its last 4px narrowing to the bar's middle), so it reads as "goes on". The point ends 2px before the box's right edge (`tl.W × k − 2`), and the drawn shape is at least 6px long: its left edge is the sooner of `spanX(start) − 0.5` and 6px before the point, also when the call starts at the axis's end (the session's last start). A failed clipped call is the same point, hollow. The sentence, the tooltip and the table give its true end and duration. The key line shows "▸ ran past the last event" when such a call is drawn, and a note counts them: "1 call ran past the last event: its bar ends in a point." ("2 calls ran past the last event: their bars end in a point."). Drawn as is, it would cross the sheet's edge.
 
 Alternative: extend the axis to the last end. That would move every tick of the timeline above, which this change does not edit. Rejected.
 
@@ -155,20 +157,20 @@ Alternative (not the plan): squeeze a gap only where no call is running, so a lo
 | Box height | 4 + Σ lanes (14 × s + rows × 10 + 6) + 16 × s, rounded up |
 | Plot | from `tl.m.l × k` to `(tl.m.l + tl.iw) × k`: lane labels sit above their lane, not in the 40px left margin |
 
-Examples: a session with one main row and no subagent, 4 + 30 + 16 = 50px at 16px text. Main 3 rows and three subagent lanes of 2 rows: 190px. The cap: main 4 rows, 6 subagent lanes and the folded lane of 3 rows, and the not-told-apart lane of 3 rows: 480px at 16px text, 642px at 32px text.
+Examples: a session with one main row and no subagent, 4 + 30 + 16 = 50px at 16px text. Main 3 rows and three subagent lanes of 2 rows: 190px. The cap: main 4 rows, 6 subagent lanes and the folded lane of 3 rows, and the not-told-apart lane of 3 rows: 480px at 16px text, 622px at 32px text.
 
-**Spans.** Each holds the call's id, tool (`"Unknown tool"` when NULL), lane, row, `x0`, `x1`, its kind (`ok`, `failed`, `open` for no result, `still` for no duration or no start) and two flags (`clipped`, `squeezed`), and its true start, end and duration in ms. They stay in payload order.
+**Spans.** Each holds the call's id, tool (`"Unknown tool"` when NULL, with `known` false), input, lane, row, its own thread (`sub`: 0, the subagent's rank even in a folded lane, or null), `x0`, `x1`, its kind (`ok`, `failed`, `open` for no result, `still` for no duration or no start; decision 2), three flags (`failed` from `is_error`, whatever the kind; `clipped`; `squeezed`), and its true start, end and duration in ms. They stay in payload order. The layout also gives the plot's left and right, the breaks' x, where the lanes end (`bottom`) and `long` (the axis runs over 20 hours).
 
-**Notes** (each only when its count is not 0): the truncated cut ("Long session: only its first 5,000 tool calls are drawn."); no duration ("4 calls have no recorded duration: drawn as ticks."); clipped ("2 calls ran past the last event: their bars end at the edge."); squeezed (decision 4); rows over the cap (above); folded lanes ("Subagents 7 to 9 share the lane Other subagents.").
+**Notes** (each only when its count is not 0): the cut ("Long session: only its first 5,000 tool calls are drawn.", the number the spans drawn, shown only when the payload's `calls_truncated` is true); no duration ("4 calls have no recorded duration: drawn as ticks."; "1 call has no recorded duration: drawn as a tick."); clipped (decision 3); squeezed (decision 4); rows over the cap (above); folded lanes ("Subagents 7 to 9 share the lane Other subagents."; "Subagent 7 shares …" for one; "7, 9 and 12" when the numbers skip).
 
 ### 6. Drawing: the custom series on no grid
 
-One option, `spansOption(layout, env)` in `spansOption.ts`, types only from `components/echart/echarts.ts`:
+One option, `spansOption(layout, env, times)` in `spansOption.ts` (`times`: the axis's first and last time as `tl.fmtT` writes them), types only from `components/echart/echarts.ts`:
 
 - `...baseOption(env)` from `option.ts` as it is, `animation: false` in every mode.
 - No grid and no axis. Three custom series, each `coordinateSystem: "none"`, `silent: true`: `breaks` (z 1: for each of `tl.gaps`, a 6px band in `--surface-2` at `g.bx × k` over the lanes' height, and the ⌇ zigzag at its top, as the timeline draws it), `spans` (z 2: one data item per span, `renderItem` returning its shape by `dataIndex`; `z2` higher for shorter spans, so a tick over a long bar stays visible), `labels` (z 3: the lane labels, `overflow: "truncate"` to the plot's width; the two time labels).
-- **Shapes.** `ok`: a filled rect in `--series-1`. `failed`: a hollow rect, 1.5px stroke in `--critical` and fill `ink.surface`, when at least 4px wide; narrower, a 2px rect in `--critical` that rises 2px above its row, so a failed tick is told by its height as well as its hue. `open`: a ring of 3px radius at the start, 1.5px stroke in `ink.muted`, no fill. `still`: a 1px rect in `ink.muted`. `clipped`: the bar's last 4px narrow to a point at the plot's edge (a polygon). Colors from `env.color()` and `env.ink`; every color set.
-- **Forced colors** (`env.forced`): `ok` filled `CanvasText`; `failed` a `CanvasText` outline over `Canvas` (narrow: a taller `CanvasText` tick); `open` a `CanvasText` ring; `still` `CanvasText`; breaks `GrayText`; labels `CanvasText`. Kinds are told by shape and height, not by hue.
+- **Shapes.** `ok`: a filled rect in `--series-1`. `failed`: a hollow rect, 1.5px stroke in `--critical` inside the bar's edges and fill `ink.surface`, when at least 4px wide. The failure tick: a 2px rect in `--critical`, 10px high, that rises 2px above its row, for a failed call narrower than 4px and for a failed call with no recorded duration (`still`), so a failed tick is told by its height as well as its hue. `open`: a ring of 3px radius at the start, 1.5px stroke in `ink.muted`, no fill. `still` (not failed): a 1px rect in `ink.muted`. `clipped`: the bar's last 4px narrow to its point in the plot's right margin (a polygon, decision 3), filled or hollow by its kind. `spanBox()` in `spansOption.ts` gives each shape's outer box, which the component's mark and a key's tooltip use too. Colors from `env.color()` and `env.ink`; every color set.
+- **Forced colors** (`env.forced`): `ok` filled `CanvasText`; `failed` a `CanvasText` outline over `Canvas` (the failure tick: a taller `CanvasText` tick); `open` a `CanvasText` ring; `still` `CanvasText`; breaks and their ⌇ `GrayText`; labels and times `CanvasText`. Kinds are told by shape and height, not by hue.
 - **Nothing registered.** `echarts.ts` is not edited; rect, circle, polygon, polyline and text are the custom series' own shapes. The ECharts chunk stays at 176.5 kB.
 - The view key given to the wrapper is the session id.
 
@@ -187,50 +189,52 @@ A real-ECharts smoke test (step 1.7) proves the shapes, their places and the for
 | Key | Reads |
 |---|---|
 | Right, Left | the next, the previous call of the lane; at an end, stays and says the sentence again |
-| Up, Down | the lane above, below: its call nearest in time to the call read (by start; ties to the earlier); at the top or bottom lane, stays and says the sentence again |
+| Up, Down | the lane above, below: its call nearest in time to the call read (by start, else end; ties to the earlier); a lane with no call (the main thread, drawn empty while a subagent has a call) is skipped; at the top or bottom lane, stays and says the sentence again |
 | Home, End | the lane's first, last call |
 | Any of these with nothing read | the top lane's first call (Left and End: its last) |
-| Enter | opens the read call's tool sheet (below) |
-| Escape | ends the reading; with nothing read, left to the sheet, which closes |
+| Enter | opens the read call's tool sheet (decision 8); with nothing read, left alone |
+| Escape | ends the reading; with nothing read, left alone, to the sheet, which closes |
 
-The arrows, Home and End are prevented while the box has focus: the sheet does not scroll under the chart. Blur ends the reading.
+The arrows, Home and End are prevented while the box has focus: the sheet does not scroll under the chart. Blur ends the reading, unless the focus moves within the box.
 
-**Escape in a sheet.** The sheet is a modal dialog that closes on Escape. While a reading is open, Escape ends the reading and is prevented (`preventDefault()` on the keydown), so the sheet stays open; with nothing read, Escape closes the sheet as before. A reading the pointer opened while the focus is elsewhere in the sheet ends on Escape from anywhere: a capturing `keydown` listener on the document while a reading is open, attached in a layout effect (an Escape pressed the moment the tooltip shows finds it), which also prevents the key. The browser check proves that the sheet stays open (step 1.11, check 7): jsdom does not turn Escape into a dialog's `cancel`.
+**Escape in a sheet.** The sheet is a modal dialog that closes on Escape. While a reading is open, Escape ends the reading and is prevented (`preventDefault()` on the keydown), never stopped, so the sheet stays open and a control the focus is in still gets the key; with nothing read, Escape is left alone and closes the sheet as before. A reading the pointer opened while the focus is elsewhere in the sheet ends on Escape from anywhere in the sheet's dialog: a capturing `keydown` listener on the document while a reading is open, attached in a layout effect (an Escape pressed the moment the tooltip shows finds it), which also prevents the key. Both ignore an Escape during IME composition (`isComposing`) or with a modifier; the document's listener also ignores one whose target is outside the sheet's dialog (a control over it, such as the command palette) and leaves the box's own keys to the box. The browser check proves that the sheet stays open (step 1.11): jsdom does not turn Escape into a dialog's `cancel`.
 
-**Pointer.** `mousemove`, `mouseleave` and `click` on `div.spans-box`; the position is the client position less the plot's. `spanAt` reads, in the row band under the pointer (10px, the row's bar and its gap), the span nearest horizontally within 6px (distance 0 inside the bar); ties go to the shorter span (drawn on top), then the earlier start, then the id. Outside every span nothing is read. A click on a span reads and opens it. The cursor is a hand over a span: a class on `div.spans-box` with `cursor: pointer !important`, over the inline cursor zrender sets.
+**Pointer.** `mousemove`, `mouseleave` and `click` on `div.spans-box`; the position is the client position less the box's. `spanAt` reads, in the row band under the pointer (10px, the row's bar and its gap), the span nearest horizontally within 6px (distance 0 inside the bar); ties go to the shorter span (drawn on top), then the earlier start, then the id. Outside every span nothing is read. A click on a span opens it (decision 8). The cursor is a hand over a span: a class on `div.spans-box` with `cursor: pointer !important`, over the inline cursor zrender sets.
 
-**The mark.** An outline around the span read: `<svg class="spans-mark" aria-hidden="true">` over the plot, a 2px rect 2px outside the bar (a 6px circle around a ring), in `--text-primary`; `Highlight` under forced colors. HTML, so it works before the chart has drawn.
+**The mark.** An outline around the span read: `<svg class="spans-mark" aria-hidden="true">` over the box, a 2px rect 2px outside the span's drawn box (`spanBox()`; a circle of 6px radius around a ring), in `--text-primary`; `Highlight` under forced colors. HTML, so it works before the chart has drawn.
 
-**The tooltip.** A `div.tip` with `role="tooltip"`, shown with an inline `display: block` (the app's stylesheet hides `.tip` until a chart shows it). Measured before it is placed, so a long input never overflows a 343px box: placed with `tipAt()` beside the pointer, or for a key above the span's start (below it at the box's top), kept inside the box. The tool name and the input wrap (`overflow-wrap: anywhere`), at most 18rem wide. Rows: the tool (bold); the input (when not empty); the thread ("Main thread", "Subagent 2", "Subagents, not told apart"); "14:02:10 to 14:08:41" (or "Started 14:02:10, no result recorded", "At 14:02:10, no duration recorded", "Ended 14:02:10, start not recorded"); the duration; "Failed" or "Succeeded" (none without a result); "and 2 other calls at the same time" when `alongside` is not 0. Times by `toLocaleTimeString(undefined, { hour, minute, second })` in the browser's locale, with the date before them when the session spans over 20 hours (the timeline's `long` rule).
+**The tooltip.** A `div.tip` with `role="tooltip"`, shown with an inline `display: block` (the app's stylesheet hides `.tip` until a chart shows it). Measured at the box's top left before it is placed, so a long input never overflows a 343px box. The pointer's: placed with `tipAt()` beside the pointer; when that leaves the box or would cover the span's mark (over a long bar's middle), centred on the pointer above the span, or below the span when there is no room above. A key's: centred on the span's start above the span, or below it when there is no room above. Either is then kept inside the box at both edges. The tool name and the input wrap (`overflow-wrap: anywhere`), at most 18rem wide and never wider than the box. Rows: the tool (bold); the input (when not empty); the thread ("Main thread", "Subagent 2", "Subagents, not told apart"); "14:02:10 to 14:08:41" (or "Started 14:02:10, no result recorded", "At 14:02:10, no duration recorded", "Ended 14:02:10, start not recorded"); the duration; "Failed" or "Succeeded" (none without a result); "and 2 other calls at the same time" when `alongside` is not 0. Times by `toLocaleTimeString(undefined, { hour, minute, second })` in the browser's locale, with the date before them when the session spans over 20 hours (the timeline's `long` rule).
 
 **The live region.** One `div.sr` with `aria-live="polite"` in the component; the wrapper's stays empty.
 
 | Case | Sentence |
 |---|---|
-| A timed call | "Bash on the main thread, 14:02:10 to 14:08:41, 6m, failed: npm test. 2 other calls ran during it." |
+| A failed timed call | "Bash on the main thread, 14:02:10 to 14:08:41, 7m, failed: npm test. 2 other calls ran during it." |
+| A successful timed call | "Read on the main thread, 14:00:00 to 14:00:03, 3s: src/app.ts." (nothing of its outcome) |
 | No result | "Bash on subagent 2, started 14:02:10, no result recorded: npm run dev." |
-| No duration | "exec_command on the main thread, at 14:02:10, no duration recorded: cargo test." |
+| No duration | "exec_command on the main thread, at 14:02:10, no duration recorded: cargo test." (failed: "…, no duration recorded, failed: …") |
 | No start | "Read on the main thread, ended 14:02:10, start not recorded." |
+| A subagent call not told apart | "Read on a subagent not told apart, started 14:48:55, no result recorded: src/limits.py." |
 | Clipped or squeezed | as a timed call; its duration is the true one |
 
-The duration is `dur(ms / 1000)`, one unit, as the requirement "Write durations in one unit" asks ("6m", not the recommendation's "6 min 31 s"); under a second `ms()` ("420ms"). The input follows a colon when not empty. "N other calls ran during it" only when N is not 0.
+The duration is `dur(ms / 1000)`, one unit, rounded, as the requirement "Write durations in one unit" asks ("7m" for 6 minutes 31 seconds, not the recommendation's "6 min 31 s"); under a second `ms()` ("420ms"). ", failed" follows the time of a failed call of any kind. The input follows a colon when not empty. "N other calls ran during it" only when N is not 0. Tooltip and sentence say a call of the folded lane by its own subagent's number.
 
 - A key that cannot move says the sentence again, so it is not met with silence.
 - Newer data keeps the reading: it is held by call id. The lookup of a call gone from the newer payload returns nothing and never throws; the reading then ends quietly, with no sentence. A reading a key made is said again when newer data changes its words (a call that got its result); the pointer's is not, its tooltip shows them (the wrapper's rule).
 
-**The group's label**, on the wrapper's box: "Tool calls of this session by thread, on the timeline's time axis: 412 calls on 3 threads, the main thread and 2 subagents, over 1.9h of active time; the longest, Bash, 6m. Use the left and right arrow keys to step through a thread's calls, up and down to change thread, Home and End for its first and last call, Enter to open the tool." The active time is `info.active_s` (`dur`), the longest call the timed call of the longest duration.
+**The group's label**, on the wrapper's box: "Tool calls of this session by thread, on the timeline's time axis: 412 calls on 3 threads, the main thread and 2 subagents, over 1.9h of active time; the longest, Bash, 7m. Use the left and right arrow keys to step through a thread's calls, up and down to change thread, Home and End for its first and last call, Enter to open the tool." The active time is `info.active_s` (`dur`; left out when null), the longest call the timed call of the longest duration (left out with none). The calls of subagents not told apart count as one thread, listed as "subagents not told apart".
 
 **Visible lines.** Heading (in `SessionSheet`): "Tool calls by thread". Hint: "Each bar is a tool call, from its start to its result, on its thread: the main thread, then each subagent. Calls stacked in a lane ran at once." The key line (HTML, `aria-hidden` as the timeline's): Call, Failed, No result, and, when drawn, "▸ ran past the last event" and the squeezed line of decision 4.
 
 ### 8. Enter and click: the tool's sheet
 
-Enter on the read call, or a click on a span, calls `openToolSheet("tool", tool)` (`session.ts`), as a row of the sheet's Tools table does (`TOOL_PICK`, `ToolSheet.tsx:56`). The tool sheet replaces the session sheet and shows "← Back", which returns to it. A call whose tool is NULL opens nothing: Enter says "No sheet for an unknown tool." and the reading stays. A failed call's sentence does not link to Errors: the Events list and Error loops above keep their "Open in Errors" links.
+Enter on the read call, or a click on a span, ends the reading and calls `openToolSheet("tool", tool)` (`session.ts`), as a row of the sheet's Tools table does (`TOOL_PICK`, `ToolSheet.tsx:56`). The tool sheet opens in place of the session sheet. It shows no "← Back" (the sheets give one only to a session opened from a project or tool sheet, `UsageSheets.tsx`); the browser's Back returns to the session sheet, as from the Tools table. A call whose tool is NULL opens nothing: Enter or a click says "No sheet for an unknown tool." in the live region and the reading stays. A failed call's sentence does not link to Errors: the Events list and Error loops above keep their "Open in Errors" links.
 
 ### 9. Placement and loading
 
-- **Place.** After `<Timeline>` in `SessionSheet.tsx`, before Error loops: `<h3>Tool calls by thread</h3>` then the lazy section. `Timeline.tsx` renders its Events list after its svg, so the section sits under the Events list, not under the svg (correction to the brief: "directly under the timeline" needs an edit of `Timeline.tsx`, which this change does not make). The Events list shows at most 8 events before "Show all".
-- **Lazy chunk.** `const SessionSpans = lazy(loadSpans)` in `SessionSheet.tsx`, where `loadSpans = () => import("./spans/SessionSpans").then(m => ({ default: m.SessionSpans }), () => ({ default: SpansFailed }))`. A failed load resolves to a component that says "The tool-call chart could not be loaded. Reload the page to try again." in place of the section: React.lazy keeps that result, so the rest of the sheet stays and nothing throws to the root (the app has no error boundary).
-- **Requested when the sheet opens.** `SessionSheet` calls `loadSpans()` while it shows "Loading session…" (and on every render; the promise is cached), so the chunk loads beside the session's request. `Suspense` gets `fallback={null}`. When the session's figures are already cached (the context menu fetches them, `SubjectMenu.tsx:43`) the section can appear a moment after the sheet, the first time in a page's life; the content under it then moves once. Accepted: the chunk is a few kB from the local server, and putting the layout in `index` to reserve the height would grow the entry chunk, which the owner ruled out.
+- **Place.** After `<Timeline>` in `SessionSheet.tsx`, so after the timeline and its Events list, before Error loops: `<h3>Tool calls by thread</h3>` then the lazy section. `Timeline.tsx` renders its Events list after its svg, so the section sits under the Events list, not under the svg (correction to the brief: "directly under the timeline" needs an edit of `Timeline.tsx`, which this change does not make). The Events list shows at most 8 events before "Show all".
+- **Lazy chunk.** `const SessionSpans = lazy(loadSpans)` in `SessionSheet.tsx`, where `loadSpans = () => import("./spans/SessionSpans").then(m => ({ default: m.SessionSpans }), () => ({ default: () => <p className="empty">…</p> }))`. A failed load resolves to a component that says "The tool-call chart could not be loaded. Reload the page to try again." in place of the section: React.lazy keeps that result, so the rest of the sheet stays and nothing throws to the root (the app has no error boundary).
+- **Requested when the sheet opens.** `SessionSheet` calls `loadSpans()` while it shows "Loading session…" (and on every render; the promise is cached), so the chunk loads beside the session's request. `Suspense` gets `fallback={null}`. When the session's figures are already cached (the context menu fetches them, `SubjectMenu.tsx:43`) the section can appear a moment after the sheet, the first time in a page's life; the content under it then moves once. Accepted: the chunk is a few kB from the local server, and putting the layout in `index` to reserve the height would grow the entry chunk, which the owner ruled out. The browser check measured the move: the Models block went 406px down, once. The mount itself (the `lazy()` line, the failure line, the heading and `Suspense`) grew `index` by 0.2 kB, 109.9 to 110.1 kB gzip. A failed load stays failed until a reload: React.lazy keeps its result.
 - **The ECharts chunk** loads when the wrapper mounts, as on every chart: once per visit on Live, Limits and Context, which load no chart today (proposal, known cost).
 - **No chart** (each a line in place of the chart, no box): `spansLayout` null: "Not enough activity to draw the tool calls."; a session with no call: "No tool calls in this session."
 
@@ -244,7 +248,7 @@ Enter on the read call, or a click on a span, calls `openToolSheet("tool", tool)
 
 ### 11. The data table: "Calls by duration"
 
-"Show data table" under the chart, through `ChartTable` and the shared `Table`, unchanged, closed on every load. Name: "Calls by duration". One row per call, longest first; calls with no duration or no result after the timed ones, by start. The first 20 rows, then a "Show all N calls" button that renders the rest and moves the focus to the 21st row's button (the timeline's "Show all events" pattern). Columns: Started (the time, with its date when the session spans over 20 hours), Thread, Tool (a button; `pick` opens the tool's sheet, as `TOOL_PICK`), Input (wrapping), Duration ("–" with none), Result ("Failed", "Succeeded", "No result"). `rowId` is the call id.
+"Show data table" under the chart, through `ChartTable` and the shared `Table`, unchanged, closed on every load. Name: "Calls by duration". One row per call drawn, longest first; calls with no duration or no result after the timed ones, by start (else end), then id. The first 20 rows, then a "Show all N calls" button that renders the rest and moves the focus to the 21st row's button, or to the row itself when its call has no tool (the row then takes `tabIndex` −1; the timeline's "Show all events" pattern). Columns, in this order: Started (the time with seconds, with its date when the axis spans over 20 hours; "–" with no start), Thread ("Main thread", "Subagent 2", "Subagents, not told apart"), Tool (a button when the tool is known, plain "Unknown tool" otherwise; `pick` opens the tool's sheet, as `TOOL_PICK`; the cell wraps and is at least 8ch wide), Input (wrapping anywhere), Duration (one unit; "–" with none), Result ("Failed" for every failed call, timed or not; "No result"; else "Succeeded"). `rowId` is the call id. The table sits in the shared table's own scroll region (`div.scroll`, region classes `scroll tall`): at a 343px box it scrolls sideways inside that region, and the sheet does not grow.
 
 ### 12. Tests and the browser check
 
@@ -255,33 +259,35 @@ Enter on the read call, or a click on a span, calls `openToolSheet("tool", tool)
 | `spans/spansReading.test.ts` | `stepSpan` for every key at both ends and with nothing read, `spanAt` on a bar, beside it within 6px, 7px away, over a tick on a bar, `alongside`, the sentences of the five cases, the tooltip rows, the label | Decision 7's rules and words |
 | `spans/spansOption.test.ts`, stubbed `api` | the three series, shapes per kind, `z2`, colors and forced colors, `animation: false`, silent series, no grid | Decision 6 |
 | `spans/SessionSpans.test.tsx`, fake runtime | what a user reaches: the label, hint, key line, notes; Right, Up, Down, Home, End; the sentence in the live region, the tooltip, the mark; pointer read and leave; Enter and a click open the tool sheet; Escape ends a reading and is prevented, and Escape with nothing read is not; newer data keeps the reading, a gone call ends it quietly; the table's first 20 and Show all; the empty lines | Wiring and wording |
-| `sheets.test.tsx`, the existing "shows the session with its timeline, events and error-loop link to Errors" test | one assertion: the heading "Tool calls by thread" and the chart's group after the timeline | The mount |
+| `sheets.test.tsx`, the existing "shows the session with its timeline, events and error-loop link to Errors" test, and a new one, "says so when the tool-call chart's chunk fails to load, and the rest of the sheet works" (a new branch: the failed import) | the heading "Tool calls by thread" and the chart's group after the timeline; the failure line with the timeline and the error-loop link still shown | The mount and the failed load |
 | `spans/SessionSpans.real.test.tsx`, real ECharts | one path per span at its layout pixel; hollow, ring, tick and point shapes; breaks; labels as text; newer data redraws with no stale path; forced colors | An option ECharts refuses or draws elsewhere |
-| `tools/demo/chartfit/spans.mjs`, Chromium | what jsdom cannot show (step 1.11) | Layout, real text, real events, the dialog's Escape |
+| `tools/demo/chartfit/spans.mjs`, Chromium's headless shell (866 lines, 56 check lines) | what jsdom cannot show (step 1.11) | Layout, real text, real events, the dialog's Escape |
 
 The fake runtime draws nothing, and the reading does not use the chart: a section that draws no bar passes every fake test. The real test and the browser check see the drawing.
 
-Only a browser shows: that the bars sit under the timeline's ticks to the pixel; real label widths at 16px and 32px text in a 343px box; that `mousemove` and `click` reach `div.spans-box` through zrender's svg, and a touch tap; the hand cursor; that Escape with a reading open leaves the sheet open; the tooltip shown and inside the box; forced colors; dark and the OS flip; no sideways scroll at 375px and 32px text.
+Only a browser shows: that the bars sit under the timeline's ticks to the pixel; real label widths at 16px and 32px text in a 343px box; that `mousemove` and `click` reach `div.spans-box` through zrender's svg, and a touch tap; the hand cursor; that Escape with a reading open leaves the sheet open; the tooltip shown and inside the box; forced colors; dark and the OS flip; no sideways scroll at 375px and 32px text. The browser check ran on Chromium's headless shell only: Firefox and WebKit could not be run here.
 
-Net test lines, estimated: Python 45, layout 160, reading and words 110, option 70, component 150, real 70, mount 5: about 610, over the 400-line advice. Why: the section owns a two-dimensional reading the wrapper cannot give (decision 7), as the calendar (701), the cost flow and the session plot (611 to 654) did. The step that ends over its share says why in its pull request.
+Net test lines, estimated: Python 45, layout 160, reading and words 110, option 70, component 150, real 70, mount 5: about 610, over the 400-line advice. As built: Python 46, layout 153, reading and words 110, option 121, component 216, real 119, mount and failed load 20: 785 (`verification.md` says why), plus the browser module's 866 lines, which run outside the test suites. Why: the section owns a two-dimensional reading the wrapper cannot give (decision 7), as the calendar (701), the cost flow and the session plot (611 to 654) did.
 
 ### 13. Bundle
 
+Measured on the built assets (gzip -9, `node scripts/check-bundle.mjs`):
+
 - `echarts-*.js`: unchanged, 176.5 kB of 195. No part registered.
-- `index-*.js`: unchanged within 0.1 kB (109.9 of 130). `SessionSheet.tsx` gains a `lazy()` line, the failure component and the heading.
-- A new chunk named after its first module, `SessionSpans-*.js` (assumed: Vite names a chunk after its entry module): estimated 6 to 8 kB. `web/scripts/check-bundle.mjs` gains `SessionSpans: <measured + 2>` in `LIMITS`, with a true comment ("the session sheet's tool-call chart, loaded when a sheet opens"), and the name in `SINGLE`: one line and one name, since other teams edit that file. If the build names it otherwise, guard the name it found and say so.
-- `EChart-*.js`: unchanged; the section imports it, as the pages do.
+- `index-*.js`: 110.1 kB of 130, 0.2 kB over the base's 109.9: the mount itself (`SessionSheet.tsx` gains the `lazy()` line, the failure component, the heading and `Suspense`).
+- A new chunk, `SessionSpans-*.js` (Vite named it after its entry module, as assumed): 6.4 kB. `web/scripts/check-bundle.mjs` has `SessionSpans: 9` in `LIMITS`, with the comment "6.4 kB: the session sheet's tool-call chart (layout, option, reading and table), loaded when a sheet opens", and the name in `SINGLE`.
+- `EChart-*.js`: 7.1 kB of 8. This change edits none of its files and adds nothing to it; the section imports it, as the pages do (the base's 6.3 kB grew on the default branch before this change's base).
 
 ### 14. The demo store: one session for the images and the browser check
 
-Every demo call has a NULL `result_file`, so the demo shows no subagent lane, and its calls run 40 ms to 20 s, so it has no call over 20 minutes (measured). `tools/demo/seed.py` gains one session, `demo-spans` (task 1.8): atlas-api, Claude Code, yesterday from 14:00 to 14:58, with fixed values and no random stream, so every other row the seed writes stays the same (the seed's rule for its later passes, `seed.py:163`, `307`). It holds each case the chart must show: two subagents in parallel and a third later, each with its own result file; three main-thread calls at once; a 6-minute failed test run; a 24.5-minute call with nothing starting for 30 minutes (a squeezed gap); a main-thread call with no result; a subagent call with no result file; the last call ending 3 minutes after the last start. A fixed id lets the browser check and the shot open it by URL.
+Every demo call has a NULL `result_file`, so the demo shows no subagent lane, and its calls run 40 ms to 20 s, so it has no call over 20 minutes (measured). `tools/demo/seed.py` gains one session, `demo-spans` (task 1.8): atlas-api, Claude Code, yesterday from 14:00 to 14:58, with fixed values and no random stream. `demo_spans()` builds its own lists of rows and inserts them itself, and runs after every other pass: the limit snapshots read the seed's requests and the /context snapshots its sessions, so a row added to either list would change them. Every other row the seed writes stays the same. It holds 35 calls (`demo-spans-1` to `demo-spans-35`), with each case the chart must show: two subagents in parallel and a third later, each with its own result file; three main-thread calls at once at 1:30; a 6-minute failed test run; a failed short Edit at 8:40; a 24.5-minute call with nothing starting for 30 minutes (a squeezed gap, 10:00 to 40:10); a main-thread call with no result (52:00); a subagent call with no result file (48:55); `demo-spans-35`, a failed Bash at 8:20 with a result and no end time (the failure tick); the last call ending 3 minutes after the last start (55:00). A fixed id lets the browser check and the shot open it by URL.
 
 What else reads the seed's output, and what the new session changes there:
 
 - `tools/demo/chartfit/*.mjs` read the served payloads at run time and name no demo session or count (`grep` for `demo-` ids and `result_file` finds only payload readers): one more atlas-api session is one more row, dot or bar for them, not a broken check.
 - `tools/demo/record.mjs`: its shots crop panels of pages; its GIF scenes open a session sheet from the first Sessions row and from an "Open session" link of the Judgments log (`record.mjs:136`, `199`, `248`). Sessions are sorted newest first and the seed has sessions until 30 minutes ago, so `demo-spans` (yesterday) is not a first row. The new `session-spans` shot (task 1.12) opens it by URL. The README GIFs are not re-recorded in this change: they show the session sheet without the section until the next recording.
 - `tools/demo/firstscreen.mjs`, `typefit.mjs`, `sticky.mjs`, `livefit.mjs`: layout checks of pages and Live; `demo-spans` is not live (it ended yesterday).
-- Errors, Cost and Activity count one more session with two failed calls (the test run and an edit) and its requests' cost. Nothing hard-codes those figures.
+- Errors, Cost and Activity count one more session with three failed calls (the test run, an edit and the 8:20 Bash) and its requests' cost. Nothing hard-codes those figures.
 
 ## Corrections to the brief and the recommendation
 
@@ -292,6 +298,20 @@ What else reads the seed's output, and what the new session changes there:
 5. **No lane names from spawn calls** in this version (decision 1, alternatives).
 6. **The demo seed writes `result_file = None` for every call, main thread included**, not only subagent calls (`seed.py:155-156`, `201-203`, `360-363`).
 7. **Escape in a sheet** is a fault class the three built graphs did not have: they live on pages, not in a modal dialog. Decision 7 settles it; the browser check proves it.
+
+## Differences found while building
+
+Each is folded into the decision named; the code is the reference.
+
+1. **Heights** (decision 5): every cap at 32px text is 622px by the formula, not 642px.
+2. **The failure tick** (decisions 2 and 6): a failed call with no recorded duration is drawn as the failure tick, not the muted 1px tick. A call with a result but no end time, or an unparseable end, has no duration; only a call with neither an end nor an error flag has no result.
+3. **The clipped bar** (decision 3) ends in a point in the plot's right margin, 2px before the box's edge, and is at least 6px long; its note says "… in a point.", not "… at the edge."
+4. **The words** (decision 7): a successful call's sentence says nothing of its outcome; "a subagent not told apart"; the cut note counts the spans drawn and shows only with `calls_truncated`; a 6 minutes 31 seconds call reads "7m"; the tooltip's placement and Escape's exact conditions.
+5. **Back** (decision 8): the tool sheet has no "← Back"; the browser's Back returns.
+6. **The entry chunk** (decisions 9 and 13) grew by 0.2 kB, the mount itself.
+7. **The table** (decision 11): its columns as built, the Tool cell's 8ch, its own scroll region.
+8. **The lane ranks** (decision 1) follow the payload's own call order (`min(n)`), not `min(start), min(id)`; the payload gains `calls_truncated`; only the result file's path is kept from the browser.
+9. **The seed** (decision 14) inserts its own rows after every other pass, and holds 35 calls.
 
 ## Risks / Trade-offs
 
