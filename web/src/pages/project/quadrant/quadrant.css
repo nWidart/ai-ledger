@@ -13,7 +13,8 @@
 .quad-mark { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
 .quad-mark circle { fill: none; stroke: var(--text-primary); stroke-width: 2; }
 
-.quad-box .tip .tname { max-width: 18rem; overflow-wrap: anywhere; }
+/* A long name wraps: the tooltip's own rows keep the app's nowrap. */
+.quad-box .tip .tname { max-width: 18rem; white-space: normal; overflow-wrap: anywhere; }
 .quad-box .tip .row { display: flex; gap: var(--space-5); justify-content: space-between; }
 .quad-box .tip .chip { margin-left: var(--space-2); }
 

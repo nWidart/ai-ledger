@@ -92,6 +92,8 @@ export function SessionQuadrant({ rows, totalSessions, project, view }: { rows: 
     const el = box.current, tip = tipEl.current;
     if (!el || !tip || at == null) return;
     const r = el.getBoundingClientRect(), d = fit.dots[at]!, p = pointer.current ?? { x: r.left + d.px, y: r.top + d.py };
+    // Measured at the box's left: a wrapping name makes the tooltip as wide as the room right of where it last stood.
+    tip.style.left = "0px";
     const pos = tipAt(el, tip, p.x, p.y), w = tip.offsetWidth, h = tip.offsetHeight;
     // Beside the dot when it fits in the box on one side; in a narrow box, or beside a long name, that would cover the dot
     // and its neighbours: then above the dot (below it at the window's top), inside the box.
