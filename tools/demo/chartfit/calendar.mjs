@@ -23,7 +23,7 @@
 //   keeps the range; the tab list is in view, under the sticky bars; the status is in the calendar's live region; outside
 //   the range the URL gets the range, then the day, the status names the range, and Back restores the earlier range;
 // - a touch tap in a 343px box selects a day;
-// - Escape with the focus on another control closes a tooltip the pointer opened;
+// - Escape with the focus on another control closes a tooltip the pointer opened, also an Escape the moment it shows;
 // - newer figures keep the day read with the keys, and say nothing; with motion on no cell animates, on the first drawing,
 //   on newer figures or on a theme change;
 // - after a filter change answered 500: "Could not load the calendar (…)." with Retry, and the kept calendar takes no pick;
@@ -415,6 +415,22 @@ export async function calendar(h) {
     const closed = await until(() => reading(page), r => !r.tip && !r.ring), focus = await ev(page, () => document.activeElement?.id ?? "");
     line("Escape with the focus on another control closes a tooltip the pointer opened, and leaves the focus there", !!opened.tip && !closed.tip && !closed.ring && focus === "navTheme",
       `${opened.tip ? "opened" : "never opened"}; after Escape ${closed.tip ? "tooltip open" : "no tooltip"}; focus on "#${focus}"`);
+    // The same Escape the moment the tooltip shows: dispatched on the focused control by an observer of the tooltip, before
+    // the page paints. On a loaded machine a key press can come that soon.
+    await away(page);
+    await until(() => reading(page), r => !r.tip);
+    await ev(page, () => {
+      const tip = document.querySelector("#calendar .cal-box .tip");
+      const o = new MutationObserver(() => {
+        if (getComputedStyle(tip).display === "none") return;
+        o.disconnect();
+        document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+      });
+      o.observe(tip, { attributes: true, attributeFilter: ["style"] });
+    });
+    await page.mouse.move(c.x, c.y);
+    const soon = await until(() => reading(page), r => !r.tip && !r.ring);
+    line("an Escape the moment the pointer's tooltip shows closes it", !soon.tip && !soon.ring, `${soon.tip ? "tooltip open" : "no tooltip"}, ${soon.ring ? "ring drawn" : "no ring"}`);
     await page.done();
   }
 
