@@ -30,7 +30,8 @@
 //   labels fit 52px with counts up to "600,000" and two-decimal rates; the focus ring on the chart and on the message's box;
 // - the message without failed calls: no zoom words, Space kept from scrolling; the mini chart shows when #chartView
 //   scrolls away;
-// - by week in a 343px box: the edges and labels of checks.mjs, a click on the newest week; about 98 weeks: the frame
+// - by week in a 343px box: the edges and labels of checks.mjs, a click on the newest week; at 32px text with the web
+//   font held back until the chart has drawn, the default title ends inside the plot once it loads; about 98 weeks: the frame
 //   stays visible and no wider than its band;
 // - newer figures keep the reading, the zoom and the selection, and say nothing; the bars grow once.
 import { LOCALE, PHONE, line, sleep, until } from "./harness.mjs";
@@ -951,6 +952,28 @@ export async function errors(h) {
     await wk.shot(p32, "narrow-32px");
     await narrow(wk, p32, `a ${bw32}px box at 32px text, ${WEEKS.length} weeks`, true);
     await p32.done();
+    // The web font arriving after the first drawing: the chart, drawn and cut in the fallback font, is drawn again when
+    // IBM Plex Sans has loaded, with no interaction. The font is held back until the chart has drawn: routing turns the
+    // HTTP cache off, so the reload fetches it again.
+    {
+      const pf = await wk.open(`${PHONE}px window, ${WEEKS.length} weeks, 32px root, the font late`, phone, root32);
+      let release;
+      const held = new Promise(r => { release = r; });
+      await pf.route(/fonts\.gstatic\.com/, async route => { await held; await route.continue().catch(() => {}); });
+      await pf.reload();
+      await until(() => drawn(pf), n => n > 0);
+      const plex = () => ev(pf, () => [...document.fonts].some(f => f.family.includes("IBM Plex Sans") && f.weight === "500" && f.status === "loaded"));
+      const early = await plex();
+      release();
+      await ev(pf, () => document.fonts.ready.then(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))));
+      const title = () => ev(pf, () => ({ t: window.chartfit.texts().find(x => x.text.startsWith("Failed calls per")), g: window.chartfit.grid() }));
+      const got = await until(title, x => x.t && x.t.r <= x.g.r + .5);
+      const late = await plex();
+      line(`a ${bw32}px box at 32px text, by week, the font loaded after the first drawing: the default title ends inside the plot, with no interaction`,
+        !early && late && !!got.t && got.t.l >= got.g.l - .5 && got.t.r <= got.g.r + .5,
+        `IBM Plex Sans 500 ${early ? "ALREADY LOADED" : "not loaded"} at the first drawing, ${late ? "loaded" : "NOT LOADED"} after; ${got.t ? `"${got.t.text}" ${got.t.l.toFixed(1)}..${got.t.r.toFixed(1)}px` : "no title"}; plot ${got.g.l.toFixed(1)}..${got.g.r.toFixed(1)}px`);
+      await pf.done();
+    }
   }
 
   // About 98 weeks in a 343px box: the selected week's frame stays visible and no wider than its band, as the fix line.
