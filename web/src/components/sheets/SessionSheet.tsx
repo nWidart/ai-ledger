@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import type { SessionDetail, View } from "../../api";
 import { big, dur, num, pct, plural, usd, when } from "../../format";
 import { queries } from "../../queries";
@@ -14,6 +14,12 @@ import { TOOL_COLUMNS, TOOL_PICK } from "./ToolSheet";
 import { FilterButton } from "./FilterButton";
 import { SessionInsight } from "./SessionInsight";
 import { Timeline } from "./Timeline";
+
+// The tool-call chart is its own chunk. A failed load resolves to a line in its place: React.lazy keeps that result, so the
+// rest of the sheet stays and nothing throws to the root (the app has no error boundary).
+const loadSpans = () => import("./spans/SessionSpans").then(m => ({ default: m.SessionSpans }),
+  () => ({ default: () => <p className="empty">The tool-call chart could not be loaded. Reload the page to try again.</p> }));
+const SessionSpans = lazy(loadSpans);
 
 /** A session's cost: unknown when no model is priced, a labelled subtotal when only some are. */
 export function sessCost(models: SessionDetail["models"]): [string, string] {
@@ -71,6 +77,7 @@ export function SessionSheet({ id, s, error, retry, range, pageProject, view }: 
   // The text lands only after the user asked (or it was cached already, which asks for nothing): focus it then.
   const landed = asked && full != null;
   useEffect(() => { if (landed) requestAnimationFrame(() => pre.current?.focus({ preventScroll: true })); }, [landed]);
+  loadSpans(); // requested while the session loads; the promise is cached
   if (error) return error instanceof ApiError && error.status === 404
     ? <div className="empty">This session was not found.</div>
     : <div className="empty" role="alert">Could not load this session ({error.message}). <button type="button" className="linkish" onClick={retry}>Retry</button></div>;
@@ -112,6 +119,8 @@ export function SessionSheet({ id, s, error, retry, range, pageProject, view }: 
     {s.insight && <SessionInsight i={s.insight} view={view} />}
     <h3>Timeline</h3>
     <Timeline s={s} project={i.project} />
+    <h3>Tool calls by thread</h3>
+    <Suspense fallback={null}><SessionSpans s={s} /></Suspense>
     {s.error_loops.length > 0 && <><h3>Error loops</h3>{s.error_loops.map(l => (
       <div key={l.first_id}>{l.tool} failed {l.failures}× in a row. <a href={errorsHref(i.project, range, l.first_id)} onClick={appLink}>Open in Errors</a></div>))}</>}
     {s.commits.length > 0 && <details className="sd"><summary>Commits<span className="c">{num(s.commits.length)}</span></summary>

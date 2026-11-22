@@ -36,11 +36,31 @@ describe("SessionSheet", () => {
     expect(sheet().getByText("active").textContent).toMatch(/^9m active/); // active time, not first to last
     expect(sheet().getByRole("link", { name: "Open in Errors" }).getAttribute("href")).toBe("/errors?project=foo&range=30&ex=t01");
     expect(sheet().getByRole("group", { name: /^Session timeline\. Context grew from 10\.0M/ })).toBeTruthy();
+    // The tool-call chart is a lazy chunk: its group arrives after the sheet, under the timeline.
+    const timeline = sheet().getByRole("group", { name: /^Session timeline/ });
+    expect(sheet().getByRole("heading", { name: "Tool calls by thread" }).compareDocumentPosition(timeline) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    expect(await sheet().findByRole("group", { name: /^Tool calls of this session by thread/ })).toBeTruthy();
     // Four failures in a row (one run), the commit, then two more failures with no success between them.
     const evs = sheet().getAllByRole("button", { pressed: false }).filter(b => b.classList.contains("evbtn"));
     expect(evs.map(b => b.textContent)).toEqual([expect.stringMatching(/Edit failed 4× in a row/), expect.stringMatching(/^.*Commit/),
       expect.stringMatching(/Bash, mcp__srv__q failed 2× in a row/)]);
     expect(sheet().getAllByRole("link", { name: "Open the first of these failures in Errors" })[0]!.getAttribute("href")).toBe("/errors?project=foo&ex=t01");
+  });
+
+  it("says so when the tool-call chart's chunk fails to load, and the rest of the sheet works", async () => {
+    vi.resetModules();
+    vi.doMock("./spans/SessionSpans", () => { throw new Error("chunk blocked"); });
+    try {
+      const [{ UsageSheets: Sheets }, { mockApi: mock }, { renderApp: render }] = await Promise.all([import("./UsageSheets"), import("./testing"), import("../../testing")]);
+      mock({ "/api/session": () => session });
+      at("?range=30&session=s1");
+      render(<Sheets />);
+      expect(await sheet().findByText("The tool-call chart could not be loaded. Reload the page to try again.")).toBeTruthy();
+      expect(sheet().getByRole("group", { name: /^Session timeline/ })).toBeTruthy();
+      expect(sheet().getByRole("link", { name: "Open in Errors" })).toBeTruthy();
+    } finally {
+      vi.doUnmock("./spans/SessionSpans");
+    }
   });
 
   it("leaves modified keys to the browser on the timeline, but for Shift+Left and Shift+Right, its ten-request step", async () => {
