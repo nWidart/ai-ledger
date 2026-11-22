@@ -23,6 +23,7 @@ The message reads `cannot listen on 127.0.0.1:<port>: <reason>; pass --port to u
 
 - **Cause:** the server accepts the host `127.0.0.1:<port>` only. A request for `localhost:<port>` is redirected to `127.0.0.1:<port>`. A request with any other host gets 403 "forbidden host".
 - **Fix:** open `http://127.0.0.1:8765/` (with your port). Do not use `localhost`, a machine name or an IP address of another interface. The app listens on no other interface, and another machine cannot connect to it.
+- **To open the app through a reverse proxy**, start it with `--proxy-host <host[:port]>`, with the `Host` the proxy passes on, port included when it is not 443. See [CLI and options](/ai-ledger/reference/cli/). The pages show full transcripts and the proxy adds no login: use a private network only.
 
 ### `ingest` or `rebuild` says "the app is running and owns the store"
 

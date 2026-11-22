@@ -77,6 +77,7 @@ The first start reads every transcript, about 5 minutes for a month of heavy use
 | `--usage-data` | `~/.claude/usage-data` |
 | `--db` | `~/Library/Application Support/ai-ledger/ai-ledger.duckdb` (macOS), `~/.local/share/ai-ledger/ai-ledger.duckdb` (Linux) |
 | `--metrics-host HOST[:PORT]` | none; repeatable (see [Prometheus and Grafana](#prometheus-and-grafana)) |
+| `--proxy-host HOST[:PORT]` | none; repeatable (see [Open the pages from another device](#open-the-pages-from-another-device)) |
 
 With the app stopped, `ai-ledger ingest` reads new lines once and `ai-ledger rebuild` recomputes the derived tables. After an upgrade that asks for it, run `ai-ledger rebuild` once.
 
@@ -144,9 +145,24 @@ Cost is the reported cost, else the list-price estimate, as on Cost; a request w
 
 The [documentation site](https://nwidart.github.io/ai-ledger/reference/metrics/) lists every metric and panel.
 
+## Open the pages from another device
+
+**Warning.** The pages show full transcript content, secrets included. The proxy adds no login: anyone who can reach the proxied address can read everything and start ingests. Expose it only on a private network you control, such as your tailnet, and consider Tailscale ACLs to limit which devices reach it. Never use Tailscale Funnel or any public proxy for it.
+
+The app keeps listening on `127.0.0.1`. A reverse proxy such as `tailscale serve` makes it reachable, and `--proxy-host` tells the app to accept the `Host` the proxy passes on:
+
+```bash
+tailscale serve --bg --https=8445 http://127.0.0.1:8765
+ai-ledger --proxy-host <machine>.<tailnet>.ts.net:8445
+```
+
+Then open `https://<machine>.<tailnet>.ts.net:8445/`. The value must match the `Host` the proxy passes: include the port when the proxy listens on one other than 443. The option is repeatable, and a bad value stops the start. Every route answers that host, including `/metrics`. A request that another site makes from your browser is still refused.
+
+The proxied address is another browser origin, so the settings your browser keeps per origin (theme, column choices, wide sheets, page view options) start fresh there. Fix markers and muted error types are in the store, so both addresses share them.
+
 ## Privacy
 
-- The server listens on `127.0.0.1` only, and refuses requests that another site makes from your browser. `GET /metrics` serves project, model and tool names to any Prometheus that can reach it; see [Prometheus and Grafana](#prometheus-and-grafana).
+- The server listens on `127.0.0.1` only, and refuses requests that another site makes from your browser. `GET /metrics` serves project, model and tool names to any Prometheus that can reach it; see [Prometheus and Grafana](#prometheus-and-grafana). With `--proxy-host`, every page answers the proxied host; see [Open the pages from another device](#open-the-pages-from-another-device).
 - The store keeps every transcript line, **including any secrets** that appeared in a session. Only your user can read it. Do not share it.
 - On macOS, the Limits page sends your Claude Code OAuth token from the Keychain to Anthropic's usage endpoint every 5 minutes. The token goes nowhere else and is never stored or logged. On Linux there is no Keychain to read, so Limits shows no Claude Code window.
 - If the Grok CLI is signed in with grok.com, the Limits page sends that login's access token, read from `~/.grok/auth.json` (or `$GROK_HOME/auth.json`), to `https://cli-chat-proxy.grok.com/v1/billing?format=credits` every 5 minutes. The token goes nowhere else, is never stored, logged or shown, and is never refreshed. With an API key or no login, nothing is sent.

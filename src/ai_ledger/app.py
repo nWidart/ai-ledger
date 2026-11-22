@@ -356,9 +356,10 @@ def asset(path):
     return (full, ASSET_TYPES[ext]) if os.path.dirname(full) == base and ext in ASSET_TYPES and os.path.isfile(full) else None
 
 
-def handler(app, port=PORT, metrics_hosts=()):
-    """The request handler. metrics_hosts: lowercase Host values that GET /metrics accepts besides 127.0.0.1:<port>."""
-    metrics_hosts = frozenset(metrics_hosts)
+def handler(app, port=PORT, metrics_hosts=(), proxy_hosts=()):
+    """The request handler. Lowercase Host values accepted besides 127.0.0.1:<port>: metrics_hosts by GET /metrics, proxy_hosts by
+    every route."""
+    metrics_hosts, proxy_hosts = frozenset(metrics_hosts), frozenset(proxy_hosts)
 
     class Handler(BaseHTTPRequestHandler):
         def handle(self):
@@ -434,11 +435,15 @@ def handler(app, port=PORT, metrics_hosts=()):
             except (ValueError, RecursionError):
                 raise ValueError("body must be JSON") from None
 
+        def host(self):
+            return (self.headers.get("Host") or "").lower()
+
         def checked_host(self, metrics=False):
-            """Serve only 127.0.0.1; send localhost there (fix markers live in that origin); refuse other hosts. A GET of
-            /metrics (metrics) also takes a --metrics-host name: the one a proxy such as tailscale serve passes on."""
-            host = (self.headers.get("Host") or "").lower()
-            if metrics and host in metrics_hosts:
+            """Serve only 127.0.0.1; send localhost there (the browser keeps the page's settings per origin); refuse other hosts,
+            which stops DNS rebinding. A --proxy-host name, the one a proxy such as tailscale serve passes on, gets every route; a
+            --metrics-host name gets a GET of /metrics (metrics) only."""
+            host = self.host()
+            if host in proxy_hosts or (metrics and host in metrics_hosts):
                 return True
             if host == f"localhost:{port}":
                 self.send(301, "", headers=[("Location", f"http://{HOST}:{port}{self.path}")])
@@ -452,14 +457,17 @@ def handler(app, port=PORT, metrics_hosts=()):
             """Refuse a request another site made, before it runs. /api and every POST are for this page's own scripts: a
             cross-site page can still send them (a form post, a no-cors fetch, an EventSource), and /api/refresh needs no body.
             Sec-Fetch-Site says who sent it; a browser without it sends Origin on a POST. Requests with neither (curl, the
-            command line) and page navigations pass."""
+            command line) and page navigations pass. Behind a --proxy-host proxy the page's origin is that host, over https or
+            http as the proxy serves it."""
             if method == "GET" and not path.startswith("/api"):
                 return True
             site, origin = self.headers.get("Sec-Fetch-Site"), self.headers.get("Origin")
             if site is not None:
                 ok = site.lower() in ("same-origin", "none")
             else:
-                ok = origin is None or origin == f"http://{HOST}:{port}"
+                host = self.host()
+                mine = (f"https://{host}", f"http://{host}") if host in proxy_hosts else (f"http://{HOST}:{port}",)
+                ok = origin is None or origin.lower() in mine
             if not ok:
                 self.send(403, "forbidden cross-site request\n", "text/plain")
             return ok
@@ -611,10 +619,10 @@ def can_open():
     return sys.stdout.isatty() and (sys.platform != "linux" or bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")))
 
 
-def serve(con, roots, port=PORT, open_page=False, metrics_hosts=()):
+def serve(con, roots, port=PORT, open_page=False, metrics_hosts=(), proxy_hosts=()):
     app = App(con, roots)
     try:
-        httpd = ThreadingHTTPServer((HOST, port), handler(app, port, metrics_hosts))
+        httpd = ThreadingHTTPServer((HOST, port), handler(app, port, metrics_hosts, proxy_hosts))
     except OSError as e:
         sys.exit(f"cannot listen on {HOST}:{port}: {e}; pass --port to use another port")
     loop = threading.Thread(target=app.loop, daemon=True)
@@ -634,8 +642,8 @@ def serve(con, roots, port=PORT, open_page=False, metrics_hosts=()):
         app.stop(loop)
 
 
-def metrics_host(value):
-    """A --metrics-host value as a Host header carries it: a name, with a port or not, lowercase."""
+def host_header(value):
+    """A --metrics-host or --proxy-host value as a Host header carries it: a name, with a port or not, lowercase."""
     if not re.fullmatch(r"[A-Za-z0-9.-]+(:[0-9]{1,5})?", value):
         raise argparse.ArgumentTypeError(f"not a host or host:port: {value!r}")
     return value.lower()
@@ -651,8 +659,11 @@ def main(argv=None):
     ap.add_argument("--db", help=f"database file (default {store.DEFAULT_DB})")
     ap.add_argument("--port", type=int, default=PORT, help=f"port to serve on at {HOST} (default {PORT})")
     ap.add_argument("--no-open", action="store_true", help="serve without opening the browser")
-    ap.add_argument("--metrics-host", action="append", default=[], type=metrics_host, metavar="HOST[:PORT]",
+    ap.add_argument("--metrics-host", action="append", default=[], type=host_header, metavar="HOST[:PORT]",
                     help="also answer GET /metrics for this Host header, as a proxy such as tailscale serve sends it; repeatable")
+    ap.add_argument("--proxy-host", action="append", default=[], type=host_header, metavar="HOST[:PORT]",
+                    help="also answer every route for this Host header, as a proxy such as tailscale serve sends it; the pages "
+                         "show full transcripts and the proxy adds no login, so use a private network only; repeatable")
     ap.add_argument("--version", action="version", version=f"ai-ledger {importlib.metadata.version('ai-ledger')}")
     a = ap.parse_args(argv)
     roots = dict(claude=a.projects, codex=a.codex, grok=a.grok, insights=a.usage_data)
@@ -665,7 +676,7 @@ def main(argv=None):
         print(e, file=sys.stderr)
         sys.exit(1)
     if a.command == "serve":
-        serve(con, roots, a.port, open_page=not a.no_open, metrics_hosts=a.metrics_host)
+        serve(con, roots, a.port, open_page=not a.no_open, metrics_hosts=a.metrics_host, proxy_hosts=a.proxy_host)
     elif a.command == "ingest":
         t = time.time()
         print(store.ingest(con, roots, log=print))

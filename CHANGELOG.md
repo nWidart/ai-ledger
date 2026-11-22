@@ -8,6 +8,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Prices for OpenAI `gpt-6.2-sol` and `gpt-6.2-astra`, so Codex sessions on those models show an estimated cost.
+- `--proxy-host HOST[:PORT]` (repeatable) lets every page and route answer the `Host` that a reverse proxy such as `tailscale serve` passes on, so you can open the app from another device. The cross-site check still applies. The pages show full transcripts and the proxy adds no login: use it only on a private network such as your tailnet, never with Tailscale Funnel.
 
 ### Fixed
 

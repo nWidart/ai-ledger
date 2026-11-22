@@ -40,6 +40,7 @@ A first ingest reads every transcript and takes about 5 minutes for a month of h
 | `--usage-data <path>` | `~/.claude/usage-data` | The directory of Claude Code's `/insights` usage data. | `serve`, `ingest` |
 | `--db <file>` | The store in the [data folder](/ai-ledger/reference/storage/) | The database file. The configuration files are read from its folder. | all |
 | `--metrics-host <host[:port]>` | none | Also lets `GET /metrics` accept this `Host` header, as a proxy such as `tailscale serve` sends it. Repeatable; matched without case. Every other route keeps the strict host check. See [Prometheus metrics](/ai-ledger/reference/metrics/#a-second-machine). | `serve` |
+| `--proxy-host <host[:port]>` | none | Lets every route answer this `Host` header, as a reverse proxy such as `tailscale serve` sends it. Repeatable; matched without case. A value that is not a host name with an optional port stops the start. The page shows full transcripts and the proxy adds no login: use it on a private network only. See [Privacy and security model](/ai-ledger/concepts/privacy-security/#how-the-server-is-guarded). | `serve` |
 | `--version` | | Prints `ai-ledger <version>` and exits without opening the store. It works while the app runs. | |
 | `-h`, `--help` | | Prints the usage and exits. | |
 
@@ -52,7 +53,7 @@ A transcript root that does not exist, such as a missing Codex or Grok home, is 
 - The app prints `serving http://127.0.0.1:<port>/ (ingest every 60s)`.
 - The app opens the browser unless `--no-open` is given, standard output is not a terminal, or it runs on Linux with neither `DISPLAY` nor `WAYLAND_DISPLAY` set. It prints the URL in every case.
 - A second instance on another store and port runs beside the first: `ai-ledger --db <copy> --port 8766`.
-- A request with a `Host` of `localhost:<port>` is redirected to `127.0.0.1:<port>`. A request with any other host gets 403, except `GET /metrics` with a host that `--metrics-host` names.
+- A request with a `Host` of `localhost:<port>` is redirected to `127.0.0.1:<port>`. A request with any other host gets 403, except `GET /metrics` with a host that `--metrics-host` names, and any request with a host that `--proxy-host` names. A request for a `--proxy-host` host still gets `403 forbidden cross-site request` when another site sends it from your browser.
 - `GET /metrics` serves the figures in the Prometheus text format. See [Prometheus metrics](/ai-ledger/reference/metrics/).
 
 ## Exit status

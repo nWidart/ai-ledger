@@ -62,9 +62,9 @@ class AppTest(unittest.TestCase):
             status, headers, body = self.get(path)
             self.assertEqual((status, headers["Content-Type"], headers["Cache-Control"], body), (200, "text/html; charset=utf-8", "no-cache", index))
 
-    def request(self, method, path, headers=None, body=None):
-        h = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1])
-        h.request(method, path, body=body, headers={"Host": f"{app.HOST}:{app.PORT}", **(headers or {})})
+    def request(self, method, path, headers=None, body=None, host=f"{app.HOST}:{app.PORT}", server=None):
+        h = http.client.HTTPConnection("127.0.0.1", (server or self.httpd).server_address[1])
+        h.request(method, path, body=body, headers={"Host": host, **(headers or {})})
         r = h.getresponse()
         return r.status, dict(r.getheaders()), r.read()
 
@@ -284,7 +284,8 @@ class AppTest(unittest.TestCase):
         self.assertEqual(self.get("/assets/x.js", host="evil:8765")[0], 403)
         self.assertEqual(self.get("/metrics", host="mac.example.ts.net")[0], 403)  # no --metrics-host given
         httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(self.con, {}, pollers=[]), 8766,
-                                                                  [app.metrics_host("Mac.example.ts.net")]))
+                                                                  [app.host_header("Mac.example.ts.net")],
+                                                                  [app.host_header("Box.example.ts.net:8445")]))
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         self.addCleanup(httpd.server_close)
         self.addCleanup(httpd.shutdown)
@@ -296,8 +297,18 @@ class AppTest(unittest.TestCase):
         self.assertEqual(self.get("/metrics", host="mac.EXAMPLE.ts.net", server=httpd)[0], 200)
         self.assertEqual(self.get("/api/status", host="mac.example.ts.net", server=httpd)[0], 403)
         self.assertEqual(self.get("/usage", host="mac.example.ts.net", server=httpd)[0], 403)
+        # A --proxy-host name opens every route. Its https origin is same-site; another site's is not.
+        box, mine = "box.example.ts.net:8445", {"Origin": "https://box.example.ts.net:8445"}
+        self.assertEqual(self.get("/usage", host=box, server=httpd)[0], 200)
+        self.assertEqual(self.get("/", host=box, server=httpd)[1]["Location"], "/usage")
+        self.assertEqual(self.request("GET", "/api/status", mine, host=box, server=httpd)[0], 200)
+        self.assertEqual(self.request("POST", "/api/errors/fix", mine, host=box, server=httpd)[0], 400)  # past both checks, to the body
+        self.assertEqual(self.request("POST", "/api/errors/fix", {"Origin": "https://evil.example"}, host=box, server=httpd)[0], 403)
+        self.assertEqual(self.request("POST", "/api/errors/fix", {"Sec-Fetch-Site": "cross-site"}, host=box, server=httpd)[0], 403)
+        self.assertEqual(self.request("GET", "/api/status", {"Origin": "http://127.0.0.1:8766"}, host=box, server=httpd)[0], 403)
+        self.assertEqual(self.get("/usage", host="box.example.ts.net", server=httpd)[0], 403)  # the port is part of the name
         with self.assertRaises(argparse.ArgumentTypeError):
-            app.metrics_host("mac.example.ts.net/metrics")
+            app.host_header("mac.example.ts.net/metrics")
 
     def test_port_in_use(self):
         with socket.socket() as held:
