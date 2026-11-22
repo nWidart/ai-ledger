@@ -67,29 +67,40 @@ When the view holds more sessions than the usage payload lists, the block SHALL 
 - **THEN** the block says two sessions with no known cost are left out
 
 ### Requirement: Show a zero on the session plot's log axes
-A session at $0.00, or with no tool call, SHALL be drawn in a lane at the start of that axis, labelled 0, under the smallest tick. The lane SHALL be drawn only when a shown session needs it.
+A session at $0, or with no tool call, SHALL be drawn in a lane at the start of that axis, labelled "$0" on the cost axis and "0" on the tool-call axis. The lane SHALL lie under the power of ten at or below the axis's lowest value and span at most one decade. The lane SHALL be drawn only when a shown session needs it; an axis with no positive value SHALL take a fallback decade with a lane.
 
 #### Scenario: No tool call
 - **WHEN** a session of the view made no tool call
 - **THEN** its dot sits in the lane at the bottom of the plot, labelled 0, and its reading says "no tool call"
 
+#### Scenario: A session at no cost
+- **WHEN** a session of the view has an estimated cost of 0
+- **THEN** its dot sits in the lane at the left of the plot, labelled "$0", and its reading says "$0"
+
 #### Scenario: No session at zero
-- **WHEN** every shown session has a cost above $0.00 and at least one tool call
+- **WHEN** every shown session has a cost above $0 and at least one tool call
 - **THEN** neither axis has a lane
 
 ### Requirement: Read the session plot from the cheapest session to the costliest
-The session plot SHALL be read by keyboard from the cheapest session to the costliest: Right and Left to the next and previous dot, Home and End to the ends. The pointer SHALL read the dot nearest to it within 12px. A reading SHALL say the session's name (its title, or its short id without one), start, estimated cost, tool calls, commits and, with three dots or more, its quadrant.
+The session plot SHALL be read by keyboard from the cheapest session to the costliest: Right and Left to the next and previous dot, Home and End to the ends. The pointer SHALL read the dot nearest to it within 12px. A reading SHALL say the session's name (its title, or its short id without one), start (its time in the browser's locale), estimated cost, tool calls, commits and, with three dots or more, its quadrant.
 
 #### Scenario: First key
-- **WHEN** the user focuses the session plot and presses Right
-- **THEN** the cheapest session is read, for example "Fix the flaky invoice export test, started Nov 2, 09:05: $0.85, 41 tool calls, 2 commits. Cheap, much done."
+- **WHEN** the user focuses the session plot and presses Right, in an en-US browser
+- **THEN** the cheapest session is read, for example "Fix the flaky invoice export test, started Nov 2, 09:05 AM: $0.85, 41 tool calls, 2 commits. Cheap, much done."
+
+### Requirement: Write a session's cost on the session plot
+A session's cost SHALL read as the app writes a cost, with "$0" for a true zero. A positive cost under a cent SHALL read "under $0.01" in the sentence and "<$0.01" in the tooltip and the table; with unpriced requests it SHALL read "more than $0".
+
+#### Scenario: A cost under a cent
+- **WHEN** the session read cost $0.003 and all its requests are priced
+- **THEN** its sentence says "under $0.01" and its tooltip "<$0.01"
 
 #### Scenario: Sessions in one place
 - **WHEN** three sessions sit within 4px of each other and the pointer reads one of them
 - **THEN** its tooltip says "and 2 more sessions here", and the arrow keys read each of the three in turn
 
 ### Requirement: Open a session from the session plot
-Enter on the dot read, or a click on a dot, SHALL open the session's sheet over the page, as a row of the Sessions block does. The plot's data table SHALL list every dot with the same figures and quadrant, and a row SHALL open its session's sheet.
+Enter on the dot read, or a click on a dot, SHALL open the session's sheet over the page, as a row of the Sessions block does. When the sheet closes and the focus is back on the plot, Right and Left SHALL go on from that dot. The plot's data table, "Sessions on the plot", SHALL list every dot with the same figures and quadrant, and a row SHALL open its session's sheet.
 
 #### Scenario: Open a session
 - **WHEN** the user reads a dot and presses Enter
