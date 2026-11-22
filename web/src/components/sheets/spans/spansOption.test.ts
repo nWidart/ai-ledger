@@ -69,9 +69,9 @@ describe("spansOption", () => {
     expect(sp(stillFailed)).toMatchObject({ kind: "still", failed: true });
     expect(spanOf(stillFailed)).toMatchObject({ type: "rect", shape: { x: sp(stillFailed).x0 - .5, y: top(stillFailed) - 2, width: 2, height: 10 }, style: { fill: "var(--critical)" } });
     expect(spanOf(stillFailed, forced).style).toMatchObject({ fill: "CanvasText" });
-    // Clipped: to the plot's edge, the last 4px narrowing to the edge's middle.
-    const c = sp(clipped), y = top(clipped), r = layout.right;
-    expect(c.clipped).toBe(true);
+    // Clipped: to its point in the right margin (the layout's), the last 4px narrowing to the middle.
+    const c = sp(clipped), y = top(clipped), r = c.x1;
+    expect([c.clipped, r > layout.right]).toEqual([true, true]);
     expect(spanOf(clipped)).toMatchObject({ type: "polygon", shape: { points: [[c.x0, y], [r - 4, y], [r, y + 4], [r - 4, y + 8], [c.x0, y + 8]] }, style: { fill: "var(--series-1)" } });
   });
 

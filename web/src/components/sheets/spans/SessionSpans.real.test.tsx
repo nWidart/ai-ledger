@@ -14,7 +14,7 @@ import { SessionSpans } from "./SessionSpans";
 // The section's one test on real ECharts (graph-session-flamechart, step 1.7): every other test draws on the fake runtime
 // from test-setup, which draws nothing. The shapes and colors per kind are spansOption.test.ts's, on a stubbed api; here
 // only what the drawing proves on ECharts 6: one path per span in the box the layout gives it, the hollow bar, the ring,
-// the clipped bar's point at the plot's edge, the break band, the lane labels as text, the mark on the bar the live region
+// the clipped bar's point in the right margin, the break band, the lane labels as text, the mark on the bar the live region
 // names, no stale path after newer data, and forced colors reaching the drawing. Nothing logged: test-setup fails on it.
 vi.unmock("../../echart/load");
 
@@ -28,7 +28,7 @@ const call = (id: string, start: number, end: number | null, o: Partial<Call> = 
 });
 // Main thread: an ok bar, a failed wide one, a failed narrow one, a call with no result, a call that runs past the axis's
 // end (clipped) through 32 minutes with nothing starting (a squeezed gap), and the last call, with no duration, where the
-// axis ends. Subagent 1: one bar.
+// axis ends. Subagent 1: one bar, and a call that starts where the axis ends and runs past it.
 const CALLS = [
   call("ok", 0, 2),
   call("wide", 2.5, 6, { is_error: true }),
@@ -37,6 +37,7 @@ const CALLS = [
   call("clipped", 7.5, 50),
   call("still", 40, 40),
   call("sub", 1, 1.5, { subagent: true, lane: 1 }),
+  call("edge", 40, 45, { subagent: true, lane: 1 }),
 ];
 const WIDTH = 343, LINE = 1.5, MARK = 3;
 const detail = (calls = CALLS): SessionDetail => ({ ...session, requests: [], compaction_ts: [], calls });
@@ -77,14 +78,14 @@ it("draws each span in its box, the shapes, the break and the labels, marks the 
   // A cold load of ECharts can take more than a second on a busy machine.
   await waitFor(() => expect(spanPaths(l)).toHaveLength(l.spans.length), { timeout: 5000 });
   drawsEachSpanOnce(l);
-  const [ok, wide, , open, clipped] = pathsOf(l).map(ps => ps[0]!);
+  const [ok, wide, , open, clipped, , , edge] = pathsOf(l).map(ps => ps[0]!);
   expect([ok!.fill, wide!.fill, wide!.stroke]).toEqual(["var(--series-1)", "var(--surface-1)", "var(--critical)"]);
   // The ring is a circle: one arc of radius 3 back to where it starts, unfilled.
   const [mx, my, ax, ay] = /^M([\d.]+) ([\d.]+)A3 3 0 1 1 ([\d.]+) ([\d.]+)$/.exec(open!.d)!.slice(1).map(Number);
   expect([near(mx!, ax!) && near(my!, ay!), open!.fill]).toEqual([true, "none"]);
-  // The clipped bar: five points, its point at the plot's edge.
-  const points = clipped!.d.match(/[ML]/g)!.length;
-  expect([points, near(clipped!.left + clipped!.width, l.right)]).toEqual([5, true]);
+  // The clipped bars, also the one that starts at the axis's end: five points, at least 6px long, the point in the right
+  // margin 2px before the box's edge.
+  expect([clipped, edge].map(p => [p!.d.match(/[ML]/g)!.length, p!.width >= 6, near(p!.left + p!.width, WIDTH - 2)])).toEqual([[5, true, true], [5, true, true]]);
   // The break band, 6px wide around the gap's break.
   expect(l.breaks).toHaveLength(1);
   expect(breaks(l).filter(p => p.fill === "var(--surface-2)").map(p => [near(p.cx, l.breaks[0]!), p.width])).toEqual([[true, 6]]);

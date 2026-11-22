@@ -8,7 +8,8 @@ import { BAR, ROW, type Span, type SpansLayout } from "./spans";
 
 /** The lane label line's height before the text scale (spans.ts: a lane's top is this much under its label line's). */
 const LABEL = 14;
-/** A failed bar narrower than this is a tick, taller than its row; a clipped bar's last POINT px narrow to its point. */
+/** A failed bar narrower than this is a tick, taller than its row; a clipped bar's last POINT px narrow to its point (the layout makes it
+ *  longer than POINT). */
 const HOLLOW = 4, POINT = 4;
 /** The ring's radius, the outlines' width, and the break band's width. */
 const RING = 3, LINE = 1.5, BREAK = 6;
@@ -23,8 +24,8 @@ export function spanBox(l: SpansLayout, sp: Span): { x: number; y: number; width
   if (sp.kind === "open") return { x: cx - RING, y: y + BAR / 2 - RING, width: 2 * RING, height: 2 * RING, ring: true };
   // The timeline's 2px failure tick, 2px above its row.
   if (failTick(sp)) return { x: cx - 1, y: y - 2, width: 2, height: BAR + 2, ring: false };
-  // A clipped bar runs to the plot's edge.
-  return { x: sp.x0, y, width: (sp.clipped ? l.right : sp.x1) - sp.x0, height: BAR, ring: false };
+  // A clipped bar's edges are the layout's too: its point is in the plot's right margin.
+  return { x: sp.x0, y, width: sp.x1 - sp.x0, height: BAR, ring: false };
 }
 
 /** The chart's option. times: the axis's first and last time as the timeline writes them (`tl.fmtT(tl.start)`,
@@ -49,8 +50,8 @@ export function spansOption(l: SpansLayout, env: OptionEnv, times: readonly [str
     const style = hollow ? { fill: ink.surface, stroke: fail, lineWidth: LINE } : { fill: bar };
     const x0 = x + inset, y0 = y + inset, y1 = y + height - inset;
     if (sp.clipped) {
-      // To the plot's edge, the last POINT px narrowing to the edge's middle: it goes on.
-      const x1 = l.right - inset, neck = Math.max(x0, x1 - POINT);
+      // Into the plot's right margin, the last POINT px narrowing to the middle: it goes on.
+      const x1 = x + width - inset, neck = Math.max(x0, x1 - POINT);
       return { type: "polygon" as const, z2: z, shape: { points: [[x0, y0], [neck, y0], [x1, y + height / 2], [neck, y1], [x0, y1]] }, style };
     }
     return { type: "rect" as const, z2: z, shape: { x: x0, y: y0, width: width - 2 * inset, height: height - 2 * inset }, style };

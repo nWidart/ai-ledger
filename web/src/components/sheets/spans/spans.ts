@@ -17,6 +17,9 @@ export const SUB_LANES = 6;
 /** A row's height, the bar's height within it (the rest is the gap under it), in px. */
 export const ROW = 10, BAR = 8;
 const PAD = 4, LABEL = 14, LANE_GAP = 6, AXIS = 16;
+/** A clipped span's point ends this far before the box's right edge, in the plot's right margin; the span is at least
+ *  CLIPPED px long in all, also when it starts at the plot's edge (the last call starts at the axis's end). */
+const TIP = 2, CLIPPED = 6;
 
 /** ok and failed: a timed call; open: no result; still: no duration, no start, or a result with no end that can be read. */
 export type SpanKind = "ok" | "failed" | "open" | "still";
@@ -29,12 +32,13 @@ export interface Span {
   lane: number; row: number;
   /** The call's own thread: 0 the main thread, k subagent k (kept in a folded lane), null not told apart. */
   sub: number | null;
-  /** The drawn edges in px of the box: at least 1px apart. */
+  /** The drawn edges in px of the box: at least 1px apart; a clipped span's, from its start (or CLIPPED px before its point,
+   *  if that is sooner) to its point, TIP px before the box's right edge. */
   x0: number; x1: number;
   kind: SpanKind;
   /** The call failed (is_error), whatever its kind: a still call can fail too, as a Codex call with no duration. */
   failed: boolean;
-  /** Ran past the axis's end: drawn to the plot's edge. */
+  /** Ran past the axis's end: drawn past the plot's edge into its right margin, ending in a point. */
   clipped: boolean;
   /** Ran through squeezed time: drawn shorter than it lasted. */
   squeezed: boolean;
@@ -98,6 +102,8 @@ export function spansLayout(tl: TimelineModel | null, calls: readonly SpanCall[]
   const k = width / tl.W;
   // The axis's px per ms where no gap ends: every gap is over 20 minutes, so none ends in the first minute.
   const perMs = (tl.x(tl.start + 60e3) - tl.x(tl.start)) / 60e3;
+  // A clipped span's point: in the timeline's right margin, as the svg scales it.
+  const tip = (tl.m.l + tl.iw + tl.m.r) * k - TIP;
 
   // The span of each call the timeline places (by start_ts, else end_ts), its lane and row still to come.
   interface Placed { span: Span; at: number; until: number; group: string }
@@ -111,13 +117,12 @@ export function spansLayout(tl: TimelineModel | null, calls: readonly SpanCall[]
     // open: no result, so no end and no is_error (every source sets both from the result). An end that is missing or
     // cannot be read beside a known outcome is a result with no duration: a failure there keeps its failure tick.
     const kind: SpanKind = !timed ? (start != null && !c.end_ts && c.is_error == null ? "open" : "still") : c.is_error ? "failed" : "ok";
-    const xs = spanX(tl, width, at), xe = timed ? spanX(tl, width, end!) : xs;
+    const xs = spanX(tl, width, at), xe = timed ? spanX(tl, width, end!) : xs, clipped = timed && end! > tl.end;
     placed.push({
       at, until: timed ? end! : at, group: sub === 0 ? "main" : sub == null ? "apart" : `sub-${sub}`,
       span: {
         id: c.id, tool: c.tool ?? "Unknown tool", known: c.tool != null, input: c.input ?? "", lane: 0, row: 0, sub,
-        x0: xs - .5, x1: Math.max(xe, xs) + .5, kind, failed: c.is_error === true,
-        clipped: timed && end! > tl.end,
+        x0: clipped ? Math.min(xs - .5, tip - CLIPPED) : xs - .5, x1: clipped ? tip : Math.max(xe, xs) + .5, kind, failed: c.is_error === true, clipped,
         squeezed: timed && (end! - start!) * perMs - (gapX(tl, end!) - tl.x(start!)) > 1e-6,
         start, end, ms: timed ? end! - start! : null,
       },

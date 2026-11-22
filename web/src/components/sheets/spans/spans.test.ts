@@ -25,16 +25,16 @@ const span = (l: ReturnType<typeof layout>["l"], c: SpanCall) => l.spans.find(s 
 
 describe("the time mapping", () => {
   // Starts at 0, 2, 42 and 45: a squeezed gap from 2 to 42 before the axis's end; keep is 30 s (5 minutes active).
-  const long = call(2, 30), short = call(2, 2.25), past = call(42, 50), calls = [call(0, 1), long, short, past, call(45, 45.5)];
+  // The last call starts at the axis's end and runs past it.
+  const long = call(2, 30), short = call(2, 2.25), past = call(42, 50), last = call(45, 50), calls = [call(0, 1), long, short, past, last];
   const { tl, l } = layout(calls);
   const g = tl.gaps[0]!;
 
   it.each([
     ["a call longer than keep ending inside the gap: at the gap's far side", long, "x1", tl.x(g.b) + .5],
     ["a short call ending inside the gap: unchanged", short, "x1", tl.x(Date.parse(short.end_ts!)) + .5],
-    ["a time past the axis's end: at the plot's edge", past, "x1", tl.m.l + tl.iw + .5],
-    ["a start on the axis", past, "x0", tl.x(Date.parse(past.start_ts!)) - .5],
-  ] as const)("%s", (_, c, edge, x) => {
+    ["a time past the axis's end: its point in the right margin, 2px before the box's edge", past, "x1", tl.m.l + tl.iw + tl.m.r - 2],
+    ["a start on the axis", past, "x0", tl.x(Date.parse(past.start_ts!)) - .5],  ] as const)("%s", (_, c, edge, x) => {
     expect(tl.gaps).toHaveLength(1);
     expect(span(l, c)[edge]).toBeCloseTo(x, 9);
   });
@@ -48,7 +48,8 @@ describe("the time mapping", () => {
   it("scales by the box's width below 300px, as the timeline's svg", () => {
     const narrow = timelineModel(sess(calls), 280, 1)!, small = spansLayout(narrow, calls, 280, 1)!;
     const t = Date.parse(past.start_ts!);
-    expect(span(small, past).x0).toBeCloseTo(narrow.x(t) * 280 / 300 - .5, 9);
+    // A clipped point 2px before the box's edge; the call that starts at the axis's end, in a margin narrowed to 7.5px, 6px long.
+    expect([span(small, past).x0, span(small, past).x1, span(small, last).x0]).toEqual([narrow.x(t) * 280 / 300 - .5, 278, 272].map(x => expect.closeTo(x, 9)));
     expect([small.left, small.right]).toEqual([narrow.m.l * 280 / 300, (narrow.m.l + narrow.iw) * 280 / 300]);
     expect(small.breaks[0]).toBeCloseTo(narrow.gaps[0]!.bx * 280 / 300, 9);
   });
