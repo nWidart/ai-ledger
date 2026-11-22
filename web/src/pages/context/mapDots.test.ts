@@ -45,6 +45,8 @@ describe("fitLines", () => {
     const tight = fitLines("Heavy and full", 30, 11, est);
     expect(tight.fs).toBeLessThan(11);
     expect(tight.fs).toBeGreaterThanOrEqual(11 * .8);
+    // "Lean" is 21.8px at 80%: in 20px it is not drawn, rather than cross the 30k line.
+    expect(fitLines("Lean", 20, 11, est)).toEqual({ lines: [], fs: 11 });
   });
 });
 
@@ -142,6 +144,9 @@ describe("mapOption", () => {
     expect(calmDots[0]!.style.opacity).toBe(.2);
     const names = draw(f, seriesOf(option(f, "full"), "guides"), 0).filter(e => e.type === "text").slice(2);
     expect(names.map(n => [n.style.text, n.style.fill])).toEqual([["Lean", "ink-muted"], ["Heavy start", "ink-muted"], ["Grew full", "ink-text"], ["Heavy and full", "ink-muted"]]);
+    // A name with no line that fits is not drawn: 30px a character leaves no word room in a 343px box at twice the text.
+    const tiny = fit(points, 343, 2, t => t.length * 30);
+    expect(draw(tiny, seriesOf(option(tiny, null), "guides"), 0).filter(e => e.type === "text").map(e => e.style.text)).toEqual(["30k start", "80% of window"]);
   });
 
   it("frames the selected quadrant and edges the dots and rings in the text color in forced colors", () => {

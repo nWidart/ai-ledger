@@ -48,8 +48,9 @@ export function startTicks([lo, hi]: [number, number]): number[] {
 export const drawnShare = (p: SessionPoint): number => Math.min(1, p.peak / p.window);
 
 /** A quadrant's name as lines that fit room px at font size fs: one line when it fits, else its words wrapped, at a smaller size
- *  (down to 80%) when even its longest word does not fit. measure gives a text's width at fs; a width at another size is in
- *  proportion. */
+ *  (down to 80%) when even its longest word does not fit, and no line when it does not fit at 80% either: a name drawn wider
+ *  than its room would cross the 30k line into the next quadrant. The buttons under the map name every quadrant. measure
+ *  gives a text's width at fs; a width at another size is in proportion. */
 export function fitLines(label: string, room: number, fs: number, measure: (text: string) => number): { lines: string[]; fs: number } {
   if (measure(label) <= room) return { lines: [label], fs };
   const lines: string[] = [];
@@ -59,7 +60,8 @@ export function fitLines(label: string, room: number, fs: number, measure: (text
     else lines.push(word);
   }
   const longest = Math.max(...lines.map(measure));
-  return { lines, fs: longest <= room ? fs : Math.max(fs * .8, fs * room / longest) };
+  if (longest * .8 > room) return { lines: [], fs };
+  return { lines, fs: longest <= room ? fs : fs * room / longest };
 }
 
 const byDate = (a: SessionPoint, b: SessionPoint) => (a.first_ts ?? "").localeCompare(b.first_ts ?? "") || a.session_id.localeCompare(b.session_id);
@@ -203,6 +205,7 @@ function guides(fit: MapFit, env: OptionEnv, quad: Quad | null): CustomSeriesOpt
         text("30k start", fit.startLabel, { fill: env.ink.secondary }), text(NEAR_TEXT, fit.nearLabel, { fill: env.ink.secondary }));
       for (const n of QUADS) {
         const at = fit.names[n.id];
+        if (!at.lines.length) continue;
         children.push(text(at.lines.join("\n"), at, { fill: n.id === quad ? env.ink.text : env.ink.muted, size: at.size, weight: 600, lineHeight: at.lineHeight }));
       }
       return { type: "group", children };
