@@ -186,13 +186,13 @@ On a phone, the table keeps Project, Spend and the change.
   A key stops at the ends of a list. Right on the last column and Left on the first column say the item again. Up and Down do not scroll the page. A key with Alt, Ctrl, Meta or Shift is left to the browser.
 - **Enter** on a named project, or a click on it, opens that project's sheet and leaves the filter alone. On Other, "(no project)", a model, a kind or a band, nothing happens and the reading stays. With one project selected, nothing opens a sheet.
 - **Esc** ends a reading, also when the pointer opened it and the focus is elsewhere. A reading also ends when the focus leaves the graph, which includes opening a project's sheet, and when the pointer leaves it.
-- A screen reader hears one sentence per item, for example "Project atlas-api: $60, 28.6% of $210. To opus-4-5 $24, sonnet-4-5 $18 and 1 more." or "atlas-api to opus-4-5: $24, 11.4% of $210 and 40.0% of atlas-api."
-- **Show data table** opens a table named "Estimated cost from project to model to token kind", closed on every page load. One row per flow, not folded: every project and model pair, including $0.00 ones, then every model and kind, Reported included, each step costliest first. Columns: Step, From, To, Est. cost (to the cent) and Share of cost. With one project selected it has only the second step.
+- A screen reader hears one sentence per item, for example "Project atlas-api: $60, 28.6% of $210. To opus-4-5 $24, sonnet-4-5 $18, gpt-5.1-codex $12 and 1 more." or "atlas-api to opus-4-5: $24, 11.4% of $210 and 40.0% of atlas-api."
+- **Show data table** opens a table named "Estimated cost from project to model to token kind", closed on every page load. One row per flow, not folded: every project and model pair, including $0.00 ones, then every model and kind, Reported included, each step costliest first. Columns: Step, From, To, Est. cost (to the cent) and Share of cost. With one project selected it has only the second step, and its name says the project: "Estimated cost on atlas-api from model to token kind".
 
 **Rules**
 
 - Newer data keeps the item you read, and a key's reading is said again when its figures change. The reading ends when its item is gone or the view changes (range, project, source, Include automated sessions).
-- Nothing animates, in any setting. In forced-colors modes, nodes and labels use the text color, bands are outlines, and the mark on the item read uses the highlight color.
+- The drawing never animates, in any setting: a band does not grow or move when the figures change. On a view change the section fades in like the page's other panels, unless your system asks for reduced motion. In forced-colors modes, nodes and labels use the text color, bands are outlines, and the mark on the item read uses the highlight color.
 - The graph's total equals the heading's estimated cost, as every column adds up to it.
 
 ### What stands out

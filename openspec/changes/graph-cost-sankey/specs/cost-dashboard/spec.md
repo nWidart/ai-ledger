@@ -39,7 +39,7 @@ When the view is filtered to one project, the section SHALL show two columns, mo
 
 #### Scenario: One project in all projects
 - **WHEN** no project is picked and every request of the view is from atlas-api
-- **THEN** the project column shows atlas-api alone, at the full height
+- **THEN** the project column shows atlas-api alone, as tall as the plot less the gaps between the nodes of the column with the most nodes
 
 ### Requirement: Name the token kinds of the cost flow as the drawer does
 The token kind column SHALL have the kinds the Tokens and cache drawer bills: Input, Output + thinking, Cache write (both lifetimes) and Cache read. The cost an agent reported with no split by kind SHALL be a fifth node, "Reported", so the kinds add up to the total. A kind with no cost SHALL have no node.
@@ -50,7 +50,7 @@ The token kind column SHALL have the kinds the Tokens and cache drawer bills: In
 
 #### Scenario: Reported cost
 - **WHEN** a Grok model's requests carry reported costs of $0.75 and no estimate
-- **THEN** that model has one band of $0.75 to Reported, and its reading says it is not split by kind
+- **THEN** that model has one band of $0.75 to Reported, and the reading of the Reported node says it is not split by kind
 
 ### Requirement: Fold small projects and models into Other in the cost flow
 The project column and the model column SHALL each show their five costliest names that hold at least 1% of the view's cost, and SHALL fold every other name with a cost into one "Other (N)" node, last in its column. When only one name would fold, it SHALL keep its own node instead. The fold SHALL be the same at every width. The token kinds SHALL NOT fold. A name whose cost is $0.00 SHALL have no node and SHALL NOT count in Other.
@@ -76,7 +76,7 @@ The project column and the model column SHALL each show their five costliest nam
 - **THEN** it has its own node, in grey, with its name
 
 ### Requirement: Name what the cost flow leaves out
-Requests from unpriced models SHALL NOT be drawn, since their cost is unknown, and the section SHALL say so under the graph, naming the models and the number of requests. The total in the section's label SHALL carry the unpriced chip. When the view has no request, no priced request, or priced requests that cost $0.00, the section SHALL say why there is no flow, in place of the graph and its table.
+Requests from unpriced models SHALL NOT be drawn, since their cost is unknown, and the section SHALL say so under the graph, naming the models and the number of requests. The graph's label SHALL say how many requests from unpriced models are not drawn, and the section's How measured SHALL carry the unpriced chip after its total. When the view has no request, no priced request, or priced requests that cost $0.00, the section SHALL say why there is no flow, in place of the graph and its table.
 
 #### Scenario: Some unpriced
 - **WHEN** 12 requests of the view are from m-unknown, which has no price
@@ -110,7 +110,7 @@ On the focused cost flow, Up and Down SHALL move to the next or the previous ite
 - **THEN** Cache read is still read, and its sentence is said again
 
 ### Requirement: Say what a node or band of the cost flow holds
-The pointer SHALL read the node or the band under it, the one drawn on top where bands cross. One tooltip and one polite sentence SHALL give the item's cost and its share of the total; for a band, also its share of its source; for a node, its three largest bands on each side, with "and N more". Newer figures SHALL keep the item read.
+The pointer SHALL read the node or the band under it, the one drawn on top where bands cross. One tooltip and one polite sentence SHALL give the item's cost and its share of the total; for a band, also its share of its source; for a node, its three largest bands on each side, with "and N more". Newer figures SHALL keep the item read; newer figures without it SHALL end the reading with no sentence, tooltip or mark.
 
 #### Scenario: A model's sentence
 - **WHEN** the user reads the model opus-4-5
@@ -124,6 +124,10 @@ The pointer SHALL read the node or the band under it, the one drawn on top where
 - **WHEN** the user reads opus-4-5 with the keys and newer data raises its cost
 - **THEN** opus-4-5 is still read, and the new sentence is said
 
+#### Scenario: Newer figures without the item read
+- **WHEN** the user reads atlas-api and newer data folds it into Other
+- **THEN** the reading ends, with no sentence, no tooltip and no mark
+
 ### Requirement: Open a project's sheet from the cost flow
 Enter on a project node, or a click on it, SHALL open that project's sheet without changing the filter, as the project table does. Other, "(no project)", a model, a token kind and a band SHALL do nothing, and the reading SHALL stay.
 
@@ -136,7 +140,11 @@ Enter on a project node, or a click on it, SHALL open that project's sheet witho
 - **THEN** nothing opens and opus-4-5 is still read
 
 ### Requirement: Fit the cost flow to its box
-The cost flow SHALL fit its box at every width and text size, and the page SHALL NOT scroll sideways. A name longer than its room SHALL be cut with an ellipsis on the graph and given whole in the tooltip, the reading and the table. Labels SHALL grow with the text, and the graph SHALL grow taller with them. A label that would overlap another SHALL be left out. A column whose labels have no room SHALL be named in a key under the graph, each node with its swatch and cost. Nothing SHALL animate.
+The cost flow SHALL fit its box at every width and text size, and the page SHALL NOT scroll sideways. A name longer than its room SHALL be cut with an ellipsis on the graph and given whole in the tooltip, the reading and the table. Labels SHALL grow with the text, and the graph with them. A label that would overlap another SHALL be left out. A column whose labels have no room SHALL be named in a key under the graph, each node with its swatch and cost. The drawing SHALL NOT animate.
+
+#### Scenario: A view change
+- **WHEN** the user picks another range and the system allows motion
+- **THEN** the section fades in as the page's other panels do, and no band grows or moves
 
 #### Scenario: Phone
 - **WHEN** the flow's box is 343px wide at the default text size
