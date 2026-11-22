@@ -24,8 +24,8 @@ const call = (start: number | null, end: number | null, o: Partial<SpanCall> = {
 });
 // One of each shape, a squeezed gap from 3 to 42, and the clipped call's end past the axis's end.
 const ok = call(0, 1), hollow = call(.5, 1.5, { is_error: true }), tick = call(2, 2.01, { is_error: true }), open = call(2.5, null),
-  still = call(3, 3), clipped = call(42, 50), apart = call(1, 2, { subagent: true, lane: null });
-const calls = [ok, hollow, tick, open, still, clipped, apart, call(44, 44.1)];
+  still = call(3, 3), stillFailed = call(3.5, 3.5, { is_error: true }), clipped = call(42, 50), apart = call(1, 2, { subagent: true, lane: null });
+const calls = [ok, hollow, tick, open, still, stillFailed, clipped, apart, call(44, 44.1)];
 const W = 400;
 const tl = timelineModel({ ...session, requests: [], compaction_ts: [],
   calls: calls.map(c => ({ ...c, category: null, is_commit: false })) } as unknown as SessionDetail, W, 1)!;
@@ -65,6 +65,10 @@ describe("spansOption", () => {
     expect(spanOf(tick)).toMatchObject({ type: "rect", shape: { x: sp(tick).x0 - .5, y: top(tick) - 2, width: 2, height: 10 }, style: { fill: "var(--critical)" } });
     expect(spanOf(open)).toMatchObject({ type: "circle", shape: { cx: sp(open).x0 + .5, cy: top(open) + 4, r: 3 }, style: { fill: "none", stroke: "ink-muted", lineWidth: 1.5 } });
     expect(spanOf(still)).toMatchObject({ type: "rect", shape: { x: sp(still).x0, width: 1, height: 8 }, style: { fill: "ink-muted" } });
+    // A failure with no duration (Codex writes start = end): the failure tick, not the muted one.
+    expect(sp(stillFailed)).toMatchObject({ kind: "still", failed: true });
+    expect(spanOf(stillFailed)).toMatchObject({ type: "rect", shape: { x: sp(stillFailed).x0 - .5, y: top(stillFailed) - 2, width: 2, height: 10 }, style: { fill: "var(--critical)" } });
+    expect(spanOf(stillFailed, forced).style).toMatchObject({ fill: "CanvasText" });
     // Clipped: to the plot's edge, the last 4px narrowing to the edge's middle.
     const c = sp(clipped), y = top(clipped), r = layout.right;
     expect(c.clipped).toBe(true);

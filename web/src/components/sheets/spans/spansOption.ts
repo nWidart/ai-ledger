@@ -13,6 +13,20 @@ const HOLLOW = 4, POINT = 4;
 /** The ring's radius, the outlines' width, and the break band's width. */
 const RING = 3, LINE = 1.5, BREAK = 6;
 
+/** A failed call drawn as the timeline's 2px failure tick, taller than its row: narrower than HOLLOW, or with no duration. */
+const failTick = (sp: Span) => sp.failed && (sp.kind === "still" || sp.x1 - sp.x0 < HOLLOW);
+
+/** Where a span is drawn, its outer box in px of the chart's box: the option draws its shape in it, and the component's mark
+ *  and a key's tooltip go around it. ring: the span is a ring of RING px radius, centred in the box. */
+export function spanBox(l: SpansLayout, sp: Span): { x: number; y: number; width: number; height: number; ring: boolean } {
+  const y = l.lanes[sp.lane]!.top + sp.row * ROW, cx = sp.x0 + .5;
+  if (sp.kind === "open") return { x: cx - RING, y: y + BAR / 2 - RING, width: 2 * RING, height: 2 * RING, ring: true };
+  // The timeline's 2px failure tick, 2px above its row.
+  if (failTick(sp)) return { x: cx - 1, y: y - 2, width: 2, height: BAR + 2, ring: false };
+  // A clipped bar runs to the plot's edge.
+  return { x: sp.x0, y, width: (sp.clipped ? l.right : sp.x1) - sp.x0, height: BAR, ring: false };
+}
+
 /** The chart's option. times: the axis's first and last time as the timeline writes them (`tl.fmtT(tl.start)`,
  *  `tl.fmtT(tl.end)`), drawn under the lanes at the plot's ends; the layout holds no times of the axis. */
 export function spansOption(l: SpansLayout, env: OptionEnv, times: readonly [string, string]): EChartsOption {
@@ -20,28 +34,26 @@ export function spansOption(l: SpansLayout, env: OptionEnv, times: readonly [str
   const font = { fontFamily: base.textStyle.fontFamily, fontSize: 11 * s };
   const bar = forced ? ink.text : env.color("var(--series-1)");
   const fail = forced ? ink.text : env.color("var(--critical)");
-  const top = (sp: Span) => l.lanes[sp.lane]!.top + sp.row * ROW;
   // A shorter span over a longer one: a tick on a long bar stays visible.
   const widths = [...new Set(l.spans.map(sp => sp.x1 - sp.x0))].sort((a, b) => b - a);
   const z2 = new Map(widths.map((w, i) => [w, i]));
 
   const shape = (sp: Span) => {
-    const y = top(sp), w = sp.x1 - sp.x0, cx = sp.x0 + .5, z = z2.get(w)!;
-    if (sp.kind === "open")
-      return { type: "circle" as const, z2: z, shape: { cx, cy: y + BAR / 2, r: RING }, style: { fill: "none", stroke: forced ? ink.text : ink.muted, lineWidth: LINE } };
-    if (sp.kind === "still") return { type: "rect" as const, z2: z, shape: { x: sp.x0, y, width: w, height: BAR }, style: { fill: forced ? ink.text : ink.muted } };
-    // A narrow failure: the timeline's 2px failure tick, 2px above its row.
-    if (sp.kind === "failed" && w < HOLLOW) return { type: "rect" as const, z2: z, shape: { x: cx - 1, y: y - 2, width: 2, height: BAR + 2 }, style: { fill: fail } };
+    const b = spanBox(l, sp), { x, y, width, height } = b, z = z2.get(sp.x1 - sp.x0)!;
+    if (b.ring)
+      return { type: "circle" as const, z2: z, shape: { cx: sp.x0 + .5, cy: y + RING, r: RING }, style: { fill: "none", stroke: forced ? ink.text : ink.muted, lineWidth: LINE } };
+    if (failTick(sp)) return { type: "rect" as const, z2: z, shape: { x, y, width, height }, style: { fill: fail } };
+    if (sp.kind === "still") return { type: "rect" as const, z2: z, shape: { x, y, width, height }, style: { fill: forced ? ink.text : ink.muted } };
     // A failure's outline inside the bar's edges: the stroke is centred on the shape.
     const hollow = sp.kind === "failed", inset = hollow ? LINE / 2 : 0;
     const style = hollow ? { fill: ink.surface, stroke: fail, lineWidth: LINE } : { fill: bar };
-    const x0 = sp.x0 + inset, y0 = y + inset, y1 = y + BAR - inset;
+    const x0 = x + inset, y0 = y + inset, y1 = y + height - inset;
     if (sp.clipped) {
       // To the plot's edge, the last POINT px narrowing to the edge's middle: it goes on.
       const x1 = l.right - inset, neck = Math.max(x0, x1 - POINT);
-      return { type: "polygon" as const, z2: z, shape: { points: [[x0, y0], [neck, y0], [x1, y + BAR / 2], [neck, y1], [x0, y1]] }, style };
+      return { type: "polygon" as const, z2: z, shape: { points: [[x0, y0], [neck, y0], [x1, y + height / 2], [neck, y1], [x0, y1]] }, style };
     }
-    return { type: "rect" as const, z2: z, shape: { x: x0, y: y0, width: w - 2 * inset, height: BAR - 2 * inset }, style };
+    return { type: "rect" as const, z2: z, shape: { x: x0, y: y0, width: width - 2 * inset, height: height - 2 * inset }, style };
   };
 
   const y0 = l.lanes.length ? l.lanes[0]!.top - LABEL * s : 0;
