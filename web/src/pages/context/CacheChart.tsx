@@ -54,7 +54,7 @@ export function CacheChart({ series, view }: { series: Series; view: string }) {
   const overall = hitRatio(all);
   const label = `Cache waste ${when(slots[0]!, true)} to ${dayLabel(slots[n - 1]!.day, true)}: ${short(waste(all))} tokens not read from the cache `
     + `(${short(all.input)} uncached input, ${short(all.cache_write)} cache write), ${overall == null ? "no prompt tokens" : `${pct(overall)} of prompt tokens read from the cache`}, `
-    + `${plural(all.b, "cache break")}. Use the left and right arrow keys to read each ${unit}, Escape to dismiss it.${zoom ? " Plus and minus zoom." : ""}`;
+    + `${plural(all.b, "cache break")}. Use the left and right arrow keys to read each ${unit}, Escape to dismiss it${zoom ? ", and plus and minus to zoom" : ""}.`;
 
   // A slot with no row is read too (decision 4): the keys and the pointer stop on it, and it says it has no request.
   const read = (i: number) => {

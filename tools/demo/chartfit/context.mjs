@@ -546,7 +546,7 @@ async function cache(h) {
     const got = [];
     for (const [what, k] of [["14 days", 14], ["13 days", 13]]) {
       const p = await c.openOn({ answer: d => last(full(d), k), points: k }, what);
-      got.push({ what, k, ...await ev(p, () => ({ handles: window.chartfit.handles().length, h: Math.round(window.chartfit.box().h), label: document.querySelector(".cache-chart .echart").getAttribute("aria-label").includes("Plus and minus zoom.") })) });
+      got.push({ what, k, ...await ev(p, () => ({ handles: window.chartfit.handles().length, h: Math.round(window.chartfit.box().h), label: document.querySelector(".cache-chart .echart").getAttribute("aria-label").includes("and plus and minus to zoom.") })) });
       await p.done();
     }
     const ok = x => (x.k >= 14 ? x.handles === 2 && x.h === 392 && x.label : x.handles === 0 && x.h === 364 && !x.label);

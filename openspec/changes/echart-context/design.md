@@ -316,7 +316,7 @@ The cache chart's zoom, by the rules of the foundation (decision 8) and the Erro
 - The model's `zoom` is `slots >= 14`. The slider's faint trend is what the bars draw, the waste or the prompt tokens: `sliderTrend(totals, trackAxes(2))`, listed before the ratio line, on the first track that holds a line (S5).
 - The three tracks keep the whole view's scales while zoomed.
 - "Show all days" or "Show all weeks" from `useZoomReset()`, at the end of the legend row.
-- The label gains "Plus and minus zoom." only in views that show the slider.
+- The label's keys sentence gains ", and plus and minus to zoom" only in views that show the slider.
 - The "Cache reads" toggle keeps the window (decision 11).
 - Status wording, as on Errors: "Showing Oct 11 to Oct 20, 10 of 30 days." and "Showing all 30 days."; by week "Showing the weeks of Oct 5 to Nov 9, 6 of 20 weeks." and "Showing all 20 weeks.". An empty slot counts as its day or week.
 - The data table lists every bucket, zoomed or not.

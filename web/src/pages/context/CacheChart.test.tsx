@@ -111,7 +111,7 @@ describe("cache chart zoom", () => {
     const { rerender } = render(<CacheChart view="v" series={month} />);
     const fake = await drawn();
     expect(fake.last!.dataZoom).toHaveLength(1);
-    expect(chart().getAttribute("aria-label")).toMatch(/ Plus and minus zoom\.$/);
+    expect(chart().getAttribute("aria-label")).toMatch(/read each day, Escape to dismiss it, and plus and minus to zoom\.$/);
     act(() => chart().focus());
     key("Home");
     for (let i = 0; i < 8; i++) key("ArrowRight"); // Oct 15
