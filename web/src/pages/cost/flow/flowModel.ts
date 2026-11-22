@@ -55,15 +55,15 @@ export interface FlowModel {
 
 const TITLE: Record<FlowColumnKey, string> = { project: "Project", model: "Model", kind: "Token kind" };
 /** The billed kinds, as the Tokens and cache drawer names them (tokenPairs in cost.ts), and the reported cost. */
-const KINDS: { id: string; label: string; of: (m: FlowModelRow) => number }[] = [
+export const KINDS: { id: string; label: string; of: (m: FlowModelRow) => number }[] = [
   { id: "k:input", label: "Input", of: m => m.cost_input ?? 0 },
   { id: "k:output", label: "Output + thinking", of: m => m.cost_output ?? 0 },
   { id: "k:write", label: "Cache write", of: m => (m.cost_cache_5m ?? 0) + (m.cost_cache_1h ?? 0) },
   { id: "k:read", label: "Cache read", of: m => m.cost_cache_read ?? 0 },
 ];
-const REPORTED = "k:reported";
+export const REPORTED = "k:reported";
 /** A model's cost less its kinds under this is float leftovers, not a reported cost (as costDays' guard). */
-const EPS = 1e-9;
+export const EPS = 1e-9;
 const KIND_COLOR = "var(--text-secondary)";
 const FOLD = { keep: 5, floor: .01 };
 
