@@ -226,7 +226,7 @@ dialog.sheet::backdrop { background: var(--scrim); }
   .pg-limits .lim-chart .plan line:not(.hit) { stroke: LinkText; }
   .pg-limits .lim-chart :is(.ax, .plan text) { fill: CanvasText; }
   .pg-limits .lim-chart .pick { fill: Highlight; stroke: Canvas; }
-  /* The ECharts bars edge themselves (stack.ts), and Context's cache chart edges its own segments (CacheChart.css). */
+  /* The ECharts bars edge themselves (stack.ts). */
   /* Keys and dots that name a series or a project by color alone. */
   .pdot, :is(.pg-activity, .pg-cost, .pg-judgments) .legend i:not(.line), .pg-context .legend i:not(.line), .pg-errors .sw:not(.line), .pg-judgments .key .sw { forced-color-adjust: none; outline: 1px solid CanvasText; }
 }

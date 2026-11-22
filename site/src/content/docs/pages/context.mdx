@@ -141,7 +141,7 @@ Sessions without a measured start, a known window or a peak take no part. With n
 **Figures**
 
 - **One bar per window size** (for example 200k, 1M), over the sessions with a known window. Each bar splits into five segments: under 25%, 25–50%, 50–80%, 80–90% and 90% or more of the window at the session's peak. A segment is a share of that window's sessions; a segment of 7% or more of the bar shows its count, and one of 20% or more its label. A peak at an edge belongs to the band above it (80% is in 80–90%).
-- **Sessions by start and peak**: one dot per session, placed by starting context (log scale) and peak share of the window, with a line at 30,000 tokens and one at 80% of the window. A ring marks a session that compacted at least once. A dot shows the session's details in a tooltip on hover or focus, named by its title (else its short id), and the dot read has a ring around it. The chart holds at most the 1,000 newest sessions that have a measured start, a known window and a recorded peak, and states "Showing the newest N of M sessions" when there are more.
+- **Sessions by start and peak**: one dot per session, placed by starting context (log scale) and peak share of the window, with a line at 30,000 tokens and one at 80% of the window. A ring marks a session that compacted at least once. A dot shows the session's details in a tooltip on hover, or with the arrow keys, named by its title (else its short id), and the dot read has a ring around it. The chart holds at most the 1,000 newest sessions that have a measured start, a known window and a recorded peak, and states "Showing the newest N of M sessions" when there are more.
 - **Quadrants**: the two lines cut the map into four, named in its corners:
 
   | Quadrant | Start | Peak |
