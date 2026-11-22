@@ -35,7 +35,7 @@ The filters live in the page URL, together with the inspected project and the op
 
 ## Layout
 
-The page reads top to bottom: the heading with the plan gauge beside it, the daily chart, the project table, the insights beside Models and effort, then two drawers (Tokens, Sessions). A drawer is a table folded behind its title. Each section has its own heading; the page has no section index. At 1440×900 the daily chart starts on the first screen.
+The page reads top to bottom: the heading with the plan gauge beside it, the daily chart, the project table, the cost flow, the insights beside Models and effort, then two drawers (Tokens, Sessions). A drawer is a table folded behind its title. Each section has its own heading; the page has no section index. At 1440×900 the daily chart starts on the first screen.
 
 ## Panels
 
@@ -154,6 +154,46 @@ On a phone, the table keeps Project, Spend and the change.
 - **Download CSV** and **Copy** export the table. The export holds, per project: estimated cost, tokens, cache hit, 1h writes, subagent cost share, commits, cost per commit, cost per prompt and the change. It holds every row in the order shown, small projects included even when folded, with costs and shares rounded to 4 decimals. Copy puts tab-separated text on the clipboard. The file is named `ai-ledger-cost-projects-<date>.csv`, dated today. A text cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with an apostrophe; numbers are not.
 - From Compare projects, a note says "Sorted by cost per commit, highest first.", gives the outlier's cost per commit and its multiple of the median, and offers "Sort by cost again", which sorts by Spend and moves focus to its header.
 - Every sort says what it did to a screen reader: "Sorted by spend, highest first". That includes Compare projects, Sort by cost again, the same sort twice and the reset a new range makes.
+
+### Where the cost goes
+
+**Shows** the estimated cost of the view followed from project to model to token kind, in three columns of nodes joined by bands. A band is the estimated cost that went from one node to the next, and its width is that cost, never tokens. The graph sits after the project table; with one project selected it follows the daily chart. The hint beside the title says "From project to model to token kind, each band as wide as its cost; small ones in Other. Arrow keys follow the bands."
+
+**Figures**
+
+- **Columns.** Project, Model and Token kind. Each column adds up to the page's estimated cost, and a band is as wide at both ends. A node's label shows its name and, when the node is tall enough, its cost. A model's name drops the `claude-` prefix.
+- **One project selected.** The graph has two columns, Model and Token kind, since the heading already names the project. The hint and the label say "on" and the project.
+- **Token kinds.** Input, Output + thinking, Cache write (both lifetimes) and Cache read, as the Tokens and cache drawer bills them. A kind with no cost has no node.
+- **Reported.** A fifth kind, for the cost an agent reported with no split by kind, as Grok does. It holds each model's cost less its kinds. A view of Grok alone goes from its models to Reported alone.
+- **Other.** A column keeps its five costliest names that hold at least 1% of the cost; the rest go to one grey node, "Other (N)". Other always holds two names or more: a lone name that would fold keeps its own node. Its tooltip and sentence list its three costliest names, then "and N more". A name that costs $0.00 has no node.
+- **Colors.** A band takes its source's color. A project has its color from the daily chart, or grey. A model has its color from the daily chart stacked by model. Kinds and Reported are neutral. Every node has a label, or a name in the key, so color is never alone.
+- **Labels and key.** When a column has no room for labels, its nodes are named in a key under the graph, each with a swatch and its cost. A label that would overlap a costlier one is left out, and its node is still read by the pointer and the keys. A name too long for its room ends with "…".
+- **Unpriced models.** Their requests are not drawn, since their cost is unknown. A line under the graph names the models and the number of requests, and the "+?" chip follows the total in How measured.
+- **Empty views.** The section says so in place of the graph: "No usage in this view, so no cost to follow.", "No request in this view is priced, so there is no cost to follow." (with the unpriced line), or "The priced requests in this view cost $0.00, so there is no cost to follow."
+
+**Controls**
+
+- **Pointer or touch.** Move over a node or a band to read it. A tooltip gives a node's cost and share with its three largest bands (or Other's names), and a band's source, target, cost, share of the cost and share of its source. A project's node shows a hand cursor. Leaving the graph ends the reading.
+- **Keys**, with the graph focused:
+
+  | Key | On a node | On a band | Nothing read |
+  | --- | --- | --- | --- |
+  | Down, Up | Next, previous node of the column | Next, previous band of the node it was entered from | Down: first node of the first column; Up: first node of the last column |
+  | Right | The node's top band out | The band's target node | The first node of the first column |
+  | Left | The node's top band in | The band's source node | The first node of the last column |
+  | Home, End | First, last node of the column | First, last band of the node it was entered from | First, last node of the first column |
+
+  A key stops at the ends of a list. Right on the last column and Left on the first column say the item again. Up and Down do not scroll the page. A key with Alt, Ctrl, Meta or Shift is left to the browser.
+- **Enter** on a named project, or a click on it, opens that project's sheet and leaves the filter alone. On Other, "(no project)", a model, a kind or a band, nothing happens and the reading stays. With one project selected, nothing opens a sheet.
+- **Esc** ends a reading, also when the pointer opened it and the focus is elsewhere. A reading also ends when the focus leaves the graph, which includes opening a project's sheet, and when the pointer leaves it.
+- A screen reader hears one sentence per item, for example "Project atlas-api: $60, 28.6% of $210. To opus-4-5 $24, sonnet-4-5 $18 and 1 more." or "atlas-api to opus-4-5: $24, 11.4% of $210 and 40.0% of atlas-api."
+- **Show data table** opens a table named "Estimated cost from project to model to token kind", closed on every page load. One row per flow, not folded: every project and model pair, including $0.00 ones, then every model and kind, Reported included, each step costliest first. Columns: Step, From, To, Est. cost (to the cent) and Share of cost. With one project selected it has only the second step.
+
+**Rules**
+
+- Newer data keeps the item you read, and a key's reading is said again when its figures change. The reading ends when its item is gone or the view changes (range, project, source, Include automated sessions).
+- Nothing animates, in any setting. In forced-colors modes, nodes and labels use the text color, bands are outlines, and the mark on the item read uses the highlight color.
+- The graph's total equals the heading's estimated cost, as every column adds up to it.
 
 ### What stands out
 

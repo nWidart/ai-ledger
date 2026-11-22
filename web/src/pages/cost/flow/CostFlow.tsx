@@ -220,7 +220,7 @@ export function CostFlow({ d, onProject }: CostFlowProps) {
     <section className="panel sect" id="flow" aria-labelledby="flowTitle">
       <h2 id="flowTitle">Where the cost goes</h2>
       <div className="hint">{one ? `From model to token kind on ${d.project}` : "From project to model to token kind"}, each band as wide as its cost; small ones in Other. Arrow keys follow the bands.
-        <HowMeasured what="where the cost goes" docs="pages/cost">
+        <HowMeasured what="where the cost goes" docs="pages/cost#where-the-cost-goes">
           Each band is the estimated cost that went from one column to the next, at list prices. The token kinds are the ones the
           Tokens and cache drawer bills: Input, Output + thinking, Cache write (both lifetimes) and Cache read. Reported is the cost an
           agent reported with no split by kind. A column keeps its five costliest names that hold at least 1% of the cost; the rest
