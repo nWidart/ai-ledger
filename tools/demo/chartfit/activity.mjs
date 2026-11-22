@@ -5,7 +5,8 @@
 //   the readout name the same day for the pointer in the bars, in the gap between the tracks and in the rate track, and for
 //   Right, Home and End;
 // - a click and Enter select the day: the frame is drawn around it over both tracks, the chip names it, the tabs below
-//   narrow, the live region says the "selected" sentence once; selecting it again says "is still selected", then "is
+//   narrow, the live region says the "selected" sentence once and keeps it when the pointer leaves the chart; selecting
+//   it again says "is still selected", then "is
 //   already selected"; the chip's clear button and Escape (focus on the chart, nothing read; a first Escape ends a reading)
 //   clear it and say "cleared"; the tab note's "Show the whole range" says nothing and drops the sentence; the focus after
 //   each; the frame stays while other days are read and is not the band; an idle day declines, and the reading stays;
@@ -230,6 +231,13 @@ export async function activity(h) {
     const s1 = await heard(page);
     line("the live region says the selected sentence once", s1.length === 1 && s1[0] === `${day(DAYS[J], true)} selected; ${selected}` && (await region(page)) === s1[0],
       `${JSON.stringify(s1)}; focus on ${await focus(page)}`);
+    // The pointer leaving the chart ends no sentence but a reading's: the selected one stays in the region.
+    await ev(page, () => { window.__said = []; });
+    await away(page);
+    await sleep(800);
+    const left = { said: await said(page), region: await region(page) };
+    line("the pointer leaving the chart after the click leaves the selected sentence in the live region", !left.said.length && left.region === s1[0],
+      `said ${JSON.stringify(left.said)} after it left, region "${left.region.split(";")[0]}"`);
     await c.shot(page, "selected");
     // The frame stays while another day is read, and is not the band; on its own day both show.
     await page.mouse.move(centre(t.g, J + 4), (t.bars.t + t.bars.b) / 2);
