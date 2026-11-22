@@ -10,7 +10,7 @@ const item = (kind: OverheadItem["kind"], name: string | null, tokens: number, o
   ({ seq: next++, kind, name, detail: null, server: null, tokens, ...o });
 const snap = (cats: [string, number][], items: OverheadItem[] = [], o: Partial<ContextOverhead> = {}): ContextOverhead => ({
   ts: "2026-11-15T10:42:41.622Z", session_id: "s1", model: "claude-fable-5-2", version: "2.1.325", window: 1000000, before_view: false,
-  categories: cats.map(([name, tokens]) => ({ name, tokens, state: "used" as const })), top: { mcp_servers: [], memory_files: [], skills: [] },
+  categories: cats.map(([name, tokens]) => ({ name, tokens, state: "used" as const })),
   items, calls: { mcp: [], skill: [] }, ...o,
 });
 // The repo's /context fixture, its server under a plugin's key that differs from its name, plus a tool and a skill with no name.

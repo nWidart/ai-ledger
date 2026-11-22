@@ -597,7 +597,7 @@ export interface ContextPayload {
   overhead: ContextOverhead | null;
 }
 
-/** A part of a /context snapshot: an MCP server (its tools' tokens summed), a memory file (its path) or a skill. */
+/** A part of a /context snapshot: an overhead category and its tokens. */
 export interface OverheadPart { name: string; tokens: number }
 /** An item of a /context snapshot. seq: its identity, unique within the snapshot. name: the MCP tool's or skill's name, the
  *  memory file's path or the agent's type; detail: the tool's server name, the file's type or the agent's or skill's source; both
@@ -607,11 +607,10 @@ export interface OverheadItem {
   seq: number; kind: "mcp_tool" | "memory_file" | "agent" | "skill"; name: string | null; detail: string | null; server: string | null; tokens: number;
 }
 /** What /context measured in a session of the project: categories in the order /context lists them (state is the category's
- *  kind: used, deferred, buffer or free), and the five largest MCP servers, memory files and skills. */
+ *  kind: used, deferred, buffer or free), and every item the categories hold (items) with how often Claude Code called each. */
 export interface ContextOverhead {
   ts: Ts; session_id: string; model: string | null; version: string | null; window: number | null;
   categories: { name: string; tokens: number; state: "used" | "deferred" | "buffer" | "free" }[];
-  top: { mcp_servers: OverheadPart[]; memory_files: OverheadPart[]; skills: OverheadPart[] };
   /** The snapshot was taken before the view's first day (false for all time). */
   before_view: boolean;
   /** Every MCP tool, memory file, custom agent and skill, by tokens (largest first), then name (none last), then seq. */

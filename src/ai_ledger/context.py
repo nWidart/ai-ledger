@@ -33,7 +33,6 @@ LONG_TIER_MIN_USD = 1.0  # long_tier: long-prompt-tier cost at least this
 LONG_TIER_SHARE = 0.10  # ... and at least this share of the view's cost
 TIP_SESSIONS = 20  # the newest matching sessions a tip lists
 TIP_PROJECTS = 5  # large_start names the projects with the largest medians, and counts the rest
-OVERHEAD_TOP = 5  # overhead lists the largest MCP servers, memory files and skills of the snapshot
 
 
 # ---------- the shared CTEs ----------
@@ -616,8 +615,7 @@ def overhead(cur, project, source, W, fp, start):
     then by seq, the part's ordinal and the item's identity; a NULL name or detail is kept, a negative token count reads 0.
     An MCP tool's server is the key its calls are stored under (store.mcp_server_of its name, else its detail); None for
     the other kinds. calls: Claude Code's calls in the view (main thread and subagents) of the snapshot's servers (mcp:
-    server, calls) and skills (skill: name, calls), sorted by key, only those called; lists, so any name is just a row.
-    top holds the OVERHEAD_TOP largest MCP servers (their tools summed), memory files and skills."""
+    server, calls) and skills (skill: name, calls), sorted by key, only those called; lists, so any name is just a row."""
     if not project or source not in ("", "claude"):
         return None
     snap = metrics.rows(cur, f"""SELECT uuid, ts, session_id, model, version, context_window AS window,
@@ -637,9 +635,6 @@ def overhead(cur, project, source, W, fp, start):
         x["server"] = (store.mcp_server_of(x["name"]) or x["detail"]) if x["kind"] == "mcp_tool" else None
     snap["items"] = [{k: x[k] for k in ("seq", "kind", "name", "detail", "server", "tokens")} for x in items]
     snap["calls"] = overhead_calls(cur, items, W, fp)
-    top = lambda kind, name: metrics.rows(cur, f"""SELECT {name} AS name, sum(coalesce(tokens, 0)) AS tokens FROM context_parts
-        WHERE uuid = ? AND kind = ? AND {name} IS NOT NULL GROUP BY 1 ORDER BY tokens DESC, name LIMIT {OVERHEAD_TOP}""", [uuid, kind])
-    snap["top"] = dict(mcp_servers=top("mcp_tool", "detail"), memory_files=top("memory_file", "name"), skills=top("skill", "name"))
     return snap
 
 

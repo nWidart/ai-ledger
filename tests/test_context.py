@@ -956,10 +956,7 @@ class OverheadTest(unittest.TestCase):
         self.assertEqual(server["mcp__plugin_gh_github__get_pr"], ("github", "plugin_gh_github"))  # the stored calls' key, not detail
         self.assertEqual(server["search"], ("docs", "docs"))  # no prefix: detail
         self.assertEqual(o["calls"], dict(mcp=[], skill=[]))
-        self.assertEqual(o["top"]["mcp_servers"], [dict(name=f"s{i}", tokens=20 * i + 1) for i in (6, 5, 4, 3, 2)])  # tools summed by server
-        self.assertEqual([m["name"] for m in o["top"]["memory_files"]], [f"/m/{i}.md" for i in (5, 4, 3, 2, 1)])
-        self.assertEqual(o["top"]["skills"], [dict(name=n, tokens=t) for n, t in (("d", 9), ("a", 5), ("b", 5), ("f", 3), ("e", 2))])
-        self.assertEqual(sorted(o), ["before_view", "calls", "categories", "items", "model", "session_id", "top", "ts", "version", "window"])
+        self.assertEqual(sorted(o), ["before_view", "calls", "categories", "items", "model", "session_id", "ts", "version", "window"])
 
     def test_calls_are_claude_codes_in_the_view(self):
         b = Builder(self)

@@ -25,13 +25,6 @@
 .ctx-grid .cg-fig { font-variant-numeric: tabular-nums; }
 .ctx-grid .cg-note { grid-column: 2 / -1; font-size: .75rem; }
 .ctx-grid p.cg-note { margin: 10px 0 0; max-width: 60ch; }
-.ctx-grid .cg-top { margin-top: 12px; font-size: .8125rem; color: var(--text-secondary); }
-.ctx-grid .cg-top summary { cursor: pointer; color: var(--text-primary); }
-.ctx-grid .cg-top h4 { margin: 10px 0 4px; font-size: .75rem; font-weight: 600; color: var(--text-muted); }
-.ctx-grid .cg-top ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.ctx-grid .cg-top li { display: flex; justify-content: space-between; gap: 12px; min-width: 0; }
-.ctx-grid .cg-top .cg-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ctx-grid .cg-top .cg-fig { flex: none; }
 @media (max-width: 40em) { .ctx-grid { flex-direction: column; } .ctx-grid .cg-cells, .ctx-grid .cg-side { flex-basis: auto; } }
 
 /* Compact: one of several small grids, the cells over three figures */

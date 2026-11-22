@@ -317,8 +317,11 @@ describe("ProjectPage", () => {
       categories: [{ name: "System prompt", tokens: 4000, state: "used" }, { name: "System tools", tokens: 12000, state: "used" },
         { name: "Skills", tokens: 4000, state: "used" }, { name: "Messages", tokens: 900, state: "used" }, { name: "MCP tools", tokens: 7000, state: "deferred" },
         { name: "Free space", tokens: 150000, state: "free" }],
-      top: { mcp_servers: [{ name: "github", tokens: 5200 }], memory_files: [{ name: "/Users/me/foo/CLAUDE.md", tokens: 1800 }], skills: [] },
-      before_view: false, items: [], calls: { mcp: [], skill: [] },
+      before_view: false, calls: { mcp: [{ server: "plugin_gh_github", calls: 4 }], skill: [] },
+      // The server's call key differs from its name: the sheet opens by the key.
+      items: [{ seq: 1, kind: "mcp_tool", name: "mcp__plugin_gh_github__get_pr", detail: "github", server: "plugin_gh_github", tokens: 5200 },
+        { seq: 2, kind: "memory_file", name: "/Users/me/foo/CLAUDE.md", detail: "Project", server: null, tokens: 1800 },
+        { seq: 3, kind: "skill", name: "ship", detail: "userSettings", server: null, tokens: 300 }],
     };
     const measured = (overhead: ContextOverhead | null, median = 40000) =>
       ({ ...withGrid({ ...context, starting: { ...context.starting, sessions: 9, median, window: 200000, window_share: median / 200000 } }, .4), overhead }) as ContextPayload;
@@ -335,11 +338,18 @@ describe("ProjectPage", () => {
       expect(items[4]).toContain("Added by the peak");
       expect(blk.textContent).not.toContain("transcripts do not split them");
       expect(within(blk).getByText(/^Overhead measured .* with claude-opus-4-1/).textContent).toContain(`${big(7000)} deferred tokens of tools are not loaded`);
-      const details = within(blk).getByText("Largest overhead items").closest("details")!;
-      expect(within(details).getByText("MCP servers")).toBeTruthy();
-      expect(within(details).getByText("github").nextElementSibling!.textContent).toBe(`${big(5200)} tokens`);
-      expect(within(details).getByText("CLAUDE.md").getAttribute("title")).toBe("/Users/me/foo/CLAUDE.md");
-      expect(within(details).queryByText("Skills")).toBeNull();
+      // Of the three used categories (20,000 tokens), the list: closed, in the side column, in place of "Largest overhead items".
+      const summary = within(blk).getByText(`What loads before your first prompt · ${big(20000)} tokens`);
+      expect([summary.closest("details")!.open, blk.textContent!.includes("Largest overhead items")]).toEqual([false, false]);
+      await userEvent.click(summary);
+      const row = within(blk).getByRole("button", { name: "github" }).closest(".ol-row")!;
+      expect(row.textContent).toMatch(new RegExp(`^github, ${big(5200)} tokens, called 4 times by Claude Code in this view, 1 tool`)); // then its tool
+      await userEvent.click(within(blk).getByRole("button", { name: "ship" }));
+      await waitFor(() => expect(new URLSearchParams(location.search).get("skill")).toBe("ship"));
+      // Enter on the server's name opens its tool sheet by the key its calls are stored under, not by its name.
+      within(blk).getByRole("button", { name: "github" }).focus();
+      await userEvent.keyboard("{Enter}");
+      await waitFor(() => expect(new URLSearchParams(location.search).get("mcp")).toBe("plugin_gh_github"));
     });
 
     it("says so when the snapshot is larger than the median start", async () => {
@@ -423,7 +433,8 @@ describe("ProjectPage", () => {
       expect(within(blk).getByText(/^Overhead measured .* with claude-opus-4-1/).textContent).toContain(`${big(7000)} deferred tokens of tools are not loaded`);
       const items = [...blk.querySelectorAll(".cg-legend li")].map(li => li.textContent);
       expect(items).toEqual([`System prompt${big(4000)} tokens (2.0%)`, `System tools${big(12000)} tokens (6.0%)`, `Skills${big(4000)} tokens (2.0%)`]);
-      expect(within(blk).getByText("Largest overhead items")).toBeTruthy();
+      expect(within(blk).getByText(`What loads before your first prompt · ${big(20000)} tokens`)).toBeTruthy();
+      expect(blk.textContent).not.toContain("Largest overhead items");
     });
 
     it("offers no Measure now without Claude Code sessions or a snapshot", async () => {

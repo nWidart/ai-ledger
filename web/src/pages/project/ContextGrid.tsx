@@ -3,10 +3,12 @@
 // overhead categories. Cells are inline SVG so they do not depend on a font's glyphs.
 import type { ReactNode } from "react";
 import { big, plural, when } from "../../format";
-import type { ContextOverhead, OverheadPart } from "../../api";
+import type { ContextOverhead } from "../../api";
 import { subjectAttrs } from "../../components/menu/subject";
+import { openToolSheet } from "../../components/sheets/session";
 import { share, windowLabel } from "../context/context";
 import "./ContextGrid.css";
+import { OverheadList } from "./OverheadList";
 import { GRID_CELLS, gridOverhead, overheadParts, PART_TONES, type ContextGridModel, type GridOverhead, type GridRow, type GridTone } from "./project";
 
 const COLS = 20;
@@ -14,29 +16,6 @@ const symbol = (t: GridTone) => (t === "free" ? "cg-free" : "cg-used");
 
 function Icon({ tone, className }: { tone: GridTone; className: string }) {
   return <svg className={className + " cg-" + tone} width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><use href={"#" + symbol(tone)} /></svg>;
-}
-
-const base = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
-
-/** The snapshot's largest MCP servers, memory files and skills; only the groups it has. */
-function TopItems({ top }: { top: GridOverhead["top"] }) {
-  const groups: { title: string; items: OverheadPart[]; path?: boolean }[] = [
-    { title: "MCP servers", items: top.mcp_servers }, { title: "Memory files", items: top.memory_files, path: true }, { title: "Skills", items: top.skills },
-  ].filter(g => g.items.length > 0);
-  if (!groups.length) return null;
-  return (
-    <details className="cg-top">
-      <summary>Largest overhead items</summary>
-      {groups.map(g => (
-        <div key={g.title}>
-          <h4>{g.title}</h4>
-          <ul>{g.items.map(i => (
-            <li key={i.name}><span className="cg-name" title={g.path ? i.name : undefined}>{g.path ? base(i.name) : i.name}</span><span className="cg-fig">{big(i.tokens)} tokens</span></li>
-          ))}</ul>
-        </div>
-      ))}
-    </details>
-  );
 }
 
 /** The grid's text for a screen reader: the parts in order, the start's split in brackets. */
@@ -73,7 +52,7 @@ const Measured = ({ o }: { o: GridOverhead }) => (
 );
 
 /** The snapshot alone, when there is no typical session to draw it in (no request in the view, or no share of the window known):
- *  when it was measured, each overhead category's tokens, and the largest items. */
+ *  when it was measured, each overhead category's tokens, and the list of what loads before the first prompt. */
 function Snapshot({ snapshot }: { snapshot: ContextOverhead }) {
   const o = gridOverhead(snapshot, null), w = snapshot.window;
   return (
@@ -91,7 +70,7 @@ function Snapshot({ snapshot }: { snapshot: ContextOverhead }) {
             </li>
           ))}
         </ul>
-        <TopItems top={o.top} />
+        <OverheadList snapshot={snapshot} onOpen={openToolSheet} />
       </div>
     </div>
   );
@@ -146,7 +125,7 @@ export function ContextGrid({ model, snapshot, compact }: { model: ContextGridMo
           ))}
         </ul>
         {o?.overflow && <p className="cg-note cg-over muted">The measured overhead is larger than the median start: the configuration grew or the model differs.</p>}
-        {o && <TopItems top={o.top} />}
+        {snapshot && <OverheadList snapshot={snapshot} onOpen={openToolSheet} />}
       </div>
     </div>
   );
