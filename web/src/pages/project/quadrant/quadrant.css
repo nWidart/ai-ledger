@@ -1,0 +1,29 @@
+/* The session quadrant (SessionQuadrant.tsx): the box the reading sits on, the ring around the dot read, the hand over a dot,
+   the tooltip's rows and the quadrants' counts. The dots, the guides and the axes are drawn by components/echart from
+   quadrantOption.ts. Nothing here moves: the plot never animates. */
+
+/* The box is the origin of every pixel of the fit: the wrapper's box sits at its top left, the ring and the tooltip over it. */
+.quad-box { position: relative; }
+
+/* A hand over a dot, where a click opens its session. zrender writes its own cursor inline on the element it draws in, on
+   every pointer move: only an important rule wins over it. */
+.quad-box.hand, .quad-box.hand * { cursor: pointer !important; }
+
+/* The dot read: a 2px ring of 8px radius around it, in the text color. */
+.quad-mark { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.quad-mark circle { fill: none; stroke: var(--text-primary); stroke-width: 2; }
+
+.quad-box .tip .tname { max-width: 18rem; overflow-wrap: anywhere; }
+.quad-box .tip .row { display: flex; gap: var(--space-5); justify-content: space-between; }
+.quad-box .tip .chip { margin-left: var(--space-2); }
+
+.quad-note { margin: var(--space-2) 0; }
+
+/* The four names with their counts, in the order of their corners; they wrap on a narrow box and at large text. */
+.quad-list { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); margin: var(--space-3) 0 0; padding: 0; list-style: none;
+  font-size: .78125rem; color: var(--text-secondary); }
+.quad-list b { font-weight: 600; }
+
+@media (forced-colors: active) {
+  .quad-mark circle { stroke: Highlight; }
+}
