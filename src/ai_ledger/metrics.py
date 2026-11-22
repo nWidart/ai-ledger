@@ -1040,10 +1040,16 @@ def projects(cur, rq, rp, W, fp, loops):
 
 
 def session(cur, sid, prices=None):
-    """One session's drill-in on its own, for the session sheet."""
+    """One session's drill-in on its own, for the session sheet, read in one transaction as usage() is: an ingest that
+    commits while it is built changes none of its figures, so the tool-call chart, the timeline's axis and the Tools table
+    agree. The transaction only reads and is rolled back at the end."""
     prices = load_prices() if prices is None else prices
     pcte, pparams = price_cte(prices)
-    return session_detail(cur, sid, requests_cte(pcte, "r.session_id = ?"), pparams + [sid], prices)
+    cur.execute("BEGIN")
+    try:
+        return session_detail(cur, sid, requests_cte(pcte, "r.session_id = ?"), pparams + [sid], prices)
+    finally:
+        cur.execute("ROLLBACK")
 
 
 def session_detail(cur, sid, allq, p, prices):
@@ -1087,10 +1093,22 @@ def session_timeline(cur, sid, allq, p):
     context: the prompt size of each request (context_of), the same measure as sessions.peak_context."""
     reqs = rows(cur, f"""{allq} SELECT ts, model, subagent, {context_of()} AS context, output, cost
         FROM rq ORDER BY ts, message_id LIMIT {TIMELINE_CAP}""", p)
-    calls = rows(cur, f"""SELECT tool_use_id AS id, tool, start_ts, end_ts, is_error, category, subagent,
-        is_commit AND coalesce(test_passed, false) AS is_commit
-        FROM tool_calls WHERE session_id = ? AND coalesce(start_ts, end_ts) IS NOT NULL
-        ORDER BY coalesce(start_ts, end_ts), tool_use_id LIMIT {TIMELINE_CAP}""", [sid])
+    # lane: 0 on the main thread (a NULL subagent counts as it); k for a subagent file of the session, by its first call
+    # among those files, ranked over every call before the cap so a lane keeps its number; null when the call's agent
+    # cannot be told (no result file, or a main file: an old transcript's sidechain call). The main files are the files
+    # of the main-thread calls; the IS NOT NULL keeps a NULL out of them, which would make the NOT IN drop every file.
+    # The path never leaves the server: the payload has only the rank.
+    calls = rows(cur, f"""WITH c AS (SELECT * FROM tool_calls WHERE session_id = ? AND coalesce(start_ts, end_ts) IS NOT NULL),
+        main AS (SELECT DISTINCT result_file FROM c WHERE NOT coalesce(subagent, false) AND result_file IS NOT NULL),
+        agents AS (SELECT result_file, row_number() OVER (ORDER BY min(coalesce(start_ts, end_ts)), min(tool_use_id)) AS lane
+                   FROM c WHERE coalesce(subagent, false) AND result_file IS NOT NULL AND result_file NOT IN (SELECT result_file FROM main)
+                   GROUP BY result_file)
+        SELECT c.tool_use_id AS id, c.tool, c.start_ts, c.end_ts, c.is_error, c.category, c.subagent,
+        c.is_commit AND coalesce(c.test_passed, false) AS is_commit,
+        CASE WHEN NOT coalesce(c.subagent, false) THEN 0 ELSE a.lane END AS lane,
+        coalesce(left(c.input_summary, 120), '') AS input
+        FROM c LEFT JOIN agents a ON a.result_file = c.result_file
+        ORDER BY coalesce(c.start_ts, c.end_ts), c.tool_use_id LIMIT {TIMELINE_CAP}""", [sid])
     for r in reqs:
         r["ts"] = iso(r["ts"])
     for c in calls:

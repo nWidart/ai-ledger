@@ -497,6 +497,48 @@ class MetricsTest(unittest.TestCase):
         finally:
             c.execute("DELETE FROM raw_lines WHERE key IN ('x1', 'x2')")
 
+    def test_session_calls_carry_their_lane_and_input(self):
+        # s4: main calls in two main files and one with a NULL subagent and no file, a sidechain call in a main file, two
+        # subagent files whose first calls come in the reverse order of their names, and a subagent call with no result.
+        c = self.con.cursor()
+        d, t0 = "/home/u/.claude/projects/p/", datetime(2026, 11, 6, 12)
+        cols = ["tool_use_id", "session_id", "tool", "input_summary", "start_ts", "end_ts", "is_error", "subagent", "result_file"]
+        row = lambda i, sec, sub, f, inp="ls", end=True: (i, "s4", "Read", inp, str(t0 + timedelta(seconds=sec)),
+                                                           str(t0 + timedelta(seconds=sec + 5)) if end else None, False if end else None, sub, f)
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts"], [("s4", "foo", "2026-11-06 12:00:00", "2026-11-06 12:10:00")])
+        store.insert(c, "tool_calls", cols, [
+            row("m1", 0, False, d + "s4.jsonl", "a" * 130), row("nu", 5, None, None, None), row("m2", 10, False, d + "s4-resumed.jsonl"),
+            row("sc", 20, True, d + "s4.jsonl"), row("x1", 30, True, d + "s4/subagents/agent-b.jsonl"),
+            row("y1", 40, True, d + "s4/subagents/agent-a.jsonl"), row("nr", 45, True, None, end=False),
+            row("y2", 50, True, d + "s4/subagents/agent-a.jsonl"), row("x2", 60, True, d + "s4/subagents/agent-b.jsonl")])
+        try:
+            s = metrics.session(c, "s4", prices=PRICES)
+            self.assertEqual([(x["id"], x["lane"], x["input"]) for x in s["calls"]], [
+                ("m1", 0, "a" * 120), ("nu", 0, ""), ("m2", 0, "ls"), ("sc", None, "ls"), ("x1", 1, "ls"), ("y1", 2, "ls"),
+                ("nr", None, "ls"), ("y2", 2, "ls"), ("x2", 1, "ls")])
+            self.assertNotIn(".jsonl", json.dumps(s, default=str))  # the browser gets the rank, never the path
+            # The cap keeps the first calls; the lanes left keep their numbers.
+            with mock.patch.object(metrics, "TIMELINE_CAP", 6):
+                cut = metrics.session(c, "s4", prices=PRICES)
+            self.assertEqual(([x["lane"] for x in cut["calls"]], cut["truncated"]), ([0, 0, 0, None, 1, 2], True))
+            # An ingest that commits a call after each statement changes none of the payload's figures: the chart's calls
+            # and the Tools table agree.
+            real, late = metrics.rows, []
+
+            def rows(cur, *a, **k):
+                out = real(cur, *a, **k)
+                late.append(f"late{len(late)}")
+                store.insert(cur.cursor(), "tool_calls", cols, [row(late[-1], 70 + len(late), False, d + "s4.jsonl")])
+                return out
+
+            with mock.patch.object(metrics, "rows", rows):
+                s = metrics.session(c, "s4", prices=PRICES)
+            self.assertTrue(late)
+            self.assertEqual((len(s["calls"]), sum(t["calls"] for t in s["tools"])), (9, 9))
+        finally:
+            c.execute("DELETE FROM tool_calls WHERE session_id = 's4'")
+            c.execute("DELETE FROM sessions WHERE session_id = 's4'")
+
     def test_first_prompt_cap(self):
         c = self.con.cursor()
         long = "word " * 200
