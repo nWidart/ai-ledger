@@ -383,7 +383,7 @@ def demo_spans():
     `sessions`, so a row in either would change them. It holds each case the session sheet's tool-call chart must draw:
     two subagents in parallel and a third later, each with a result file; three main-thread calls at once; a 24.5-minute
     call with nothing starting for 30 minutes (a squeezed gap, 10:00 to 40:10); a main-thread call and a subagent call with
-    no result; the last call ending 3 minutes after the last start (55:00)."""
+    no result; a failed call with a result but no end time; the last call ending 3 minutes after the last start (55:00)."""
     sid, project, model = "demo-spans", "atlas-api", "claude-opus-5-5"
     t0 = datetime.combine(TODAY - timedelta(days=1), datetime.min.time()) + timedelta(hours=14)
 
@@ -437,6 +437,8 @@ def demo_spans():
                             ("Grep", "p95", (48, 48), (48, 50))]:
         call(tool, inp, a, b, sub="c")
     call("Read", "src/limits.py", (48, 55), None, sub="x", result=False)
+    # a failed main-thread call with a result but no end time: a red tick
+    call("Bash", "npx vitest run src/cart.test.ts", (8, 20), None, err="test")
 
     # main-thread requests with a context, then each subagent's own requests
     ctx = [(0, 10, 48_000), (0, 40, 52_000), (1, 30, 61_000), (8, 10, 78_000), (8, 40, 84_000), (10, 0, 90_000), (40, 10, 97_000),
