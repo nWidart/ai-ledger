@@ -401,6 +401,18 @@ export async function errors(h) {
       slash ? `"//" ${Math.round(slash.l)}..${Math.round(slash.r)}px x ${Math.round(em(slash).t)}..${Math.round(em(slash).b)}px; labels under the plot ${under.map(x => `"${x.text}" ${Math.round(x.l)}..${Math.round(x.r)}px x ${Math.round(em(x).t)}..${Math.round(em(x).b)}px`).filter((_, i) => i < 3).join(", ")}…` : "no //");
     await c.shot(pf, "text-32px-fixes-fold");
     await pf.done();
+    // Twelve fixes on the newest day, at 32px: every line drawn, and only the label rows that end inside the plot.
+    const twelve = Array.from({ length: 12 }, (_, k) => `fix${String(k + 1).padStart(2, "0")}`);
+    const many = d => {
+      d.categories = [...d.categories, ...twelve.map(id => ({ id, label: `Fixed ${id.slice(3)}`, why: "", fix: "", snippet: "" }))];
+      return fixed(full(d), Object.fromEntries(twelve.map(id => [id, 29])));
+    };
+    const pm = await c.openOn({ answer: many }, "32px root, twelve fixes on one day", {}, root32);
+    const m = await ev(pm, () => ({ fixes: window.errfit.fixes(), g: window.chartfit.grid() }));
+    line("32px root: twelve fixes on the newest day draw twelve lines, no label passing the plot's bottom", m.fixes.lines.length === 12 && m.fixes.labels.length > 0 && m.fixes.labels.every(x => x.b <= m.g.b + .5),
+      `${m.fixes.lines.length} lines, ${m.fixes.labels.length} labels, the lowest ending at ${Math.round(Math.max(...m.fixes.labels.map(x => x.b)))}px; plot bottom ${Math.round(m.g.b)}px`);
+    await c.shot(pm, "text-32px-twelve-fixes");
+    await pm.done();
   }
 
   // The reading: pointer, keys, both tracks, the zoom.

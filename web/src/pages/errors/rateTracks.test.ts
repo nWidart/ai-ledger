@@ -266,6 +266,17 @@ describe("the marks on the frame", () => {
     // No wider than its band: 98 weeks in 246px.
     expect(draw(byId(f, "fixes"), 0, { ...plot, width: 11 * 246 / 98 }, ...whole(f))!.children[0]!.style.lineWidth).toBe(1.5);
     expect(draw(byId(f, "fixes"), 0, { ...plot, width: 11 }, ...whole(f))!.children[0]!.style.lineWidth).toBe(1);
+    // Twelve fixes on one day: every line, and the labels whose row ends inside the frame. 21 rows fit at the default
+    // text, 11 at twice it: the twelfth is left out.
+    const types = Object.fromEntries(Array.from({ length: 12 }, (_, k) => [`t${k + 10}`, 1]));
+    const many = model(payload([["2026-11-05", 100, types]]), {}, Object.fromEntries(Object.keys(types).map(c => [c, "2026-11-05"])));
+    for (const [e, labels] of [[env(), 12], [env({ textScale: 2 }), 11]] as const) {
+      const frame = frameOf(many, e), drawn = many.fixes.map((_, n) => draw(byId(many, "fixes", e), n, frame, 0, 0)!.children);
+      expect(drawn.map(c => c[0]!.type)).toEqual(Array(12).fill("line"));
+      const tops = drawn.flatMap(c => c.slice(1).map(t => t.style.y as number));
+      expect(tops).toHaveLength(labels);
+      for (const y of tops) expect(y + 13 * e.textScale).toBeLessThanOrEqual(frame.y + frame.height);
+    }
   });
 });
 

@@ -194,10 +194,13 @@ function idleBands(m: RateModel, env: ChartEnv, barsMid: number): CustomSeriesOp
   } as CustomSeriesOption;
 }
 
+/** A fix label's row, 13px apart at the default text: the label and the space under it. */
+const ROW = 13;
+
 /** The fix markers (decision 5), on the frame over the line and its dots (z 4): a dashed line at the middle of the point's
  *  band over the frame's height, and "✓ type" at the frame's top, one row lower for each fix before it on the point. The
  *  label sits right of the line, left of it where it would pass the plot's right edge, and is left out where neither side
- *  has room. A fix outside the points shown is not drawn. */
+ *  has room, or where its row would end under the frame. A fix outside the points shown is not drawn. */
 function fixMarks(m: RateModel, env: ChartEnv): CustomSeriesOption {
   const { fontFamily, fontSize } = baseOption(env).textStyle, s = env.textScale;
   const stroke = env.forced ? env.ink.text : env.color("var(--good)"), fill = env.forced ? env.ink.text : env.color("var(--good-text)");
@@ -220,12 +223,14 @@ function fixMarks(m: RateModel, env: ChartEnv): CustomSeriesOption {
         shape: { x1: cx, y1: frame.y, x2: cx, y2: frame.y + frame.height },
         style: { stroke, lineWidth: Math.min(1.5, band), lineDash: [4, 3], opacity },
       }];
-      const text = `✓ ${fx.label}`, w = labelWidth(env, text), gap = 4 * s;
-      const at = cx + gap + w <= right ? { x: cx + gap, align: "left" as const } : cx - gap - w >= frame.x ? { x: cx - gap, align: "right" as const } : null;
+      const text = `✓ ${fx.label}`, w = labelWidth(env, text), gap = 4 * s, y = (2 + ROW * fx.row) * s;
+      // A row that would end under the frame is left out: its line stays. 21 rows fit at the default text, 11 at twice it.
+      const at = y + ROW * s > frame.height ? null
+        : cx + gap + w <= right ? { x: cx + gap, align: "left" as const } : cx - gap - w >= frame.x ? { x: cx - gap, align: "right" as const } : null;
       // A halo in the surface's color, as pointLabel's, as wide as the letters grow: the rate line breaks behind the text.
       if (at) children.push({
         type: "text", emphasisDisabled: true,
-        style: { text, ...at, y: frame.y + (2 + 13 * fx.row) * s, verticalAlign: "top", fontFamily, fontSize, fill, stroke: env.ink.surface, lineWidth: 3 * s, opacity },
+        style: { text, ...at, y: frame.y + y, verticalAlign: "top", fontFamily, fontSize, fill, stroke: env.ink.surface, lineWidth: 3 * s, opacity },
       });
       return { type: "group", children };
     },
