@@ -671,18 +671,21 @@ A drawer's title SHALL be a real heading in the page outline, and its toggle SHA
 - **THEN** the drawer's title is listed as a heading
 
 ### Requirement: Label an interactive chart as a group
-The box of a chart that the user reads by keyboard, on Cost, Activity, Errors and Project, SHALL be a `role="group"` with a label that says what the chart shows and how to read it, and SHALL NOT be `role="img"` or `role="application"`. Its live region for the keyboard reading SHALL stay. The drawing inside the box SHALL be hidden from assistive technology, which reads the label, the live region and the data table instead; the chart SHALL NOT expose a description generated from its series.
+The box of a chart that the user reads by keyboard, on Cost, Activity, Errors, Project and the session sheet, SHALL be a `role="group"` with a label that says what the chart shows and how to read it, and SHALL NOT be `role="img"` or `role="application"`. Its live region for the keyboard reading SHALL stay.
 
 #### Scenario: Roles
 - **WHEN** a screen reader reaches the Cost chart
 - **THEN** it exposes a group with the chart's label, and the label names the stacking
+
+### Requirement: Hide an interactive chart's drawing from assistive technology
+The drawing inside the box of a chart that the user reads by keyboard SHALL be hidden from assistive technology, which reads the label, the live region and the data table instead; the chart SHALL NOT expose a description generated from its series.
 
 #### Scenario: Drawing hidden
 - **WHEN** a screen reader user moves through the Cost chart's group
 - **THEN** it reads the label and the day being read, and none of the chart's drawn text or shapes
 
 ### Requirement: Dismiss a chart tooltip with Escape
-Escape SHALL dismiss the open tooltip of the Cost, cost flow, Activity work, outcome trend, Errors rate and session plot charts, whether the pointer or the keyboard reading opened it, without closing a sheet or the palette and without changing the selected bucket.
+Escape SHALL dismiss the open tooltip of the Cost, cost flow, Activity work, outcome trend, Errors rate, session plot and session sheet's tool-call charts, whether the pointer or the keyboard reading opened it, without closing a sheet or the palette and without changing the selected bucket.
 
 #### Scenario: Escape on a hovered bar
 - **WHEN** the tooltip of a Cost bar is open and the user presses Escape
@@ -1574,7 +1577,7 @@ A page whose load failed, in its failure message or its "Could not load" banner,
 - **THEN** the no-session note goes away
 
 ### Requirement: Keep a chart's space while it loads
-A chart whose drawing code loads after the page SHALL hold its final height from its first render, so nothing under it moves when it draws. Its label, keyboard reading, live readout and data table SHALL work before it has drawn. The Cost daily chart, the cost flow, the Activity work chart, the outcome trend, the Errors rate chart, the Activity calendar and the session plot are such charts.
+A chart whose drawing code loads after the page SHALL hold its final height from its first render, so nothing under it moves when it draws. Its label, keyboard reading, live readout and data table SHALL work before it has drawn. The Cost daily chart, the cost flow, the Activity work chart, the outcome trend, the Errors rate chart, the Activity calendar, the session plot and the session sheet's tool-call chart are such charts.
 
 #### Scenario: First visit to Cost
 - **WHEN** the user opens Cost for the first time and the chart's drawing code has not loaded yet
@@ -1623,7 +1626,7 @@ A drawn chart SHALL take its colors from the theme's color tokens, and SHALL red
 - **THEN** that project's segments in the chart are the same color
 
 ### Requirement: Use system colors in a drawn chart under forced colors
-In a forced-colors mode, a chart drawn by the shared chart component SHALL draw its text, grid lines, reading mark and zoom control in system colors. Each colored bar segment SHALL keep its series color, since the color is the data, with an edge in the system text color. A chart of nodes and bands, or of dots, has its own rule. A chart not yet drawn by the shared chart component keeps its own forced-colors rules. The chart SHALL switch when forced colors turns on or off, without a reload.
+In a forced-colors mode, a chart drawn by the shared chart component SHALL draw its text, grid lines, reading mark and zoom control in system colors. Each colored bar segment SHALL keep its series color, since the color is the data, with an edge in the system text color. A chart of nodes and bands, dots or spans has its own rule. A chart not yet drawn by the shared chart component keeps its own forced-colors rules. The chart SHALL switch when forced colors turns on or off, without a reload.
 
 #### Scenario: Cost chart in high contrast
 - **WHEN** forced colors is on and the Cost chart is drawn
@@ -1806,6 +1809,28 @@ A drawn chart with a log axis SHALL draw a value of 0 in a lane at the start of 
 #### Scenario: Large text
 - **WHEN** the root font size is 32px, the session plot's box is 343px wide and both axes have a lane
 - **THEN** the tool-call lane's label 0 and that axis's first tick label are both shown, apart, and no label overlaps another
+
+### Requirement: Read a drawn chart of spans along and across its lanes
+A drawn chart of spans on lanes SHALL be read by keyboard along a lane, Left and Right by start, Home and End at its ends, and across lanes, Up and Down to the span nearest in time in the lane above or below; and by pointer at the span whose drawn shape holds the pointer, else the nearest in its row, not at a band of an x axis. The span read SHALL be marked by an outline around its own shape. Its keyboard reading, tooltip and live sentence SHALL work before the chart has drawn.
+
+#### Scenario: Reading before the chart has drawn
+- **WHEN** the session sheet's tool-call chart has not drawn yet and the user focuses it and presses Right
+- **THEN** the main thread's first call is read, with its tooltip, its outline and its sentence
+
+#### Scenario: Two calls at one moment
+- **WHEN** two calls of the main thread start at the same moment, in two rows, and the pointer is over the lower row
+- **THEN** the call in the lower row is read
+
+#### Scenario: A failure tick above its row
+- **WHEN** the pointer is on the top pixel of a failure tick, drawn above its row
+- **THEN** that failed call is read
+
+### Requirement: Tell spans apart by shape under forced colors
+In a forced-colors mode, a drawn chart of spans SHALL draw each span in the system text color, telling a failed span, a span with no result and a span with no duration apart by shape and height, not by hue, and SHALL outline the span read in the system highlight color. The chart SHALL switch when forced colors turns on or off, without a reload.
+
+#### Scenario: Failed and open calls in high contrast
+- **WHEN** forced colors is on and the tool-call chart shows a failed call and a call with no result
+- **THEN** the failed call is an outline in the system text color and the call with no result a ring in it
 
 ### Requirement: Answer a proxy's host by name
 `ai-ledger serve` SHALL take `--proxy-host HOST[:PORT]`, repeatable. Every route and method SHALL accept a `Host` header equal to one of those values, ignoring case, as it accepts `127.0.0.1:<port>`. A value that is not a host name with an optional port SHALL be refused at start. Without the option, every other host SHALL keep getting `403 forbidden host`. The app SHALL keep listening on `127.0.0.1` only.
