@@ -159,7 +159,7 @@ See [Windows](/ai-ledger/concepts/windows/) for how limit windows work.
 
 ### Sessions by cost and tool calls
 
-**Shows** one dot for each session of the project in the view: its estimated cost across and its tool calls up, both on log scales. The hint above the plot says so. A table, "Sessions by cost and tool calls", lists the same sessions under **Show data table**.
+**Shows** one dot for each session of the project in the view: its estimated cost across and its tool calls up, both on log scales. The hint above the plot says so, and that "done" counts tool calls, not results. A table, "Sessions on the plot", lists the same sessions under **Show data table**.
 
 **What a dot is**
 
@@ -189,10 +189,10 @@ Each name sits in its corner of the plot, when it fits there. A list under the p
 - Focus the plot, then press Right or Left to read the next or previous dot, cheapest to costliest. Home and End read the cheapest and the costliest. With no dot read, Right reads the cheapest and Left the costliest. At an end, the key says the sentence again. Up and Down scroll the page.
 - A screen reader hears one sentence: the session's name, its start, its cost, tool calls and commits, and its quadrant, such as "Fix the flaky invoice export test, started Nov 2, 09:05 AM: $0.85, 41 tool calls, 2 commits. Cheap, much done."
 - Move the pointer over a dot, within 12 pixels, to read it. The cursor turns to a hand over a dot. A tooltip gives the name, the start, the estimated cost, the tool calls, the commits and the quadrant.
-- Press Enter on the dot read, or click a dot, to open its session sheet over the page. The reading ends.
+- Press Enter on the dot read, or click a dot, to open its session sheet over the page. The reading ends, but not its place: when the sheet closes and the focus is back on the plot, Right and Left go on from that dot. Nothing is said until you press a key.
 - Esc ends the reading, also one the pointer opened while the focus is elsewhere. Leaving the plot ends it too. Newer figures of the same view keep the dot read.
 - **Show data table** lists every dot, costliest first: Session, Started, Est. cost, Tool calls, Commits and Quadrant. A row opens its session sheet.
-- In forced colors, dots, lines and labels take the system text color, the split lines the system gray, and the ring around the dot read the system highlight color. Filled and hollow dots stay apart. The plot never animates.
+- In forced colors, dots, the dashed median lines and labels take the system text color, the grid lines the system gray, and the ring around the dot read the system highlight color. Filled and hollow dots stay apart. The plot never animates.
 
 **Controls** The heading link **Open in Activity** opens Activity for the project. The block follows the range, source and automated filters.
 

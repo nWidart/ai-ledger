@@ -16,7 +16,7 @@ Every page works from the keyboard and with a screen reader. This page lists the
 | Esc | An open menu, the palette, a sheet, a toggletip, a chart tooltip | Close it. Esc in a menu or on a chart tooltip does not close the sheet or the palette under it. |
 | Left, Right | A focused chart | Read the previous or next point. |
 | Home, End | A focused chart | Read the first or last point. |
-| Left, Right | The focused Project plot "Sessions by cost and tool calls" | Read the next or previous session, from the cheapest to the costliest. With none read, Right reads the cheapest and Left the costliest. |
+| Left, Right | The focused Project plot "Sessions by cost and tool calls" | Read the previous or next session, from the cheapest to the costliest. With none read, Right reads the cheapest and Left the costliest. After a session sheet opened from the plot closes, they go on from that session. |
 | Home, End | The focused Project plot | Read the cheapest or the costliest session. |
 | Enter | The focused Project plot, with a session read | Open its session sheet. |
 | Esc | The focused Activity work chart, with no bar being read | Clear the selected day or week. |

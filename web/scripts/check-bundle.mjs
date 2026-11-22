@@ -18,11 +18,11 @@ const LIMITS = {
   // The chart code the charts of Cost, Activity and Errors share. Vite names a shared chunk after its first module, so
   // the name (`zoomReset`) can change when modules move: the check then fails on "found 0" rather than skipping the chunk.
   zoomReset: 4, // 2.1 kB since the wrapper moved into `EChart`: what is left is the zoom-reset control and its helpers
-  echarts: 195, // the lazy ECharts chunk, which the charts of Cost, Activity and Errors load
+  echarts: 195, // the lazy ECharts chunk, which the charts of Cost, Activity, Errors and Project load
 };
 // The page chunks and the shared chunk, each of which must match exactly one file.
 const SINGLE = ["index", "CostPage", "ActivityPage", "ErrorsPage", "ProjectPage", "EChart", "zoomReset"];
-// How many `echarts-*.js` chunks the build must hold: one, which the charts of Cost, Activity and Errors load.
+// How many `echarts-*.js` chunks the build must hold: one, which the charts of Cost, Activity, Errors and Project load.
 const ECHARTS_CHUNKS = 1;
 
 const files = readdirSync(assets).filter((f) => f.endsWith(".js"));
