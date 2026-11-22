@@ -1331,14 +1331,19 @@ describe("EChart zoom", () => {
   const readBack = (list: readonly string[], name: string) => { key("End"); for (let n = list.length - 1; n > list.indexOf(name); n--) key("ArrowLeft"); };
 
   it("keeps a key's reading and the window on their days when days join at the front, and says nothing", async () => {
-    const onZoom = zoomSpy();
+    // A tooltip as wide as its text, in a box 800px wide: wider words move it.
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("tip") ? (this.textContent?.length ?? 0) * 20 : 0;
+    });
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 800, bottom: 300, width: 800, height: 300, x: 0, y: 0, toJSON() {} } as DOMRect);
+    const onZoom = zoomSpy(), option = fresh(EARLY.length);
     const { rerender } = render(keyed(MONTH, { onZoom }));
     const chart = await drawn();
     chart.zoomTo(15, 29);
     readBack(MONTH, "Oct 23");
     const place = [tooltip()!.style.left, tooltip()!.style.top], said = spoken();
     const set = vi.spyOn(chart, "setOption"), px = vi.spyOn(chart, "convertToPixel");
-    rerender(keyed(EARLY, { onZoom }));
+    rerender(keyed(EARLY, { onZoom, option }));
     // The chart is asked where the day is once it draws the new days: before, it would answer for another day.
     expect(px).toHaveBeenCalled();
     expect(set.mock.invocationCallOrder[0]).toBeLessThan(Math.min(...px.mock.invocationCallOrder));
@@ -1349,8 +1354,13 @@ describe("EChart zoom", () => {
     expect(onZoom.mock.calls).toEqual([[{ from: 15, to: 29 }], [{ from: 17, to: 31 }]]);
     expect(readout()).toBe("Oct 23: read");
     expect(said()).toBe(0);
+    // Newer words on the same drawing: the wider tooltip is placed again, where a fresh reading of the day puts it.
+    rerender(keyed(EARLY, { onZoom, option, read: i => `${EARLY[i]}: longer words now`, tip: i => <b>{EARLY[i]}, a tip too wide for the right of the day</b> }));
+    const wider = tooltip()!.style.left;
     key("ArrowLeft");
-    expect(readout()).toBe("Oct 22: read");
+    expect(readout()).toBe("Oct 22: longer words now");
+    key("ArrowRight");
+    expect(tooltip()!.style.left).toBe(wider);
   });
 
   it("moves the reading and the window by a day that joins before them, and by a day that leaves", async () => {

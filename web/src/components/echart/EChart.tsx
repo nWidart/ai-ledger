@@ -225,9 +225,7 @@ export function EChart({
   const [failed, setFailed] = useState(false);
   // The point being read, whether a key read it, and its sentence as last said. Kept apart from the live region, which a
   // zoom sentence or a status can take over while the reading goes on. `at` is the cursor: the index of the point, or null.
-  // `moved`: the point keys moved the reading to another index, which the chart does not draw there until the draw
-  // effect has run (see the layout effect that places the tooltip).
-  const [reading, setReading] = useState<{ i: number; keyed: boolean; text: string; moved?: boolean } | null>(null);
+  const [reading, setReading] = useState<{ i: number; keyed: boolean; text: string } | null>(null);
   const at = reading && reading.i < points ? reading.i : null;
   // The points shown, as the chart last reported them: null while every point shows.
   const [zoomed, setZoomed] = useState<Shown | null>(null);
@@ -285,7 +283,7 @@ export function EChart({
       // took the region since stays.
       setReading(null);
       if (said?.reading != null) setSaid(null);
-    } else if (reading && i !== reading.i) setReading({ ...reading, i: i!, moved: true });
+    } else if (reading && i !== reading.i) setReading({ ...reading, i: i! });
     const next = zoomed && by && was ? windowOn(zoomed, was, by, points) : null;
     if (!same(next, zoomed)) {
       setZoomed(next); // the draw effect puts the chart's window on it (`keep`)
@@ -351,6 +349,9 @@ export function EChart({
   // Where the pointer's reading points, in px from the plot's top left; null for a key's reading, which points at the
   // point itself. Not state: a pointer move inside one point re-renders nothing, the tooltip is only moved.
   const pointer = useRef<{ x: number; y: number } | null>(null);
+  // The option the chart was last drawn from, set by the draw effect: until it is this render's, the chart answers for
+  // the points it drew before.
+  const drawnFrom = useRef<EChartProps["option"] | null>(null);
   /** Puts the tooltip where the reading of point i points: beside the pointer, or over the point as the chart draws it
    *  now. Before the chart is there, the point is at its share of the box's width. */
   const place = useEffectEvent((i: number) => {
@@ -362,9 +363,10 @@ export function EChart({
     placeTip(box.current!, plot.current!, tipEl.current, to);
   });
   // Each key sets a new reading, so its tooltip is placed even when the point is the one the pointer was reading.
-  // Not a reading the point keys moved, once there is a chart: this runs before the draw effect, and the chart, which
-  // still draws the old points, would answer for another point. The band effect places it after the drawing.
-  const placeRead = useEffectEvent((i: number) => { if (!(reading?.moved && chart)) place(i); });
+  // Not while the chart is not yet drawn from this render's option (a reading the point keys moved comes with the newer
+  // data): this runs before the draw effect, and the chart, which still draws the old points, would answer for another
+  // point. The band effect, which runs after every drawing, places it then.
+  const placeRead = useEffectEvent((i: number) => { if (!chart || drawnFrom.current === option) place(i); });
   useLayoutEffect(() => { if (at != null) placeRead(at); }, [reading, at]);
   /** Enter or a click on point i: the reading ends, unless the chart declines. False in a chart that selects nothing. */
   const activate = (i: number) => {
@@ -557,6 +559,7 @@ export function EChart({
     if (!chart) return;
     const made = option(env), first = drawn.current !== chart;
     drawn.current = chart;
+    drawnFrom.current = option;
     chart.setOption({
       ...made, ...(env.motion && first ? {} : { animation: false }), ...(zoom ? {} : { dataZoom: [] }),
       axisPointer: { ...made.axisPointer, triggerOn: "none" },
