@@ -122,10 +122,14 @@ describe("flowModel", () => {
     { rule: "no request", d: { ...view([]), totals: { ...view([]).totals, requests: 0, cost: null } }, want: "No usage in this view, so no cost to follow." },
     { rule: "only unpriced requests", d: { ...view([]), totals: { ...view([]).totals, requests: 4, cost: null } }, want: "No request in this view is priced, so there is no cost to follow." },
     { rule: "priced at zero", d: view([["a", "free", 0]], { free: [0, 0, 0, 0, 0] }), want: "The priced requests in this view cost $0.00, so there is no cost to follow." },
-  ])("says why there is no flow: $rule", ({ d, want }) => {
+    // A price below zero: the table keeps every cost as it is, each step adding up to the heading's $2.
+    { rule: "a cost below zero", d: view([["a", "m", 3], ["b", "n", -1]]), rows: [3, -1, 3, -1],
+      want: "Some costs in this view are below zero, from a price below zero in prices.json, and a band cannot be drawn for them, so there is no flow. The data table lists every cost: $2.00 in all." },
+  ])("says why there is no flow: $rule", ({ d, want, rows = [] }) => {
     const m = flowModel(d);
     expect(m.empty).toBe(want);
     expect(flowLayout(m, flowFit(800, 1, 3))).toBeNull();
+    expect([m.columns, m.bands, [...m.rows.pairs, ...m.rows.kinds].map(r => r.value), m.total]).toEqual([[], [], rows, rows.length ? 2 : 0]);
   });
 });
 

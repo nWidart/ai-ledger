@@ -160,6 +160,16 @@ describe("cost flow: what it shows", () => {
     expect(screen.queryByRole("button", { name: "Show data table" })).toBeNull();
   });
 
+  it("says why a cost below zero has no flow, and lists every cost with its sign in the data table", () => {
+    show(view([["atlas-api", "gpt-5.1-codex", 3], ["beacon", "gpt-5.1-codex", -1]]));
+    expect(screen.getByText(/^Some costs in this view are below zero/).textContent).toMatch(/: \$2\.00 in all\.$/);
+    expect(screen.queryByRole("group", { name: /^Estimated cost/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show data table" }));
+    const rows = within(screen.getByRole("table", { name: "Estimated cost from project to model to token kind" })).getAllByRole("row");
+    expect(rows.slice(1).map(r => r.textContent)).toEqual(["Project to modelatlas-apigpt-5.1-codex$3.00150.0%", "Project to modelbeacongpt-5.1-codex−$1.00-50.0%",
+      "Model to token kindgpt-5.1-codexInput$2.00100.0%"]);
+  });
+
   it("names the models in a key in a 343px box at a text scale of 2", () => {
     vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(343);
     document.documentElement.style.fontSize = "32px";

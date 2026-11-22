@@ -40,15 +40,16 @@ export interface FlowColumn { key: FlowColumnKey; title: string; nodes: FlowNode
 /** A flow before folding, between two names as the nodes say them: a row of the data table. */
 export interface FlowRow { id: string; from: string; to: string; value: number }
 export interface FlowGraph {
-  /** Why there is no flow (decision 11), or null. With a sentence, the columns and bands are empty. */
+  /** Why there is no flow (decision 11), or null. With a sentence, the columns and bands are empty, and so are the rows
+   *  unless some cost is below zero. */
   empty: string | null;
-  /** The view's priced cost: every column adds up to it. */
+  /** The view's priced cost: every column adds up to it, and each step of the rows. */
   total: number;
   /** Project, Model, Token kind; with one project selected, Model and Token kind. */
   columns: FlowColumn[];
   bands: FlowBand[];
   /** Every flow unfolded, from the same figures as the bands: project to model (none with one project selected), then
-   *  model to token kind. */
+   *  model to token kind. Signed: with a cost below zero, the only part of the flow there is. */
   rows: { pairs: FlowRow[]; kinds: FlowRow[] };
 }
 
@@ -61,6 +62,10 @@ const KINDS: { id: string; label: string; of: (m: FlowModel) => number }[] = [
   { id: "k:read", label: "Cache read", of: m => m.cost_cache_read ?? 0 },
 ];
 export const REPORTED = "k:reported";
+/** The kinds and Reported, as the table lists a model's cost. */
+const SPLIT = [...KINDS, { id: REPORTED, label: "Reported", of: (m: FlowModel) => m.cost_reported ?? 0 }];
+/** A dollar figure to the cent with its sign ($10.49, −$1.00), as the drawer's table writes it. */
+export const cents = (n: number) => (n < 0 ? "−$" : "$") + num(Math.abs(n), 2);
 /** A model's node id before folding: "m?" for a model with no name (Grok stores so a turn with no breakdown by model). */
 const modelKey = (model: string | null) => (model == null ? "m?" : "m:" + model);
 /** A model's name as its node says it, as the unpriced line under the graph names a model with no name. */
@@ -87,11 +92,26 @@ const add = (m: Map<string, number>, k: string, v: number) => m.set(k, (m.get(k)
  *  model's name can hold both. Two different pairs of ends never give one id. */
 const key = (from: string, to: string) => [from, to].map(s => s.replace(/[\\|]/g, "\\$&")).join("|");
 
+/** The data table's rows: every flow unfolded, signed as the payload has it. Project to model, $0.00 ones too (none with one
+ *  project selected), then model to token kind with a cost. */
+function tableRows(d: FlowInput): FlowGraph["rows"] {
+  return {
+    pairs: d.project ? [] : d.cost_flow.pairs.map(p => ({ id: key("p:" + (p.project ?? ""), modelKey(p.model)), from: p.project || "(no project)", to: short(p.model), value: p.cost })),
+    kinds: d.cost_flow.models.flatMap(m => SPLIT.map(k => ({ id: key(modelKey(m.model), k.id), from: short(m.model), to: k.label, value: k.of(m) })).filter(r => r.value)),
+  };
+}
+
 /** The flow of a view: its columns of nodes, each by cost with Other and Reported last, and its bands, in dollars. */
 export function flowModel(d: FlowInput): FlowGraph {
   const none = (empty: string): FlowGraph => ({ empty, total: 0, columns: [], bands: [], rows: { pairs: [], kinds: [] } });
   if (!d.totals.requests) return none("No usage in this view, so no cost to follow.");
   if (d.totals.cost == null) return none("No request in this view is priced, so there is no cost to follow.");
+  // A price below zero (the prices file takes any number) gives costs below zero, which no band can be drawn for: the
+  // sentence, and the table with every cost as it is, which adds up to the heading's total.
+  const rows = tableRows(d);
+  if (d.cost_flow.pairs.some(p => p.cost < 0) || rows.kinds.some(r => r.value < 0))
+    return { ...none("Some costs in this view are below zero, from a price below zero in prices.json, and a band cannot be drawn for "
+      + `them, so there is no flow. The data table lists every cost: ${cents(d.totals.cost)} in all.`), total: d.totals.cost, rows };
   const pairs = d.cost_flow.pairs.filter(p => p.cost > 0);
   const total = pairs.reduce((s, p) => s + p.cost, 0);
   if (!(total > 0)) return none("The priced requests in this view cost $0.00, so there is no cost to follow.");
@@ -102,11 +122,11 @@ export function flowModel(d: FlowInput): FlowGraph {
   for (const p of pairs) { add(modelCost, modelKey(p.model), p.cost); modelName.set(modelKey(p.model), p.model); }
   const modelColor = new Map(costKinds({ project: d.project, by_project: [], daily_models: [...modelCost].map(([model, cost]) => ({ day: "", model, cost })) }, "model")
     .map(k => [k.k, k.c]));
-  const models = fold([...modelCost].map(([key, value]) => ({ key, label: short(modelName.get(key)!), value })), total);
+  const models = fold([...modelCost].map(([k, value]) => ({ key: k, label: short(modelName.get(k)!), value })), total);
   const modelId = new Map<string, string>([...models.kept.map(m => [m.key, m.key] as const), ...models.rest.map(m => [m.key, "m"] as const)]);
 
   const columns: FlowColumn[] = [];
-  const bands = new Map<string, FlowBand>(), rows: FlowGraph["rows"] = { pairs: [], kinds: [] };
+  const bands = new Map<string, FlowBand>();
   const flow = (from: string, to: string, v: number) => {
     if (!(v > 0)) return;
     const id = key(from, to), b = bands.get(id);
@@ -127,8 +147,6 @@ export function flowModel(d: FlowInput): FlowGraph {
       ...other("p", 0, projects.rest),
     ] });
     for (const p of pairs) flow(projectId.get(p.project ?? "")!, modelId.get(modelKey(p.model))!, p.cost);
-    // The table lists the $0.00 pairs too.
-    rows.pairs = d.cost_flow.pairs.map(p => ({ id: key("p:" + (p.project ?? ""), modelKey(p.model)), from: p.project || "(no project)", to: short(p.model), value: p.cost }));
   }
   const mc = columns.length, kc = mc + 1;
   columns.push({ key: "model", title: TITLE.model, nodes: [
@@ -141,12 +159,9 @@ export function flowModel(d: FlowInput): FlowGraph {
   for (const m of d.cost_flow.models) {
     const id = modelId.get(modelKey(m.model));
     if (!id) continue; // no cost in the view: no node, no band
-    for (const k of [...KINDS, { id: REPORTED, label: "Reported", of: (x: FlowModel) => x.cost_reported ?? 0 }]) {
+    for (const k of SPLIT) {
       const v = k.of(m);
-      if (!(v > 0)) continue;
-      flow(id, k.id, v);
-      add(kindCost, k.id, v);
-      rows.kinds.push({ id: key(modelKey(m.model), k.id), from: short(m.model), to: k.label, value: v });
+      if (v > 0) { flow(id, k.id, v); add(kindCost, k.id, v); }
     }
   }
   columns.push({ key: "kind", title: TITLE.kind, nodes: [

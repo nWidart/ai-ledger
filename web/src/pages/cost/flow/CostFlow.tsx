@@ -14,7 +14,7 @@ import { modified } from "../../../components/keys";
 import { Table, type Column } from "../../../components/table/Table";
 import { num, pct, plural, usd } from "../../../format";
 import { Unpriced } from "../drawers";
-import { bandPath, flowFit, flowLayout, flowModel, flowOption, REPORTED, type FlowInput, type FlowLayout, type FlowRow, type PlacedBand, type PlacedNode } from "./flowModel";
+import { bandPath, cents, flowFit, flowLayout, flowModel, flowOption, REPORTED, type FlowInput, type FlowLayout, type FlowRow, type PlacedBand, type PlacedNode } from "./flowModel";
 import { flowAt, moveFlow, type FlowItem } from "./flowReading";
 import "./flow.css";
 
@@ -28,8 +28,6 @@ export interface CostFlowProps {
 /** The item read: whether a key read it, its sentence as last said, and a count that makes the live region say it again. */
 interface Reading { at: FlowItem; keyed: boolean; text: string; n: number }
 
-/** A dollar figure to the cent, for the table ($10.49, not $10), as the drawer's table writes it. */
-const cents = (n: number) => "$" + num(n, 2);
 const share = (v: number, of: number) => pct(of > 0 ? v / of : 0, 1);
 const WORD: Record<string, string> = { project: "project", model: "model" };
 /** Up to three names with their cost, and how many more. */
@@ -249,7 +247,8 @@ export function CostFlow({ d, onProject }: CostFlowProps) {
       })}
       {unpriced > 0 && <p className="hint flow-unpriced">Not drawn: {plural(unpriced, "request")} from unpriced models
         {` (${d.unpriced.map(u => u.model ?? "no model name").join(", ")})`}, whose cost is unknown.</p>}
-      {layout && <ChartTable><Table name={one ? `Estimated cost on ${d.project} from model to token kind` : "Estimated cost from project to model to token kind"} region="scroll" rows={rows} columns={tableColumns} rowId={r => r.id} /></ChartTable>}
+      {/* With a cost below zero, the table is the flow's only part. */}
+      {rows.length > 0 && <ChartTable><Table name={one ? `Estimated cost on ${d.project} from model to token kind` : "Estimated cost from project to model to token kind"} region="scroll" rows={rows} columns={tableColumns} rowId={r => r.id} /></ChartTable>}
     </section>
   );
 }
