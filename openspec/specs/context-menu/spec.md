@@ -223,3 +223,10 @@ The menu SHALL also open, on the subject each stands for, on the session buttons
 #### Scenario: A small window grid
 - **WHEN** the user right-clicks the window grid of project `foo` on Context
 - **THEN** the menu of `foo` opens; the grid of "(no project)" opens none
+
+### Requirement: Cover the servers and skills of the overhead list
+The menu SHALL open on each MCP server and skill name that opens a sheet in the list of what loads before the first prompt, on the Project page and on Context. A name of that list that opens no sheet (the Unknown server, an unnamed skill, or any name while Context still shows another project's figures) SHALL open none.
+
+#### Scenario: A server in the overhead list
+- **WHEN** the user opens the list of what loads before the first prompt on the Project page of `foo` and right-clicks the name of the MCP server `github`
+- **THEN** the menu of the MCP server `github` opens; the "Unknown server" row opens none
