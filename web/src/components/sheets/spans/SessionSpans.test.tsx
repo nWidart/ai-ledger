@@ -167,7 +167,7 @@ describe("tool calls by thread: reading", () => {
     const escapes = () => sheet.mock.results.filter(r => r.value).length;
     document.addEventListener("keydown", sheet);
     // A control over the sheet (the command palette, a popover) that the focus is in.
-    const other = document.body.appendChild(document.createElement("button")), own = vi.fn();
+    const other = document.body.appendChild(document.createElement("button")), own = vi.fn<(ev: Event) => void>();
     other.addEventListener("keydown", own);
     try {
       focused();
