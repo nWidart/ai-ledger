@@ -32,7 +32,7 @@ export const QUAD_LIST_MAX = 20;
 const STEPS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity };
 
 /** A point in one sentence, as the live region says it (the tooltip carries the same fields). */
-export const readPoint = (p: SessionPoint): string =>
+const readPoint =(p: SessionPoint): string =>
   `${sessName(p)}: ${p.project ?? "(no project)"}, ${SOURCE_LABELS[p.source]}, started ${when(p.first_ts)}: starting context ${short(p.start)} tokens, peak ${short(p.peak)} tokens, `
   + `${share(p.peak / p.window)} of a ${windowLabel(p.window)} window, ${plural(p.turns, "turn")}, ${plural(p.compactions, "compaction")}`;
 
@@ -59,9 +59,17 @@ const COLUMNS: Column<SessionPoint>[] = [
 ];
 const PICK: RowPick<SessionPoint> = { value: p => p.session_id, open: v => openSessionSheet(v), subject: p => ({ kind: "session", value: p.session_id }) };
 
+type MapProps = { map: SessionsMap; quad: Quad | null; onQuad: (q: Quad | null) => void; view: string };
+
 /** Every session of the view with a measured start, a known window and a peak, as a dot. quad: the selected quadrant (null for none);
- *  onQuad selects one, or clears it with null. view: what the user chose, never the figures: a new view ends the reading. */
-export function SessionMap({ map, quad, onQuad, view }: { map: SessionsMap; quad: Quad | null; onQuad: (q: Quad | null) => void; view: string }) {
+ *  onQuad selects one, or clears it with null. view: what the user chose, never the figures: a new view ends the reading.
+ *  The map mounts with its first session, so the box it measures is the one on screen after an empty view. */
+export function SessionMap(props: MapProps) {
+  if (!props.map.points.length) return <p className="muted session-map-empty">No session in this view has a measured start, a known window and a peak.</p>;
+  return <Plotted {...props} />;
+}
+
+function Plotted({ map, quad, onQuad, view }: MapProps) {
   const color = useColors(), box = useRef<HTMLDivElement>(null), tipEl = useRef<HTMLDivElement>(null), width = useWidth(box);
   const quadsRef = useRef<HTMLDivElement>(null);
   /** Clears the quadrant from its controls: Clear goes away with it, so focus moves to the quadrant that was pressed, not to the body. */
@@ -169,7 +177,6 @@ export function SessionMap({ map, quad, onQuad, view }: { map: SessionsMap; quad
     return () => document.removeEventListener("keydown", escape, true);
   }, [reads]);
 
-  if (!pts.length) return <p className="muted session-map-empty">No session in this view has a measured start, a known window and a peak.</p>;
 
   const label = `Session map: ${plural(pts.length, "session")} shown, ${num(counts.full + counts.both)} at or over 80% of their window, ${num(counts.both)} of those started at or over 30k tokens. `
     + "Use the left and right arrow keys to step through sessions from oldest to newest, Enter to open one, Escape to dismiss it and clear the selected quadrant.";

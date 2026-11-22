@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, within } from "@testing-library/react";
 import { renderApp } from "../../testing";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionPoint } from "../../api";
 import { setOrder } from "../../colors";
 import { drawn } from "../../components/echart/testing";
@@ -80,6 +80,11 @@ describe("SessionMap", () => {
     expect(live()).toMatch(/^#calm0000/);
     press("Escape");
     expect([live(), tip(), mark()]).toEqual(["", null, null]);
+    // Focus leaving the map ends a reading too.
+    press("Home");
+    expect(live()).not.toBe("");
+    act(() => screen.getByRole("button", { name: /^Lean/ }).focus());
+    expect([live(), tip()]).toEqual(["", null]);
   });
 
   it("keeps a key's reading on its session through newer data, says it again when its words change, and ends it with its session or the view", () => {
@@ -108,9 +113,9 @@ describe("SessionMap", () => {
     expect([live(), tip()]).toEqual(["", null]);
   });
 
-  it("reads the nearest dot under the pointer within 12px, and Escape from elsewhere ends it", () => {
+  it("reads the dot under the pointer, ends the reading off it, and Escape from elsewhere ends it", () => {
     renderApp(<Map map={{ total: 3, points }} start="lean" />);
-    fireEvent.mouseMove(box(), pixel(points, "calm0000003", 7, 9)); // 11.4px away
+    fireEvent.mouseMove(box(), pixel(points, "calm0000003"));
     expect(tip()!.textContent).toMatch(/^#calm0000/);
     expect(live()).toMatch(/^#calm0000: bar, Codex/);
     expect(box().classList.contains("hand")).toBe(true);
@@ -238,5 +243,25 @@ describe("SessionMap", () => {
     renderApp(<Map map={{ total: 0, points: [] }} />);
     expect(screen.getByText("No session in this view has a measured start, a known window and a peak.")).toBeTruthy();
     expect(screen.queryByRole("group")).toBeNull();
+  });
+
+  it("measures the box it shows after an empty view, so the reading and the drawing share its width", async () => {
+    const width = vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(500);
+    try {
+      const { rerender } = renderApp(<Map map={{ total: 0, points: [] }} />);
+      /** The drawn grid's width, and the ring's box, after a key reads a session. */
+      const widths = async () => {
+        const grid = ((await drawn()).last as { grid: { width: number } }).grid.width;
+        press("Home");
+        return [grid, document.querySelector(".map-mark")!.getAttribute("width")];
+      };
+      rerender(<Map map={{ total: 3, points }} />);
+      expect(await widths()).toEqual([500 - 52 - 16, "500"]);
+      rerender(<Map map={{ total: 0, points: [] }} />);
+      rerender(<Map map={{ total: 3, points }} />);
+      expect(await widths()).toEqual([500 - 52 - 16, "500"]);
+    } finally {
+      width.mockRestore();
+    }
   });
 });
