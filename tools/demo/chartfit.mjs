@@ -40,7 +40,7 @@
 //                          its own checks), flow (Cost's flow from project to model to token kind, a graph with no
 //                          axis: its own readers and checks, none of the shared ones), quadrant (the Project page's
 //                          sessions by cost and tool calls, which reads its dots itself: its own checks only, listed in
-//                          its header)
+//                          its header), spans (the session sheet's tool calls by thread, its own checks)
 // It runs locally, not in CI. It needs the build and the pinned Playwright:
 //   uv sync;  cd web && npm ci && npm run build;  cd tools/demo && npm ci
 //   node chartfit.mjs [cost] [activity] [judgments] [errors] [calendar] [flow] [quadrant]   the pages named, every
@@ -54,8 +54,9 @@ import { errors } from "./chartfit/errors.mjs";
 import { judgments } from "./chartfit/judgments.mjs";
 import { flow } from "./chartfit/flow.mjs";
 import { quadrant } from "./chartfit/quadrant.mjs";
+import { spans } from "./chartfit/spans.mjs";
 
-const PAGES = { cost, activity, judgments, errors, calendar, flow, quadrant };
+const PAGES = { cost, activity, judgments, errors, calendar, flow, quadrant, spans };
 const named = process.argv.slice(2);
 const unknown = named.filter(n => !(n in PAGES));
 if (unknown.length) {
