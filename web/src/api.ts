@@ -186,7 +186,7 @@ export interface SessionDetail {
   /** lane: 0 on the main thread; a subagent's rank among the session's subagent result files, by its first call; null when its agent cannot be told (no result file, or the main thread's file). input: the input summary, cut to 120. */
   calls: { id: string; tool: string; start_ts: Ts | null; end_ts: Ts | null; is_error: boolean; category: string | null; subagent: boolean; is_commit: boolean | null; lane: number | null; input: string }[];
   compaction_ts: Ts[];
-  first_prompt: string | null; first_prompt_cut: boolean; title: string | null; truncated: boolean;
+  first_prompt: string | null; first_prompt_cut: boolean; title: string | null; truncated: boolean; calls_truncated: boolean;
 }
 
 export interface PromptPayload { text: string }

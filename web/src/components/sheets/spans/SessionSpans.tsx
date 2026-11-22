@@ -204,7 +204,8 @@ export function SessionSpans({ s }: { s: SessionDetail }) {
           {layout.notes.clipped > 0 && <span>▸ ran past the last event</span>}
           {layout.breaks.length > 0 && <span>⌇ squeezed: over 20 minutes with nothing starting; a call that ran through it is drawn shorter than it lasted</span>}
         </div>
-        {noteLines(layout, s.truncated).map(n => <p key={n} className="hint spans-note">{n}</p>)}
+        {/* Only the calls' cap: the requests' is the timeline's. A payload from before calls_truncated has no note. */}
+        {noteLines(layout, s.calls_truncated === true).map(n => <p key={n} className="hint spans-note">{n}</p>)}
         <div ref={box} className={hand ? "spans-box hand" : "spans-box"} onKeyDown={onKey} onMouseMove={onMove} onMouseLeave={onLeave} onClick={onClick}
           onBlur={ev => { if (!box.current?.contains(ev.relatedTarget as Node | null)) read(null); }}>
           <EChart id="session-spans" label={groupLabel(layout, s.info)} height={layout.height} option={option} view={s.info.session_id} points={0} read={() => ""} />

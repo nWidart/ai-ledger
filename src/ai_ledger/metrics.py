@@ -1123,4 +1123,4 @@ def session_timeline(cur, sid, allq, p):
     full = titles.first_prompts(cur, [sid]).get(sid)
     return dict(requests=reqs, calls=calls, compaction_ts=compactions, first_prompt=titles.cap_prompt(full),
                 first_prompt_cut=bool(full and len(full) > titles.FIRST_PROMPT_CAP), title=titles.titles(cur, [sid]).get(sid, (None,))[0],
-                truncated=len(reqs) >= TIMELINE_CAP or len(calls) >= TIMELINE_CAP)
+                truncated=len(reqs) >= TIMELINE_CAP or len(calls) >= TIMELINE_CAP, calls_truncated=len(calls) >= TIMELINE_CAP)

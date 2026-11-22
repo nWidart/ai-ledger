@@ -523,7 +523,8 @@ class MetricsTest(unittest.TestCase):
             # call (sc's file is a main file by m2, past the cap).
             with mock.patch.object(metrics, "TIMELINE_CAP", 6):
                 cut = metrics.session(c, "s4", prices=PRICES)
-            self.assertEqual(([x["lane"] for x in cut["calls"]], cut["truncated"]), ([0, 0, None, 1, 2, None], True))
+            self.assertEqual(([x["lane"] for x in cut["calls"]], cut["truncated"], cut["calls_truncated"], s["calls_truncated"]),
+                             ([0, 0, None, 1, 2, None], True, True, False))
             # An ingest that commits a call after each statement changes none of the payload's figures: the chart's calls
             # and the Tools table agree.
             real, late = metrics.rows, []

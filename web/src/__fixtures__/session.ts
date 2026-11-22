@@ -267,5 +267,6 @@ export default {
  "first_prompt": null,
  "first_prompt_cut": false,
  "title": null,
- "truncated": false
+ "truncated": false,
+ "calls_truncated": false
 } satisfies SessionDetail;

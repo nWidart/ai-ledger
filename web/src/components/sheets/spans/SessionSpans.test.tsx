@@ -65,7 +65,7 @@ const said = (id: string, l = L) => readSpan(l, id);
 
 describe("tool calls by thread: what it shows", () => {
   it("labels the chart, shows the hint, the key line with its clipped and squeezed entries, and the notes", () => {
-    const { again } = show(detail(CALLS, { truncated: true }));
+    const { again } = show(detail(CALLS, { truncated: true, calls_truncated: true }));
     expect(group().getAttribute("aria-label")).toBe(groupLabel(L, session.info));
     expect(screen.getByText(/^Each bar is a tool call/).textContent).toBe("Each bar is a tool call, from its start to its result, on its thread: "
       + "the main thread, then each subagent. Calls stacked in a lane ran at once.");
@@ -76,8 +76,9 @@ describe("tool calls by thread: what it shows", () => {
     expect(notes()).toEqual(noteLines(L, true));
     expect(notes()).toContain("Long session: only its first 8 tool calls are drawn.");
     expect(live().textContent).toBe("");
-    // A request after every call ends the axis there: no call past its end, no squeezed gap, neither entry, and no note.
-    again(detail(CALLS.slice(0, 5), { requests: [{ ts: at(8), model: "m-a", subagent: false, context: 1000, output: 0, cost: null }] }));
+    // A request after every call ends the axis there: no call past its end, no squeezed gap, neither entry, and no note,
+    // though the requests reached the cap.
+    again(detail(CALLS.slice(0, 5), { truncated: true, requests: [{ ts: at(8), model: "m-a", subagent: false, context: 1000, output: 0, cost: null }] }));
     expect(key()).toEqual(["Call", "Failed", "No result"]);
     expect(notes()).toEqual([]);
   });
