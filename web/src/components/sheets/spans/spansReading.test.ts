@@ -93,12 +93,12 @@ describe("the words", () => {
     expect(noteLines(many, true)).toEqual([
       "Long session: only its first 18 tool calls are drawn.",
       "1 call has no recorded duration: drawn as a tick.",
-      "2 calls ran past the last event: their bars end at the edge.",
+      "2 calls ran past the last event: their bars end in a point.",
       "1 call ran through squeezed time; its bar is shorter than its duration.",
       "1 call ran beside 3 others on subagent 1 and is drawn over its last row.",
       "Subagents 7 to 9 share the lane Other subagents.",
     ]);
-    expect(noteLines(layout([call(0, 1), call(2, 3)]), false)).toEqual(["1 call ran past the last event: its bar ends at the edge."]);
+    expect(noteLines(layout([call(0, 1), call(2, 3)]), false)).toEqual(["1 call ran past the last event: its bar ends in a point."]);
   });
 
   it("reads nothing of a gone call, and never says a missing value", () => {

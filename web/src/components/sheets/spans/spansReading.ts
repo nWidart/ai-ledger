@@ -154,7 +154,7 @@ export function noteLines(l: SpansLayout, truncated: boolean): string[] {
   return [
     truncated && `Long session: only its first ${num(l.spans.length)} tool calls are drawn.`,
     still && `${plural(still, "call")} ${one(still) ? "has" : "have"} no recorded duration: drawn as ${one(still) ? "a tick" : "ticks"}.`,
-    clipped && `${plural(clipped, "call")} ran past the last event: ${one(clipped) ? "its bar ends" : "their bars end"} at the edge.`,
+    clipped && `${plural(clipped, "call")} ran past the last event: ${one(clipped) ? "its bar ends" : "their bars end"} in a point.`,
     squeezed && `${plural(squeezed, "call")} ran through squeezed time; `
       + `${one(squeezed) ? "its bar is shorter than its duration" : "their bars are shorter than their durations"}.`,
     ...over.map(({ lane, n }) => `${plural(n, "call")} ran beside ${num(l.lanes[lane]!.rows)} others on ${laneWords(l.lanes[lane]!)} `
