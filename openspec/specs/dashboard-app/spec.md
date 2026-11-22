@@ -682,7 +682,7 @@ The box of a chart that the user reads by keyboard, on Cost, Activity and Errors
 - **THEN** it reads the label and the day being read, and none of the chart's drawn text or shapes
 
 ### Requirement: Dismiss a chart tooltip with Escape
-Escape SHALL dismiss the open tooltip of the Cost, Activity work, outcome trend and Errors rate charts, whether the pointer or the keyboard reading opened it, without closing a sheet or the palette and without changing the selected bucket.
+Escape SHALL dismiss the open tooltip of the Cost, cost flow, Activity work, outcome trend and Errors rate charts, whether the pointer or the keyboard reading opened it, without closing a sheet or the palette and without changing the selected bucket.
 
 #### Scenario: Escape on a hovered bar
 - **WHEN** the tooltip of a Cost bar is open and the user presses Escape
@@ -1574,7 +1574,7 @@ A page whose load failed, in its failure message or its "Could not load" banner,
 - **THEN** the no-session note goes away
 
 ### Requirement: Keep a chart's space while it loads
-A chart whose drawing code loads after the page SHALL hold its final height from its first render, so nothing under it moves when it draws. Its label, keyboard reading, live readout and data table SHALL work before it has drawn. The Cost daily chart, the Activity work chart, the outcome trend, the Errors rate chart and the Activity calendar are such charts.
+A chart whose drawing code loads after the page SHALL hold its final height from its first render, so nothing under it moves when it draws. Its label, keyboard reading, live readout and data table SHALL work before it has drawn. The Cost daily chart, the cost flow, the Activity work chart, the outcome trend, the Errors rate chart and the Activity calendar are such charts.
 
 #### Scenario: First visit to Cost
 - **WHEN** the user opens Cost for the first time and the chart's drawing code has not loaded yet
@@ -1623,7 +1623,7 @@ A drawn chart SHALL take its colors from the theme's color tokens, and SHALL red
 - **THEN** that project's segments in the chart are the same color
 
 ### Requirement: Use system colors in a drawn chart under forced colors
-In a forced-colors mode, a chart drawn by the shared chart component SHALL draw its text, grid lines, reading mark and zoom control in system colors. Each colored bar segment SHALL keep its series color, since the color is the data, with an edge in the system text color. A chart not yet drawn by the shared chart component keeps its own forced-colors rules. The chart SHALL switch when forced colors turns on or off, without a reload.
+In a forced-colors mode, a chart drawn by the shared chart component SHALL draw its text, grid lines, reading mark and zoom control in system colors. Each colored bar segment SHALL keep its series color, since the color is the data, with an edge in the system text color. A chart of nodes and bands has its own rule. A chart not yet drawn by the shared chart component keeps its own forced-colors rules. The chart SHALL switch when forced colors turns on or off, without a reload.
 
 #### Scenario: Cost chart in high contrast
 - **WHEN** forced colors is on and the Cost chart is drawn
@@ -1740,6 +1740,39 @@ A drawn chart whose points sit in rows and columns SHALL mark the point being re
 #### Scenario: Reading before the chart has drawn
 - **WHEN** the calendar's drawing code has not loaded yet and the user focuses it and presses Left
 - **THEN** today is read, with its tooltip and the ring where its cell will be
+
+### Requirement: Read a chart of nodes and bands along its bands
+A drawn chart of nodes in columns joined by bands SHALL be read by keyboard along its bands: Up and Down within a column or among the bands of one node, Right and Left from a node to its bands and from a band to the node at its end. Its keyboard reading, tooltip and live sentence SHALL work before the chart has drawn.
+
+#### Scenario: From a node to its band
+- **WHEN** the user reads atlas-api on the cost flow and presses Right
+- **THEN** atlas-api's top band is read
+
+#### Scenario: Reading before the chart has drawn
+- **WHEN** the cost flow's drawing code has not loaded yet and the user focuses it and presses Right
+- **THEN** the costliest project is read, with its tooltip and its sentence
+
+### Requirement: Mark the item read on its own shape
+A drawn chart of nodes and bands SHALL mark the item being read on its own shape, a node's bar or a band's outline along its whole length, not with a band over a column. The tooltip of an item read by keyboard SHALL sit beside it. In a forced-colors mode the mark SHALL be in the system highlight color.
+
+#### Scenario: Marking a band
+- **WHEN** the user reads the band from atlas-api to opus-4-5 on the cost flow
+- **THEN** that band, and no other, is outlined along its whole length
+
+#### Scenario: Forced colors
+- **WHEN** forced colors is on and the user reads a band
+- **THEN** its outline is in the system highlight color
+
+### Requirement: Draw bands as outlines under forced colors
+In a forced-colors mode, a drawn chart of nodes and bands SHALL draw its nodes filled in the system text color and its bands as unfilled outlines in the system text color, so that overlapping bands stay apart by their edges and not by a shade. Its labels SHALL be in the system text color. The chart SHALL switch when forced colors turns on or off, without a reload.
+
+#### Scenario: Cost flow in high contrast
+- **WHEN** forced colors is on and the cost flow is drawn
+- **THEN** each band is an outline in the system text color with no fill, and each node a bar in the system text color
+
+#### Scenario: Turning forced colors off
+- **WHEN** the user turns forced colors off while the cost flow is shown
+- **THEN** the bands take their source nodes' colors again, without a reload
 
 ### Requirement: Answer a proxy's host by name
 `ai-ledger serve` SHALL take `--proxy-host HOST[:PORT]`, repeatable. Every route and method SHALL accept a `Host` header equal to one of those values, ignoring case, as it accepts `127.0.0.1:<port>`. A value that is not a host name with an optional port SHALL be refused at start. Without the option, every other host SHALL keep getting `403 forbidden host`. The app SHALL keep listening on `127.0.0.1` only.
