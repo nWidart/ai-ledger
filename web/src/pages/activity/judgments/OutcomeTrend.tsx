@@ -27,9 +27,9 @@ export function OutcomeTrend({ weeks, view }: { weeks: TrendWeek[]; view: string
   const m = useMemo(() => trendModel(weeks), [weeks]);
   // One function per set of figures: a new one is drawn.
   const option = useCallback((env: ChartEnv) => trendOption(m, env), [m]);
-  // The view, and every week's date: weeks without a session are left out, so an older week can join in the middle and move
-  // the bars. Newer figures for the same weeks keep the reading; any change to the list of weeks is another view.
-  const key = `${view}|${weeks.map(w => w.week).join(",")}`;
+  // Weeks without a session are left out, so a week can join in the middle and move the bars: each week's date is its key, so
+  // the reading stays on its week. The chart's view is the Judgments view on screen alone.
+  const keys = useMemo(() => weeks.map(w => w.week), [weeks]);
   const few = weeks.some(isFew);
   const tip = (i: number) => {
     const cur = weeks[i]!;
@@ -58,7 +58,7 @@ export function OutcomeTrend({ weeks, view }: { weeks: TrendWeek[]; view: string
         {TREND_PARTS.map(p => <span key={p.k} className="key"><i style={{ background: p.c }} />{p.label}</span>)}
         {few && <span className="key"><i className="few" />{`Under ${FEW_SESSIONS} sessions`}</span>}
       </div>
-      <EChart label={name} height={H} option={option} view={key} points={weeks.length} tip={tip} read={read} />
+      <EChart label={name} height={H} option={option} view={view} pointKeys={keys} points={weeks.length} tip={tip} read={read} />
       {/* The chart's text alternative: each week's sessions, and its count and share per outcome. */}
       <ChartTable><Table name="Analysed sessions by outcome per week" region="scroll tall" rows={weeks} columns={COLUMNS} rowId={wk => wk.week} /></ChartTable>
     </section>

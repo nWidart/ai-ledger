@@ -78,7 +78,10 @@ export interface WorkModel {
   zoom: boolean;
   /** The selected bar's index; null without a selection or when it is not a bar of this chart (a week on a chart by day). */
   selected: number | null;
-  /** The view's identity (decision 7): what the user chose and the first bar. Neither the selection nor the figures. */
+  /** Each bar's key, in order: its day (a week's Monday). With `view`, the bucket tells a day from a week of the same date. */
+  keys: string[];
+  /** The view's identity (decision 7): what the user chose. Not the selection, the figures or the first bar: the keys follow
+   *  the bars when older ones arrive (echart-point-keys). */
   view: string;
 }
 
@@ -101,7 +104,8 @@ export function workModel(d: UsagePayload, metric: WorkMetric, selected: WorkPic
     metric, week, span: { start: d.start, end: d.end }, buckets, stacked, kinds, values, totals, rates,
     drawn: rates.map(v => (v == null ? null : Math.min(v, rate.top))), low, hasRate, hasLow: low.some(Boolean), rate, peak,
     axis: niceMax(Math.max(...totals, 0), niceStep), zoom: buckets.length >= ZOOM_FROM, selected: at < 0 ? null : at,
-    view: [d.range, d.work_bucket, buckets[0]?.day, d.project, d.source, d.automated, metric].join("|"),
+    keys: buckets.map(p => p.day),
+    view: [d.range, d.work_bucket, d.project, d.source, d.automated, metric].join("|"),
   };
 }
 

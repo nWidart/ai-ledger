@@ -475,12 +475,20 @@ describe("EChart reading", () => {
     expect([tooltip()!.style.left, tooltip()!.style.top]).toEqual(["236px", "42px"]); // point 1 is now at x 250, the grid's top at 30
   });
 
-  it("leaves the pointer's tooltip beside the pointer after a redraw", async () => {
+  it("leaves the pointer's tooltip beside the pointer after a redraw, and puts it over the point once one moves the point away", async () => {
     render(show());
     const chart = await drawn();
     chart.fire("mousemove", [250, 60]);
     act(() => setTheme("dark"));
     expect([tooltip()!.style.left, tooltip()!.style.top]).toEqual(["236px", "50px"]);
+    chart.grid = { left: 200, top: 10, width: 400, height: 200 }; // a resize: point 1 is now at x 400, the pointer over point 0
+    act(() => setTheme("light"));
+    expect(chart.band).toBe(1);
+    expect([tooltip()!.style.left, tooltip()!.style.top]).toEqual(["386px", "22px"]); // over the band, as a key's
+    chart.fire("mousemove", [450, 60]);
+    chart.grid = { left: 200, top: 80, width: 400, height: 200 }; // a larger text size: the grid's top is under the pointer
+    act(() => setTheme("dark"));
+    expect([tooltip()!.style.left, tooltip()!.style.top]).toEqual(["386px", "90px"]); // over the band, not over the margin
   });
 
   it("shows a hand over a point that a click activates, and the default cursor elsewhere", async () => {
@@ -850,6 +858,11 @@ describe("EChart zoom", () => {
     expect(readout()).toBe("Showing all 30 days.");
     key("+");
     expect(chart.shown).toEqual({ from: 15, to: 29 });
+    key("End");
+    key("-");
+    const actions = bands(chart).length;
+    rerender(zoomed({ onZoom, zoom: false })); // every point shows already: only the drawing changes
+    expect(bands(chart).slice(actions)).toEqual(["at 29"]); // the redraw dropped the band: back on its point
   });
 
   it("reports each step of a slider drag, and says the days shown once, when the drag ends", async () => {
@@ -1312,6 +1325,242 @@ describe("EChart zoom", () => {
     expect(texts).toEqual(["Oct 30: $29.00", SELECTED]); // the figure was taken in then: it is not said later
     rerender(around(viewed({ status: SELECTED, read: i => `${MONTH[i]}: $${i + 2}.00` }))); // the next change is said as ever
     expect(texts.at(-1)).toBe("Oct 30: $31.00");
+  });
+
+  // Point keys: each day is its key, so newer data of the same view can move the days. `keyed(list)` draws those days,
+  // read, tipped and worded by their names, with a new option function as a refetch gives one.
+  const EARLY = ["Sep 29", "Sep 30", ...MONTH];
+  const keyed = (list: readonly string[], props: Partial<EChartProps> = {}) => viewed({
+    option: env => ({ ...fresh(list.length)(env), xAxis: { type: "category", data: [...list] } }), points: list.length,
+    pointKeys: list, read: i => `${list[i]}: read`, tip: i => <b>{list[i]} tip</b>,
+    readZoom: s => (s ? `Showing ${list[s.from]} to ${list[s.to]}, ${s.to - s.from + 1} of ${list.length} days.` : `Showing all ${list.length} days.`),
+    ...props,
+  });
+  /** Reads the day `name` with End, then Left: inside a window that ends on the last day. */
+  const readBack = (list: readonly string[], name: string) => { key("End"); for (let n = list.length - 1; n > list.indexOf(name); n--) key("ArrowLeft"); };
+
+  it("keeps a key's reading and the window on their days when days join at the front, and says nothing", async () => {
+    // A tooltip as wide as its text, in a box 800px wide: wider words move it.
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("tip") ? (this.textContent?.length ?? 0) * 20 : 0;
+    });
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 800, bottom: 300, width: 800, height: 300, x: 0, y: 0, toJSON() {} } as DOMRect);
+    const onZoom = zoomSpy(), option = fresh(EARLY.length);
+    // The tooltip's place at each commit, as the layout effects leave it: what the next paint shows.
+    const painted: string[] = [];
+    const around = (el: ReactNode) => <Profiler id="chart" onRender={() => painted.push(tooltip()?.style.left ?? "")}>{el}</Profiler>;
+    const { rerender } = render(around(keyed(MONTH, { onZoom })));
+    const chart = await drawn();
+    chart.zoomTo(15, 29);
+    readBack(MONTH, "Oct 23");
+    const place = [tooltip()!.style.left, tooltip()!.style.top], said = spoken();
+    const asked = (["setOption", "getOption", "dispatchAction", "convertToPixel", "convertFromPixel", "containPixel", "resize", "getZr"] as const)
+      .map(name => ({ name, spy: vi.spyOn(chart, name) }));
+    rerender(around(keyed(EARLY, { onZoom, option })));
+    // The chart is asked nothing before it draws the new days: until then, it would answer for another day.
+    const calls = asked.flatMap(({ name, spy }) => spy.mock.invocationCallOrder.map(n => ({ name, n }))).sort((a, b) => a.n - b.n);
+    expect(calls[0]?.name).toBe("setOption");
+    expect(calls.map(c => c.name)).toContain("convertToPixel");
+    expect(tooltip()!.textContent).toBe("Oct 23 tip");
+    expect([tooltip()!.style.left, tooltip()!.style.top]).toEqual(place); // the window kept its days: the day kept its place
+    expect(chart.band).toBe(24);
+    expect(chart.shown).toEqual({ from: 17, to: 31 });
+    expect(onZoom.mock.calls).toEqual([[{ from: 15, to: 29 }], [{ from: 17, to: 31 }]]);
+    expect(readout()).toBe("Oct 23: read");
+    expect(said()).toBe(0);
+    // Newer words on the same drawing: the wider tooltip is placed again, where a fresh reading of the day puts it.
+    rerender(around(keyed(EARLY, { onZoom, option, read: i => `${EARLY[i]}: longer words now`, tip: i => <b>{EARLY[i]}, a tip too wide for the right of the day</b> })));
+    const wider = tooltip()!.style.left;
+    key("ArrowLeft");
+    expect(readout()).toBe("Oct 22: longer words now");
+    key("ArrowRight");
+    expect(tooltip()!.style.left).toBe(wider);
+    // Newer data under the same keys, words and all: the tooltip is at its new place in the commit itself, before paint.
+    rerender(around(keyed(EARLY, { onZoom, read: i => `${EARLY[i]}: short`, tip: i => <b>{EARLY[i]}</b> })));
+    expect(tooltip()!.style.left).not.toBe(wider);
+    expect(painted.at(-1)).toBe(tooltip()!.style.left);
+  });
+
+  it("moves the reading and the window by a day that joins before them, and by a day that leaves", async () => {
+    const { rerender } = render(keyed(MONTH));
+    const chart = await drawn();
+    chart.zoomTo(15, 29);
+    readBack(MONTH, "Oct 23");
+    const more = [...MONTH.slice(0, 5), "Oct 5, late", ...MONTH.slice(5)];
+    rerender(keyed(more));
+    expect([chart.band, chart.shown]).toEqual([23, { from: 16, to: 30 }]);
+    const option = fresh(30), left = more.slice(1);
+    rerender(keyed(left, { option }));
+    expect([chart.band, chart.shown]).toEqual([22, { from: 15, to: 29 }]);
+    expect(tooltip()!.textContent).toBe("Oct 23 tip");
+    const actions = bands(chart).length;
+    rerender(keyed(["Oct 1", ...left.slice(1)], { option })); // other keys outside the window, with the same option function
+    expect(bands(chart).slice(actions)).toEqual(["at 22"]); // the redraw dropped the band: back on its point
+  });
+
+  it("ends a reading whose day leaves, without asking for its words, and leaves a status the region holds", async () => {
+    const reads: string[] = [];
+    const counted = (list: readonly string[]) => (i: number) => { reads.push(list[i]!); return `${list[i]}: read`; };
+    const { rerender } = render(keyed(MONTH, { status: "" }));
+    const chart = await drawn();
+    readBack(MONTH, "Oct 29");
+    const gone = MONTH.filter(d => d !== "Oct 29");
+    rerender(keyed(gone, { status: "", read: counted(gone) }));
+    expect(tooltip()).toBeNull();
+    expect(chart.band).toBeNull();
+    expect(readout()).toBe(""); // its sentence goes with it
+    expect(reads).toEqual([]);
+    key("End");
+    rerender(keyed(gone, { status: SELECTED }));
+    rerender(keyed(gone.slice(0, -1), { status: SELECTED }));
+    expect(tooltip()).toBeNull();
+    expect(readout()).toBe(SELECTED);
+  });
+
+  // A window over [from, to], then the days `after`: the points shown, what the caller is told, and what is said.
+  it.each([
+    ["loses its first day and keeps its count", [2, 8], [...MONTH.slice(1), "Oct 31"], { from: 1, to: 7 }, [[{ from: 1, to: 7 }]], []],
+    ["sits at the old end and loses its own first day", [0, 9], [...MONTH.slice(1), "Oct 31"], { from: 0, to: 8 }, [[{ from: 0, to: 8 }]], [""]],
+    ["falls under the fewest days: widened from its start", [0, 6], [...MONTH.slice(1), "Oct 31"], { from: 0, to: 6 }, [], [""]],
+    ["falls under the fewest days at the axis end: widened back from it", [23, 29], MONTH.slice(0, -1), { from: 22, to: 28 }, [[{ from: 22, to: 28 }]], [""]],
+    ["loses every day", [15, 29], MONTH.slice(0, 15), { from: 0, to: 14 }, [[null]], ["Showing all 15 days."]],
+    ["ends up holding every day", [5, 14], MONTH.slice(5, 15), { from: 0, to: 9 }, [[null]], ["Showing all 10 days."]],
+    ["sees its days change order", [10, 19], [...MONTH].reverse(), { from: 0, to: 29 }, [[null]], ["Showing all 30 days."]],
+  ])("puts the window on its days still drawn when it %s", async (_, [from, to], after, shown, told, says) => {
+    const onZoom = zoomSpy(), { texts, around } = heard();
+    const { rerender } = render(around(keyed(MONTH, { onZoom })));
+    const chart = await drawn();
+    chart.zoomTo(from!, to!);
+    rerender(around(keyed(after, { onZoom })));
+    expect(chart.shown).toEqual(shown);
+    expect(onZoom.mock.calls.slice(1)).toEqual(told);
+    expect(texts.slice(1)).toEqual(says);
+  });
+
+  it("says a status alone when it arrives in the render whose keys end the zoom", async () => {
+    const { texts, around } = heard();
+    const { rerender } = render(around(keyed(MONTH, { status: "" })));
+    (await drawn()).zoomTo(15, 29);
+    rerender(around(keyed(MONTH.slice(0, 15), { status: SELECTED })));
+    expect(texts).toEqual(["Showing Oct 16 to Oct 30, 15 of 30 days.", SELECTED]);
+  });
+
+  // The zoom ends with no one asking in the render that changes the words of a key's reading: both are said, at once
+  // where the render finds the end, the reading first.
+  it.each([
+    ["the keys end it", MONTH.slice(15), {}, ["Oct 23: more Showing all 15 days."]],
+    ["zoom turns off", MONTH, { zoom: false }, ["Oct 23: more Showing all 30 days."]],
+    ["the option stops drawing the slider", MONTH, { option: fresh(30, false) }, ["Oct 23: more", "Oct 23: more Showing all 30 days."]],  ])("says a key's reading whose words changed, then the zoom's end, when %s", async (_, after, ends, says) => {
+    const { texts, around } = heard();
+    const { rerender } = render(around(keyed(MONTH)));
+    (await drawn()).zoomTo(15, 29);
+    readBack(MONTH, "Oct 23");
+    const n = texts.length;
+    rerender(around(keyed(after, { read: i => `${after[i]}: more`, ...ends })));
+    expect(texts.slice(n)).toEqual(says);
+  });
+
+  it.each([
+    ["another length than the points", {}, { pointKeys: EARLY.slice(1) }, "the point keys hold 31 keys for 32 points"],
+    ["a key twice", {}, { pointKeys: [...EARLY.slice(0, 31), "Oct 1"] }, `the point keys hold the key "Oct 1" twice`],
+    ["keys that come within one view", { pointKeys: undefined }, {}, "the point keys came within one view"],
+    ["keys that go within one view", {}, { pointKeys: undefined }, "the point keys went within one view"],
+    ["a last list of another length", { pointKeys: MONTH.slice(1) }, {}, "the last point keys held 29 keys for 30 points"],
+  ])("ends the reading and the zoom, and names the fault, through %s", async (_, before, after, fault) => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { rerender } = render(keyed(MONTH, before));
+    const chart = await drawn();
+    error.mockClear(); // a list already wrong at mount is named then: here, only the change counts
+    chart.zoomTo(15, 29);
+    readBack(MONTH, "Oct 23");
+    rerender(keyed(EARLY, after));
+    rerender(keyed(EARLY, after));
+    expect(tooltip()).toBeNull();
+    expect(chart.shown).toEqual({ from: 0, to: 31 });
+    expect(readout()).toBe("Showing all 32 days.");
+    expect(error.mock.calls).toEqual([[`EChart "${LABEL}": ${fault}, so the reading and the zoom end.`]]);
+  });
+
+  it("names a list it cannot go by at mount, with a new view, and when the points change under it, once each", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const short = MONTH.slice(1), view = "29 days by project";
+    const strict = (list: readonly string[], props: Partial<EChartProps>) => <StrictMode>{keyed(list, props)}</StrictMode>;
+    const { rerender } = render(strict(MONTH, { pointKeys: short })); // its effects run twice at mount
+    await drawn();
+    rerender(strict(MONTH, { pointKeys: [...short] }));
+    rerender(strict(EARLY, { pointKeys: short, view }));
+    rerender(strict(MONTH, { pointKeys: short, view }));
+    const named = (fault: string) => [`EChart "${LABEL}": the point keys hold ${fault}, so a redraw that changes the keys will end the reading and the zoom.`];
+    expect(error.mock.calls).toEqual([named("29 keys for 30 points"), named("29 keys for 32 points"), named("29 keys for 30 points")]);
+    // The list fits its points again: the next change of keys keeps the reading on its day.
+    rerender(strict(short, { view }));
+    readBack(short, "Oct 23");
+    rerender(strict(["Sep 30", ...short], { view }));
+    expect(tooltip()!.textContent).toBe("Oct 23 tip");
+    expect(error).toHaveBeenCalledTimes(3);
+  });
+
+  it("takes another list with the same keys for the same days, and renders and draws nothing more", async () => {
+    const option = fresh(), tips = vi.fn<(i: number) => ReactNode>(i => <b>{MONTH[i]} tip</b>);
+    const { rerender } = render(keyed(MONTH, { option, tip: tips }));
+    const chart = await drawn();
+    readBack(MONTH, "Oct 23");
+    const draws = chart.options.length, renders = tips.mock.calls.length;
+    rerender(keyed([...MONTH], { option, tip: tips }));
+    expect(chart.options).toHaveLength(draws);
+    expect(tips).toHaveBeenCalledTimes(renders + 1); // one render
+    expect(tooltip()!.textContent).toBe("Oct 23 tip");
+  });
+
+  it("clears on a new view, which may bring keys where the last had none, and compares the keys after it with its own", async () => {
+    const view = "32 days by project";
+    const { rerender } = render(keyed(MONTH, { pointKeys: undefined }));
+    const chart = await drawn();
+    chart.zoomTo(15, 29);
+    readBack(MONTH, "Oct 23");
+    rerender(keyed(EARLY, { view }));
+    expect([tooltip(), chart.shown, readout()]).toEqual([null, { from: 0, to: 31 }, ""]);
+    readBack(EARLY, "Oct 23");
+    rerender(keyed(["Sep 28", ...EARLY], { view }));
+    expect([tooltip()!.textContent, chart.band]).toEqual(["Oct 23 tip", 25]);
+  });
+
+  it("moves a reading by its key before the runtime has loaded", async () => {
+    const load = fakeECharts.hold();
+    const { rerender } = render(keyed(MONTH));
+    readBack(MONTH, "Oct 23");
+    rerender(keyed(EARLY));
+    expect(tooltip()!.textContent).toBe("Oct 23 tip");
+    expect(tooltip()!.style.left).toBe("598.5px"); // at its share of the box: day 24 of 32
+    await load.resolve();
+    expect((await drawn()).band).toBe(24);
+  });
+
+  it("says the days a drag shows once, on release, when days join under it", async () => {
+    const { texts, around } = heard();
+    const { rerender } = render(around(keyed(MONTH)));
+    const chart = await drawn();
+    chart.fire("mousedown", [200, 250]);
+    chart.zoomTo(10, 29);
+    rerender(around(keyed(EARLY)));
+    expect(chart.shown).toEqual({ from: 12, to: 31 });
+    chart.zoomTo(12, 25);
+    fireEvent.pointerUp(document.body);
+    expect(texts).toEqual(["Showing Oct 11 to Oct 24, 14 of 32 days."]);
+  });
+
+  it("says a key's reading again, in its new index's words, when they changed, and leaves a pointer's unsaid", async () => {
+    const LATE = ["Sep 28", ...EARLY];
+    const { rerender } = render(keyed(MONTH));
+    const chart = await drawn();
+    readBack(MONTH, "Oct 23");
+    const said = spoken();
+    rerender(keyed(EARLY, { read: i => `${EARLY[i]}: more` }));
+    expect([readout(), said()]).toEqual(["Oct 23: more", 1]);
+    chart.fire("mousemove", chart.pointAt(10));
+    expect([readout(), said()]).toEqual(["Oct 9: more", 1]);
+    rerender(keyed(LATE, { read: i => `${LATE[i]}: most`, tip: i => <b>{LATE[i]}: most</b> }));
+    expect([readout(), said(), tooltip()!.textContent, chart.band]).toEqual(["Oct 9: more", 0, "Oct 9: most", 11]);
   });
 });
 

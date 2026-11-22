@@ -52,6 +52,9 @@
 // It is simpler than ECharts in what it does not model, so no test may rely on it: a slider's `xAxisId`, a vertical
 // slider (it drives y axes), and which x axes an inside dataZoom drives; and where a series or a mark is drawn, since it
 // draws nothing (a mark outside the zoom window, symbols on single items of a line, how the slider draws its trend).
+// Nor what the chart holds between a setOption that changes the points and the next dataZoom action when a drag made the
+// window: the fake keeps the indexes, where ECharts keeps the share (10–19 of 30 is 11–20 of 32). Nor a slider drag in
+// progress through a setOption: the fake has no drag, and zoomTo() sets a window.
 import { act, waitFor } from "@testing-library/react";
 import type { ECharts, ElementEvent, Payload, SetOptionOpts } from "./echarts";
 import type { Runtime } from "./load";

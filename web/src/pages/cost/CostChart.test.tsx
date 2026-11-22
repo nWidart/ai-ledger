@@ -340,23 +340,16 @@ describe("cost chart: zoom", () => {
     expect(sr()).toBe("Showing all 30 days.");
   });
 
-  it("shows every day again when a rolling range moves on a day, and moves the focus from 'Show all days' to the chart", async () => {
+  it("keeps the days shown, and the focus on 'Show all days', when a rolling range moves on a day", async () => {
     const { rerender } = renderApp(<Host />);
     const chart = await drawn();
     await drag(5, 14);
     act(() => showAll()!.focus());
     rerender(<Host data={{ ...view("2026-10-07", "2026-11-05"), range: 30 }} />); // midnight: the range moved on a day
-    expect(chart.shown).toEqual({ from: 0, to: 29 }); // its first day is another view's
-    expect(showAll()).toBeNull();
-    expect(document.activeElement).toBe(group());
-
-    // With the focus elsewhere, it stays there.
-    await drag(5, 14);
-    const metric = screen.getByRole("button", { name: "Tokens" });
-    act(() => metric.focus());
-    rerender(<Host data={{ ...view("2026-10-08", "2026-11-06"), range: 30 }} />);
-    expect(showAll()).toBeNull();
-    expect(document.activeElement).toBe(metric);
+    expect(chart.shown).toEqual({ from: 4, to: 13 }); // Oct 11 to Oct 20 still
+    expect(showAll()).toBeTruthy();
+    expect(document.activeElement).toBe(showAll());
+    expect(sr()).toBe("Showing Oct 11 to Oct 20, 10 of 30 days.");
   });
 
   it("moves the focus from 'Show all days' to the chart when the view falls under 14 days and loses its slider", async () => {
@@ -369,14 +362,15 @@ describe("cost chart: zoom", () => {
     expect(document.activeElement).toBe(group());
   });
 
-  it("shows every day again when an all-time view gains an earlier first day, as after an ingest of older transcripts", async () => {
+  it("keeps the zoom on its days when an all-time view gains an earlier first day, as after an ingest of older transcripts", async () => {
     const all = (from: string): UsagePayload => ({ ...view(from, "2026-11-04"), range: 0, start: null });
     const { rerender } = renderApp(<Host data={all("2026-10-06")} />);
     const chart = await drawn();
     await drag(5, 14);
     rerender(<Host data={all("2026-10-05")} />);
-    expect(chart.shown).toEqual({ from: 0, to: 30 });
-    expect(showAll()).toBeNull();
+    expect(chart.points).toBe(31);
+    expect(chart.shown).toEqual({ from: 6, to: 15 }); // Oct 11 to Oct 20 still
+    expect(showAll()).toBeTruthy();
   });
 
   it("keeps the zoom on its days when an all-time view gains a day at its end", async () => {

@@ -8,7 +8,8 @@
 //   key for it (one week's sessions are cut to 3; the seed's judgment cut moves with the clock, so the counts are read
 //   from the payload);
 // - in a 343px box, the edges and the labels of checks.mjs;
-// - newer figures keep the week read and say nothing; the bars grow once, and not on a theme change or a refresh; under
+// - newer figures keep the week read and say nothing; the backfill of checks.mjs, by one older week; a new newest week
+//   keeps the week read, on every frame, and says nothing; the bars grow once, and not on a theme change or a refresh; under
 //   reduced motion they do not grow.
 import { LOCALE, PHONE, line, sleep, until } from "./harness.mjs";
 import { chart } from "./checks.mjs";
@@ -32,9 +33,9 @@ export async function judgments(h) {
     zoom: false,
     activates: false,
     tell: 1, // --good-text: --good is one green in both schemes
-
+    fewer: (d, n) => { d.trend = d.trend.slice(n); return d; },
   });
-  const { N, named, centre, ev, state, onPoint } = c;
+  const { N, I, named, centre, ev, state, onPoint } = c;
   /** The counts over the bars: the texts above the grid, with the middle of each. */
   const counts = page => ev(page, () => {
     const g = window.chartfit.grid();
@@ -140,6 +141,25 @@ export async function judgments(h) {
   }
 
   await c.refreshRead();
+  await c.backfill(1);
+  // A new newest week while week 3 is read: the same week stays read, where it was, and nothing is said.
+  {
+    const { page, fill } = await c.openMoving("a new newest week", { before: d => { d.trend = d.trend.slice(0, -1); return d; }, points: N - 1 });
+    await c.read(page);
+    await until(() => state(page), s => onPoint(s, I, centre(s.grid, I, 0, N - 2)).ok);
+    await ev(page, () => window.chartfit.listen());
+    await c.watch(page);
+    const redrawn = await fill();
+    // A late sentence would come after the drawing: the band and the tooltip on the week first, then a while more.
+    await until(() => state(page), s => s.band && Math.abs(c.mid(s.band) - centre(s.grid, I)) <= 1.5 && named(s.tip?.day ?? "") === I);
+    await sleep(400);
+    const fs = await c.framed(page), s = await state(page), heard = await ev(page, () => window.__said.filter(t => t !== ""));
+    const at = c.mid(s.band), want = centre(s.grid, I), bar = (await ev(page, () => window.chartfit.columns())).find(b => Math.abs(b.x - at) <= 1), f = c.steady(fs, I, { newest: true });
+    line(`a new newest week while week ${I + 1} is read: the band, the tooltip and the readout stay on it, at its new place, on every frame, and nothing is said`,
+      redrawn && Math.abs(at - want) <= 1.5 && !!bar && named(s.tip?.day ?? "") === I && named(s.readout) === I && c.beside(s, at) && f.ok && !heard.length,
+      `${redrawn ? "redrawn" : "NOT REDRAWN"}; band at ${c.px(at)}, want ${c.px(want)}, bar at ${c.px(bar?.x)}; tooltip "${s.tip?.day ?? "none"}", readout "${s.readout.split(":")[0]}"; ${f.at}; said ${JSON.stringify(heard)}`);
+    await page.done();
+  }
   await c.motionOnce([
     ["a theme change", page => c.theme(page, "dark")],
     ["a refresh", (page, refresh) => refresh()],

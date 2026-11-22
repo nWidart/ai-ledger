@@ -4,7 +4,11 @@
 // - the hint under the heading is one line at 1440px in every stacking and scale;
 // - in the tokens Share view a kind under 1% of a day is drawn at least 1px tall;
 // - a 7-day view has no slider, and back at 30 days the slider returns with every day shown;
-// - in a 343px box, the edges and the labels of checks.mjs.
+// - in a 343px box, the edges and the labels of checks.mjs;
+// - the backfill of checks.mjs, and, since the rule is the wrapper's, through a backfill of 2 older days: a window a drag
+//   made keeps its days; a real drag with the button down keeps them, the next move changes them, and the release says
+//   the days shown once; a pointer at rest, not zoomed, has the tooltip over the band at the day's new place, on every
+//   frame.
 import { LOCALE, PHONE, W, line, sleep, until } from "./harness.mjs";
 import { chart } from "./checks.mjs";
 
@@ -19,6 +23,15 @@ export async function cost(h) {
   const DAYS = [];
   for (let t = Date.parse(usage.start + "T00:00:00Z"); t <= Date.parse(usage.end + "T00:00:00Z"); t += 864e5) DAYS.push(new Date(t).toISOString().slice(0, 10));
   const label = (day, long = false) => new Date(day + "T00:00:00Z").toLocaleDateString(LOCALE, { month: "short", day: "numeric", timeZone: "UTC", ...(long ? { year: "numeric" } : {}) });
+  /** The view's first n days left out: the view starts later, and has no rows before it. The server never sends this for
+   *  range=30, whose 30 days only move on together at midnight; it moves `start` the way an all-time view's first day
+   *  moves when older transcripts are ingested. To the chart the two are one case: its `view` leaves out the first day, so
+   *  either is a redraw of the same view with days joining at its front, through the same `pointKeys` path. */
+  const fewer = (d, n) => {
+    d.start = DAYS[n];
+    for (const k of LISTS) if (Array.isArray(d[k])) d[k] = d[k].filter(r => r.day >= DAYS[n]);
+    return d;
+  };
   const c = chart(h, {
     name: "cost", path: "/cost?range=30", root: "#spend", points: DAYS, label, unit: { one: "day", many: "days" }, at: 9, // day 10
     data: /\/api\/usage\?/,
@@ -28,6 +41,7 @@ export async function cost(h) {
       return d;
     },
     kept: [["heading", "#chartTitle"], ["lede", "#lede"]],
+    fewer,
   });
   const { N, I, named, centre, ev, drawn, away, box } = c;
 
@@ -153,5 +167,81 @@ export async function cost(h) {
   }
 
   await c.refresh();
+  await c.backfill();
+
+  // The wrapper's rule, once here: a window a drag made, a drag in progress and a pointer at rest, each through a backfill
+  // of 2 older days. The page opens on days 3 to 30.
+  const B = 2, M = N - B, older = { before: p => fewer(p, B), points: M };
+  /** The slider's right handle: its middle, and the slider's width. */
+  const right = page => ev(page, () => {
+    const hs = window.chartfit.handles(), r = hs.at(-1);
+    return hs.length === 2 ? { x: (r.l + r.r) / 2, y: (r.t + r.b) / 2, slider: r.r - hs[0].l } : null;
+  });
+  const said = page => ev(page, () => window.__said.filter(t => t.startsWith("Showing")));
+  {
+    const { page, fill } = await c.openMoving("backfill, a dragged window", older);
+    const hd = await right(page);
+    await ev(page, () => window.chartfit.listen());
+    await page.mouse.move(hd.x, hd.y);
+    await page.mouse.down();
+    for (let k = 1; k <= 12; k++) { await page.mouse.move(hd.x - hd.slider * .45 * k / 12, hd.y); await sleep(40); }
+    await page.mouse.up();
+    await sleep(400);
+    const was = await c.labels(page), n0 = await drawn(page), w = c.shownBy((await said(page)).at(-1) ?? "");
+    // The labels reader proven on the drag's sentence: it names the first and the last day shown.
+    const proven = !!w && was.length > 0 && was[0] === label(DAYS[w.from]) && was.at(-1) === label(DAYS[w.to]);
+    const redrawn = await fill();
+    await sleep(400);
+    const now = await c.labels(page), n1 = await drawn(page);
+    line(`a window a drag made, then a backfill of ${B} older days: the same days are drawn`,
+      redrawn && proven && n0 < M && n1 === n0 && now[0] === was[0] && now.at(-1) === was.at(-1),
+      `${redrawn ? "redrawn" : "NOT REDRAWN"}; ${n0} days drawn, ${c.ends(was)}${proven ? "" : " (NOT the window said)"}; then ${n1}, ${c.ends(now)}`);
+    await page.done();
+  }
+  {
+    // ECharts keeps the drag through the redraw: the handle jumps by as much as the days moved, and goes on from there.
+    const { page, fill } = await c.openMoving("backfill under a drag", older);
+    const hd = await right(page);
+    await ev(page, () => window.chartfit.listen());
+    await page.mouse.move(hd.x, hd.y);
+    await page.mouse.down();
+    let x = hd.x;
+    for (let k = 1; k <= 6; k++) { x = hd.x - hd.slider * .3 * k / 6; await page.mouse.move(x, hd.y); await sleep(40); }
+    await sleep(300);
+    const was = await c.labels(page), h0 = (await right(page))?.x;
+    const redrawn = await fill();
+    await sleep(400);
+    const kept = await c.labels(page), h1 = (await right(page))?.x;
+    const x1 = x;
+    for (let k = 1; k <= 4; k++) { x = x1 - hd.slider * .1 * k / 4; await page.mouse.move(x, hd.y); await sleep(40); }
+    await sleep(300);
+    const moved = await c.labels(page), h2 = (await right(page))?.x, n2 = await drawn(page), down = await said(page);
+    await page.mouse.up();
+    await sleep(400);
+    const up = await said(page), w = c.shownBy(up[0] ?? "");
+    line(`a real drag with the button down through a backfill of ${B} older days: the days drawn stay, the next move changes them and moves the handle by the pointer's movement, and the release says the days shown once`,
+      redrawn && was.length > 0 && kept[0] === was[0] && kept.at(-1) === was.at(-1) && moved.at(-1) !== kept.at(-1) && Math.abs(h2 - h1 - (x - x1)) <= 2 && !down.length && up.length === 1
+        && !!w && w.to - w.from + 1 === n2 && label(DAYS[w.to]) === moved.at(-1),
+      `${redrawn ? "redrawn" : "NOT REDRAWN"}; ${c.ends(was)}, then ${c.ends(kept)}, after the move ${c.ends(moved)}; the handle at ${c.px(h0)} under the pointer at ${c.px(x1)}, `
+      + `${c.px(h1)} after the backfill, ${c.px(h2)} after the pointer moved ${c.px(x - x1)}; said ${down.length} while down, then ${JSON.stringify(up)}`);
+    await page.done();
+  }
+  {
+    const { page, fill } = await c.openMoving("backfill under a pointer at rest", older);
+    const K = B + I, g = await ev(page, () => window.chartfit.grid()), x = centre(g, I, 0, M - 1);
+    await page.mouse.move(x, (g.t + g.b) / 2);
+    await until(() => c.state(page), s => c.onPoint(s, K, x).ok);
+    await c.watch(page);
+    const redrawn = await fill();
+    await sleep(400);
+    const fs = await c.framed(page), s = await c.state(page), cols = await ev(page, () => window.chartfit.columns());
+    const at = c.mid(s.band), want = centre(s.grid, K), half = s.band ? (s.band.r - s.band.l) / 2 : 0, f = c.steady(fs, K);
+    const bar = cols.find(b => Math.abs(b.x - at) <= 1), aim = s.tip ? c.aim(s.tip, at) : Infinity;
+    line(`a pointer at rest on day ${K + 1}, not zoomed, then a backfill of ${B} older days: the band moves to the day's new place, off the pointer, and the tooltip names it over the band, on every frame`,
+      redrawn && Math.abs(at - want) <= 1.5 && !!bar && Math.abs(at - x) > half && named(s.tip?.day ?? "") === K && aim <= half && f.ok,
+      `${redrawn ? "redrawn" : "NOT REDRAWN"}; pointer at ${c.px(x)}, band at ${c.px(at)}, want ${c.px(want)}, bar at ${c.px(bar?.x)}; tooltip "${s.tip?.day ?? "none"}" points ${c.px(aim)} from the band's centre; ${f.at}`);
+    await page.done();
+  }
+
   await c.motion();
 }

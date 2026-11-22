@@ -26,6 +26,12 @@
 //     - newer figures keep the point read with the keys, and say nothing; Escape with the focus on another control closes
 //       a tooltip the pointer opened; with motion on the bars grow on the first drawing and on no later one; under
 //       reduced motion they never grow;
+//     - a backfill: older points join at the front of the same view, with a point read by the keys and, on a chart with a
+//       zoom, plus pressed around it; the points that joined are drawn, the band stays over the point's bar, the tooltip
+//       names it beside the band, and nothing new is said; on a chart with a zoom the first and the last label drawn stay
+//       and "Show all" stays; on each animation frame through the redraw the tooltip names the point and points within
+//       half a band of the band's centre, and the band does not move on a chart with a zoom, or is on the point's column
+//       on one without;
 //     - the pages log no CSP violation, no console error and no page error.
 //   chartfit/<page>.mjs    a page's descriptor, the order of its checks and its own checks: cost (Cost's daily chart),
 //                          activity (Activity's work chart, its two tracks, selection, zoom and weeks), judgments (the

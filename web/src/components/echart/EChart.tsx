@@ -42,14 +42,27 @@ export interface EChartProps {
    *  measure), never from the figures. While it stays the same, a new option function is the same chart with newer data:
    *  it is drawn, and the reading and the zoom stay on the points they were on. When it changes, the reading ends and
    *  every point shows again.
-   *  Within a view a point keeps its index, and new points come at the end. So the key must also hold what fixes the
-   *  first point (a rolling range's first day): when that moves, it is another view.
+   *  Within a view a point keeps its index, and new points come at the end, unless the chart gives `pointKeys`. Without
+   *  keys, the key must also hold what fixes the first point (a rolling range's first day): when that moves, it is
+   *  another view.
    *  Without a key the option function is the view, and each new function ends the reading and the zoom. */
   view?: string;
   /** How many points the keys read: days, weeks, sessions, requests. One per band of the option's first x axis, which
    *  in a chart of several tracks is the frame's. When a view loses points, a reading on a point that is gone ends, and
-   *  a zoom that no longer fits shows every point. */
+   *  a zoom that no longer fits shows every point. With `pointKeys`, the two lists have one length. */
   points: number;
+  /** Each point's key, in order: one per point, each once. A day, a week's first day, a session's id. With keys a
+   *  point is its key, not its index. When a redraw of the same view brings other keys, the reading and the zoom stay
+   *  on the keys they were on. A point read that is still drawn is read at its new index. The points shown run from the
+   *  first to the last of the points shown before that are still drawn, and are never fewer than a zoom shows
+   *  (MIN_SHOWN). A reading on a key that is gone ends. A zoom with none of its points left, or with every point in it,
+   *  ends, and that is said once, as when any zoom ends with no one asking. Nothing else is said.
+   *  With keys, `view` holds only what the user chose: not the first point, nor anything else that fixes where a point
+   *  sits. It still holds what gives a key another meaning: a day and a week can share one.
+   *  A list the wrapper cannot go by (another length than `points`, or a key twice) keeps nothing through a redraw that
+   *  changes the keys: the reading ends and every point shows, and the console names the fault. It names it too at
+   *  mount, with a new view, and when `points` changes under the same keys. */
+  pointKeys?: readonly string[];
   /** The tooltip for point i. Without it, the chart has no tooltip. */
   tip?: (i: number) => ReactNode;
   /** The sentence the live region says for point i, when a key or the pointer reads it. A reading a key made is said
@@ -80,15 +93,18 @@ export interface EChartProps {
    *  category x axis (one band per point): a value or time axis gives values, not indexes, and is not supported. */
   zoom?: boolean;
   /** The points shown changed, by a key, the slider, `reset()`, a new view, or a redraw that left the zoom no slider or
-   *  no room: null when every point shows. A redraw of the same view that keeps the points shown is not a change.
+   *  no room, or a redraw that moved the points shown to other indexes: null when every point shows. A redraw of the
+   *  same view that keeps the points shown at their indexes is not a change. Turn `zoom` off in the render whose option
+   *  draws no slider: with it on, a redraw that moves the points shown and drops the slider tells of the moved window,
+   *  then of null, since the wrapper learns that the slider is gone only from the drawing.
    *  A control that leaves with the zoom (a "Show all" button) can lose the focus here with no one pressing it: the
    *  caller moves it to the box (`focus()`), as its own press does. */
   onZoom?: (shown: Shown | null) => void;
   /** The sentence the live region says after the points shown change: null when every point shows. It is said alone
    *  after a zoom key, the slider or `reset()`, and once after the reading (`read(i)`, then this) when an arrow key,
    *  Home or End moved the points shown to include the point it reads. It is also said, with null, when the zoom ends
-   *  in the same view with no one asking (the slider or the room for it is gone), unless that render brings a new
-   *  `status`, which is then the one said. A sentence that a redraw makes untrue is dropped, never said again with
+   *  in the same view with no one asking (the slider or the room for it is gone), after the reading when that redraw
+   *  changed the words of a key's reading, unless that render brings a new `status`, which is then the one said. A sentence that a redraw makes untrue is dropped, never said again with
    *  other words. */
   readZoom?: (shown: Shown | null) => string;
   /** `reset()` shows every point again; `focus()` focuses the box. */
@@ -127,6 +143,52 @@ function unzoom(chart: ECharts) {
 const same = (a: Shown | null, b: Shown | null) => a?.from === b?.from && a?.to === b?.to;
 const inside = (i: number, s: Shown | null) => !s || (i >= s.from && i <= s.to);
 
+type Keys = readonly string[] | undefined;
+/** Whether two lists of point keys name other points: by identity first, which is what a caller that keeps its list
+ *  costs, then by content, so a list made again with the same keys is the same points. */
+const differ = (a: Keys, b: Keys) => a !== b && (!a || !b || a.length !== b.length || a.some((k, i) => k !== b[i]));
+/** Each key's index among n points, or why the wrapper cannot go by the list: another length, or a key twice. */
+function indexed(keys: readonly string[], n: number): Map<string, number> | string {
+  if (keys.length !== n) return `${keys.length} keys for ${n} points`;
+  const at = new Map<string, number>();
+  for (const [i, k] of keys.entries()) {
+    if (at.has(k)) return `the key "${k}" twice`;
+    at.set(k, i);
+  }
+  return at;
+}
+/** Why the wrapper cannot go by a list of keys for n points, or null when it can or there is none. */
+function faultOf(keys: Keys, n: number) {
+  const at = keys && indexed(keys, n);
+  return typeof at === "string" ? at : null;
+}
+/** The faults a change of the keys or of the points met, for the console. `ends`: they ended the reading and the zoom,
+ *  as a change of keys does; else they will end them at the next one. */
+type Faults = { of: readonly string[]; ends: boolean };
+/** A list of keys for n points, checked where nothing is kept through it: the mount, a new view, another count under
+ *  the same keys. */
+function checked(keys: Keys, n: number) {
+  const fault = faultOf(keys, n);
+  return { points: n, fault, faults: fault ? { of: [`the point keys hold ${fault}`], ends: false } : null };
+}
+/** The window `w`, made over the keys `was`, put on the first and the last of its points that the keys `at` still draw,
+ *  among n points: null when every point shows. Null too when none is left, or when the two came in the other order (the
+ *  keys changed their order). A window under MIN_SHOWN points is widened as the slider widens it: the start is kept,
+ *  unless the end would then pass the last point, and the window then ends on the last point. */
+function windowOn(w: Shown, was: readonly string[], at: Map<string, number>, n: number): Shown | null {
+  let first = w.from, last = w.to;
+  while (first <= last && !at.has(was[first]!)) first++;
+  while (last >= first && !at.has(was[last]!)) last--;
+  if (first > last) return null;
+  let from = at.get(was[first]!)!, to = at.get(was[last]!)!;
+  if (from > to) return null;
+  if (to - from + 1 < MIN_SHOWN) {
+    from = Math.max(0, Math.min(from, n - MIN_SHOWN));
+    to = Math.min(n - 1, from + MIN_SHOWN - 1);
+  }
+  return from <= 0 && to >= n - 1 ? null : { from, to };
+}
+
 /** The points shown after a zoom key of factor f (ZOOMS) on a chart of n points showing `s`, around point c: c keeps its
  *  place along the window, or the window is centred on it when it is outside. Null when every point shows; `s` itself
  *  when the span cannot change. */
@@ -162,8 +224,8 @@ function placeTip(box: HTMLElement, plot: HTMLElement, tip: HTMLElement | null, 
 }
 
 export function EChart({
-  label, describedBy, id, className, hidden, height, option, view, points, tip, read, onActivate, keys, status, onEscape, zoom,
-  onZoom, readZoom, ref,
+  label, describedBy, id, className, hidden, height, option, view, points, pointKeys, tip, read, onActivate, keys, status,
+  onEscape, zoom, onZoom, readZoom, ref,
 }: EChartProps) {
   const box = useRef<HTMLDivElement>(null), plot = useRef<HTMLDivElement>(null), tipEl = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(UNMEASURED);
@@ -198,17 +260,65 @@ export function EChart({
   // sentence came with no one asking, and the region says one thing. A redraw's sentence in a later render replaces
   // the status as ever. The draw effect follows the same rule for the zoom it finds ended (`keep`): it runs after the
   // status is in the region, so the other order would change the region twice, the status and then the zoom's end.
+  // The point keys are compared here too, second, right after the view: a new view keeps its keys and carries nothing
+  // over, and every later branch reads a point by its index (`read(reading.i)`, `readZoom(shown)`), so it must see the
+  // indexes the keys moved it to, or it would ask for another point's words, say them, or end a reading that is still
+  // drawn. The render that moves them is thrown away before it commits, so no tooltip is rendered for a stale index.
+  // `drawing.keys` is the last list, kept until one with other keys comes, so a list made again with the same keys
+  // renders nothing more; `points` is the count it was checked against; `fault` is why the wrapper cannot go by it, or
+  // null; `faults` is what the last check met (the mount, a new view, other keys, another count under the same keys),
+  // a new object each time, which the console is told of once.
   const shows = view ?? option;
-  const [drawing, setDrawing] = useState({ view: shows, zoom, status });
+  /** The zoom ended with no one asking, in one of the branches below: said once. When a key made the reading `kept` and
+   *  this redraw changed its words, the new words come first, as a key that moves the window says both: left to the
+   *  words branch, they would replace the zoom's end in the next render, before React commits it. */
+  const ended = (kept: typeof reading) => {
+    if (!readZoom) return;
+    const zoom = readZoom(null), text = kept?.keyed && kept.i < points ? read(kept.i) : null;
+    if (kept && text != null && text !== kept.text) {
+      setReading({ ...kept, text });
+      setSaid({ reading: text, zoom });
+    } else setSaid({ reading: null, zoom });
+  };
+  const [drawing, setDrawing] = useState(() => ({ view: shows, zoom, status, keys: pointKeys, ...checked(pointKeys, points) }));
   if (drawing.view !== shows) {
-    setDrawing({ view: shows, zoom, status });
+    setDrawing({ view: shows, zoom, status, keys: pointKeys, ...checked(pointKeys, points) });
     setReading(null);
     setZoomed(null);
     setSaid(null);
+  } else if (differ(drawing.keys, pointKeys)) {
+    // Newer data of the same view moved the points. The reading and the window stay on their keys, by the two lists.
+    // Through a list the wrapper cannot go by, this one or the last, or keys that came or went, no point can be named:
+    // the reading ends and every point shows. Nothing is said here but a zoom that ends (`ended`), as the `zoom` branch
+    // says it; the branches after it say the rest, each in its own render.
+    const was = drawing.keys, now = pointKeys && indexed(pointKeys, points);
+    const faults = [
+      !was !== !pointKeys ? `the point keys ${was ? "went" : "came"} within one view` : null,
+      drawing.fault && `the last point keys held ${drawing.fault}`,
+      typeof now === "string" ? `the point keys hold ${now}` : null,
+    ].filter(f => f != null);
+    setDrawing({ ...drawing, keys: pointKeys, points, fault: typeof now === "string" ? now : null, faults: faults.length ? { of: faults, ends: true } : null });
+    const by = was && !drawing.fault && now instanceof Map ? now : null;
+    const i = reading && by && was ? by.get(was[reading.i]!) : undefined;
+    if (reading && i == null) {
+      // Its point is gone: its own sentence goes, as for a point past the last one. A status or a zoom sentence that
+      // took the region since stays.
+      setReading(null);
+      if (said?.reading != null) setSaid(null);
+    } else if (reading && i !== reading.i) setReading({ ...reading, i: i! });
+    const next = zoomed && by && was ? windowOn(zoomed, was, by, points) : null;
+    if (!same(next, zoomed)) {
+      setZoomed(next); // the draw effect puts the chart's window on it (`keep`)
+      if (!next) ended(reading && i != null ? { ...reading, i } : null);
+    }
+  } else if (pointKeys && drawing.points !== points) {
+    // Another count under the same keys: nothing moves, but the list is checked again, for the console and for the
+    // next change of keys.
+    setDrawing({ ...drawing, ...checked(pointKeys, points) });
   } else if (drawing.zoom !== zoom) {
     setDrawing({ ...drawing, zoom });
     setZoomed(null);
-    if (zoomed && readZoom) setSaid({ reading: null, zoom: readZoom(null) }); // the zoom ended with no one asking: said once
+    if (zoomed) ended(reading);
   } else if (reading && reading.i >= points) {
     setReading(null);
     if (said?.reading != null) setSaid(null);
@@ -265,6 +375,9 @@ export function EChart({
   // Where the pointer's reading points, in px from the plot's top left; null for a key's reading, which points at the
   // point itself. Not state: a pointer move inside one point re-renders nothing, the tooltip is only moved.
   const pointer = useRef<{ x: number; y: number } | null>(null);
+  // The point keys the chart was last drawn with, set by the draw effect; null until it draws. While they are not this
+  // render's, the chart still draws the points as they were before the keys moved the reading to its new index.
+  const drawnKeys = useRef<Keys | null>(null);
   /** Puts the tooltip where the reading of point i points: beside the pointer, or over the point as the chart draws it
    *  now. Before the chart is there, the point is at its share of the box's width. */
   const place = useEffectEvent((i: number) => {
@@ -276,7 +389,12 @@ export function EChart({
     placeTip(box.current!, plot.current!, tipEl.current, to);
   });
   // Each key sets a new reading, so its tooltip is placed even when the point is the one the pointer was reading.
-  useLayoutEffect(() => { if (at != null) place(at); }, [reading, at]);
+  // Not while the keys changed since the chart last drew (a reading the point keys moved comes with the newer data): this
+  // runs before the draw effect, and the chart, which still draws the old points, would answer for another point. The
+  // band effect, which runs after every drawing, places it then. Newer data under the same keys, or with none, keeps
+  // each point at its index, so its reading is placed here, before the paint, as ever.
+  const placeRead = useEffectEvent((i: number) => { if (!chart || drawnKeys.current === drawing.keys) place(i); });
+  useLayoutEffect(() => { if (at != null) placeRead(at); }, [reading, at]);
   /** Enter or a click on point i: the reading ends, unless the chart declines. False in a chart that selects nothing. */
   const activate = (i: number) => {
     if (!onActivate) return false;
@@ -434,9 +552,9 @@ export function EChart({
   // while its box is hidden still has one. The first run repeats the size init() took, which changes nothing.
   useEffect(() => { chart?.resize({ width, height }); }, [chart, width, height]);
 
-  // The status as of the commit before this one. The draw effect runs before the effect that moves it on (below), so a
-  // status that differs from it there is one this render brought.
-  const settled = useRef(status);
+  // The status and what the region held, as of the commit before this one. The draw effect runs before the effect that
+  // moves them on (below), so one that differs from them there is one this render brought.
+  const settled = useRef({ status, said });
   /** After a redraw of the same view, the window goes back on the points it showed. The slider merges into the old one
    *  by id and keeps its window, but as ECharts holds it: a drag's window is a share of the points, which is other
    *  points once their number changes. A redraw that leaves no slider, or no room for the window, leaves no zoom. */
@@ -452,7 +570,8 @@ export function EChart({
     // The zoom ended with no one asking: said once, so no one goes on believing the chart shows fewer days. Not when the
     // render drawn here brought a new status: the region already says it, and the status is the one said (see the
     // render's comparison). The zoom's end is then not said at all, as when the `zoom` prop ends it in such a render.
-    if (zoomed && !now && !(status && status !== settled.current)) say(null);
+    // A reading this render said (newer words of a key's reading) stays before it, so the end does not replace it.
+    if (zoomed && !now && !(status && status !== settled.current.status)) say(null, said !== settled.current.said);
   });
   // The chart is given the caller's option with what the wrapper keeps for itself, so no option builder can forget it:
   // reduced motion, and the band. Only the wrapper's actions draw the band: left to its own triggers, ECharts also draws
@@ -468,6 +587,7 @@ export function EChart({
     if (!chart) return;
     const made = option(env), first = drawn.current !== chart;
     drawn.current = chart;
+    drawnKeys.current = drawing.keys;
     chart.setOption({
       ...made, ...(env.motion && first ? {} : { animation: false }), ...(zoom ? {} : { dataZoom: [] }),
       axisPointer: { ...made.axisPointer, triggerOn: "none" },
@@ -476,9 +596,20 @@ export function EChart({
     drew.current = shows;
     unsaid.current = false; // a drag still going changed the old view: its release has nothing to say of this one
     unzoom(chart);
-  }, [chart, option, env, shows, zoom]);
+  }, [chart, option, env, shows, zoom, drawing.keys]); // keys come with their option: drawn once
   // After the draw effect, which must still see the status of the commit before.
-  useEffect(() => { settled.current = status; }, [status]);
+  useEffect(() => { settled.current = { status, said }; }, [status, said]);
+  // A caller's fault in its point keys, met at mount, with a new view or by a change of the keys or of the points: told
+  // once, not thrown, since a duplicate can come from the data and the chart can still be read. Once under StrictMode's
+  // second run of the mount's effects too.
+  const complain = useEffectEvent(({ of, ends }: Faults) => console.error(`EChart "${label}": ${of.join("; ")}, so ${
+    ends ? "the reading and the zoom end" : "a redraw that changes the keys will end the reading and the zoom"}.`));
+  const complained = useRef<Faults | null>(null);
+  useEffect(() => {
+    if (!drawing.faults || drawing.faults === complained.current) return;
+    complained.current = drawing.faults;
+    complain(drawing.faults);
+  }, [drawing.faults]);
   // The caller hears of every change to the points shown, whatever made it: a key, the slider, reset(), a new view, or
   // a redraw that left the zoom no slider or no room.
   const told = useRef<Shown | null>(null);
@@ -492,16 +623,21 @@ export function EChart({
   // The band follows the cursor, here and nowhere else, whatever moved it: a key, the pointer, Escape, a new drawing.
   // It runs after the draw above and again after each one, and after a zoom: a redraw drops ECharts' band, and a redraw
   // or a zoom can move the points. A key's tooltip goes with the band, so the two never sit over different points.
+  // A pointer's tooltip goes with it too once the point read is no longer under the pointer (a redraw or a zoom moved
+  // it away, or moved the grid from under the pointer, by what `under()` holds to be inside): the pointer's place is
+  // forgotten, and the next move reads the point under it, as ever.
   const banded = useRef(false);
   useEffect(() => {
     if (!chart) return;
     if (at != null) {
+      const p = pointer.current;
+      if (p && (!chart.containPixel(GRID, [p.x, p.y]) || Number(chart.convertFromPixel(X_AXIS, p.x)) !== at)) pointer.current = null;
       const [x, y] = drawnAt(chart, at, env.height);
       chart.dispatchAction({ type: "updateAxisPointer", currTrigger: "mousemove", x, y });
       place(at);
     } else if (banded.current) chart.dispatchAction({ type: "updateAxisPointer", currTrigger: "leave" });
     banded.current = at != null;
-  }, [chart, at, option, env, shown]);
+  }, [chart, at, option, env, shown, zoom, drawing.keys]); // each of the draw effect's, but `shows`: a new view ends any reading
 
   // Last, so that on unmount every other cleanup still has a live chart. The load is asynchronous: StrictMode's first
   // mount is gone before it resolves and makes no chart.

@@ -16,6 +16,7 @@
 //   activates false for a chart that takes no activation: the pointer is then never a hand over it
 //   said     said(key): the point as the zoom sentence names it, label(key) by default; the sentence may name "the weeks of"
 //   tell     the index of the legend key whose color differs between light and dark, 0 by default
+//   fewer    fewer(payload, n): the payload without its first n points, the same view, for the backfill block
 // A chart below the first screen is scrolled into view once drawn, so the pointer can reach it.
 // The page module calls the blocks in its order, with its own checks between them.
 import { H, W, line, sleep, until } from "./harness.mjs";
@@ -82,6 +83,87 @@ export function chart(h, d) {
   /** The band's centre's distance from column c's, and where the band, the tooltip and the readout are for point i. */
   const offBy = (s, c) => (s.band && c ? Math.abs((s.band.l + s.band.r) / 2 - c.x) : Infinity);
   const where = (s, c, i) => `${one} ${i + 1}: band at ${s.band ? ((s.band.l + s.band.r) / 2).toFixed(1) : "none"}px, its bar at ${c ? c.x.toFixed(1) : "none"}px, tooltip "${s.tip?.day ?? "none"}", readout "${s.readout.split(":")[0]}"`;
+  const mid = r => (r ? (r.l + r.r) / 2 : NaN);
+  const px = n => (Number.isFinite(n) ? `${n.toFixed(1)}px` : "none");
+  /** A page whose chart's payload is answered with before(payload) at first, and after(payload) from fill() on: fill()
+   *  makes the page ask for it again, as a window focus after a background ingest does, and resolves once the chart has
+   *  drawn something else (its bars, or its slider's handles when a zoom keeps the same days), with whether it did. Both
+   *  get the payload as the descriptor's answer makes it. points: the bars' columns drawn at first. */
+  const openMoving = async (name, { before, after = p => p, points }, options) => {
+    let moved = false;
+    const answer = json => { const base = d.answer ? d.answer(json) : json; return moved ? after(base) : before(base); };
+    const page = await openOn({ answer, points }, name, options);
+    await page.route(/\/api\/status/, route => h.answer(route, s => (moved ? { ...s, last_change: "chartfit backfill" } : s)));
+    const look = () => ev(page, () => JSON.stringify([window.chartfit.bars().map(r => [Math.round(r.l), Math.round(r.t), Math.round(r.h)]), window.chartfit.handles().map(r => Math.round(r.l))]));
+    const fill = async () => {
+      const was = await look();
+      moved = true;
+      await ev(page, () => window.dispatchEvent(new Event("visibilitychange")));
+      return (await until(look, s => s !== was)) !== was;
+    };
+    return { page, fill };
+  };
+  /** The point labels drawn under the plot, left first: the texts there that are a point's short label. */
+  const labels = async page => (await ev(page, () => {
+    const g = window.chartfit.grid();
+    return g ? window.chartfit.texts().filter(t => t.t >= g.b - 1).sort((a, b) => a.l - b.l).map(t => t.text) : [];
+  })).filter(t => P.some(k => label(k) === t));
+  const ends = ls => (ls.length ? `${ls[0]} to ${ls.at(-1)}` : "no labels");
+  /** Notes on each animation frame, from now until framed(), where the tooltip and the band are, what the tooltip names,
+   *  which drawing the bars are (their columns' count and outer edges), how many columns are drawn, and which of them the
+   *  band is on (-1 for none). zrender stops its own frame loop after 10 still frames, and a redraw or the band's action
+   *  starts it again after this loop has asked for its next frame, so in each frame this loop runs first: a note is taken
+   *  before zrender draws that frame. It holds the tooltip as the browser then paints it, and the band and the bars as the
+   *  frame before painted them, so in the notes the band reaches a new place one frame late. */
+  const watch = page => ev(page, () => {
+    window.__frames = [];
+    window.__framing = true;
+    const tick = () => {
+      const t = window.chartfit.tip(), b = window.chartfit.band(), cs = window.chartfit.columns();
+      window.__frames.push({ tip: t && { l: t.l, r: t.r, day: t.day }, band: b && { l: b.l, r: b.r },
+        bars: cs.length ? `${cs.length} ${Math.round(cs[0].l)} ${Math.round(cs.at(-1).r)}` : "",
+        cols: cs.length, col: b ? cs.findIndex(c => Math.abs(c.x - (b.l + b.r) / 2) <= 1) : -1 });
+      if (window.__framing) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  const framed = page => ev(page, () => { window.__framing = false; return window.__frames; });
+  /** The tooltip's gap to the place it points at (tipAt() in web/src/components/chart.ts): right of it, or left near the
+   *  box's right edge. */
+  const GAP = 14;
+  /** How far the place a tooltip points at is from x. */
+  const aim = (tip, x) => Math.min(Math.abs(tip.l - GAP - x), Math.abs(tip.r + GAP - x));
+  /** Whether, on every frame noted, the tooltip was open, named point k and pointed within half a band of the band's
+   *  centre; with still, a pixel, whether the band stayed within half a band of it; without, whether the band was on point
+   *  k's column. Points not yet drawn are the oldest (a backfill), or with newest the newest, so on a frame of fewer
+   *  columns than points point k's column is k less the points missing, or k. A redraw drops ECharts' band for a frame or
+   *  two: on such a frame the tooltip is held to the band of the nearest frame with the same bars, so it is still held to
+   *  the drawing on screen. */
+  const steady = (fs, k, { still = null, newest = false } = {}) => {
+    let tipOff = 0, bandOff = 0, bare = 0, over = 0, closed = 0, loose = 0, half = 0;
+    const off = new Set(), cols = new Set();
+    if (still == null) for (const f of fs) if (f.band && f.col !== (newest ? k : k - (N - f.cols))) cols.add(`${f.col < 0 ? "none" : `column ${f.col + 1}`} of ${f.cols}`);
+    const near = i => {
+      for (let j = 1; j < fs.length; j++) for (const at of [i - j, i + j]) if (fs[at]?.band && fs[at].bars === fs[i].bars) return fs[at].band;
+      return null;
+    };
+    fs.forEach((f, i) => {
+      if (!f.band) bare++;
+      if (!f.tip) { closed++; return; }
+      if (named(f.tip.day) !== k) off.add(f.tip.day);
+      const band = f.band ?? near(i);
+      if (!band) { loose++; return; }
+      half = (band.r - band.l) / 2;
+      const c = mid(band), t = aim(f.tip, c);
+      tipOff = Math.max(tipOff, t);
+      if (still != null && f.band) bandOff = Math.max(bandOff, Math.abs(c - still));
+      if (t > half || (still != null && f.band && Math.abs(c - still) > half)) over++;
+    });
+    return {
+      ok: fs.length > 0 && fs.some(f => f.band) && !closed && !loose && !off.size && !over && !cols.size,
+      at: `${fs.length} frames, ${bare} without a band${loose ? ` (${loose} with no band of the same bars)` : ""}, ${closed} with no tooltip; the tooltip pointed at most ${px(tipOff)} from the band's centre${still != null ? `, the band moved at most ${px(bandOff)}` : ""}, half a band ${px(half)}${over ? `, ${over} frames off` : ""}${off.size ? `; named ${[...off].map(t => `"${t}"`).join(", ")}` : ""}${still == null ? (cols.size ? `; the band on ${[...cols].join(", ")}, not ${one} ${k + 1}'s` : `; the band on ${one} ${k + 1}'s column`) : ""}`,
+    };
+  };
   /** Focuses the chart's box and reads point I with the keys. */
   const read = async page => {
     await box(page).focus();
@@ -137,6 +219,7 @@ export function chart(h, d) {
 
   return {
     N, I, P, named, centre, shownBy, open, openOn, shot, ev, drawn, away, box, showAll, state, read, onPoint, drawnKeys, keyLine, newerOn,
+    mid, px, beside, aim, openMoving, labels, ends, watch, framed, steady,
 
     /** Colors: light, the toggle's dark, then System with the OS scheme flipped; the slider's handles in light and dark. */
     async colors() {
@@ -412,6 +495,56 @@ export function chart(h, d) {
       const s = await state(page), at = onPoint(s, I, centre(s.grid, I)), heard = await ev(page, () => window.__said);
       line(`newer figures keep the ${one} read with the keys, and say nothing`, after !== before && at.ok && !heard.length,
         `${after !== before ? "redrawn" : "NOT REDRAWN"}; ${at.at}; said ${JSON.stringify(heard)}`);
+      await page.done();
+    },
+
+    /** A backfill: n older points join at the front of the same view, as an ingest of older transcripts brings them. The
+     *  page opens on fewer(payload, n), with point I of its points read by the keys and, on a chart with a zoom, plus
+     *  pressed around it; the next request gets the whole payload. The points that joined are drawn: every column, or
+     *  when zoomed the slider's handles move, since the same days are a smaller share. The band stays over the point's
+     *  bar (on its pixels when zoomed, at its new place when not), the tooltip names it beside the band, the first and the
+     *  last label drawn stay (zoomed), "Show all" stays (zoomed), and the live region says nothing new: a zoom sentence
+     *  the new count makes untrue is dropped, which may empty it. On each animation frame through the redraw the tooltip
+     *  names the point and points within half a band of the band's centre; a zoomed band does not move, and a band not
+     *  zoomed is on the point's column. */
+    async backfill(n = 2) {
+      const K = n + I, M = N - n, zooms = d.zoom !== false;
+      const { page, fill } = await openMoving("backfill", { before: p => d.fewer(p, n), points: M });
+      await read(page);
+      let s0 = await until(() => state(page), s => onPoint(s, K, centre(s.grid, I, 0, M - 1)).ok);
+      let w = null;
+      if (zooms) {
+        await page.keyboard.press("+");
+        s0 = await until(() => state(page), s => { w = shownBy(s.readout); return w && s.band && Math.abs(mid(s.band) - centre(s.grid, K, w.from, w.to)) <= 1.5; });
+        await showAll(page).waitFor({ timeout: 4000 }).catch(() => {});
+      }
+      const was = await labels(page);
+      // The labels reader proven on the zoom sentence: it names the first and the last point shown.
+      const proven = !zooms || (!!w && was.length > 0 && was[0] === label(P[w.from]) && was.at(-1) === label(P[w.to]));
+      const handles = () => ev(page, () => JSON.stringify(window.chartfit.handles().map(r => Math.round(r.l))));
+      const h0 = await handles();
+      await ev(page, () => window.chartfit.listen());
+      await watch(page);
+      const redrawn = await fill();
+      const want = s => (zooms ? mid(s0.band) : centre(s.grid, K));
+      // A late sentence would come after the drawing: the band and the tooltip on the point first, then a while more.
+      await until(() => state(page), s => s.band && Math.abs(mid(s.band) - want(s)) <= 1.5 && named(s.tip?.day ?? "") === K);
+      await sleep(400);
+      const fs = await framed(page);
+      const s = await state(page), now = await labels(page), all = zooms && await showAll(page).isVisible(), h1 = await handles();
+      const cols = await ev(page, () => window.chartfit.columns()), heard = await ev(page, () => window.__said.filter(t => t !== ""));
+      const at = mid(s.band), bar = cols.find(c => Math.abs(c.x - at) <= 1);
+      // More points drawn: every column when not zoomed; zoomed, the same days are a smaller share, so the handles move.
+      const more = zooms ? h1 !== h0 : cols.length === N;
+      const kept = !zooms || (now.length > 0 && now[0] === was[0] && now.at(-1) === was.at(-1));
+      const what = zooms ? `zoomed by plus around ${one} ${K + 1}` : `${one} ${K + 1} read`;
+      line(`a backfill of ${n} older ${n === 1 ? one : many}, ${what}: the band stays over its bar, the tooltip names it beside the band${zooms ? `, the first and the last ${one} drawn stay, "Show all ${many}" stays` : ""}, and nothing is said`,
+        redrawn && more && proven && Math.abs(at - want(s)) <= 1.5 && !!bar && named(s.tip?.day ?? "") === K && beside(s, at) && kept && (!zooms || all) && !heard.length,
+        `${redrawn ? "redrawn" : "NOT REDRAWN"}, ${zooms ? `the handles ${h1 !== h0 ? `moved from ${h0} to ${h1}` : `STILL at ${h1}`}` : `${cols.length} of ${N} columns drawn`}; band at ${px(at)}, want ${px(want(s))}, bar at ${px(bar?.x)}; tooltip "${s.tip?.day ?? "none"}" ${s.tip ? `${Math.round(s.tip.l)}..${Math.round(s.tip.r)}px` : ""}`
+        + `${zooms ? `; labels ${ends(now)}, were ${ends(was)}${proven ? "" : ` (NOT the window said, ${w ? `${label(P[w.from])} to ${label(P[w.to])}` : "none"})`}; "Show all ${many}" ${all ? "shown" : "gone"}` : ""}; said ${JSON.stringify(heard)}`);
+      const f = steady(fs, K, { still: zooms ? mid(s0.band) : null });
+      line(`through the backfill, on each animation frame the tooltip names ${one} ${K + 1} and points within half a band of the band's centre${zooms ? ", and the band does not move" : `, and the band is on ${one} ${K + 1}'s column`}`,
+        redrawn && f.ok, f.at);
       await page.done();
     },
 

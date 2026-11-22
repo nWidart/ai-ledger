@@ -1465,8 +1465,9 @@ describe("ErrorsPage bucket selection", () => {
     expect(chartSaid()).toBe("Selection cleared: the table and detail cover the whole range.");
   });
 
-  it("can't select a folded stretch without calls, and says so in other words the second time", async () => {
-    await open("?range=30", withDays([["2026-10-10", "foo", 10, 0, "claude"], ["2026-11-04", "foo", 10, 0, "claude"]]));
+  it("can't select a folded stretch without calls, says so in other words the second time, and reads its first day when it opens", async () => {
+    const calls: ErrorsPayload["calls"] = [["2026-10-10", "foo", 10, 0, "claude"], ["2026-11-04", "foo", 10, 0, "claude"]];
+    const client = await open("?range=30", withDays(calls));
     keys();
     await userEvent.keyboard("{Home}{ArrowRight}");
     expect(chartSaid()).toContain(" – ");
@@ -1475,6 +1476,11 @@ describe("ErrorsPage bucket selection", () => {
     expect(chartSaid()).toBe("A stretch without tool calls cannot be selected.");
     await userEvent.keyboard(" ");
     expect(chartSaid()).toBe("This stretch has no tool calls to select.");
+    // An ingest adds a call inside the stretch: it opens, and its first day, now a point of its own, is still read.
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? withDays([...calls, ["2026-10-14", "foo", 10, 0, "claude"]]) : {})));
+    refreshed(client);
+    await waitFor(() => expect(chartSaid()).toBe("Oct 11, 2026: no activity"));
+    expect(chartTip()!.textContent).toMatch(/^Oct 11, 2026No activity/);
   });
 
   it("Back clears a selection, and the chip's button clears it, says nothing in the chart's region and keeps focus in the table", async () => {
@@ -1653,9 +1659,9 @@ describe("ErrorsPage bucket selection", () => {
     expect(location.search).toBe("?range=30");
   });
 
-  // What moves the points (an earlier first day, a fold) is another view: rateTracks.test.ts has its key. What the region
-  // says of a reading through newer data is the wrapper's rule, in EChart.test.tsx ("says a key's reading again in place of
-  // a status when newer figures change it, and leaves the pointer's unsaid").
+  // What moves the points (an earlier first day, a fold) keeps the view: rateTracks.test.ts has its key, the zoom tests the
+  // backfill. What the region says of a reading through newer data is the wrapper's rule, in EChart.test.tsx ("says a key's
+  // reading again in place of a status when newer figures change it, and leaves the pointer's unsaid").
   it("keeps the point read, with its tooltip, through newer data of the same view", async () => {
     const client = await open("?range=30");
     const fake = await drawn(), drawings = fake.options.length;
@@ -1718,19 +1724,42 @@ describe("ErrorsPage rate chart zoom", () => {
     expect(chartSaid()).toBe("Showing all 30 days.");
   });
 
-  it("keeps the zoom through a selection and a type, and shows every point after Week", async () => {
-    const fake = await open();
-    fake.zoomTo(4, 13);
-    fake.fire("click", fake.pointAt(8));
-    expect(location.search).toBe("?range=30&at=2026-10-15");
-    expect(fake.shown).toEqual({ from: 4, to: 13 });
+  it("keeps the zoom and the point read through a selection, older calls and a type, clears with Space after them, and ends both at Week", async () => {
+    // Ninety days: the chart starts on the first call, Oct 7, so older calls add points at its front.
+    stubErrors(month);
+    history.replaceState(null, "", "/errors?range=90");
+    const client = await page(), fake = await drawn();
+    const days = async () => (await pointKeys()).slice(fake.shown!.from, fake.shown!.to + 1);
+    act(() => chartBox().focus());
+    await userEvent.keyboard(`{Home}${"{ArrowRight}".repeat(8)}{Enter}+`); // Oct 15, selected, then zoomed around it
+    expect(location.search).toBe("?range=90&at=2026-10-15");
+    const zoomed = await days();
+    expect([zoomed.length, chartSaid()]).toEqual([15, "Showing Oct 11 to Oct 25, 15 of 30 days."]);
+    // An ingest adds a call on Oct 1, before the chart's first day: six points join at its front.
+    const drawings = fake.options.length;
+    stubErrors({ ...month, calls: [["2026-10-01", "foo", 10, 0, "claude"], ...month.calls] });
+    refreshed(client);
+    await waitFor(() => expect(fake.options.length).toBeGreaterThan(drawings));
+    expect((await pointKeys())[0]).toBe("2026-10-01");
+    expect(await days()).toEqual(zoomed);
+    expect(chartTip()!.textContent).toMatch(/^Oct 15, 2026/);
+    expect(showAll()).toBeTruthy();
+    expect(location.search).toBe("?range=90&at=2026-10-15"); // still selected
+    expect(chartSaid()).toBe(""); // nothing new: the zoom sentence, now untrue ("of 30 days"), is dropped
+    await userEvent.keyboard(" ");
+    expect(location.search).toBe("?range=90");
+    expect(chartSaid()).toBe("Selection cleared: the table and detail cover the whole range.");
     await userEvent.click(within(document.getElementById("legend")!).getByRole("button", { name: /^x/ }));
     await waitFor(() => expect(location.search).toContain("cat=x"));
-    expect(fake.shown).toEqual({ from: 4, to: 13 });
+    expect(await days()).toEqual(zoomed);
     expect(showAll()).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Week" }));
     expect(showAll()).toBeNull();
-    expect((await drawn()).last!.dataZoom).toEqual([]); // five weeks: no slider, every point
+    expect((await drawn()).last!.dataZoom).toEqual([]); // six weeks: no slider, every point
+    act(() => chartBox().focus());
+    expect(chartTip()).toBeNull(); // the reading ended: Enter has no point to select
+    await userEvent.keyboard("{Enter}");
+    expect(location.search).toBe("?range=90&gran=week&cat=x");
   });
 });
 

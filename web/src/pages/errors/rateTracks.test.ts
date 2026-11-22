@@ -152,15 +152,18 @@ describe("rateModel", () => {
     expect([calm.pts.length, calm.bare, calm.zoom]).toEqual([20, "noErrors", false]);
   });
 
-  it("keeps the view through the type, the selection, the fixes and a new last point, not through what moves the points", () => {
-    const v = model(quiet).view, more = model({ ...quiet, today: "2026-11-21", calls: [...quiet.calls, ["2026-11-21", "foo", 50, 0, "claude"]] });
+  it("keeps the view through the type, the selection, the fixes, a new last point, an earlier first point and a fold that opens, not through the granularity or the project, and keys each point by its first bucket", () => {
+    const q = model(quiet), v = q.view, more = model({ ...quiet, today: "2026-11-21", calls: [...quiet.calls, ["2026-11-21", "foo", 50, 0, "claude"]] });
+    expect(q.keys).toEqual([...dayRange("2026-11-01", "2026-11-09"), "2026-11-19", "2026-11-20"]); // the fold is Nov 9
     expect(model(quiet, { cat: "x", at: "2026-11-02" }, { x: "2026-11-06" }).view).toBe(v);
     expect(more.pts).toHaveLength(12);
     expect(more.view).toBe(v);
     expect(model(quiet, { gran: "week" }).view).not.toBe(v);
     expect(model(quiet, { project: "bar" }).view).not.toBe(v);
-    expect(model({ ...quiet, calls: [["2026-10-30", "foo", 5, 0, "claude"], ...quiet.calls] }).view).not.toBe(v); // an earlier first point
-    expect(model({ ...quiet, calls: [...quiet.calls, ["2026-11-13", "foo", 5, 0, "claude"]] }).view).not.toBe(v); // the fold opens
+    const earlier = model({ ...quiet, calls: [["2026-10-30", "foo", 5, 0, "claude"], ...quiet.calls] });
+    expect([earlier.view, earlier.keys.slice(0, 3)]).toEqual([v, ["2026-10-30", "2026-10-31", "2026-11-01"]]);
+    const opened = model({ ...quiet, calls: [...quiet.calls, ["2026-11-13", "foo", 5, 0, "claude"]] });
+    expect([opened.view, opened.keys.slice(8, 15)]).toEqual([v, dayRange("2026-11-09", "2026-11-15")]); // the fold opens: Nov 9 is a day
   });
 });
 
