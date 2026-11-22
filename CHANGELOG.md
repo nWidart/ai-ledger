@@ -39,7 +39,13 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - Errors:
-  - The rate chart uses the shared chart component. It follows theme changes without a reload, frames the selected day or week and keeps the reading on it, so the same key clears it, keeps the point you are reading when new data lands, and keeps both panels' height at larger text sizes.
+  - The rate chart uses the shared chart component. It frames the selected day or week and keeps the reading on it, so the same key clears it, keeps the point you are reading when new data lands, and keeps both panels' height at larger text sizes.
+  - The rate chart announces what a selection did from its own live region, and the sentence stays when the pointer leaves the chart.
+  - The rate chart draws its fix labels inside the plot, one under the other on a shared day.
+
+### Fixed
+
+- Errors' rate axis no longer repeats a label at a 0.05 step: it reads "0.00%", "0.05%", "0.10%".
 
 ## [0.5.0] - 2026-11-21
 
