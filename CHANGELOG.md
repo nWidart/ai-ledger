@@ -5,6 +5,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Prices for OpenAI `gpt-6.2-sol` and `gpt-6.2-astra`, so Codex sessions on those models show an estimated cost.
+
 ## [0.5.0] - 2026-11-21
 
 ### Added
