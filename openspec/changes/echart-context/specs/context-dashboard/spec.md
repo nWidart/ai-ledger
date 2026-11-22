@@ -123,6 +123,10 @@ Each track of the cache chart SHALL carry a title that names it and gives its fi
 
 #### Scenario: Phone width
 - **WHEN** the cache chart is 343px wide
+- **THEN** each track's title ends inside the plot, with its figure
+
+#### Scenario: Phone width at 200% text
+- **WHEN** the cache chart is 343px wide and the browser's text size is 200%
 - **THEN** each track's title ends inside the plot, with its figure in the short form or left out
 
 #### Scenario: Cache reads on
@@ -130,6 +134,33 @@ Each track of the cache chart SHALL carry a title that names it and gives its fi
 - **THEN** the bars' title reads "Prompt tokens", and its figure counts the prompt tokens
 
 ## MODIFIED Requirements
+
+### Requirement: Map the view's sessions
+The page SHALL chart each of the view's sessions with a measured start, a known window and a peak as one mark, placed by starting context and peak share of the window, with the 30,000-token and 80% lines and each quadrant they make named where its name fits. A compacted session's mark SHALL differ by more than colour. A mark SHALL give the session's details; selecting it SHALL open its sheet. The chart SHALL show at most the 1,000 newest such sessions and say how many it shows of how many.
+
+#### Scenario: Heavy start, full window
+- **WHEN** a session starts at 60,000 tokens and peaks at 180,000 of a 200,000-token window
+- **THEN** its mark sits right of the 30,000-token line and above the 80% line, in the quadrant named Heavy and full
+
+#### Scenario: A narrow map at a large text size
+- **WHEN** the map is 343px wide and the browser's text size is 200%
+- **THEN** a quadrant's name that does not fit in its quadrant is left out of the plot, and the quadrant buttons under the map still name all four quadrants
+
+#### Scenario: Open a session from the map
+- **WHEN** the user selects the mark of session `s7`
+- **THEN** the session sheet for `s7` opens and the page keeps its filters
+
+#### Scenario: Unknown window
+- **WHEN** a session has a measured start and no known window
+- **THEN** it has no mark, and the count the chart states leaves it out
+
+#### Scenario: More sessions than the chart shows
+- **WHEN** the view has 3,412 sessions that qualify
+- **THEN** the chart shows the 1,000 newest and says it shows 1,000 of 3,412
+
+#### Scenario: Compacted session
+- **WHEN** a session compacted twice
+- **THEN** its mark differs in shape from a session that never compacted, and its details say 2 compactions
 
 ### Requirement: Keep the cache chart's stacks in their tracks
 On the cache chart's bars and breaks strip, a part above zero SHALL be drawn at least 1px tall with 2px of surface between parts. A stack SHALL be its total's scaled height, the other parts shrinking to make room, so no stack rises past its track and none is drawn taller than a stack of a larger total. In a stack too short to hold every part's minimum, the gaps SHALL shrink first, so each nonzero part stays visible.

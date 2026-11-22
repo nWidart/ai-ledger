@@ -22,13 +22,13 @@ This section holds only what shapes this change.
 
 **Constraints.**
 
-- The wrapper reads grid 0 and x axis 0 as category bands: `convertFromPixel({ xAxisIndex: 0 }, x)` is the point's index. `EChart.tsx` and `testing.ts` belong to the `echart-point-keys` change until it merges, and a wrapper contract change is the owner's to make.
+- The wrapper reads grid 0 and x axis 0 as category bands: `convertFromPixel({ xAxisIndex: 0 }, x)` is the point's index. The `echart-point-keys` change, which owned `EChart.tsx` and `testing.ts` while this change was planned, has merged (PR #219): the wrapper takes `pointKeys`. A wrapper contract change is the owner's to make.
 - `web/scripts/check-bundle.mjs`: the ECharts chunk is 176.5 kB gzip, limit 195 kB. Registered: `CustomChart`, `LineChart`, `DataZoomSliderComponent`, `GridComponent`, `SVGRenderer`.
 - Only color tokens declared in `theme.css` as hex or `rgb()` inside `light-dark()` may go through `env.color` (the foundation, decision 4). The cache chart's break colors are `color-mix()` values scoped to `.pg-context .cache-chart` today.
 - `web/src/css.test.ts` lets allow-lists shrink only. `openspec validate --strict` rejects a requirement text over 500 characters.
 - The page reads one payload per view (`queries.context(want)`, with the previous view's figures kept while the next loads). The server leaves out a day or week with no request, a week with no session, and a turn with fewer than 5 sessions.
 - The turns of a curve are 1 to N with none missing: a session that has turn t has turn t - 1, so the count of sessions per turn never rises, and the curve is cut at the first turn under 5 sessions (`growth()` in `src/ai_ledger/context.py`). A project's curve and a share curve end at or before the view's.
-- Another thread is building a session quadrant on the Project page (`graph-project-quadrant`, not on main; read on `step/quadrant-4-1-browser`). It is the same shape as the session map: log axes, dots as a custom series, a reading by the nearest dot. It uses the wrapper as it is, with `points={0}`, and reads by itself. It registers no new series type.
+- The Project page's session quadrant (`graph-project-quadrant`, built beside this change and merged since, PR #217) is the same shape as the session map: log axes, dots as a custom series, a reading by the nearest dot. It uses the wrapper as it is, with `points={0}`, and reads by itself. It registers no new series type.
 
 **What the spikes measured** (ECharts 6.1.0 from `web/node_modules`, registered as `echarts.ts` registers it, the SVG renderer in jsdom under vitest, with the app's own `option.ts` and `stack.ts`; chunk sizes with `vite build` and `gzip -9`, as `check-bundle.mjs` counts; the spike files are in the planner's scratchpad and in no commit). jsdom lays nothing out and estimates a text's width at 0.6em a character. Each decision cites the result it rests on.
 
@@ -41,7 +41,7 @@ This section holds only what shapes this change.
 | S5 | The zoom slider on the cache chart's slots, and on a turn axis. | **Cache.** A window of 10–12 becomes 10–16: the minimum is 7. Zoomed to 10–19, ten bars are drawn and slots 10, 13 and 19 have one x on the frame and on the three tracks (89, 311, 755px). Slot 10, whose neighbours 11 and 12 are empty, is a move with no length in the ratio line, and `lineDots` draws its dot. **The faint trend.** With the hidden totals line on the ratio track, listed before the ratio line, the slider's line is the mirror image of the one it draws without it: the totals, not the ratio. **Turns.** A slider over 100 turn slots works: zoomed to turns 1–20, the labels are 1 and 20. | 10 |
 | S6 | Text the chart measures, at a 343px box and at twice the text size. | **Track titles.** `axisTitle` cuts "Tokens not read from the cache · 2.4M in this view" (330px by the estimate) to "Tokens not read from the cache · 2.4M in…" in a 283px plot, and to "Tokens not read…" at twice the text (660px in a 223px plot). **Bucket labels.** ECharts thins them: 15 of 30 at 800px, 7 at 343px, 3 at 343px and twice the text. At 343px the newest label is not drawn in jsdom's estimate, though `tracksOption` asks for it. **Turn labels.** With `axisLabel.interval` as a function, 83 turns are labelled 1, 20, 40, 60, 80 and, right-aligned, 83 at 800px; 1, 20, 40, 60 and 83 at 343px. **The map.** At 343px and twice the text the x labels are 5k, 10k and 50k; the others are hidden as overlapping. | 6, 7, 9 |
 | S7 | What would each candidate add to the ECharts chunk? | Base 176.5 kB. `ScatterChart` +1.8 kB (178.3). `MarkLineComponent` +5.6 kB (182.1). `MarkAreaComponent` +3.1 kB (179.6). Both mark components +6.9 kB (183.4). All three +8.7 kB (185.2). The log axis: +0, it comes with the grid (S4 ran on the app's registration). Custom series: +0. | 18 |
-| S8 | How big is the Context page chunk? | `ContextPage-*.js` is 19.4 kB gzip -9 at this change's base. The shared chart chunk `zoomReset-*.js` is 7.1 kB, the entry 109.9 kB. | 18 |
+| S8 | How big is the Context page chunk? | `ContextPage-*.js` is 19.4 kB gzip -9 at the base this change was planned on, the entry 109.9 kB. The wrapper is its own shared chunk, `EChart-*.js`, 7.1 kB (limit 8 kB); `zoomReset-*.js` holds the rest of the shared chart code, 1.2 kB (limit 3 kB). As built: `ContextPage-*.js` 21.1 kB (limit 26 kB), the entry 109.7 kB, `EChart-*.js` 7.1 kB, `zoomReset-*.js` 1.2 kB, ECharts 176.5 kB (limit 195 kB). | 18 |
 
 **What jsdom cannot show**, handed to the browser steps (4.2 to 4.4): the real widths of texts (which track title form fits, the newest bucket label of S6, the wrap of a quadrant's name, the side of the "80% of window" label, the thinned labels), the pointer's place in a laid-out page (the map's box under a scroll, a page zoom, a tooltip beside the pointer), every color (dark, a system flip, forced colors), the draw-in on a first drawing, a real drag of the slider, the focus ring, and the time a redraw of 1,000 dots takes in Chromium.
 
@@ -95,14 +95,14 @@ What a user will see or meet that differs from today. The owner reads this first
 18. Each turn is a band, so the curve starts half a band inside the plot's left edge and ends half a band before its right edge. Today it runs from edge to edge. With 100 turns that is under 4px; with 5 turns it is 73px at 800px.
 19. The strip of sessions still running sits between the curve and the turn labels, and its caption is a title over it, with the figures after a middle dot. Today the turn labels are between the curve and the strip, and the caption is under the strip with the figures at the right.
 20. The last turn is always labelled, right-aligned on its point, beside turn 1 and the round turns.
-21. The curve's last point has no dot. A curve of one turn is a dot.
+21. The curve's last point has no dot. A curve of one turn is a dot on a 7px span from its 25th to its 75th percentile.
 22. The box is 302px. Today it is 306px.
 23. In forced colors each project line sits on a page-colored halo.
 
 **Median start by week** (decision 8).
 
 24. A tooltip shows at the week being read. The line of text under the chart is gone.
-25. A week with no session is read: "Week of Nov 9: no session started.". Today the keys skip it (decision 4).
+25. A week with no session is read: "Week of Nov 9: no session started.", with a tooltip, "Week of Nov 9" then "No session started". Today the keys skip it (decision 4).
 26. A week of fewer than 3 sessions is a hollow dot in the line's color at full strength. Today it is faded to 60%. A week with neighbours has no dot; a week with no neighbour keeps its dot and its span. Today every week has a dot.
 27. Each week is a band, as on the growth chart: the first and last weeks sit half a band inside the plot.
 28. At a larger text size the box grows and the plot keeps its 144px. Today the box stays 180px and the plot shrinks, to 108px at 200%.
@@ -114,8 +114,39 @@ What a user will see or meet that differs from today. The owner reads this first
 31. The line of text under the map that repeated the reading is for screen readers only. The tooltip shows the same fields.
 32. Escape from another control closes a tooltip the pointer opened. It clears the selected quadrant only from the map or the quadrant buttons, as today.
 33. In forced colors the ring around the dot read is highlight-colored, and a dot's edge and a compacted session's ring are in the system text color. Today the ring around the dot read keeps the theme's text color, which a dark forced palette hides.
-34. A quadrant's name wraps by its measured width. Today the width is estimated from its letter count.
+34. A quadrant's name wraps by its measured width, and is left out when no size fits it or when it is taller than its quadrant (in a 343px box at 32px text); the buttons under the map still name the four quadrants. Today the width is estimated from its letter count, and every name is drawn.
 35. Tick labels that would overlap are hidden. Today every tick is labelled.
+
+**Found while building.** The lines above are the plan's; these were found in the code and the browser as the charts were built.
+
+*All four charts.*
+
+36. The focus ring is the shared chart's (`.echart`), as on Cost, Activity and Errors. Today each chart's SVG box drew its own (`.pg-context .chart:focus-visible`).
+37. A pointer's reading also ends when the chart loses the focus, as a key's does.
+38. The shared chart places the tooltip, beside the point read, as on the other pages; the map places its own with `tipAt`, as today.
+
+*Cache use over time.*
+
+39. The chart takes no activation, so the pointer is never a hand over it.
+40. Its tooltip's head is bold, as today; the growth and weekly start charts' new tooltips head with a muted line.
+
+*The growth chart.*
+
+41. The tooltip has an 8px color swatch before the median (in `--text-primary`) and before each project. In forced colors each swatch keeps its color inside a `CanvasText` frame.
+42. Isolating a project draws the same view again: the reading stays while the focus stays on the chart. A mouse click or a key on a project's button moves the focus there, and the reading ends by the chart's blur.
+
+*Median start by week.*
+
+43. The newest week is always labelled, right-aligned to end inside the plot, so its label is not centred under its point.
+44. The "30k" label is 11px times the text scale. Today it is 10.5px.
+
+*Sessions by start and peak.*
+
+45. The x axis's title shortens to "Starting context" when the box is too narrow for "Starting context (tokens, log scale)" (a 343px box at 32px text).
+46. The "80% of window" label is left out when neither side of the 30k line has room for it (a 343px box at 32px text); the y axis's "80%" still names the line. "30k start" can run a few px into the right margin.
+47. The hand shows over the whole plot, and the pointer reads and opens a dot from up to about 12px outside the plot. Today the hit area, and the hand, were the plot alone.
+48. The tooltip stays inside the window, not the box: in a 343px box it can reach 33px past the box's side.
+49. The selected quadrant's wash is drawn under the grid lines, which show through it. In forced colors its frame is drawn over the grid lines and under the dots.
 
 Not different: every legend, the "Cache reads" toggle, the measure switch, the project isolation, the quadrant buttons, their lists and Clear, what a click on the map does, the one Escape that ends the reading and clears the quadrant, every label, every reading's words for a point with data, the tooltips' rows on the cache chart and the map, the data tables, the empty states, the captions, and the window pressure bars.
 
@@ -185,12 +216,12 @@ The other way is the wrapper prop `skip`, designed under "Needs the owner", W1.
 
 - **`calendarSlots(first, last, bucket)`**: the days from `first` to `last`, or the weeks 7 days apart. The date walk of today's `cacheSlots`. Users: cache, weekly start.
 - **`bandSeries(env, { id, lo, hi, color, opacity, xAxisIndex, yAxisIndex })`**: a custom series, silent, `z: 1`, shapes with `emphasisDisabled`. `lo` and `hi` are per slot, `null` where there is no point. One item per run of neighbouring slots with values: a polygon through the run's `hi` points and back along its `lo` points, filled with `color` at `opacity`. A run of one slot is a line from its `hi` to its `lo`, 7px wide with round caps, at `opacity` plus .12 (S1). Users: growth (one run), weekly start (runs and lone weeks).
-- **`thresholdLine(env, { id, value, text, xAxisIndex, yAxisIndex })`**: a one-item custom series, silent, `z: 2`: a 1px dashed line (`[4, 3]`) in `ink.muted` across the plot at `value`, and `text` right-aligned at the plot's right edge, 4px over the line, or 4px under it when it would pass the plot's top. Users: growth's 80% line, the weekly start chart's 30k line.
+- **`thresholdLine(env, { id, value, text, xAxisIndex, yAxisIndex })`**: a one-item custom series, silent, `z: 2`: a 1px dashed line (`[4, 3]`) in `ink.muted` across the plot at `value`, and `text` right-aligned at the plot's right edge, 4px (times the text scale) over the line, or as far under it when it would pass the plot's top. Users: growth's 80% line, the weekly start chart's 30k line.
 - **`fitTitle(env, title, figures, maxWidth)`**: `title · figure` for the first of `figures` (the long form, then the short) whose width at weight 500 (`labelWidth`) fits `maxWidth`, else `title` alone. The result goes to `axisTitle`, which cuts it when even the title is too wide (S6). Users: the cache chart's three titles, the growth strip's title.
 
 Not here: the map's dots and guides (one user), and the cache-read edge (one user).
 
-Why local and not in `option.ts`: two pages do not need them yet, `option.ts` belongs to every chart, and `echart-point-keys` is changing the shared files now. Limits' band and its plan-change line can move them to `option.ts` in its change, with the proof that asks.
+Why local and not in `option.ts`: two pages do not need them yet, `option.ts` belongs to every chart, and `echart-point-keys` was changing the shared files while this change was planned. Limits' band and its plan-change line can move them to `option.ts` in its change, with the proof that asks.
 
 ### 6. The cache chart: every behavior and its form
 
@@ -241,15 +272,15 @@ Layout at the default text size: margins top 12, right 14, bottom 24, left 52, s
 | The strip: one bar per turn, by its sessions | `stackSeries` on `trackAxes(1)`, `id: "strip"`, one kind `var(--text-muted)` at `o: .55`, width `min(10, band × .7)`; a value axis to the most sessions, its labels hidden |
 | The strip's caption and figures | `axisTitle(env, fitTitle("Sessions still running at each turn", ["55 at turn 1 to 5 at turn 80", "55 to 5"], …))` on the strip's axis |
 | The nearest turn by x, a dashed line and a dot | The wrapper: the band over both tracks |
-| The visible line of text | A tooltip, `tip(i)`: "Turn 12", then Median, 25th to 75th percentile, Sessions, and one row per drawn project with a point at that turn (its band too when isolated). `read(i)` is today's sentence, unchanged |
+| The visible line of text | A tooltip, `tip(i)`: "Turn 12" on a muted line, then Median, 25th to 75th percentile, Sessions, and one row per drawn project with a point at that turn (its band too when isolated); the median's row and each project's start with an 8px swatch, the median's in `--text-primary`, framed in `CanvasText` under forced colors. `read(i)` is today's readout, unchanged: the turn's sentence, then each drawn project's median at that turn, and with one isolated its 25th to 75th percentile band, joined by semicolons |
 | The measure switch ends the reading | The measure is in the `view` key (decision 11) |
-| Isolating a project does not end the reading by the redraw | It is not in the key: the same view is drawn again. The reading ends when the focus leaves the chart for the legend button, by the wrapper's blur |
+| Isolating a project does not end the reading by the redraw | It is not in the key: the same view is drawn again. The reading ends when the focus leaves the chart for the legend button, by the wrapper's blur, so a user's mouse click or key on the button ends it (difference 42) |
 | Escape and blur end the reading | The wrapper |
 | No curve: nothing | Unchanged |
 
 ### 8. The weekly start chart: every behavior and its form
 
-`startWeeks.ts` is pure: `weeksModel(trend)`, `weeksLayout(textScale)`, `weeksOption(model, env)`. One grid: margins top 10, right 14, bottom 26, left 52, scaled; the plot 144px, fixed. The box is 180px, 216px at 200% text.
+`startWeeks.ts` is pure: `weeksModel(trend)`, `weeksLayout(textScale)`, `weeksOption(model, env)`. One grid: margins top 10, right 14, bottom 26, left 52, scaled; the plot 144px, fixed. The box is 180px, 216px at 200% text. The component reads the text scale once per render and lays out both the box's height and the option at it, as the cache and growth charts do. The weeks sit on category bands, with half a band at each end (difference 27).
 
 | Behavior today | Form on the shared component |
 |---|---|
@@ -257,9 +288,9 @@ Layout at the default text size: margins top 12, right 14, bottom 24, left 52, s
 | The median with a halo, broken at a gap | Two `lineSeries`, `null` at an empty slot |
 | The band in runs, a span for a lone week | `bandSeries` (S1) |
 | A dot per week, hollow and faded under 3 sessions | `lineDots` with `hollow` for a week under `TREND_MIN_SESSIONS` (difference 26) |
-| The dashed 30,000-token line, when the axis reaches it | `thresholdLine` at `START_LARGE_TOKENS`, "30k" |
+| The dashed 30,000-token line, when the axis reaches it | `thresholdLine` at `START_LARGE_TOKENS`, "30k", at 11px times the text scale (difference 44) |
 | The y axis | `valueAxis`, today's rule in the model: the highest of the medians and 75th percentiles plus 8%, in round steps of a third of it |
-| Week labels, one every 64px | `categoryAxis` with `dayLabel`; ECharts thins them |
+| Week labels, one every 64px | `categoryAxis` with `dayLabel`; ECharts thins them. The newest week is always labelled (`showMaxLabel`), right-aligned to end inside the plot (`alignMaxLabel: "right"`), so it is not centred under its point (difference 43) |
 | The nearest week by x | The wrapper |
 | The visible line of text | A tooltip, `tip(i)`: "Week of Nov 2", then Median, 25th to 75th percentile, Sessions, and "Rests on few sessions" under 3. `read(i)` is `readWeek`, or the empty week's sentence (decision 4) |
 | One week: a dot and no line | `lineDots` and `bandSeries`' span |
@@ -280,27 +311,30 @@ Layout at the default text size: margins top 12, right 14, bottom 24, left 52, s
 |---|---|
 | A log x axis from a round value under the smallest start to one over the largest, ticks at 1, 2 and 5 | `type: "log"` with `min` and `max`, and `customValues` for the labels and ticks (S4) |
 | The y axis, 0 to 100% in fifths | `valueAxis` with `max: 1`, `step: .2` |
-| The axis titles | Each axis's `name`, `nameLocation: "middle"`, `nameMoveOverlap: false`; the y one rotated, and "Peak share" when the plot is too short for the long form |
+| The axis titles | Each axis's `name`, `nameLocation: "middle"`, `nameMoveOverlap: false`; the y one rotated, and "Peak share" when the plot is too short for the long form; the x one "Starting context" when the box is too narrow for the long form (difference 45) |
 | The plot sits where the reading expects it | One grid given as left, top, width and height, with `outerBoundsMode: "none"`: ECharts' pixel is the fit's (S4) |
-| The 30,000-token and 80% lines, their labels, the quadrant names, the selected quadrant's wash | One custom series `id: "guides"`, `z: 1`: the wash (`var(--surface-2)`; in forced colors a 2px `ink.accent` frame with no fill), two dashed lines in `ink.muted`, the two labels and the four names with a 3px `ink.surface` halo, the selected name in `ink.text` |
+| The selected quadrant's wash | Its own custom series `id: "wash"`, one item: `var(--surface-2)` at `z: -1`, under the axes' grid lines, which show through it; in forced colors a 2px `ink.accent` frame with no fill at `z: 1`, over the grid lines and under the dots (difference 49) |
+| The 30,000-token and 80% lines, their labels, the quadrant names | One custom series `id: "guides"`, `z: 1`: two dashed lines in `ink.muted`, the two labels and the four names with a 3px `ink.surface` halo, the selected name in `ink.text`. A name that no size fits, or that is taller than its quadrant, is left out; "80% of window" is left out when neither side of the 30k line has room; "30k start" can run a few px into the right margin (differences 34 and 46) |
 | One dot per session in its project's color, a ring on a compacted one, the others at 20% outside the selected quadrant | One custom series `id: "dots"`, `z: 3`: a 4px circle at .75 with a 1px `ink.surface` edge, and a 7.5px ring 1.5px wide. In forced colors the edge and the ring are `ink.text` |
 | The ring around the dot read | An `<svg class="map-mark">` over the box, with no pointer events, as the quadrant's mark: it needs no redraw of 1,000 dots (S4), and it shows before the chart has drawn |
-| Pointer: the nearest dot within 12px | `mousemove` on the box around the wrapper: `dotAt` on the pointer's place less the box's |
+| Pointer: the nearest dot within 12px | `mousemove` on the box around the wrapper: `dotAt` on the pointer's place less the box's, read at the event so a scroll counts. The box is wider than the plot, so a dot is read and opened from up to about 12px outside the plot, where today's hit area was the plot alone (difference 47). Chromium gives whole-pixel mouse positions, so between two dots under 2px apart the pointer can read the neighbour |
 | Keys: oldest to newest, Home, End | The box's `keydown`; a modified key is the browser's |
 | Enter or a click on a dot opens the session | `openSessionSheet` |
 | A click away from any dot selects or clears the quadrant | `quadAtPixel` |
 | One Escape ends the reading and clears the quadrant | Unchanged, on the box. A capturing `keydown` on the document ends a reading from elsewhere, and never clears the quadrant from there (difference 32) |
-| The tooltip | Unchanged rows, placed with `tipAt` |
+| The tooltip | Unchanged rows, placed with `tipAt`, which keeps it inside the window, not the box (difference 48) |
 | The line of text | The same sentence in a `div.sr` (difference 31) |
 | The reading is an index | It is the session's id: newer data keeps it on its session, and it ends when the session leaves the map or the view changes (difference 4) |
-| The hand over the plot | A class on the box while the pointer is in the plot, with an important `cursor` rule: zrender writes its own cursor inline on each move |
+| The hand over the plot | A class on the box while the pointer is in the plot or within 12px of a dot, with an important `cursor` rule: zrender writes its own cursor inline on each move |
 | The legend, the count line, the quadrant buttons, their lists, the table, the empty state | Unchanged HTML |
 
 The option sets `animation: false` in every mode: a dot sliding in would read as a session changing.
 
 Why not register `ScatterChart`: +1.8 kB (S7) for dots a custom series draws with what is registered, and the ring on a compacted session would still be a second series. Why not the mark components for the two lines: +5.6 kB, and their labels would still need the halo and the side rule by hand.
 
-The form is the quadrant's on purpose: a custom series of circles, a guides series, `outerBoundsMode: "none"`, a pure fit that owns the pixels, `points={0}`. The two charts share no code yet, since the quadrant is not on main.
+The form is the quadrant's on purpose: a custom series of circles, a guides series, `outerBoundsMode: "none"`, a pure fit that owns the pixels, `points={0}`. The two charts share no code yet: the quadrant merged (PR #217) while this change was built, and joining them is W2.
+
+Measured in Chromium with 1,000 sessions (step 4.4): the first drawing took 70.9ms and a quadrant's redraw 31.2ms, under the 100ms the plan set. On a window resize a few frames keep the old SVG width before the drawing settles: the wrapper resizes a frame after the map measures its box.
 
 ### 10. Zoom
 
@@ -323,7 +357,7 @@ The cache chart's zoom, by the rules of the foundation (decision 8) and the Erro
 
 ### 11. `view` identity and point keys
 
-Another change, `echart-point-keys`, adds a wrapper prop, expected as `pointKeys?: readonly string[]`: within one `view`, the reading and the zoom follow their points by key when newer data moves the indexes. With it, a chart no longer puts its first point in its `view` key. It is not merged. The steps that pass `view` and `pointKeys` to a reading wrapper (2.2, 2.3, 2.4) wait for it, and take the prop's name, type and rules from the merged code, not from this section.
+Another change, `echart-point-keys`, added the wrapper prop `pointKeys?: readonly string[]`: within one `view`, the reading and the zoom follow their points by key when newer data moves the indexes. With it, a chart no longer puts its first point in its `view` key. It merged (PR #219) before steps 2.2, 2.3 and 2.4, which waited for it and took the prop from the merged code. The cache chart passes each slot's first day (`m.slots.map(s => s.day)`), the growth chart each point's turn as a string, and the weekly start chart each slot's week (`m.slots`); the session map passes none.
 
 The page's key: `ContextPage.tsx` builds `[d.project, d.range, d.automated, d.source].join("|")` from the payload on screen, not from the URL, so a view still shown while the next one loads keeps its key. `sections.tsx` passes it to each chart as the prop `view`.
 
@@ -335,9 +369,9 @@ The page's key: `ContextPage.tsx` builds `[d.project, d.range, d.automated, d.so
 | Session map | The page's key, to the wrapper; the map's own reading resets on it | The session's id, in the map's own reading; no `pointKeys` to the wrapper, which reads nothing | The selected quadrant |
 
 - The bucket is in the cache chart's key: a view that turns 60 days old changes days into weeks, which are other points.
-- The toggle and the isolated project redraw the same view: the reading and the zoom stay, and a reading a key made is said again when its words change (the wrapper's rule).
+- The toggle and the isolated project redraw the same view: the zoom stays, and so does a reading while the focus stays on the chart; a reading a key made is said again when its words change (the wrapper's rule). A user's mouse click or key on the toggle or a project's button moves the focus there, and the reading ends by the wrapper's blur.
 - A turn's index is always its number less one, so the growth chart's keys never move a point. They are passed all the same: one rule for the three charts.
-- No model module builds a view key or a list of point keys: the swap steps do, from `model.slots`. So the models can be built before `echart-point-keys` merges.
+- No model module builds a view key or a list of point keys: the swap steps do, from `model.slots` (the growth chart from `model.points`). So the models were built before `echart-point-keys` merged.
 
 ### 12. Shared chart files and the fake runtime
 
@@ -356,7 +390,7 @@ What the fake runtime must model for the new shapes: nothing new. Each shape, an
 | Two grids for the growth chart | Already so: the fake's one grid is the frame, and it refuses a grid without `outerBoundsMode: "none"` | The strip under the curve: the real test |
 | The slider on three tracks | Already so: `zoomAxes`, `sliderShadowOf`, the minimum window | Three tracks zoomed together: the real test |
 
-If a step finds that a helper must go in `option.ts`, or that the fake must model something after all, it stops and reports. That work is then a separate small step after `echart-point-keys` merges, with the `chartfit` lines of Cost, Activity, Judgments and Errors shown byte-identical before and after.
+If a step finds that a helper must go in `option.ts`, or that the fake must model something after all, it stops and reports. That work is then a separate small step, with the `chartfit` lines of Cost, Activity, Judgments and Errors shown byte-identical before and after.
 
 ### 13. Colors and tokens
 
@@ -373,11 +407,12 @@ If a step finds that a helper must go in `option.ts`, or that the fake must mode
 |---|---|---|---|---|
 | Keyboard | The wrapper: arrows, Home, End, Escape, plus and minus | The wrapper | The wrapper | The map's own handler: arrows, Home, End, Enter, Escape |
 | Speech | The group's label; the wrapper's live region says `read(i)` and the zoom's sentence | Label; `read(i)` | Label; `read(i)` | Label; the map's own polite region says the dot's sentence |
-| Sighted reading | Tooltip | Tooltip (new) | Tooltip (new) | Tooltip and the ring |
+| Sighted reading | Tooltip, its head bold; an empty day has one ("No request") | Tooltip (new), its head a muted line | Tooltip (new), its head a muted line; an empty week has one | Tooltip and the ring |
+| Pointer | No activation: the pointer is never a hand | No activation | No activation | A hand over the whole plot and within 12px of a dot |
 | Dark | The environment's colors; a theme or system change redraws | The same | The same | The same; the ring is CSS in `--text-primary` |
-| Forced colors | Parts keep their fills in a text-colored edge; the ratio line, labels and titles in the text color; the band highlight-colored | The median in the text color, project lines on a page-colored halo, the band the text color at 16% | As growth; a hollow dot is page-colored in a text-colored ring | Dots keep their project color in a text-colored edge; rings, lines and names in the text color; the selected quadrant a highlight frame; the ring around the dot read highlight-colored |
+| Forced colors | Parts keep their fills in a text-colored edge; the ratio line, labels and titles in the text color; the band highlight-colored | The median in the text color, project lines on a page-colored halo, the band the text color at 16%; the tooltip's swatches keep their colors in a `CanvasText` frame | As growth; a hollow dot is page-colored in a text-colored ring | Dots keep their project color in a text-colored edge; rings, lines and names in the text color; the selected quadrant a highlight frame; the ring around the dot read highlight-colored |
 | Reduced motion | No growth, no draw-in (the wrapper) | The same | The same | Never animated |
-| A 343px box | `fitTitle` shortens the titles; ECharts thins the labels; the newest label inside the plot | The strip's title shortens; turn labels thin | Week labels thin | Names wrap (`fitLines`); the "80% of window" label changes side; overlapping ticks hide; the tooltip stays in the box |
+| A 343px box | In the real font the titles fit with their long figures; at 32px text `fitTitle` shortens them; ECharts thins the labels; the newest label inside the plot | The strip's title shortens; turn labels thin | Week labels thin; the newest stays, right-aligned inside the plot | Names wrap (`fitLines`), and at 32px text a name no size fits, or taller than its quadrant, is left out; the "80% of window" label changes side, and at 32px text is left out when neither side has room; the x title shortens to "Starting context"; overlapping ticks hide; the tooltip stays inside the window |
 | 32px text | Margins and gaps double, the tracks keep 180, 48 and 44px, the box is 456px | The curve keeps 218px, the box is 364px | The plot keeps 144px, the box is 216px | The plot keeps 260px, the box is 380px |
 
 Value labels stay inside the 52px margin (times the text scale): the longest are "120k", "100%" and "45k". The map's left margin also holds the rotated axis title, as today.
@@ -421,7 +456,7 @@ No new name matches an existing file's name in another case: `cacheChart.ts`, `g
 | `SessionMap.test.tsx` (227 lines) | The log scale, the placement, the clamp at 100%, the rings and the wrap move to `mapDots.test.ts`. Kept, with DOM events on the box at the fit's pixels: the count line, the keys and Escape, Enter and a click near a dot, the table's row, the names, the quadrant list, the quadrant by keyboard and by click, Clear's focus, the empty state |
 | `ContextPage.test.tsx` | One line: the count of `#growth path.curve.proj` becomes the count of the legend's project buttons |
 
-**The 400-line advisory.** Estimate: about 1,100 net test lines. Added: `chartParts.test.ts` 110, `cacheTracks.test.ts` 230, `growthCurves.test.ts` 170, `startWeeks.test.ts` 110, `mapDots.test.ts` 200, the four real tests 450. Removed: about 170 net from the four component tests (714 lines today, about 545 after). The net is over the advisory 400, and the pull request says so, with the reason: four charts each go from one test layer to three (the pure model and option, the component on the fake runtime, real ECharts in jsdom), at about 275 net lines a chart, where Errors' one chart was 778. Offsets: every geometry assertion leaves the component tests, five tests of rules the wrapper or the stack own are deleted (the outline on the bucket read, the two stack tests, the two modified-keys tests), and no shared file's test grows.
+**The 400-line advisory.** The plan estimated about 1,100 net test lines. As built (`git diff --numstat origin/main...HEAD -- '*.test.ts' '*.test.tsx'`): 1,438 added, 466 removed, **972 net**. Added: `chartParts.test.ts` 96, `cacheTracks.test.ts` 167, `growthCurves.test.ts` 147, `startWeeks.test.ts` 101, `mapDots.test.ts` 179 (690 for the pure modules); the four real tests 384 (`CacheChart.real.test.tsx` 104, `GrowthChart.real.test.tsx` 91, `StartTrend.real.test.tsx` 71, `SessionMap.real.test.tsx` 118). The four component tests went from 714 lines to 613, 101 net fewer: `CacheChart.test.tsx` 208 to 127 (+91, −172), `GrowthChart.test.tsx` 177 to 151 (+79, −105), `StartTrend.test.tsx` 102 to 68 (+45, −79), and `SessionMap.test.tsx` 227 to 267 (+147, −107), which grew with the DOM events on the box and the reading that follows its session. `css.test.ts` lost one line net, and `ContextPage.test.tsx` changed one line. The browser check, `tools/demo/chartfit/context.mjs` (2,072 lines), is not a test file and is not counted. The net is over the advisory 400, and the pull request says so, with the reason: four charts each go from one test layer to three (the pure model and option, the component on the fake runtime, real ECharts in jsdom), at about 243 net lines a chart, where Errors' one chart was 778. Offsets: every geometry assertion leaves the component tests, five tests of rules the wrapper or the stack own are deleted (the outline on the bucket read, the two stack tests, the two modified-keys tests), and no shared file's test grows.
 
 **Guards no test can turn red.** `outerBoundsMode: "none"` on the cache and growth charts' grids: `tracksOption` sets it and the fake refuses a grid without it. The band's and the line's `emphasisDisabled`: nothing asks for a highlight (`categoryAxis` turns the pointer's off, and the map has no axis pointer, S4).
 
@@ -448,7 +483,7 @@ The lines it must hold, each first shown to fail on a chart without the thing it
 - One band over the curve and the strip, for the pointer in each and in the gap, and for the keys; the tooltip names the turn, the median and each project.
 - A strip bar sits under the middle of its turn's point on the curve.
 - The band's fill covers from the 25th to the 75th percentile at three turns, read from the polygon.
-- "Share of window": a dashed line at 80% with its label inside the plot, the axis in percent, and the reading ended. Isolating a project: one project line, thicker, its band in its color, and the reading kept.
+- "Share of window": a dashed line at 80% with its label inside the plot, the axis in percent, and the reading ended. Isolating a project: one project line, thicker, its band in its color, and the reading kept while the focus stays on the chart; a mouse click or the keyboard on a project's button moves the focus there, which ends the reading.
 - The turn labels are 1, the round turns and the last turn, with none overlapping.
 - In the `PHONE` window and at 32px text: the curve track is 218px, the strip's title ends inside the plot, no label is cut.
 - Under forced colors: the median is `CanvasText`, each project line keeps its color over a `Canvas` halo.
@@ -480,8 +515,8 @@ Where the demo store lacks a case (an empty day, a gap of weeks, a lone week, a 
 
 - **ECharts chunk.** Nothing is added to `echarts.ts`. Expected: 176.5 kB, as now. The 195 kB limit stays. What each candidate would have cost is S7; none is needed.
 - **Entry.** `ContextPage` is a lazy route. The 130 kB limit stays.
-- **`ContextPage`.** New limit: **26 kB**. It is 19.4 kB at the base (S8). Four SVG charts leave and five modules come. Errors grew by 0.4 kB for one chart, Activity by 1.3 kB for two. Expected: 21 to 23 kB.
-- **Shared chart chunk.** `zoomReset-*.js` is 7.1 kB of its 9 kB. A fourth page importing the chart modules can make Vite split or rename it (the quadrant thread saw an `EChart-*.js` chunk appear when the Project page imported the wrapper alone). The check then fails on "found 0", and step 3.5 renames or adds the entry and says so.
+- **`ContextPage`.** New limit: **26 kB**. It is 19.4 kB at the base (S8). Four SVG charts leave and five modules come. Errors grew by 0.4 kB for one chart, Activity by 1.3 kB for two. Expected: 21 to 23 kB. As built: 21.1 kB.
+- **Shared chart chunks.** When the Project page's quadrant merged, the wrapper moved into its own chunk, `EChart-*.js` (7.1 kB, limit 8 kB), and `zoomReset-*.js` kept the rest (1.2 kB, limit 3 kB); `check-bundle.mjs` on main already guarded both. Context's import of the wrapper changed no chunk's name, so step 3.5 renamed nothing. The check prints nine sizes: the entry, the five page chunks (Cost, Activity, Errors, Context, Project), `EChart`, `zoomReset` and ECharts.
 - `ContextPage.tsx` calls `preloadECharts()` at module load, as the other three pages do.
 - The comment on the ECharts chunk names Context with Cost, Activity and Errors.
 
@@ -518,7 +553,7 @@ Stays:
 
 **Wrapper contract.** Nothing in this change needs a wrapper contract change. Two designs are here for the owner, each tied to a default below. Neither is built in this change.
 
-*W1: `skip`, if the owner flips F1 (empty slots are skipped, as today).* A Fable step on `EChart.tsx` and `EChart.test.tsx`, after `echart-point-keys` merges.
+*W1: `skip`, if the owner flips F1 (empty slots are skipped, as today).* A Fable step on `EChart.tsx` and `EChart.test.tsx`, on top of the merged `echart-point-keys`.
 
 ```tsx
 /** Points the reading passes over: `skip(i)` is true for a point with nothing to read, such as a day with no request.
@@ -535,7 +570,7 @@ skip?: (i: number) => boolean;
 - The fake runtime models nothing new: the rule is the wrapper's own arithmetic on indexes, and the fake already answers a pixel for every point.
 - Users: the cache chart and the weekly start chart. Their `read` and `tip` then never see an empty slot.
 
-*W2: `locate`, a later change, for the map and the Project page's quadrant together.* Once both are on main, one change can move both readings into the wrapper and delete two copies. The foundation reserved `locate={{ by: "item", series, at }}` and `onMiss(dataCoords)`; both charts since measured that the pixels must come from the chart's own layout, so the reading works before the chunk loads. The shape that fits them:
+*W2: `locate`, a later change, for the map and the Project page's quadrant together.* Both are on main now (the quadrant since PR #217); one change can move both readings into the wrapper and delete two copies. The foundation reserved `locate={{ by: "item", series, at }}` and `onMiss(dataCoords)`; both charts since measured that the pixels must come from the chart's own layout, so the reading works before the chunk loads. The shape that fits them:
 
 ```tsx
 /** Where the points are, for a chart that does not place them on the bands of its first x axis, such as a scatter.
@@ -551,14 +586,14 @@ onMiss?: (at: { x: number; y: number }) => void;
 - The fake must then model only what it has: `containPixel` on its one grid, which a test sets to the chart's plot. It converts nothing on a log axis.
 - `pointKeys` would be the sessions' ids.
 
-**Bundle.** No limit needs raising. The numbers, for the record (S7): the chunk is 176.5 kB of 195 kB; `ScatterChart` would add 1.8 kB, `MarkLineComponent` 5.6 kB, `MarkAreaComponent` 3.1 kB, both mark components 6.9 kB, all three 8.7 kB; the log axis and custom series add nothing. Recommended: add none. The new `ContextPage` limit is 26 kB, over a chunk of 19.4 kB today and 21 to 23 kB expected.
+**Bundle.** No limit needs raising. The numbers, for the record (S7): the chunk is 176.5 kB of 195 kB; `ScatterChart` would add 1.8 kB, `MarkLineComponent` 5.6 kB, `MarkAreaComponent` 3.1 kB, both mark components 6.9 kB, all three 8.7 kB; the log axis and custom series add nothing. Recommended: add none. The new `ContextPage` limit is 26 kB, over a chunk of 19.4 kB at the base and 21.1 kB as built.
 
 **Two color tokens in `theme.css`** (decision 13): `--cache-switch` and `--cache-expired`. They hold today's colors.
 
 **Other threads.**
 
-- `echart-point-keys` owns `EChart.tsx` and `testing.ts` until it merges. This change edits neither. Steps 2.2, 2.3 and 2.4 wait for it. Both changes modify `dashboard-app` requirements: the one that archives second takes the other's text as its base.
-- The quadrant thread (`graph-project-quadrant`) edits `web/scripts/check-bundle.mjs`, `tools/demo/chartfit.mjs` and the docs site's keyboard page too. Whoever merges second resolves small conflicts there.
+- `echart-point-keys` owned `EChart.tsx` and `testing.ts` while this change was planned. It has merged and been archived (PRs #219 and #220); this change edits neither file. Steps 2.2, 2.3 and 2.4 waited for it. Both changes modify `dashboard-app` requirements: this change archives second, so its delta takes main's text as its base, with every chart main names (the cost flow, the Activity calendar, the session plot) kept.
+- The quadrant thread (`graph-project-quadrant`) has merged and been archived (PRs #217 and #218). It edited `web/scripts/check-bundle.mjs`, `tools/demo/chartfit.mjs` and the docs site's keyboard page too; this change was built on top of it.
 
 ## Defaults the owner may flip
 
@@ -590,11 +625,11 @@ For the next builders: Limits needs a time axis whose points are not steps of a 
 - **The map's reading and the drawing disagree.** The fit computes the pixels, and ECharts draws them. → `outerBoundsMode: "none"` with the grid given whole makes them equal within 1e-12px (S4); the real test compares a drawn dot with the fit; `chartfit` reads a dot under the pointer at four sizes and after a scroll.
 - **The fake hides a chart that draws nothing.** The component tests run on the fake, which draws nothing, and the map's wrapper is told nothing at all. → One real test per chart; `chartfit` for each.
 - **`renderItem` tested with a stubbed `api`.** A wrong use of `api.coord` or `params.coordSys` in the band, the line, the guides or the dots passes the pure tests. → The real tests read the drawn paths; steps 1.1, 1.2 and 1.5 are marked risky.
-- **`echart-point-keys` lands with another shape.** → No model builds a key; the three swaps wait, and read the merged contract.
+- **`echart-point-keys` lands with another shape.** → No model builds a key; the three swaps waited, and read the merged contract (PR #219).
 - **A long gap is many key presses** on the cache and weekly start charts. → Home, End and the pointer; F1 is the flip.
 - **Text measures differ between jsdom and a browser.** → The fit rules are tested with a stubbed measure, and in Chromium at 343px and at 32px text.
 - **The newest bucket label at 343px.** jsdom did not draw it (S6), though the shared helper asks for it and Errors' browser check holds it. → `chartfit`'s `PHONE` line for the cache chart.
-- **1,000 dots in SVG.** Today's map is the same count of SVG nodes; jsdom drew them in under 20ms (S4). → `chartfit` prints the time in Chromium; over 100ms, the step reports and the owner decides on the canvas renderer for this chart.
+- **1,000 dots in SVG.** Today's map is the same count of SVG nodes; jsdom drew them in under 20ms (S4). → `chartfit` prints the time in Chromium: 70.9ms for the first drawing and 31.2ms for a quadrant's redraw (decision 9), under the 100ms over which the owner would decide on the canvas renderer for this chart.
 - **More test lines than the advisory.** → Decision 16 says why and what offsets them.
 - **The slider is not keyboard-operable by itself.** → Plus, minus and "Show all" cover it, as on the other three pages.
 - **Known limit: no zoom on turns.** A phone's 2.8px bands on a curve of 100 turns are hard to hit with a finger, as today's nearest-turn reading is. F3 is the flip.
@@ -611,5 +646,5 @@ For the next builders: Limits needs a time axis whose points are not steps of a 
 ## Open Questions
 
 - Whether a long run of empty weeks should fold into one point, as Errors folds idle stretches. This design reads each week.
-- Whether the map and the quadrant should share one reading now or after both merge. This design waits (W2).
+- Whether the map and the quadrant should share one reading. Both are on main now; this design leaves that to its own change (W2).
 - Whether the value axes should rescale to the points shown once a free time range exists. This change keeps the view's scales, as Cost, Activity and Errors do.
