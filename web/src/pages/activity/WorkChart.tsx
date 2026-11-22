@@ -157,7 +157,7 @@ export function WorkPanel({ d, metric, onMetric, selected, onPick, onClear }: Wo
         {hasLow && <span className="key" aria-hidden="true"><i className="low" />{`Under ${LOW_CALLS} calls`}</span>}
         {showAll(week ? "Show all weeks" : "Show all days")}
       </div>
-      <EChart ref={box} id={CHART_ID} label={label} height={workLayout(m, scale).height} option={option} view={m.view} points={rows.length}
+      <EChart ref={box} id={CHART_ID} label={label} height={workLayout(m, scale).height} option={option} view={m.view} pointKeys={m.keys} points={rows.length}
         tip={tip} read={read} onActivate={onPick ? pick : undefined} status={status.text}onEscape={onEscape} zoom={zoom} onZoom={onZoom} readZoom={readZoom} />
       {/* The chart's text alternative: the measure per bucket (by project when stacked), its total and errors per 100 tool calls. */}
       <ChartTable><Table name={`${M.label}${stacked ? " by project" : ""} and errors per 100 tool calls per ${unit}`} region="scroll tall"

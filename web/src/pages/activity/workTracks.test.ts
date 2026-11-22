@@ -230,14 +230,15 @@ describe("workModel", () => {
     expect((workOption(model(usage), env()).xAxis as typeof x)[0]!.axisLabel!.formatter("2026-11-04")).toBe("Nov 4");
   });
 
-  it("keeps the view through a new last bar or a selection, not through another measure, bucket or first bar", () => {
-    const v = model(usage).view;
+  it("keeps the view through a new last bar, an earlier first bar or a selection, not through another measure, bucket or project; its keys are the bars' days", () => {
+    const m = model(usage), v = m.view;
+    expect(m.keys).toEqual(m.buckets.map(b => b.day));
     expect(model(usage, "commits", { day: "2026-11-04", week: false }).view).toBe(v);
     const more = [...usage.work, row("2026-11-06", { commits: 3 })];
     expect(model({ ...usage, end: "2026-11-06", work: more }).view).toBe(v);
     expect(model(usage, "prompts").view).not.toBe(v);
     expect(model({ ...usage, work_bucket: "week", work: [row("2026-11-02")] }).view).not.toBe(v);
-    expect(model({ ...usage, work: [row("2026-11-03"), ...usage.work] }).view).not.toBe(v);
+    expect(model({ ...usage, work: [row("2026-11-03"), ...usage.work] }).view).toBe(v);
     expect(model({ ...usage, project: "foo" }).view).not.toBe(v);
   });
 });

@@ -445,7 +445,7 @@ describe("Judgments view", () => {
       expect(counts[1]!.data.map(w => counts[1]!.axisLabel.formatter(w))).toEqual(weeks.map(w => String(w.n)));
     });
 
-    it("keeps the week read when newer figures of the same weeks arrive, and ends it when a week joins", async () => {
+    it("keeps the week read when newer figures of the same weeks arrive, and when a week joins", async () => {
       let now: InsightsPayload = { ...fixture, trend };
       const client = makeTestClient();
       mockApi({ "/api/insights": () => now });
@@ -461,11 +461,12 @@ describe("Judgments view", () => {
       await act(() => client.refetchQueries());
       await waitFor(() => expect(readout()).toMatch(/: 13 analysed sessions: 8 fully achieved/));
       expect(tip().style.display).toBe("block");
-      // A new week: another view, so the reading ends.
-      now = { ...now, trend: [...now.trend, week("2026-11-09", 1, 1, 1, 1, 1)] };
+      // An older week joins before the week read: the same week stays read, with its tooltip.
+      now = { ...now, trend: [week("2026-10-12", 1, 1, 1, 1, 1), ...now.trend] };
       await act(() => client.refetchQueries());
-      await waitFor(() => expect(readout()).toBe(""));
-      expect(tip().style.display).toBe("none");
+      await waitFor(() => expect(chart().getAttribute("aria-label")).toMatch(/4 weeks/));
+      expect(readout()).toMatch(/: 13 analysed sessions: 8 fully achieved/);
+      expect(tip().style.display).toBe("block");
     });
 
     // The chart's view is the request whose figures it draws: a cached view shown while it refetches is that view, so its

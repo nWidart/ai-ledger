@@ -252,13 +252,18 @@ describe("chart keys", () => {
     expect(sr()).not.toContain("selected");
   });
 
-  it("keeps the bar being read when newer data arrives for the same view", () => {
+  it("keeps the bar being read when newer data arrives for the same view, also when an earlier first bar does", () => {
     const { rerender } = panel(many);
     act(() => chart().focus());
     fireEvent.keyDown(chart(), { key: "Home" });
     const reading = sr();
     const newer = { ...many, work: many.work.map((r, i) => (i ? { ...r, commits: r.commits + 1 } : r)) };
     rerender(<WorkPanel d={newer} metric="commits" onMetric={() => {}} selected={null} onPick={() => {}} onClear={() => {}} />);
+    expect(screen.getByRole("tooltip").textContent).toContain("Nov 4, 2026");
+    expect(sr()).toBe(reading);
+    // A session on an earlier day: the first bar moves, the same bar stays read.
+    const earlier = { ...newer, work: [row("2026-11-03", { commits: 1 }), ...newer.work] };
+    rerender(<WorkPanel d={earlier} metric="commits" onMetric={() => {}} selected={null} onPick={() => {}} onClear={() => {}} />);
     expect(screen.getByRole("tooltip").textContent).toContain("Nov 4, 2026");
     expect(sr()).toBe(reading);
   });
