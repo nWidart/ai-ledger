@@ -34,6 +34,10 @@
   --proj-1: light-dark(#2a64c8, #5d9bf2); --proj-2: light-dark(#0f8574, #2ab59f); --proj-3: light-dark(#c4378a, #e66db3);
   --proj-4: light-dark(#7a52d9, #a48cf5); --proj-5: light-dark(#a67c00, #d9ab33); --proj-6: light-dark(#4f8a1f, #82c24f);
   --proj-other: light-dark(#8e8c85, #75746d);
+  /* The activity calendar's shades, least to most work; in dark, more is lighter. An empty day is --grid. Each shade needs
+     1.3:1 with the next, and the first with --grid, in both themes (graph-activity-calendar, decision 5). */
+  --heat-1: light-dark(#a8c7ec, #26466b); --heat-2: light-dark(#6a9fe0, #2d5b93);
+  --heat-3: light-dark(#2a78d6, #3987e5); --heat-4: light-dark(#153f77, #8fc0f8);
   /* Shadows: light-dark() only takes colors, so a shadow that differs in size by theme is two layers, one transparent per theme. */
   --shadow-card: 0 1px 2px light-dark(rgba(20,18,12,.04), transparent);
   --shadow-pop: 0 6px 24px light-dark(rgba(20,18,12,.14), transparent), 0 8px 28px light-dark(transparent, rgba(0,0,0,.5));
