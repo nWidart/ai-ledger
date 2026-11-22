@@ -182,12 +182,12 @@ The remap itself says nothing. The existing rules say the rest, each in its own 
 | Case | Said | By |
 |---|---|---|
 | A key's reading, moved to its new index, same words | Nothing | No branch matches |
-| A key's reading whose words the newer data changed | The reading again, alone | The words branch, the render after |
+| A key's reading whose words the newer data changed | The reading again, alone, unless the zoom ends too (below) | The words branch, the render after |
 | A pointer's reading, moved or not, words changed or not | Nothing; the tooltip shows the newer figures | The words branch reads only a key's reading |
 | A reading whose key is gone | Nothing. Its own sentence is dropped, with a zoom sentence said after it; a status or a zoom sentence that took the region since stays | The remap, as the branch for a reading past the last point does |
 | A zoom sentence the region holds, no longer true (other days, another count) | Nothing: the sentence is dropped | The zoom-sentence branch, the render after |
 | A zoom sentence that is still true (P8a) | Nothing: it stays | No branch matches |
-| The zoom ended: none of its points left, every point in it, or a list the wrapper cannot go by | `readZoom(null)`, once | The remap, as the `zoom` branch does |
+| The zoom ended: none of its points left, every point in it, or a list the wrapper cannot go by | `readZoom(null)`, once; after a key's reading whose words the same redraw changed, both at once, the reading first | The remap, as the `zoom` branch does |
 | A new `status` in the same render as any line above | The status, alone | The status branch, last, as now |
 
 - **Why the zoom's end is said.** It is the wrapper's standing rule: "a zoom that ends with no one asking is said once, so no one goes on believing the chart shows fewer days" (the foundation, decision 5). A view change says nothing because the user made it; this one they did not make.

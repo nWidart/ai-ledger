@@ -1432,6 +1432,21 @@ describe("EChart zoom", () => {
     expect(texts).toEqual(["Showing Oct 16 to Oct 30, 15 of 30 days.", SELECTED]);
   });
 
+  // The zoom ends with no one asking in the render that changes the words of a key's reading: both are said, at once
+  // where the render finds the end, the reading first.
+  it.each([
+    ["the keys end it", MONTH.slice(15), {}, ["Oct 23: more Showing all 15 days."]],
+    ["zoom turns off", MONTH, { zoom: false }, ["Oct 23: more Showing all 30 days."]],
+    ["the option stops drawing the slider", MONTH, { option: fresh(30, false) }, ["Oct 23: more", "Oct 23: more Showing all 30 days."]],  ])("says a key's reading whose words changed, then the zoom's end, when %s", async (_, after, ends, says) => {
+    const { texts, around } = heard();
+    const { rerender } = render(around(keyed(MONTH)));
+    (await drawn()).zoomTo(15, 29);
+    readBack(MONTH, "Oct 23");
+    const n = texts.length;
+    rerender(around(keyed(after, { read: i => `${after[i]}: more`, ...ends })));
+    expect(texts.slice(n)).toEqual(says);
+  });
+
   it.each([
     ["another length than the points", {}, { pointKeys: EARLY.slice(1) }, "the point keys hold 31 keys for 32 points"],
     ["a key twice", {}, { pointKeys: [...EARLY.slice(0, 31), "Oct 1"] }, `the point keys hold the key "Oct 1" twice`],

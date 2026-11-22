@@ -103,8 +103,8 @@ export interface EChartProps {
   /** The sentence the live region says after the points shown change: null when every point shows. It is said alone
    *  after a zoom key, the slider or `reset()`, and once after the reading (`read(i)`, then this) when an arrow key,
    *  Home or End moved the points shown to include the point it reads. It is also said, with null, when the zoom ends
-   *  in the same view with no one asking (the slider or the room for it is gone), unless that render brings a new
-   *  `status`, which is then the one said. A sentence that a redraw makes untrue is dropped, never said again with
+   *  in the same view with no one asking (the slider or the room for it is gone), after the reading when that redraw
+   *  changed the words of a key's reading, unless that render brings a new `status`, which is then the one said. A sentence that a redraw makes untrue is dropped, never said again with
    *  other words. */
   readZoom?: (shown: Shown | null) => string;
   /** `reset()` shows every point again; `focus()` focuses the box. */
@@ -269,6 +269,17 @@ export function EChart({
   // null; `faults` is what the last check met (the mount, a new view, other keys, another count under the same keys),
   // a new object each time, which the console is told of once.
   const shows = view ?? option;
+  /** The zoom ended with no one asking, in one of the branches below: said once. When a key made the reading `kept` and
+   *  this redraw changed its words, the new words come first, as a key that moves the window says both: left to the
+   *  words branch, they would replace the zoom's end in the next render, before React commits it. */
+  const ended = (kept: typeof reading) => {
+    if (!readZoom) return;
+    const zoom = readZoom(null), text = kept?.keyed && kept.i < points ? read(kept.i) : null;
+    if (kept && text != null && text !== kept.text) {
+      setReading({ ...kept, text });
+      setSaid({ reading: text, zoom });
+    } else setSaid({ reading: null, zoom });
+  };
   const [drawing, setDrawing] = useState(() => ({ view: shows, zoom, status, keys: pointKeys, ...checked(pointKeys, points) }));
   if (drawing.view !== shows) {
     setDrawing({ view: shows, zoom, status, keys: pointKeys, ...checked(pointKeys, points) });
@@ -278,8 +289,8 @@ export function EChart({
   } else if (differ(drawing.keys, pointKeys)) {
     // Newer data of the same view moved the points. The reading and the window stay on their keys, by the two lists.
     // Through a list the wrapper cannot go by, this one or the last, or keys that came or went, no point can be named:
-    // the reading ends and every point shows. Nothing is said here but a zoom that ends, as the `zoom` branch says it;
-    // the branches after it say the rest, each in its own render.
+    // the reading ends and every point shows. Nothing is said here but a zoom that ends (`ended`), as the `zoom` branch
+    // says it; the branches after it say the rest, each in its own render.
     const was = drawing.keys, now = pointKeys && indexed(pointKeys, points);
     const faults = [
       !was !== !pointKeys ? `the point keys ${was ? "went" : "came"} within one view` : null,
@@ -298,7 +309,7 @@ export function EChart({
     const next = zoomed && by && was ? windowOn(zoomed, was, by, points) : null;
     if (!same(next, zoomed)) {
       setZoomed(next); // the draw effect puts the chart's window on it (`keep`)
-      if (!next && readZoom) setSaid({ reading: null, zoom: readZoom(null) }); // the zoom ended with no one asking: said once
+      if (!next) ended(reading && i != null ? { ...reading, i } : null);
     }
   } else if (pointKeys && drawing.points !== points) {
     // Another count under the same keys: nothing moves, but the list is checked again, for the console and for the
@@ -307,7 +318,7 @@ export function EChart({
   } else if (drawing.zoom !== zoom) {
     setDrawing({ ...drawing, zoom });
     setZoomed(null);
-    if (zoomed && readZoom) setSaid({ reading: null, zoom: readZoom(null) }); // the zoom ended with no one asking: said once
+    if (zoomed) ended(reading);
   } else if (reading && reading.i >= points) {
     setReading(null);
     if (said?.reading != null) setSaid(null);
@@ -541,9 +552,9 @@ export function EChart({
   // while its box is hidden still has one. The first run repeats the size init() took, which changes nothing.
   useEffect(() => { chart?.resize({ width, height }); }, [chart, width, height]);
 
-  // The status as of the commit before this one. The draw effect runs before the effect that moves it on (below), so a
-  // status that differs from it there is one this render brought.
-  const settled = useRef(status);
+  // The status and what the region held, as of the commit before this one. The draw effect runs before the effect that
+  // moves them on (below), so one that differs from them there is one this render brought.
+  const settled = useRef({ status, said });
   /** After a redraw of the same view, the window goes back on the points it showed. The slider merges into the old one
    *  by id and keeps its window, but as ECharts holds it: a drag's window is a share of the points, which is other
    *  points once their number changes. A redraw that leaves no slider, or no room for the window, leaves no zoom. */
@@ -559,7 +570,8 @@ export function EChart({
     // The zoom ended with no one asking: said once, so no one goes on believing the chart shows fewer days. Not when the
     // render drawn here brought a new status: the region already says it, and the status is the one said (see the
     // render's comparison). The zoom's end is then not said at all, as when the `zoom` prop ends it in such a render.
-    if (zoomed && !now && !(status && status !== settled.current)) say(null);
+    // A reading this render said (newer words of a key's reading) stays before it, so the end does not replace it.
+    if (zoomed && !now && !(status && status !== settled.current.status)) say(null, said !== settled.current.said);
   });
   // The chart is given the caller's option with what the wrapper keeps for itself, so no option builder can forget it:
   // reduced motion, and the band. Only the wrapper's actions draw the band: left to its own triggers, ECharts also draws
@@ -586,7 +598,7 @@ export function EChart({
     unzoom(chart);
   }, [chart, option, env, shows, zoom, drawing.keys]); // keys come with their option: drawn once
   // After the draw effect, which must still see the status of the commit before.
-  useEffect(() => { settled.current = status; }, [status]);
+  useEffect(() => { settled.current = { status, said }; }, [status, said]);
   // A caller's fault in its point keys, met at mount, with a new view or by a change of the keys or of the points: told
   // once, not thrown, since a duplicate can come from the data and the chart can still be read. Once under StrictMode's
   // second run of the mount's effects too.
