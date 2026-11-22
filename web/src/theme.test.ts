@@ -165,9 +165,10 @@ describe("forced colors", () => {
     return css.slice(at);
   };
   it("draws the low-call legend key like its point, over the chart stylesheet's theme colors", () => {
-    // chart.css loads after theme.css and styles .pg-activity .legend i.low: the forced-colors rule must be more specific.
+    // chart.css and errors.css load after theme.css and style these keys: the forced-colors rule must be more specific.
     expect(readFileSync("src/components/chart.css", "utf8")).toMatch(/\.pg-activity \.legend i\.low \{/);
-    expect(block()).toMatch(/\.pg-activity \.legend \.key i\.low[^{]*\{ forced-color-adjust: none; background: Canvas; border-color: CanvasText; \}/);
+    expect(readFileSync("src/pages/errors/errors.css", "utf8")).toMatch(/\.pg-errors \.sw\.low \{/);
+    expect(block()).toMatch(/\.pg-activity \.legend \.key i\.low, \.pg-errors \.legend \.key \.sw\.low \{ forced-color-adjust: none; background: Canvas; border-color: CanvasText; \}/);
   });
   it("has one forced-colors block, last in theme.css", () => {
     expect(themeCss().match(/@media \(forced-colors: active\)/g)).toHaveLength(1);
