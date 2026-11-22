@@ -5,6 +5,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-22
+
 ### Added
 
 - Prices for OpenAI `gpt-6.2-sol` and `gpt-6.2-astra`, so Codex sessions on those models show an estimated cost.
@@ -322,6 +324,7 @@ First release on PyPI.
   `$XDG_DATA_HOME/ai-ledger/` (or `~/.local/share/ai-ledger/`) elsewhere. A source checkout's `data/ai-ledger.duckdb`
   moves there on the first start.
 
+[0.6.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.6.0
 [0.5.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.5.0
 [0.4.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.4.0
 [0.3.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.3.0
