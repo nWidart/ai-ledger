@@ -115,9 +115,9 @@ When sessions of more than one agent match, the advice names each command for it
   - **10th to 90th percentile**: a bar on one token scale for every row, a tick at the median, and a dashed line at 30,000 tokens, the mark of the large-start tip.
   - **Share of window**: the median share of the model's window, with the window size.
   - **Sessions**: sessions measured. A project with none shows no figure, not zero.
-- **Median start by week**: the weekly median of starting context with its 25th to 75th percentile band, one point per week of session start. A week with fewer than 3 sessions has a hollow dot and is read as resting on few sessions. A week with no session is a gap, not a joined line.
+- **Median start by week**: the weekly median of starting context with its 25th to 75th percentile band, one point per week of session start. A week with fewer than 3 sessions has a hollow dot and is read as resting on few sessions. A week with no session is a gap, not a joined line. Weeks sit in equal slots by date.
 
-**Controls** Selecting a project row opens its project sheet. On the weekly chart, arrow keys read a week; **Show data table** lists week, median, 25th and 75th percentile, and sessions.
+**Controls** Selecting a project row opens its project sheet. On the weekly chart, hover or the arrow keys read a week: a tooltip shows its median, percentile band and sessions. A week with no session is read too, as "Week of Nov 9: no session started." The reading stays on its week when a newer week arrives. **Show data table** lists week, median, 25th and 75th percentile, and sessions.
 
 ### Window of a typical session
 
@@ -141,7 +141,7 @@ Sessions without a measured start, a known window or a peak take no part. With n
 **Figures**
 
 - **One bar per window size** (for example 200k, 1M), over the sessions with a known window. Each bar splits into five segments: under 25%, 25–50%, 50–80%, 80–90% and 90% or more of the window at the session's peak. A segment is a share of that window's sessions; a segment of 7% or more of the bar shows its count, and one of 20% or more its label. A peak at an edge belongs to the band above it (80% is in 80–90%).
-- **Sessions by start and peak**: one dot per session, placed by starting context (log scale) and peak share of the window, with a line at 30,000 tokens and one at 80% of the window. A ring marks a session that compacted at least once. A dot shows the session's details on hover or focus, named by its title (else its short id). The chart holds at most the 1,000 newest sessions that have a measured start, a known window and a recorded peak, and states "Showing the newest N of M sessions" when there are more.
+- **Sessions by start and peak**: one dot per session, placed by starting context (log scale) and peak share of the window, with a line at 30,000 tokens and one at 80% of the window. A ring marks a session that compacted at least once. A dot shows the session's details in a tooltip on hover or focus, named by its title (else its short id), and the dot read has a ring around it. The chart holds at most the 1,000 newest sessions that have a measured start, a known window and a recorded peak, and states "Showing the newest N of M sessions" when there are more.
 - **Quadrants**: the two lines cut the map into four, named in its corners:
 
   | Quadrant | Start | Peak |
@@ -154,7 +154,7 @@ Sessions without a measured start, a known window or a peak take no part. With n
 **Controls**
 
 - Selecting a segment lists its sessions, newest first, up to 20, each with its title, start, peak share and compactions. Selecting a session opens its session sheet. A table of the same counts is behind **Show data table**.
-- A dot opens its session sheet. Arrow keys step from the oldest to the newest session; Escape clears the reading and, in the same press, the selected quadrant.
+- A dot opens its session sheet. Arrow keys step from the oldest to the newest session; Escape clears the reading and, in the same press, the selected quadrant. The reading stays on its session when newer figures arrive, and ends when they no longer hold that session. Escape from another control closes a tooltip the pointer opened, and leaves the selected quadrant as it is.
 - A button under the map per quadrant gives its count. Selecting one, or clicking the map away from any dot, selects that quadrant: the bars count only its sessions on the map (a line says so), the other dots dim, and a list names its 20 newest sessions. Escape, **Clear**, **Show every session** or selecting it again clears it; after **Clear**, focus is on the quadrant's button. The map's data table names each session's quadrant.
 
 ### Growth
@@ -175,7 +175,7 @@ Sessions without a measured start, a known window or a peak take no part. With n
 
 - **Tokens / Share of window** switch: the same curves as tokens, or as a share of each session's window over the sessions with a known window.
 - A project button in the legend draws that project alone against the view, with its band; selecting it again restores every project.
-- Arrow keys, Home and End read a turn; Escape clears the reading. **Show data table** lists each turn with the median, 25th and 75th percentile, sessions, and each project's median (a dash where that curve has ended).
+- Hover, or the arrow keys, Home and End, read a turn: a tooltip shows the median, the percentile band, the sessions and each drawn project's median. Escape clears the reading, and it stays on its turn when newer data arrives. **Show data table** lists each turn with the median, 25th and 75th percentile, sessions, and each project's median (a dash where that curve has ended).
 
 ### What fills context
 
@@ -208,7 +208,7 @@ Sessions without a measured start, a known window or a peak take no part. With n
   - **Cache breaks**: each bucket's breaks by cause (model switch, expired, other).
   - **Cache-hit ratio**: cache read tokens over all prompt tokens, as a line on its own thin track, from 90% (or lower, to the lowest ratio's tenth) to 100%.
 
-  A day or week with no request is empty on every track. The caption says that a break's cause is inferred from the gap and the model of the previous request, not reported by the provider. Costs are not stacked in this chart.
+  Days and weeks sit in equal slots by date. A day or week with no request is empty on every track, and is read: the tooltip says "No request" and the sentence "Nov 4, 2026: no request." The caption says that a break's cause is inferred from the gap and the model of the previous request, not reported by the provider. Costs are not stacked in this chart.
 - **Cost by project** table: **Whole view** and each project (when there is more than one): **Estimated cost**, **Cache reads** (cost), **Long-prompt tier** (cost), **Long-tier requests**, **Cache-hit ratio**. The long-prompt tier prices a whole request higher once its prompt passes a model's threshold.
 
 A request that carries no time is in no bucket of the chart, but it counts in the table's cache-hit ratio. See [Cost estimates](/ai-ledger/concepts/cost-estimates/).
@@ -216,7 +216,8 @@ A request that carries no time is in no bucket of the chart, but it counts in th
 **Controls**
 
 - **Cache reads** in the chart's legend adds the cache reads on top of each bar and rescales the bars to all prompt tokens; the track's title becomes **Prompt tokens** and its total counts them all. Selecting it again takes them away. The tooltip, the reading and the table always include cache reads.
-- Arrow keys, Home and End read a day or week; Escape clears the reading. **Show data table** lists each bucket: uncached input, cache write, cache read, cache-hit ratio and the breaks by cause.
+- Hover, or the arrow keys, Home and End, read a day or week, an empty one too; a tooltip shows its figures. Escape clears the reading. **Show data table** lists each bucket: uncached input, cache write, cache read, cache-hit ratio and the breaks by cause.
+- **Zoom.** In a view of 14 days or weeks or more, a slider sits under the labels. Drag it, or its handles, to narrow the days or weeks the chart draws. With the chart focused, plus (or `=`) halves the days or weeks shown and minus doubles them, around the one you are reading (the newest when you read none), down to 7 and up to every one. While the chart is zoomed, a **Show all days** button (**Show all weeks** on a chart by week) ends the legend row: it shows every day or week again and returns focus to the chart. After each change the chart says which days or weeks are shown, for a screen reader. The arrow keys, Home and End still reach every day or week. Views of fewer than 14 have no slider and no zoom keys. The zoom changes nothing else: the range, the table and the URL stay as they are. It resets when the view changes, and stays on its days when newer data arrives or when you turn **Cache reads** on or off; the day or week you are reading stays read too.
 
 ## Drawers
 

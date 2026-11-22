@@ -21,6 +21,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
   - A calendar of the weeks since recording started (13 to 53) under the tabs, a cell per day shaded by the work chart's measure and read with the arrow keys. Select a day to narrow the tabs; a day outside the range widens it first.
   - `/api/calendar` serves its days.
 - Errors' rate chart zooms in views of 14 points or more, with a slider or the plus and minus keys.
+- Context's cache chart zooms in views of 14 days or weeks or more, with a slider or the plus and minus keys.
 - Cost has a "Where the cost goes" flow after the project table: estimated cost from project to model to token kind, each band as wide as its cost. Arrow keys follow the bands, and Enter on a project opens its sheet.
 - `/api/usage` has `cost_flow`: the cost of each project and model pair, and of each model by token kind and its reported cost.
 - Project: "Sessions by cost and tool calls" plots each session as a dot, split at the medians into four named quadrants. Read it with the arrow keys; a dot opens its session. A filled dot made a commit.
@@ -41,6 +42,12 @@ and versions follow [Semantic Versioning](https://semver.org/).
   - The rate chart announces what a selection did from its own live region, and the sentence stays when the pointer leaves the chart.
   - The rate chart draws its fix labels inside the plot, one under the other on a shared day. With many fixes on one day, labels that do not fit inside the chart are left out; every fix keeps its dashed line.
   - The rate chart keeps the point you are reading and the zoom when older data arrives or a folded stretch changes, so Space still clears the selection.
+- Context:
+  - The four charts use the shared chart component.
+  - The cache and weekly start charts read a day or week with no data.
+  - The growth and weekly start charts show a tooltip.
+  - The reading stays on its day, week, turn or session when new data lands.
+  - The weekly start chart and the session map keep their plot's height at larger text sizes.
 - Cost's daily chart and Activity's work chart keep the day you are reading and the zoom when older days arrive or a rolling range moves on a day. The outcome trend keeps the week you are reading when a week joins it.
 - `/api/live/session` no longer returns `limits` or `cwd`, and `/api/live` no longer returns `latest`, each session's newest call.
 
