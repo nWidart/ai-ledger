@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { usageUrl, viewOf, type Day, type SessionSort, type Span, type Totals, type UsagePayload, type View } from "../../api";
+import { calendarUrl, usageUrl, viewOf, type Day, type SessionSort, type Span, type Totals, type UsagePayload, type View } from "../../api";
 import { setOrder } from "../../colors";
 import { motion, useCountUp } from "../../components/chart";
 import { agentName, viewName } from "../../components/Filters";
@@ -202,7 +202,21 @@ function Overview({ views }: { views: ReactNode }) {
   // The range the payload counts: the server echoes the view's, one of the ranges the URL takes.
   const shownRange = (d?.range ?? 0) as Range;
   // The calendar's 53 weeks follow the view's filters, not its range: a change of range keeps them.
-  const cal = useApi(queries.calendar(want), { keepPrevious: true }), calCurrent = !!cal.data && !cal.previous;
+  const cal = useApi(queries.calendar(want), { keepPrevious: true }), calCurrent = !!cal.data && !cal.previous, calKey = calendarUrl(want);
+  // The calendar's failure, held through its Retry: the hook clears the error while a request runs, and the failure line, its
+  // Retry with the focus, stays until an answer or another failure. A change of filters is a new request, not a retry: it drops it.
+  const [calFail, setCalFail] = useState<{ key: string; error: Error } | null>(null);
+  if (cal.error) { if (cal.error !== calFail?.error) setCalFail({ key: calKey, error: cal.error }); }
+  else if (calFail && (calFail.key !== calKey || !cal.loading)) setCalFail(null);
+  const calRetrying = !!calFail && !cal.error, calRetried = useRef(false);
+  const retryCal = () => { calRetried.current = true; cal.retry(); };
+  // A Retry that brings the calendar removes its button: the focus, left on nothing, goes to the calendar.
+  useLayoutEffect(() => {
+    if (calFail || !calRetried.current) return;
+    calRetried.current = false;
+    const el = document.activeElement;
+    if (!el || el === document.body) document.getElementById("activity-calendar")?.focus();
+  }, [calFail]);
   // A week in the URL that the view does not reach is dropped, once the view's own figures are in.
   useEffect(() => {
     if (d && current && search.week && !reaches(search.week, d)) setSearch({ week: null }, { push: false });
@@ -268,6 +282,11 @@ function Overview({ views }: { views: ReactNode }) {
   // The first load shows the placeholder; the loading look (dimmed figures) belongs to a page that has figures.
   const first = !d && !error;
   const cls = "wrap pg-activity" + (slow && !first ? " loading" : "") + (grow ? " grow" : "");
+  // The calendar's failure, over the calendar it keeps if any, as the banner says it for the page. The alert empties while Retry
+  // runs, so another failure is said once; the button stays, busy, so the focus stays on it.
+  const calFailed = calFail && <p className="empty"><span role="alert">{calRetrying ? "" : `Could not load the calendar (${calFail.error.message}).`
+    + (!cal.data ? "" : cal.previous ? " Still showing the calendar of the earlier filters; it cannot be selected." : " Still showing the last one loaded.")}</span>{" "}
+    <button type="button" className="linkish" aria-disabled={calRetrying || undefined} onClick={calRetrying ? undefined : retryCal}>{calRetrying ? "Retrying…" : "Retry"}</button></p>;
 
   return (
     <main id="content" className={cls} ref={wrap} aria-busy={loading || undefined}>
@@ -300,9 +319,9 @@ function Overview({ views }: { views: ReactNode }) {
           </div>}
         </Workbench>
         {cal.data ? <ActivityCalendar d={cal.data} metric={metric} range={shownRange} selected={sel}
-          onPick={current && calCurrent ? pickDay : undefined} onClear={clear} />
-          : cal.error && <section className="panel sect cal" id="calendar" aria-labelledby="calendarTitle"><h2 id="calendarTitle">Activity calendar</h2>
-            <p className="empty" role="alert">Could not load the calendar ({cal.error.message}). <button type="button" className="linkish" onClick={cal.retry}>Retry</button></p></section>}
+          onPick={current && calCurrent ? pickDay : undefined} onClear={clear} status={calFailed} />
+          : <section className="panel sect cal" id="calendar" aria-labelledby="calendarTitle"><h2 id="calendarTitle">Activity calendar</h2>
+            {calFailed || <p className="empty">Loading the calendar…</p>}</section>}
       </>}
     </main>
   );

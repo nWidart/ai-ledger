@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import type { CalendarPayload, Day } from "../../../api";
 import { textScale, tipAt, useWidth } from "../../../components/chart";
 import { ChartTable } from "../../../components/DataTable";
@@ -26,6 +26,8 @@ export interface ActivityCalendarProps {
   onPick?: (day: Day) => void;
   /** Escape on the calendar with nothing read, while a day or a week is selected. */
   onClear: () => void;
+  /** The page's line on the calendar's request (a failure and its Retry), under the heading. */
+  status?: ReactNode;
 }
 
 const at = (k: Day) => new Date(k + "T00:00:00Z");
@@ -51,7 +53,7 @@ interface WeekRow { monday: Day; days: (CalendarDay | undefined)[] }
  *  measure (graph-activity-calendar, decisions 4 to 8, 10 and 11). The layout, the scale and the drawing are calendarDays.ts';
  *  <EChart> draws them and reads nothing (`points={0}`): the reading is this component's, in two directions (gridReading.ts),
  *  with its own tooltip, ring and live region, on `div.cal-box` around the wrapper's box. */
-export function ActivityCalendar({ d, metric, range, selected, onPick, onClear }: ActivityCalendarProps) {
+export function ActivityCalendar({ d, metric, range, selected, onPick, onClear, status }: ActivityCalendarProps) {
   const box = useRef<HTMLDivElement>(null), tipEl = useRef<HTMLDivElement>(null);
   const width = useWidth(box);
   // Read once per render, as the work chart does: the fit and the drawing are laid out at the same scale.
@@ -224,6 +226,7 @@ export function ActivityCalendar({ d, metric, range, selected, onPick, onClear }
   return (
     <section className="panel sect cal" id="calendar" aria-labelledby="calendarTitle">
       <h2 id="calendarTitle">Activity calendar</h2>
+      {status}
       <p className="hint">{M.label} per day, last {plural(m.weeks, "week")}. The shade follows the measure chosen on the work chart. Select a day to narrow the tabs.
         <HowMeasured what="the activity calendar" docs="reference/glossary#activity">Weeks start on Monday. A day's shade is its step: the
           steps are cut at the median, the 80th and the 95th percentile of the days with any {unit} over all 53 weeks, so the darkest

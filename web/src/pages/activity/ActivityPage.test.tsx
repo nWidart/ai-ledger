@@ -465,6 +465,49 @@ describe("activity calendar", () => {
     click(52, 3);
     expect(location.search).toBe("?range=7&source=codex");
   });
+
+  it("shows its heading before its figures, says a failed request with Retry over the kept calendar, and keeps the focus on Retry while it runs", async () => {
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 800, bottom: 116, width: 800, height: 116, x: 0, y: 0, toJSON: () => ({}) });
+    const first = held<typeof calendar>(), again = held<typeof calendar>();
+    // Codex's calendar fails (no answer: 404) until a test holds it in flight.
+    let codex: () => unknown = () => undefined;
+    mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": q => noDay(q.get("day")!),
+      "/api/calendar": q => (q.get("source") ? codex() : first.p) });
+    at("?range=30");
+    renderApp(<ActivityPage />);
+    await loaded();
+    const section = screen.getByRole("region", { name: "Activity calendar" });
+    expect(section.textContent).toContain("Loading the calendar…");
+    await act(async () => { first.resolve(calendar); await first.p; });
+    await screen.findByRole("group", { name: /^Commits per day as a calendar/ });
+
+    // Another source's calendar fails: the section says so over the kept calendar, which takes no pick.
+    act(() => setSearch({ source: "codex" }));
+    const region = () => within(screen.getByRole("region", { name: "Activity calendar" }));
+    const alert = await region().findByRole("alert");
+    await waitFor(() => expect(alert.textContent).toBe("Could not load the calendar (HTTP 404). Still showing the calendar of the earlier filters; it cannot be selected."));
+    click(52, 2);
+    expect(location.search).toBe("?range=30&source=codex");
+
+    // Retry fails again: the same alert says it once more.
+    await userEvent.click(region().getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(alert.textContent).toMatch(/^Could not load the calendar \(HTTP 404\)/));
+    expect(region().getByRole("alert")).toBe(alert);
+
+    // While Retry runs, its button stays, busy, with the focus; the answer brings the calendar of these filters, which picks.
+    codex = () => again.p;
+    const retry = region().getByRole("button", { name: "Retry" });
+    await userEvent.click(retry);
+    expect(retry.isConnected && retry.textContent).toBe("Retrying…");
+    expect(retry.getAttribute("aria-disabled")).toBe("true");
+    expect(document.activeElement).toBe(retry);
+    expect(alert.textContent).toBe("");
+    await act(async () => { again.resolve(calendar); await again.p; });
+    await waitFor(() => expect(region().queryByRole("alert")).toBeNull());
+    expect(document.activeElement).toBe(screen.getByRole("group", { name: /^Commits per day as a calendar/ }));
+    click(52, 2);
+    expect(location.search).toBe("?range=30&source=codex&day=2026-11-04");
+  });
 });
 
 describe("hook names", () => {
@@ -784,8 +827,8 @@ describe("ActivityPage", () => {
     expect(failed.closest("th")!.getAttribute("aria-sort")).toBe("descending");
     await userEvent.click(failed);
     expect(order("tools").at(-1)).toBe("Edit");
-    // Only the page and the Sessions tab it opened on asked the server; the sorts asked nothing.
-    expect(fetched().filter(u => !/^\/api\/(usage|calendar)/.test(String(u)) && u !== "/api/sessions?range=30")).toEqual([]);
+    // Only the page, its calendar and the Sessions tab it opened on asked the server; the sorts asked nothing.
+    expect(fetched().filter(u => !String(u).startsWith("/api/usage") && u !== "/api/calendar?" && u !== "/api/sessions?range=30")).toEqual([]);
   });
 
   it("restores the sessions filters from the hash and writes them without new history entries", async () => {
