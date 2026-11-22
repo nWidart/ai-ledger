@@ -137,8 +137,9 @@ export function ActivityCalendar({ d, metric, range, rangeEnd, selected, onPick,
     if (!el || !tip || !cur) return;
     const r = el.getBoundingClientRect();
     const p = pointer.current ?? { x: r.left + fit.left + cur.col * fit.pitch + fit.cell, y: r.top + fit.top + cur.row * fit.pitch + fit.cell / 2 };
+    // tipAt keeps the tooltip in the window; here it also stays inside the box, by its real width, at both edges.
     const pos = tipAt(el, tip, p.x, p.y);
-    tip.style.left = `${pos.left}px`;
+    tip.style.left = `${Math.max(0, Math.min(pos.left, el.clientWidth - tip.offsetWidth))}px`;
     tip.style.top = `${pos.top}px`;
   });
   useLayoutEffect(() => place(), [reading, cur, fit]);
@@ -252,7 +253,7 @@ export function ActivityCalendar({ d, metric, range, rangeEnd, selected, onPick,
           {cur.busy ? METRICS.map(x => <div key={x.k} className="row">
             <span>{x.k === metric && <span className="cal-sw" data-shade={cur.shade} />}{x.label}</span><b>{num(cur.work[x.k])}</b></div>)
             : <div>No activity</div>}
-          {to != null && <div className="muted">Outside {rangeName(range)}. Selecting it sets the range to {rangeName(to)}.</div>}
+          {to != null && <div className="muted cal-wrap">Outside {rangeName(range)}. Selecting it sets the range to {rangeName(to)}.</div>}
         </>}</div>
         {/* The calendar's one polite region: a reading's sentence or a status, as last said. The wrapper's stays empty. */}
         <div className="sr cal-live" aria-live="polite">{said.text}</div>

@@ -18,6 +18,12 @@
 .cal-sw[data-shade="4"] { background: var(--heat-4); }
 .cal-box .tip .cal-sw { margin-right: var(--space-3); }
 
+/* The tooltip is never wider than the box, whatever its left: its width is its longest line, up to the box's. Only the
+   line on a day outside the range, the longest, wraps; the day and the figures keep a line each. The placement keeps it
+   inside the box at both edges (ActivityCalendar.tsx). */
+.cal-box .tip { box-sizing: border-box; width: max-content; max-width: 100%; }
+.cal-box .tip .cal-wrap { white-space: normal; }
+
 /* The failure line's Retry while it runs: aria-disabled keeps it focusable, and it shows as unavailable, as the nav's busy
    Refresh does: dimmed, no hand, no underline under the pointer. */
 .cal .linkish[aria-disabled="true"] { opacity: .55; cursor: default; }

@@ -29,6 +29,8 @@
 // - a real click on a busy day inside the range: the calendar takes the focus, then the tab panel; the URL gets day= and
 //   keeps the range; the tab list is in view, under the sticky bars; the status is in the calendar's live region; outside
 //   the range the URL gets the range, then the day, the status names the range, and Back restores the earlier range;
+// - in a 343px box the tooltip of a busy day outside the range is no wider than the box and inside it, its long sentence
+//   wraps, its figures keep a line each, and the page does not scroll sideways;
 // - a touch tap in a 343px box selects a day;
 // - Escape with the focus on another control closes a tooltip the pointer opened, also an Escape the moment it shows;
 // - newer figures keep the day read with the keys, and say nothing; with motion on no cell animates, on the first drawing,
@@ -516,6 +518,34 @@ export async function calendar(h) {
     await page.goBack();
     const back = await until(() => new URL(page.url()), u => u.searchParams.get("range") === "30");
     line("Back restores the earlier range with its selection", back.searchParams.get("range") === "30" && back.searchParams.get("day") === D1, back.search);
+    await page.done();
+  }
+
+  // In a 343px box, the tooltip of a busy day outside the range, the first one shown and the newest: no wider than the box,
+  // inside it, its long sentence wrapped, the figures a line each, and the page not scrolling sideways.
+  {
+    const page = await open({ name: "tooltip in a 343px box", options: { viewport: { width: PHONE, height: 900 } } });
+    const outside = (await where(page)).cells.filter(c => busy(c.day) && between(c.day, END) >= 30).sort((a, b) => (a.day < b.day ? -1 : 1));
+    const found = [];
+    for (const c of [outside[0], outside.at(-1)]) {
+      const r = await until(async () => { await page.mouse.move(c.x, c.y); return reading(page); }, r => r.tip?.day === dayName(c.day));
+      found.push({ day: c.day, open: r.tip?.day === dayName(c.day), ...(await ev(page, () => {
+        const box = document.querySelector("#calendar .cal-box").getBoundingClientRect(), tip = document.querySelector("#calendar .cal-box .tip");
+        const t = tip.getBoundingClientRect(), divs = [...tip.children], one = divs[0].getBoundingClientRect().height;
+        const said = divs.find(e => e.textContent.startsWith("Outside")), lines = e => {
+          const range = document.createRange();
+          range.selectNodeContents(e);
+          return new Set([...range.getClientRects()].map(x => Math.round(x.top))).size;
+        };
+        return { l: t.left - box.left, r: t.right - box.left, w: t.width, box: box.width, said: said ? lines(said) : 0,
+          rows: divs.filter(e => e.classList.contains("row")).map(e => e.getBoundingClientRect().height <= one + .5),
+          scroll: document.documentElement.scrollWidth, window: innerWidth };
+      })) });
+    }
+    const ok = x => x.open && x.w <= x.box + .5 && x.l >= -.5 && x.r <= x.box + .5 && x.said > 1 && x.rows.length === 3 && x.rows.every(Boolean) && x.scroll <= x.window;
+    line("in a 343px box the tooltip of a busy day outside the range is no wider than the box, inside it, its long sentence wrapped, the figures a line each, the page not scrolling sideways",
+      found.length === 2 && found.every(ok), found.map(x => `${dayLong(x.day)}: ${x.open ? "" : "NOT OPEN, "}${px(x.w)} wide at ${px(x.l)}..${px(x.r)} of ${px(x.box)}, `
+        + `the sentence on ${x.said} lines, ${x.rows.filter(Boolean).length} of ${x.rows.length} figure rows on one line, scroll width ${x.scroll}px in ${x.window}px`).join("; "));
     await page.done();
   }
 
