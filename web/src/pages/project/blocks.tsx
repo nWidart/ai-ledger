@@ -23,6 +23,7 @@ import { ContextGrid } from "./ContextGrid";
 import { MeasureNow } from "./MeasureNow";
 import { Table, type Column } from "../../components/table/Table";
 import { contextGrid, errorsBlock, limitsBlock, type LimitCommitRow } from "./project";
+import { SessionQuadrant } from "./quadrant/SessionQuadrant";
 
 /** The page's view in words and links: the project and the shared keys, as a query string for another page. */
 export interface Scope { project: string; range: number; source: Source | ""; auto: boolean; search: string }
@@ -153,6 +154,17 @@ export function SessionsBlock({ usage, scope }: { usage: ApiState<UsagePayload>;
         <div className="hint">The eight most expensive sessions of the project in this view. Select one for details.</div>
         <TopSessions top={d.top_sessions.slice(0, 8)} onSession={openSessionSheet} />
       </>}
+    </Block>
+  );
+}
+
+/** Every session of the view (the payload's newest 300) as a dot, cost across and tool calls up, split at the medians. The view key is
+ *  what the user chose, as the block's own landing reads it, so newer figures of the same view keep the dot read. */
+export function QuadrantBlock({ usage, scope }: { usage: ApiState<UsagePayload>; scope: Scope }) {
+  return (
+    <Block id="quadrant" title="Sessions by cost and tool calls" page="Activity" href={"/usage" + scope.search} state={usage}>
+      {d => !d.totals.requests ? noRequests
+        : <SessionQuadrant rows={d.sessions} totalSessions={d.totals.sessions} project={scope.project} view={scope.search} />}
     </Block>
   );
 }
