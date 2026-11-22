@@ -8,7 +8,18 @@ import { ROW, spanBox, type Lane, type Span, type SpansLayout } from "./spans";
 /** The pointer reads a span within this many px beside it, in its row's band. */
 const NEAR_PX = 6;
 
-const spanOf = (l: SpansLayout, id: string) => l.spans.find(s => s.id === id);
+/** Each layout's spans by id, built on the first lookup and kept while the layout lives: a key or the pointer looks up calls
+ *  in a loop. The first span of an id wins, as a scan from the start would find it. */
+const byId = new WeakMap<SpansLayout, Map<string, Span>>();
+function spanOf(l: SpansLayout, id: string): Span | undefined {
+  let ids = byId.get(l);
+  if (!ids) {
+    ids = new Map();
+    for (const s of l.spans) if (!ids.has(s.id)) ids.set(s.id, s);
+    byId.set(l, ids);
+  }
+  return ids.get(id);
+}
 /** Where a call sits in time: its start, else its end, as the timeline's tick. */
 const at = (s: Span) => (s.start ?? s.end)!;
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
