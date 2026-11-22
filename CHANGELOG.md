@@ -8,6 +8,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Errors' rate chart zooms in views of 14 points or more, with a slider or the plus and minus keys.
+- Cost has a "Where the cost goes" flow after the project table: estimated cost from project to model to token kind, each band as wide as its cost. Arrow keys follow the bands, and Enter on a project opens its sheet.
+- `/api/usage` has `cost_flow`: the cost of each project and model pair, and of each model by token kind.
 
 ### Changed
 
@@ -42,10 +44,6 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - The wheel scrolls the page again with the pointer over the tabs on Context and Activity. The tab strip scrolled a pixel up and down and held the wheel.
-### Added
-
-- Cost has a "Where the cost goes" flow after the project table: estimated cost from project to model to token kind, each band as wide as its cost. Arrow keys follow the bands, and Enter on a project opens its sheet.
-- `/api/usage` has `cost_flow`: the cost of each project and model pair, and of each model by token kind.
 
 ## [0.5.0] - 2026-11-21
 
