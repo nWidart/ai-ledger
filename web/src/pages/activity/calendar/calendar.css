@@ -18,6 +18,11 @@
 .cal-sw[data-shade="4"] { background: var(--heat-4); }
 .cal-box .tip .cal-sw { margin-right: var(--space-3); }
 
+/* The failure line's Retry while it runs: aria-disabled keeps it focusable, and it shows as unavailable, as the nav's busy
+   Refresh does: dimmed, no hand, no underline under the pointer. */
+.cal .linkish[aria-disabled="true"] { opacity: .55; cursor: default; }
+.cal .linkish[aria-disabled="true"]:hover { text-decoration: none; }
+
 /* Forced colors: a shade is no system color, so the swatches are the cells' squares (calendarDays.ts): a step a centred
    square in the text color, 3, 5, 8 and 10px for steps 1 to 4 of a 10px cell, drawn as a background of that size centred
    in the swatch (not inside a clear border: a browser rounds a border of 1px or more down to whole device pixels, which
