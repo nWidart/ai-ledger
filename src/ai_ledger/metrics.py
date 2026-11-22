@@ -1090,9 +1090,10 @@ TIMELINE_CAP = 5000  # rows per series in the session timeline; longer sessions 
 
 def session_timeline(cur, sid, allq, p):
     """Per-request and per-tool-call rows for the session sheet's timeline, plus compaction times and the first prompt.
-    context: the prompt size of each request (context_of), the same measure as sessions.peak_context."""
+    context: the prompt size of each request (context_of), the same measure as sessions.peak_context. Each list is read
+    with one row past the cap, so truncated and calls_truncated are true only when a row was left out."""
     reqs = rows(cur, f"""{allq} SELECT ts, model, subagent, {context_of()} AS context, output, cost
-        FROM rq ORDER BY ts, message_id LIMIT {TIMELINE_CAP}""", p)
+        FROM rq ORDER BY ts, message_id LIMIT {TIMELINE_CAP + 1}""", p)
     # lane: 0 on the main thread (a NULL subagent counts as it); k for a subagent file of the session, by its first call
     # among those files in the payload's own order (n), ranked over every call before the cap so a lane keeps its number
     # and the cap keeps lanes 1 to k, never a later lane without an earlier; null when the call's agent
@@ -1110,7 +1111,9 @@ def session_timeline(cur, sid, allq, p):
         CASE WHEN NOT coalesce(c.subagent, false) THEN 0 ELSE a.lane END AS lane,
         coalesce(left(c.input_summary, 120), '') AS input
         FROM c LEFT JOIN agents a ON a.result_file = c.result_file
-        ORDER BY coalesce(c.start_ts, c.end_ts), c.tool_use_id LIMIT {TIMELINE_CAP}""", [sid])
+        ORDER BY coalesce(c.start_ts, c.end_ts), c.tool_use_id LIMIT {TIMELINE_CAP + 1}""", [sid])
+    reqs_cut, calls_cut = len(reqs) > TIMELINE_CAP, len(calls) > TIMELINE_CAP
+    reqs, calls = reqs[:TIMELINE_CAP], calls[:TIMELINE_CAP]
     for r in reqs:
         r["ts"] = iso(r["ts"])
     for c in calls:
@@ -1123,4 +1126,4 @@ def session_timeline(cur, sid, allq, p):
     full = titles.first_prompts(cur, [sid]).get(sid)
     return dict(requests=reqs, calls=calls, compaction_ts=compactions, first_prompt=titles.cap_prompt(full),
                 first_prompt_cut=bool(full and len(full) > titles.FIRST_PROMPT_CAP), title=titles.titles(cur, [sid]).get(sid, (None,))[0],
-                truncated=len(reqs) >= TIMELINE_CAP or len(calls) >= TIMELINE_CAP, calls_truncated=len(calls) >= TIMELINE_CAP)
+                truncated=reqs_cut or calls_cut, calls_truncated=calls_cut)

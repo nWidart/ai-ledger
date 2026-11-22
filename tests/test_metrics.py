@@ -520,11 +520,14 @@ class MetricsTest(unittest.TestCase):
                 ("y2", 2, "ls"), ("x2", 1, "ls"), ("a9", 2, "ls"), ("m2", 0, "ls")])
             self.assertNotIn(".jsonl", json.dumps(s, default=str))  # the browser gets the rank, never the path
             # The cap keeps the first calls; the lanes left keep their numbers: ranked in the payload's order, over every
-            # call (sc's file is a main file by m2, past the cap).
-            with mock.patch.object(metrics, "TIMELINE_CAP", 6):
+            # call (sc's file is a main file by m2, past the cap). A cap of exactly the ten calls leaves none out.
+            with mock.patch.object(metrics, "TIMELINE_CAP", 9):
                 cut = metrics.session(c, "s4", prices=PRICES)
-            self.assertEqual(([x["lane"] for x in cut["calls"]], cut["truncated"], cut["calls_truncated"], s["calls_truncated"]),
-                             ([0, 0, None, 1, 2, None], True, True, False))
+            with mock.patch.object(metrics, "TIMELINE_CAP", 10):
+                full = metrics.session(c, "s4", prices=PRICES)
+            self.assertEqual(([x["lane"] for x in cut["calls"]], cut["truncated"], cut["calls_truncated"]),
+                             ([0, 0, None, 1, 2, None, 2, 1, 2], True, True))
+            self.assertEqual((len(full["calls"]), full["truncated"], full["calls_truncated"], s["calls_truncated"]), (10, False, False, False))
             # An ingest that commits a call after each statement changes none of the payload's figures: the chart's calls
             # and the Tools table agree.
             real, late = metrics.rows, []

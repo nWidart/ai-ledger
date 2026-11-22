@@ -21,7 +21,7 @@ Files, for short: `metrics` is `tests/test_metrics.py`; `spans`, `reading`, `opt
 | Serve each tool call's thread | Subagents numbered by their first call | `metrics` "test_session_calls_carry_their_lane_and_input" (agent-b before agent-a; no `.jsonl` in the payload) |
 | | A session resumed into a second main file | the same test (`m1` in `s4.jsonl`, `m2` in `s4-resumed.jsonl`: lane 0) |
 | | A subagent call with no result | the same test (`nr`: lane null) |
-| | A cut session | the same test (`TIMELINE_CAP` patched to 6: lanes `[0, 0, None, 1, 2, None]`, `truncated` and `calls_truncated` true) |
+| | A cut session | the same test (`TIMELINE_CAP` patched to 9: lanes `[0, 0, None, 1, 2, None, 2, 1, 2]`, `truncated` and `calls_truncated` true; patched to 10, the number of calls: all 10 sent, both false) |
 | Serve each tool call's input from one snapshot | A long input | the same test (130 characters sent as 120; a NULL as "") |
 | | An ingest during the read | the same test (the `rows` patch commits a call after each statement: 10 calls and a Tools sum of 10) |
 | Read the tool-call chart by thread with the keys | Changing thread | `reading` "from %o on %s" (rows `[b, "ArrowDown", e]`, `[d, "ArrowUp", a]`, the tie to the earlier); `browser` 387 "keys: ${seq.length} presses of Right, Left, Home, End, Down and Up read as decision 7 says, …" |
