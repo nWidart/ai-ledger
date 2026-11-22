@@ -700,6 +700,7 @@ export async function flow(h) {
     const sw = keys.flatMap(k => k.items);
     line("forced colors: the key's swatches are CanvasText, each beside its name", sw.length > 0 && sw.every(i => i.swatch === sys.text && i.text.length > 1),
       sw.map(i => `${i.text.split(" $")[0]} rgb(${i.swatch})`).join(", ") || "no key");
+    await away(page);
     await shot(page, "forced");
     await page.done();
   }
@@ -762,12 +763,12 @@ export async function flow(h) {
     const one = await h.json(`/api/usage?range=30&project=${encodeURIComponent(project)}`);
     const page = await open("one project", { path });
     const m = await matched(page, one), titles = (await drawing(page)).texts.map(t => t.text);
+    await shot(page, "one-project");
     await page.locator(`${ROOT} .chart-table button`).click();
     const table = await ev(page, r => document.querySelector(`${r} table`)?.getAttribute("aria-label") ?? "", ROOT);
     line(`one project selected: two columns, model and token kind, and the table named for ${project}`,
       m.ok && m.cols.length === 2 && titles.includes("Model") && titles.includes("Token kind") && !titles.includes("Project") && table === `Estimated cost on ${project} from model to token kind`,
       `${m.cols.map(c => c.length).join(" and ")} nodes${m.bad.length ? `; ${m.bad.join("; ")}` : ""}; titles ${titles.filter(t => ["Project", "Model", "Token kind"].includes(t)).join(", ")}; table "${table}"`);
-    await shot(page, "one-project");
     await page.done();
   }
 
