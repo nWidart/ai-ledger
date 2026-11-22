@@ -174,6 +174,9 @@ class App:
         # while the others wait for that count.
         self.waiting = (None, None)
         self.waiting_lock = threading.Lock()
+        # What the Live reads derived from each stored line, kept between requests so a read parses only the lines new
+        # to it: the active list, one session's state, the nav's badge and the /metrics gauges share it.
+        self.lines = live.Lines()
         # Live pages: how many are connected, and the sessions each ingest changed, numbered so each page sends a
         # notice for every change since its last one.
         self.watchers = 0
@@ -244,7 +247,7 @@ class App:
                 sids = [r[0] for r in cur.execute("SELECT session_id FROM sessions").fetchall()]
                 self.counters = (key, prom.counters(cur, self.workloads.get(cur, sids)))
             counters = self.counters[1]
-        active = live.states(cur, automated=True)
+        active = live.states(cur, automated=True, lines=self.lines)
         workloads = self.workloads.get(cur, [a["session_id"] for a in active])
         return counters + prom.gauges(active, workloads, self.limit_windows, self.state, self.version)
 
@@ -265,7 +268,7 @@ class App:
             if fresh(at):
                 return n
             try:
-                n = live.waiting(self.con.cursor())
+                n = live.waiting(self.con.cursor(), lines=self.lines)
             except Exception as e:  # the type only: the message could carry stored text
                 n = None
                 print(f"live waiting failed: {type(e).__name__}", file=sys.stderr, flush=True)
@@ -506,9 +509,9 @@ def handler(app, port=PORT, metrics_hosts=(), proxy_hosts=()):
                     self.live_events()
                 elif url.path == "/api/live":
                     self.json(dict(live.sessions(app.con.cursor(), q.get("project", ""), q.get("source", ""), automated=q.get("automated") == "1",
-                                                 text=q.get("text") == "1"), automated_file=metrics.automated_file()))
+                                                 text=q.get("text") == "1", lines=app.lines), automated_file=metrics.automated_file()))
                 elif url.path == "/api/live/session":
-                    detail = live.session(app.con.cursor(), q.get("id", ""), q.get("after", ""), text=q.get("text") == "1")
+                    detail = live.session(app.con.cursor(), q.get("id", ""), q.get("after", ""), text=q.get("text") == "1", lines=app.lines)
                     self.send(404, json.dumps(dict(error="session not found"))) if detail is None else self.json(detail)
                 elif url.path == "/api/status":
                     self.json(app.status())
