@@ -32,9 +32,14 @@ Every page works from the keyboard and with a screen reader. This page lists the
 | Esc | The focused Activity calendar | End the reading. With none read, clear the selected day or week. |
 | Up, Down, Left, Right, Home, End | The focused Cost flow ("Where the cost goes") | Follow the cost along its [bands](/ai-ledger/pages/cost/#where-the-cost-goes): Up and Down move in a column, Right and Left follow a band to the next column. Up and Down do not scroll the page. |
 | Enter | The Cost flow, reading a named project | Open that project's sheet. |
+| Left, Right | The focused session sheet's "Tool calls by thread" | Read the previous or next call of the thread, by start. At the end of a thread, the same call is read again. |
+| Up, Down | The focused "Tool calls by thread" | Read the call of the thread above or below that started nearest in time. They do not scroll the sheet. |
+| Home, End | The focused "Tool calls by thread" | Read the thread's first or last call. |
+| Enter | "Tool calls by thread", with a call read | Open the call's [tool sheet](/ai-ledger/everywhere/sheets/#tool-mcp-server-and-skill-sheet). A call with no tool name opens nothing and says so. |
+| Esc | "Tool calls by thread", with a call read | End the reading and keep the sheet open, even when a pointer opened the tooltip and the focus is elsewhere in the sheet. With none read, Esc closes the sheet. |
 | Esc | The Cost flow, reading an item | End the reading. |
 
-Charts with this keyboard reading: the Activity work chart, the outcome trend of Activity's Judgments view, the Cost chart, the Errors chart, the Context charts, the Limits chart, Live's 10-minute pulse and the Project page's [session plot](/ai-ledger/pages/project/#sessions-by-cost-and-tool-calls), which reads sessions and not points. A tooltip that a chart opens closes with Esc without changing the selected point.
+Charts with this keyboard reading: the Activity work chart, the outcome trend of Activity's Judgments view, the Cost chart, the Errors chart, the Context charts, the Limits chart, Live's 10-minute pulse and the Project page's [session plot](/ai-ledger/pages/project/#sessions-by-cost-and-tool-calls), which reads sessions and not points. A tooltip that a chart opens closes with Esc without changing the selected point. The session sheet's [Tool calls by thread](/ai-ledger/everywhere/sheets/#session-sheet) reads calls along their threads and not points, and says each one in a sentence such as "Bash on the main thread, 14:02:10 to 14:08:41, 7m, failed: npm test. 2 other calls ran during it."; its label gives the call count, the threads and the keys.
 
 Charts and tab lists act on these keys only when you hold no Alt, Ctrl, Meta or Shift, so the browser's own shortcuts still work while they have focus: Alt+Left goes back, Ctrl+Home goes to the top of the page. The zoom keys follow the same rule, except that plus may take Shift, as it does on most keyboard layouts: Ctrl+plus and Ctrl+minus still zoom the page. The session sheet's timeline is the one exception for Shift: Shift+Left and Shift+Right move ten requests.
 

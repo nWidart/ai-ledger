@@ -10,7 +10,7 @@
 // live leaves its sessions in the store: seed it again before you record live a second time.
 //
 // node record.mjs shots [page...]   writes the docs site's screenshots (site/src/assets/shots/), not GIFs.
-//   pages: activity cost context errors limits insights project live everywhere   (default all)
+//   pages: activity cost context errors limits insights project session live everywhere   (default all)
 //   Per page: <page>-<panel>, each cropped to one panel, in dark mode and as <name>-light.png in light mode.
 //   everywhere = the command palette and the context menu. tour-overview is the tour GIF's reduced-motion still
 //   (the first screen of Activity, not the whole page). Only the panels a docs page shows are recorded; every PNG
@@ -332,6 +332,7 @@ const SHOT_PAGES = {
   project: { url: "/project?range=30&project=atlas-api", panels: [
     ["layout", "#content", { max: 1500 }], ["activity", "#activity"], ["cost", "#cost"], ["sessions", "#sessions"], ["quadrant", "#quadrant"], ["errors", "#errors"],
     ["context", "#context"], ["insights", "#insights"], ["limits", "#limits"]] },
+  session: { url: "/usage?range=30&session=demo-spans", panels: [["spans", ".spans"]] },
 };
 
 const suffix = scheme => scheme === "light" ? "-light" : "";

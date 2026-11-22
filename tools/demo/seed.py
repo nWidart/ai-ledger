@@ -375,6 +375,97 @@ store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "mcp_server"
 store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], g_prompts)
 store.insert(c, "session_runs", ["session_id", "start_ms", "api_ms"], g_runs)
 
+
+def demo_spans():
+    """One Claude Code session, `demo-spans`, of fixed rows and no random stream, so every other row stays as it is. It has
+    its own lists and inserts, after every pass above: the limit snapshots read `reqs` and the /context snapshots read
+    `sessions`, so a row in either would change them. It holds each case the session sheet's tool-call chart must draw:
+    two subagents in parallel and a third later, each with a result file; three main-thread calls at once; a 24.5-minute
+    call with nothing starting for 30 minutes (a squeezed gap, 10:00 to 40:10); a main-thread call and a subagent call with
+    no result; a failed call with a result but no end time; the last call ending 3 minutes after the last start (55:00)."""
+    sid, project, model = "demo-spans", "atlas-api", "claude-opus-5-5"
+    t0 = datetime.combine(TODAY - timedelta(days=1), datetime.min.time()) + timedelta(hours=14)
+
+    def at(m, s=0):
+        return t0 + timedelta(minutes=m, seconds=s)
+
+    base = "/home/demo/.claude/projects/-home-demo-code-atlas-api/"
+    files = {None: base + "demo-spans.jsonl", **{a: f"{base}demo-spans/subagents/agent-{a}.jsonl" for a in "abc"}}
+    fail = {"edit": "String to replace not found in file.\nString: const total = items.reduce(",
+            "test": "Exit code 1\nFAIL src/cart.test.ts\n  ● cart › applies discount\n    expected 90, received 100\nTests: 1 failed, 41 passed"}
+    calls = []
+
+    def call(tool, inp, start, end, err=None, sub=None, result=True):
+        """sub: the agent's letter for a subagent call (its result file); result: False for a call with no result."""
+        test = tool in categorize.SHELL_TOOLS and categorize.runs_tests(inp)
+        end = at(*end) if end else None
+        calls.append((f"demo-spans-{len(calls) + 1}", sid, tool, None, None, inp, at(*start), end, (err is not None) if result else None,
+                      fail[err] if err else None, categorize.categorize(fail[err], tool, inp) if err else None,
+                      "Fixed the input and retried." if err else None, sub is not None, False, test, test and not err,
+                      files[sub] if result else None, None, (len(fail[err]) if err else 2_000) if result else None))
+
+    # main thread
+    call("Read", "src/router.ts", (0, 10), (0, 12))
+    call("Grep", "rateLimit|throttle", (0, 13), (0, 16))
+    call("Read", "src/auth.ts", (0, 17), (0, 18))
+    call("Read", "src/orders.py", (0, 40), (0, 42))
+    call("Grep", "retryAfter", (0, 43), (0, 44))
+    call("Read", "tests/test_orders.py", (0, 45), (0, 48))
+    call("Agent", "Find how the orders endpoint reads its rate limits and where the limiter belongs", (1, 30), (7, 0))
+    call("Agent", "Write tests for the sliding-window limiter and its Retry-After header", (1, 30), (8, 0))
+    call("Bash", "npm test", (1, 30), (7, 31), err="test")
+    call("Edit", "src/orders.py", (8, 10), (8, 11))
+    call("Edit", "src/app.ts", (8, 40), (8, 41), err="edit")
+    call("Bash", "npm run test:e2e", (10, 0), (34, 30))
+    call("Agent", "Run the full suite against the limiter and list the slow tests", (41, 0), (49, 0))
+    call("Bash", "npm run dev", (52, 0), None, result=False)
+    call("Bash", "npm run build", (55, 0), (58, 0))
+    # subagent a (1:40 to 6:50) and b (1:45 to 7:50), some calls overlapping inside one subagent
+    for tool, inp, a, b in [("Read", "src/orders.py", (1, 40), (1, 43)), ("Grep", "rate_limit", (1, 44), (1, 46)),
+                            ("Read", "src/limits.py", (1, 50), (1, 52)), ("Grep", "Retry-After", (2, 30), (2, 33)),
+                            ("Read", "src/headers.py", (2, 31), (2, 35)), ("Edit", "src/limits.py", (4, 0), (4, 1)),
+                            ("Edit", "src/orders.py", (6, 48), (6, 50))]:
+        call(tool, inp, a, b, sub="a")
+    for tool, inp, a, b in [("Read", "tests/test_orders.py", (1, 45), (1, 47)), ("Grep", "limiter", (2, 10), (2, 12)),
+                            ("Write", "tests/test_limits.py", (3, 20), (3, 22)), ("Edit", "tests/test_limits.py", (3, 21), (3, 23)),
+                            ("Read", "src/limits.py", (5, 0), (5, 2)), ("Edit", "tests/test_limits.py", (7, 48), (7, 50))]:
+        call(tool, inp, a, b, sub="b")
+    # subagent c (41:10 to 48:50), then a subagent call with no result file
+    for tool, inp, a, b in [("Read", "package.json", (41, 10), (41, 12)), ("Grep", "slow", (41, 30), (41, 33)),
+                            ("Edit", "src/limits.py", (45, 0), (45, 2)), ("Read", "src/orders.py", (47, 0), (47, 3)),
+                            ("Grep", "p95", (48, 48), (48, 50))]:
+        call(tool, inp, a, b, sub="c")
+    call("Read", "src/limits.py", (48, 55), None, sub="x", result=False)
+    # a failed main-thread call with a result but no end time: a red tick
+    call("Bash", "npx vitest run src/cart.test.ts", (8, 20), None, err="test")
+
+    # main-thread requests with a context, then each subagent's own requests
+    ctx = [(0, 10, 48_000), (0, 40, 52_000), (1, 30, 61_000), (8, 10, 78_000), (8, 40, 84_000), (10, 0, 90_000), (40, 10, 97_000),
+           (41, 0, 104_000), (44, 0, 112_000), (52, 0, 120_000), (55, 0, 126_000)]
+    reqs = [(f"demo-spans-r{i}", sid, at(m, s), model, "high", False, 2_000, 1_200, 400, size - 6_000, 4_000, 0, 1_500, "end_turn")
+            for i, (m, s, size) in enumerate(ctx)]
+    reqs += [(f"demo-spans-s{i}", sid, at(m, s), "claude-haiku-5-5", "high", True, 1_500, 600, 200, 12_000, 2_000, 0, 800, "end_turn")
+             for i, (m, s) in enumerate([(1, 42), (3, 30), (5, 40), (1, 48), (4, 10), (6, 30), (41, 15), (45, 0), (48, 0)])]
+
+    store.insert(c, "sessions", ["session_id", "project", "cwd", "git_branch", "first_ts", "last_ts", "entrypoint", "version",
+                                 "compactions", "peak_context", "peak_model", "source", "context_window", "first_compaction_ts"],
+                 [(sid, project, f"/home/demo/code/{project}", "feat/rate-limit", t0, at(58), "cli", "2.4.0", 0, 126_000, model,
+                   "claude", None, None)])
+    store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "effort", "subagent", "input", "output", "thinking",
+                                 "cache_read", "cache_5m", "cache_1h", "thinking_ms", "stop_reason"], reqs)
+    store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "mcp_server", "skill", "input_summary", "start_ts", "end_ts",
+                                   "is_error", "error", "category", "followup", "subagent", "is_commit", "is_test", "test_passed",
+                                   "result_file", "result_seq", "result_bytes"], calls)
+    store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"],
+                 [(f"{sid}-p0", sid, t0, False), (f"{sid}-p1", sid, at(40), False)])
+    store.insert(c, "session_titles", ["session_id", "custom", "agent"],
+                 [(sid, None, "Add sliding-window rate limiting to the orders endpoint and run the e2e suite")])
+    store.insert(c, "raw_lines", ["key", "file", "line_no", "byte_offset", "type", "session_id", "uuid", "ts", "subagent", "parsed", "json"],
+                 [(f"{sid}-raw", None, 0, 0, "user", sid, f"{sid}-p0", t0.isoformat(), False, True,
+                   json.dumps({"promptId": f"{sid}-p0", "message": {"content": "Add rate limiting to the /orders endpoint"}}))])
+
+
+demo_spans()
 insights.rederive(c)
 print(f"{len(sessions)} sessions, {len(reqs)} requests, {len(tools)} tool calls, {len(snaps)} limit snapshots, {len(facet_rows) // 2} facets; "
       f"{len(g_sessions)} Grok sessions, {len(g_reqs)} requests")

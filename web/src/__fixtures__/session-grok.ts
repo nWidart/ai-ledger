@@ -121,7 +121,9 @@ export default {
    "is_error": true,
    "category": "x",
    "subagent": false,
-   "is_commit": false
+   "is_commit": false,
+   "lane": 0,
+   "input": "npm test"
   },
   {
    "id": "g1-t2",
@@ -131,12 +133,15 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "is_commit": false
+   "is_commit": false,
+   "lane": 0,
+   "input": "src/app.ts"
   }
  ],
  "compaction_ts": [],
  "first_prompt": null,
  "first_prompt_cut": false,
  "title": null,
- "truncated": false
+ "truncated": false,
+ "calls_truncated": false
 } satisfies SessionDetail;

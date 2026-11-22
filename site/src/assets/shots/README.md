@@ -48,6 +48,7 @@ Only the shots a page shows are kept: a shot no page references is deleted, and 
 | `project-context` | "Context". | Project |
 | `project-insights` | "Session judgments". | Project |
 | `project-limits` | "Plan limits". | Project |
+| `session-spans` | The session sheet's "Tool calls by thread" section, 599px wide (the sheet's width, not 1280): the hint, key line and notes, then one lane per thread (main thread, three subagents, "Subagents, not told apart") with filled bars, a hollow red failed test run, a squeezed break, rings for calls with no result and a pointed end at the right edge. | Sheets |
 | `live-rail` | The "Active · last 10 min" session list. | Live, First tour |
 | `live-stream` | One session's stream: prompt, reply, tool calls, a subagent lane and a failed `npm test`. | Live |
 | `live-strip` | The status strip above the stream: state, context meter, figures, plan limits, the pulse, the directory and Copy resume. | Live |

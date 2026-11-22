@@ -9,6 +9,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 - Project and Context (one project): "What loads before your first prompt" ranks the snapshot's categories and every MCP server, memory file, custom agent and skill. It shows how often Claude Code called each server and skill in the view, and a name opens its sheet.
 - Context's cache chart zooms in views of 14 days or weeks or more, with a slider or the plus and minus keys.
+- The session sheet has "Tool calls by thread" under the timeline's events: one lane per thread (the main thread, each subagent), each call a bar from its start to its result, on the timeline's time axis.
+  - A failed call is a hollow bar, a call with no result a ring, a call with no recorded duration a tick; a call that ran past the last event ends in a point.
+  - Read it with the arrow keys or the pointer; Enter or a click opens the tool's sheet. "Show data table" lists the calls by duration.
+- `/api/session` calls carry `lane` and `input`, and the payload a `calls_truncated` flag.
 
 ### Changed
 

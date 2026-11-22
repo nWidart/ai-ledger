@@ -965,7 +965,9 @@ export default {
     "is_error": true,
     "category": "x",
     "subagent": false,
-    "is_commit": false
+    "is_commit": false,
+    "lane": 0,
+    "input": ""
    },
    {
     "id": "t02",
@@ -975,7 +977,9 @@ export default {
     "is_error": true,
     "category": "x",
     "subagent": false,
-    "is_commit": false
+    "is_commit": false,
+    "lane": 0,
+    "input": ""
    },
    {
     "id": "t03",
@@ -985,7 +989,9 @@ export default {
     "is_error": true,
     "category": "x",
     "subagent": false,
-    "is_commit": false
+    "is_commit": false,
+    "lane": 0,
+    "input": ""
    },
    {
     "id": "t04",
@@ -995,7 +1001,9 @@ export default {
     "is_error": true,
     "category": "x",
     "subagent": false,
-    "is_commit": false
+    "is_commit": false,
+    "lane": 0,
+    "input": ""
    },
    {
     "id": "t05",
@@ -1005,7 +1013,9 @@ export default {
     "is_error": false,
     "category": null,
     "subagent": false,
-    "is_commit": true
+    "is_commit": true,
+    "lane": 0,
+    "input": ""
    },
    {
     "id": "t06",
@@ -1015,7 +1025,9 @@ export default {
     "is_error": false,
     "category": null,
     "subagent": false,
-    "is_commit": false
+    "is_commit": false,
+    "lane": 0,
+    "input": ""
    },
    {
     "id": "t07",
@@ -1025,7 +1037,9 @@ export default {
     "is_error": true,
     "category": "x",
     "subagent": false,
-    "is_commit": false
+    "is_commit": false,
+    "lane": 0,
+    "input": ""
    },
    {
     "id": "t08",
@@ -1035,7 +1049,9 @@ export default {
     "is_error": true,
     "category": "x",
     "subagent": false,
-    "is_commit": false
+    "is_commit": false,
+    "lane": 0,
+    "input": ""
    },
    {
     "id": "t09",
@@ -1045,7 +1061,9 @@ export default {
     "is_error": false,
     "category": null,
     "subagent": false,
-    "is_commit": false
+    "is_commit": false,
+    "lane": 0,
+    "input": ""
    },
    {
     "id": "t10",
@@ -1055,13 +1073,16 @@ export default {
     "is_error": false,
     "category": null,
     "subagent": false,
-    "is_commit": false
+    "is_commit": false,
+    "lane": 0,
+    "input": ""
    }
   ],
   "compaction_ts": [],
   "first_prompt": null,
   "first_prompt_cut": false,
   "title": null,
-  "truncated": false
+  "truncated": false,
+  "calls_truncated": false
  }
 } satisfies UsagePayload;
