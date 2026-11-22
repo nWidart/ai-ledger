@@ -439,12 +439,14 @@ def usage_payload(cur, project, range_days, session, prices, today, automated, s
         coalesce(sum(tokens) FILTER (WHERE subagent), 0) AS sub_tokens, sum(cost) FILTER (WHERE subagent) AS sub_cost,
         coalesce(sum(thinking_ms), 0) AS thinking_ms, {costs} FROM rq""", rp)[0]
     # The cost flow, from project to model to token kind: one scan grouped by project and model (the pairs) and by model
-    # alone (with its kinds). grouping(project) tells a model's row from a pair whose session has no project. Unpriced
-    # requests add no row; a model whose requests all carry a reported cost has its kinds NULL.
-    flow = rows(cur, f"""{rq} SELECT project, model, grouping(project) AS whole, sum(cost) AS cost, {costs}
+    # alone (with its kinds and its reported cost). grouping(project) tells a model's row from a pair whose session has no
+    # project. Unpriced requests add no row; a model whose requests all carry a reported cost has its kinds NULL, and one
+    # with none its cost_reported. A request costs its kinds or its reported cost, so a model's row adds up to its cost.
+    flow = rows(cur, f"""{rq} SELECT project, model, grouping(project) AS whole, sum(cost) AS cost, {costs},
+        sum(reported_cost) AS cost_reported
         FROM rq WHERE cost IS NOT NULL GROUP BY GROUPING SETS ((project, model), (model))
         ORDER BY whole, cost DESC, project, model""", rp)
-    kinds = ["model", "cost"] + [f"cost_{k}" for k in PRICE_KINDS]
+    kinds = ["model", "cost"] + [f"cost_{k}" for k in PRICE_KINDS] + ["cost_reported"]
     cost_flow = dict(pairs=[dict(project=r["project"], model=r["model"], cost=r["cost"]) for r in flow if not r["whole"]],
                      models=[{k: r[k] for k in kinds} for r in flow if r["whole"]])
     unpriced = rows(cur, f"{rq} SELECT model, count(*) AS requests, sum(tokens) AS tokens FROM rq WHERE cost IS NULL GROUP BY 1 ORDER BY 3 DESC, 1", rp)

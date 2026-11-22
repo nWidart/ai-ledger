@@ -18,7 +18,8 @@ function view(pairs: [string | null, string | null, number][], split: Record<str
   for (const [, m, c] of pairs) cost.set(m, (cost.get(m) ?? 0) + c);
   const models = [...cost].map(([model, c]) => {
     const k = model == null ? null : model in split ? split[model]! : [c, 0, 0, 0, 0];
-    return { model, cost: c, cost_input: k?.[0] ?? null, cost_output: k?.[1] ?? null, cost_cache_read: k?.[2] ?? null, cost_cache_5m: k?.[3] ?? null, cost_cache_1h: k?.[4] ?? null };
+    return { model, cost: c, cost_input: k?.[0] ?? null, cost_output: k?.[1] ?? null, cost_cache_read: k?.[2] ?? null, cost_cache_5m: k?.[3] ?? null, cost_cache_1h: k?.[4] ?? null,
+      cost_reported: k ? null : c };
   });
   const sum = (f: (m: (typeof models)[number]) => number | null) => models.reduce((s, m) => s + (f(m) ?? 0), 0);
   return { project, unpriced: [],
@@ -62,13 +63,17 @@ describe("flowModel", () => {
   });
 
   it("names the kinds as the drawer bills them, and Reported last", () => {
-    const m = flowModel(view([["a", "est", 3.5], ["a", "grok", 9], ["a", "mixed", 0.1 + 0.2]],
-      { est: [1, 2, 0, 0.3, 0.2], grok: null, mixed: [0.1, 0.2, 0, 0, 0] }));
-    // Output + thinking is one node, both cache write lifetimes are one, Cache read at 0 is none, and the float leftover of
-    // "mixed" (0.30000000000000004 − 0.3) is not reported cost; Reported comes last though it is the largest.
-    expect(m.columns[2]!.nodes.map(n => [n.label, n.value])).toEqual([["Output + thinking", 2.2], ["Input", 1.1], ["Cache write", 0.5], ["Reported", 9]]);
+    // "tick": a Grok request of one USD tick, a real cost of $0.0000000001.
+    const m = flowModel(view([["a", "est", 3.5], ["a", "grok", 9], ["a", "mixed", 0.1 + 0.2], ["a", "tick", 1e-10]],
+      { est: [1, 2, 0, 0.3, 0.2], grok: null, mixed: [0.1, 0.2, 0, 0, 0], tick: null }));
+    // Output + thinking is one node, both cache write lifetimes are one, Cache read at 0 is none; Reported, the server's sum
+    // of the reported costs, comes last though it is the largest.
+    expect(m.columns[2]!.nodes.map(n => [n.label, n.value])).toEqual([["Output + thinking", 2.2], ["Input", 1.1], ["Cache write", 0.5], ["Reported", 9 + 1e-10]]);
     expect(ids(m, 2)).toEqual(["k:output", "k:input", "k:write", "k:reported"]);
-    expect(m.bands.filter(b => b.to === "k:reported").map(b => b.from)).toEqual(["m:grok"]);
+    expect(m.bands.filter(b => b.to === "k:reported").map(b => [b.from, b.value])).toEqual([["m:grok", 9], ["m:tick", 1e-10]]);
+    expect(m.rows.kinds.filter(r => r.to === "Reported").map(r => [r.from, r.value])).toEqual([["grok", 9], ["tick", 1e-10]]);
+    // A view with only that request still has its token kind.
+    expect(labels(flowModel(view([["a", "tick", 1e-10]], { tick: null })), 2)).toEqual(["Reported"]);
   });
 
   it("names a model with no name apart from every named model and Other, its cost under Reported", () => {

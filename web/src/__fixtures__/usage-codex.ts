@@ -119,7 +119,8 @@ export default {
     "cost_output": 0.3,
     "cost_cache_read": 0.012,
     "cost_cache_5m": 0.0,
-    "cost_cache_1h": 0.0
+    "cost_cache_1h": 0.0,
+    "cost_reported": null
    }
   ]
  },

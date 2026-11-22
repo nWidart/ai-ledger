@@ -18,8 +18,8 @@ function view(pairs: Pair[], over: Partial<CostFlowProps["d"]> = {}): CostFlowPr
   const cost = new Map<string | null, number>();
   for (const [, m, c] of pairs) cost.set(m, (cost.get(m) ?? 0) + c);
   const models = [...cost].map(([model, c]) => {
-    const [i, o, r] = SPLIT[model ?? ""] ?? [0, 0, 0];
-    return { model, cost: c, cost_input: c * i, cost_output: c * o, cost_cache_read: c * r, cost_cache_5m: 0, cost_cache_1h: 0 };
+    const s = model == null ? undefined : SPLIT[model], [i, o, r] = s ?? [0, 0, 0];
+    return { model, cost: c, cost_input: c * i, cost_output: c * o, cost_cache_read: c * r, cost_cache_5m: 0, cost_cache_1h: 0, cost_reported: s ? null : c };
   });
   const sum = (f: (m: (typeof models)[number]) => number) => models.reduce((s, m) => s + f(m), 0);
   return { project: "", range: 30, start: "2026-10-23", source: "", automated: true, unpriced: [],

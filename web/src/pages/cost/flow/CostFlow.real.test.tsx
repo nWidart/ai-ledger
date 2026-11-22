@@ -16,7 +16,7 @@ type Pair = [string, string, number];
 function view(pairs: Pair[]): CostFlowProps["d"] {
   const cost = new Map<string, number>();
   for (const [, m, c] of pairs) cost.set(m, (cost.get(m) ?? 0) + c);
-  const models = [...cost].map(([model, c]) => ({ model, cost: c, cost_input: c / 2, cost_output: c / 2, cost_cache_read: 0, cost_cache_5m: 0, cost_cache_1h: 0 }));
+  const models = [...cost].map(([model, c]) => ({ model, cost: c, cost_input: c / 2, cost_output: c / 2, cost_cache_read: 0, cost_cache_5m: 0, cost_cache_1h: 0, cost_reported: null }));
   const all = models.reduce((s, m) => s + m.cost, 0);
   return { project: "", range: 30, start: "2026-10-23", source: "", automated: true, unpriced: [],
     totals: { requests: pairs.length, cost: all, cost_input: all / 2, cost_output: all / 2, cost_cache_read: 0, cost_cache_5m: 0, cost_cache_1h: 0 },

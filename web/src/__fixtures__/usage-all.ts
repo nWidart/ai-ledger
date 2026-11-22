@@ -198,7 +198,8 @@ export default {
     "cost_output": 10.0002,
     "cost_cache_read": 0.8,
     "cost_cache_5m": 1.0,
-    "cost_cache_1h": 2.0
+    "cost_cache_1h": 2.0,
+    "cost_reported": null
    },
    {
     "model": "m-tier",
@@ -207,7 +208,8 @@ export default {
     "cost_output": 2e-05,
     "cost_cache_read": 0.00012,
     "cost_cache_5m": 0.0,
-    "cost_cache_1h": 0.0
+    "cost_cache_1h": 0.0,
+    "cost_reported": null
    }
   ]
  },

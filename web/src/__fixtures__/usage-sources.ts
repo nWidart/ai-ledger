@@ -141,7 +141,8 @@ export default {
     "cost_output": 1.3,
     "cost_cache_read": 0.062,
     "cost_cache_5m": 0.0,
-    "cost_cache_1h": 0.0
+    "cost_cache_1h": 0.0,
+    "cost_reported": null
    },
    {
     "model": "grok-4.7-build",
@@ -150,7 +151,8 @@ export default {
     "cost_output": null,
     "cost_cache_read": null,
     "cost_cache_5m": null,
-    "cost_cache_1h": null
+    "cost_cache_1h": null,
+    "cost_reported": 0.75
    }
   ]
  },

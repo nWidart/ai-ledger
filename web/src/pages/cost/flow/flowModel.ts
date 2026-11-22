@@ -61,8 +61,6 @@ const KINDS: { id: string; label: string; of: (m: FlowModel) => number }[] = [
   { id: "k:read", label: "Cache read", of: m => m.cost_cache_read ?? 0 },
 ];
 export const REPORTED = "k:reported";
-/** A model's cost less its kinds under this is float leftovers, not a reported cost (as costDays' guard). */
-const EPS = 1e-9;
 /** A model's node id before folding: "m?" for a model with no name (Grok stores so a turn with no breakdown by model). */
 const modelKey = (model: string | null) => (model == null ? "m?" : "m:" + model);
 /** A model's name as its node says it, as the unpriced line under the graph names a model with no name. */
@@ -138,20 +136,18 @@ export function flowModel(d: FlowInput): FlowGraph {
     ...other("m", mc, models.rest),
   ] });
 
-  // Kinds: each model's estimated cost per kind, and what is left of its cost, reported with no split by kind.
+  // Kinds: each model's estimated cost per kind, and its cost reported with no split by kind, as the server sums them.
   const kindCost = new Map<string, number>();
   for (const m of d.cost_flow.models) {
     const id = modelId.get(modelKey(m.model));
     if (!id) continue; // no cost in the view: no node, no band
-    let est = 0;
-    const kind = (k: string, label: string, v: number) => {
-      flow(id, k, v);
-      add(kindCost, k, v);
-      rows.kinds.push({ id: key(modelKey(m.model), k), from: short(m.model), to: label, value: v });
-    };
-    for (const k of KINDS) { const v = k.of(m); est += v; if (v > 0) kind(k.id, k.label, v); }
-    const reported = m.cost - est;
-    if (reported > EPS) kind(REPORTED, "Reported", reported);
+    for (const k of [...KINDS, { id: REPORTED, label: "Reported", of: (x: FlowModel) => x.cost_reported ?? 0 }]) {
+      const v = k.of(m);
+      if (!(v > 0)) continue;
+      flow(id, k.id, v);
+      add(kindCost, k.id, v);
+      rows.kinds.push({ id: key(modelKey(m.model), k.id), from: short(m.model), to: k.label, value: v });
+    }
   }
   columns.push({ key: "kind", title: TITLE.kind, nodes: [
     ...ranked(KINDS.map(k => ({ id: k.id, label: k.label, value: kindCost.get(k.id) ?? 0 })), k => k.label),

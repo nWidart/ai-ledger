@@ -141,8 +141,8 @@ class ReportedCostTest(unittest.TestCase):
         self.assertAlmostEqual(u["totals"]["cost_input"], 60 / 1e6)  # the priced request's kinds only
         self.assertEqual([r["model"] for r in u["unpriced"]], ["m-other"])
         # In the cost flow the reported-only models have their cost and no kinds, a model with no name a row and a pair of
-        # its own in both grouping sets, and the reported part of each model (its cost less its kinds) adds up to the view's
-        # (the total less its kinds); the unpriced m-other has no row.
+        # its own in both grouping sets, each model's kinds and reported cost add up to its cost, and the reported costs to
+        # the view's (the total less its kinds); the unpriced m-other has no row.
         models = {r["model"]: r for r in u["cost_flow"]["models"]}
         self.assertEqual(set(models), {"m-unknown", "m-a", None})
         self.assertEqual({r["model"] for r in u["cost_flow"]["pairs"]}, set(models))
@@ -150,8 +150,11 @@ class ReportedCostTest(unittest.TestCase):
         self.assertAlmostEqual(models[None]["cost"], 0.05, 9)
         for m in ("m-unknown", None):
             self.assertEqual([models[m][f"cost_{k}"] for k in metrics.PRICE_KINDS], [None] * 5)
+        self.assertIsNone(models["m-a"]["cost_reported"])
         kinds = lambda r: sum(r[f"cost_{k}"] or 0 for k in metrics.PRICE_KINDS)
-        self.assertAlmostEqual(sum(r["cost"] - kinds(r) for r in models.values()), u["totals"]["cost"] - kinds(u["totals"]), 9)
+        for r in models.values():
+            self.assertAlmostEqual(kinds(r) + (r["cost_reported"] or 0), r["cost"], 12)
+        self.assertAlmostEqual(sum(r["cost_reported"] or 0 for r in models.values()), u["totals"]["cost"] - kinds(u["totals"]), 9)
 
     def test_cost_flow_keeps_a_session_with_no_project_apart_from_the_model_row(self):
         u = self.usage([("m-a", None), ("m-a", None, None)])
