@@ -155,6 +155,10 @@ describe("sentences", () => {
     expect(tipRows(m, quadrantFit(m, 343, 1), 1)).toEqual({ name: "#demo-012", unpriced: true, quadrant: "Cheap, much done", more: null,
       rows: [["Started", t], ["Est. cost", "at least $1.10"], ["Tool calls", "30"], ["Commits", "1"]] });
     expect(tipRows(few, quadrantFit(few, 343, 1), 0)).toMatchObject({ unpriced: false, quadrant: null, rows: [["Started", "–"], ["Est. cost", "$0.00"], ["Tool calls", "0"], ["Commits", "0"]] });
+    // A positive cost that rounds to $0.00 is not the zero lane's $0.00; with unpriced requests it is a floor.
+    const tiny = model([row(0.003, 2, { title: "Tiny" }), row(0.002, 1, { title: "Floor", unpriced: 1 })]), tf = quadrantFit(tiny, 343, 1);
+    expect(tiny.dots.map((_, i) => [readDot(tiny, i).split(": ")[1], tipRows(tiny, tf, i).rows[1]![1]])).toEqual([
+      ["more than $0, 1 tool call, no commit.", "more than $0"], ["under $0.01, 2 tool calls, no commit.", "<$0.01"]]);
   });
 
   it("labels the plot with and without a split", () => {
@@ -162,6 +166,7 @@ describe("sentences", () => {
     expect(groupLabel(m, "atlas-api")).toBe("Sessions of atlas-api by estimated cost and tool calls, both on log scales: 5 sessions, split at the medians of $1.42 and 23 tool calls. "
       + `Costly, little done: 2; cheap, much done: 2; costly, much done: 0; cheap, little done: 1. ${keys}`);
     expect(groupLabel(model([row(1, 10), row(2, 20), row(3, 25), row(4, 30)]), "p")).toContain("split at the medians of $2.50 and 22.5 tool calls.");
+    expect(groupLabel(model([row(0, 1), row(0.004, 2), row(1, 3)]), "p")).toContain("split at the medians of under $0.01 and 2 tool calls.");
     expect(groupLabel(model([row(1, 1), row(2, 2)]), "atlas-api")).toBe(`Sessions of atlas-api by estimated cost and tool calls, both on log scales: 2 sessions: too few to split at a median. ${keys}`);
   });
 });

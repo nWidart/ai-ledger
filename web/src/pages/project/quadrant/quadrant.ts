@@ -17,7 +17,8 @@ export const QUADRANTS: readonly { id: Quadrant; label: string }[] = [
   { id: "cheapLittle", label: "Cheap, little done" },
   { id: "costlyLittle", label: "Costly, little done" },
 ];
-const LABEL = Object.fromEntries(QUADRANTS.map(q => [q.id, q.label])) as Record<Quadrant, string>;
+/** Each quadrant's name, by its id. */
+export const QUADRANT_LABEL = Object.fromEntries(QUADRANTS.map(q => [q.id, q.label])) as Record<Quadrant, string>;
 
 /** A session with a known cost. quadrant: null with fewer than three dots. */
 export interface Dot { row: QuadRow; cost: number; calls: number; filled: boolean; quadrant: Quadrant | null }
@@ -176,16 +177,22 @@ export function stepDot(order: readonly string[], at: string | null, key: string
   }
 }
 
-const costText = (d: Dot) => (d.row.unpriced > 0 ? "at least " : "") + usd(d.cost);
+const subCent = (n: number) => n > 0 && n < .005;
+/** A cost as usd() writes it, except a positive cost that rounds to $0.00: "<$0.01", or "under $0.01" in a sentence, so it
+ *  does not read as the zero lane's $0.00. */
+export const dollars = (n: number, sentence = false) => (subCent(n) ? (sentence ? "under $0.01" : "<$0.01") : usd(n));
+/** A dot's cost; with unpriced requests it is a floor: "at least $1.10", or "more than $0" under a cent. */
+const costText = (d: Dot, sentence = false) =>
+  !d.row.unpriced ? dollars(d.cost, sentence) : subCent(d.cost) ? "more than $0" : "at least " + usd(d.cost);
 const count = (n: number, one: string) => (n ? plural(n, one) : `no ${one}`);
-/** A median of counts is a whole number or a half. */
+/** A median of counts is a whole number or a half; plural() rounds to a whole number, so it would say "23" for 22.5. */
 const calls = (n: number) => `${num(n, n % 1 ? 1 : 0)} ${n === 1 ? "tool call" : "tool calls"}`;
 
 /** Dot i in one sentence, as the live region says it. */
 export function readDot(model: QuadrantModel, i: number): string {
   const d = model.dots[i]!;
-  return `${sessName(d.row)}, started ${when(d.row.first_ts)}: ${costText(d)}, ${count(d.calls, "tool call")}, ${count(d.row.commits, "commit")}.`
-    + (d.quadrant ? ` ${LABEL[d.quadrant]}.` : "");
+  return `${sessName(d.row)}, started ${when(d.row.first_ts)}: ${costText(d, true)}, ${count(d.calls, "tool call")}, ${count(d.row.commits, "commit")}.`
+    + (d.quadrant ? ` ${QUADRANT_LABEL[d.quadrant]}.` : "");
 }
 
 /** Dot i's tooltip: the name, its figures, the quadrant and the dots that sit with it. unpriced: some requests have no price. */
@@ -195,7 +202,7 @@ export function tipRows(model: QuadrantModel, fit: QuadrantFit, i: number) {
     name: sessName(d.row),
     rows: [["Started", when(d.row.first_ts)], ["Est. cost", costText(d)], ["Tool calls", num(d.calls)], ["Commits", num(d.row.commits)]] as [string, string][],
     unpriced: d.row.unpriced > 0,
-    quadrant: d.quadrant && LABEL[d.quadrant],
+    quadrant: d.quadrant && QUADRANT_LABEL[d.quadrant],
     more: more ? `and ${plural(more, "more session")} here` : null,
   };
 }
@@ -206,7 +213,7 @@ const few = (n: number) => `${plural(n, "session")}: too few to split at a media
 export function groupLabel(model: QuadrantModel, project: string): string {
   const { split, counts } = model, n = model.dots.length;
   const body = split && counts
-    ? `${plural(n, "session")}, split at the medians of ${usd(split.cost)} and ${calls(split.calls)}. `
+    ? `${plural(n, "session")}, split at the medians of ${dollars(split.cost, true)} and ${calls(split.calls)}. `
       + `Costly, little done: ${num(counts.costlyLittle)}; cheap, much done: ${num(counts.cheapMuch)}; `
       + `costly, much done: ${num(counts.costlyMuch)}; cheap, little done: ${num(counts.cheapLittle)}.`
     : few(n);

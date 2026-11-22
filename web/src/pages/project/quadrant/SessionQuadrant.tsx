@@ -13,8 +13,8 @@ import type { ChartEnv } from "../../../components/echart/tokens";
 import { modified } from "../../../components/keys";
 import { openSessionSheet, sessName } from "../../../components/sheets/session";
 import { Table, type Column, type RowPick } from "../../../components/table/Table";
-import { num, usd, when } from "../../../format";
-import { dotAt, groupLabel, notes, QUADRANTS, quadrantFit, quadrantModel, readDot, stepDot, tipRows, type Dot, type QuadRow } from "./quadrant";
+import { num, when } from "../../../format";
+import { dollars, dotAt, groupLabel, notes, QUADRANT_LABEL, QUADRANTS, quadrantFit, quadrantModel, readDot, stepDot, tipRows, type Dot, type QuadRow } from "./quadrant";
 import { quadrantOption } from "./quadrantOption";
 import "./quadrant.css";
 
@@ -23,7 +23,6 @@ import "./quadrant.css";
 interface Reading { id: string; keyed: boolean; text: string; n: number }
 
 const NAME = "Sessions by cost and tool calls";
-const LABEL = Object.fromEntries(QUADRANTS.map(q => [q.id, q.label]));
 const unpricedChip = <> <span className="chip warn">Unpriced</span></>;
 
 // The data table: one row per dot, costliest first; the session's name is a button, and the row opens its sheet.
@@ -31,10 +30,10 @@ const COLUMNS: Column<Dot>[] = [
   { id: "session", header: "Session", cellProps: () => ({ className: "sess" }), cell: d =>
     <button type="button" className="cellbtn" data-session={d.row.session_id} title={d.row.title || d.row.session_id}>{sessName(d.row)}</button> },
   { id: "started", header: "Started", cell: d => when(d.row.first_ts) },
-  { id: "cost", header: "Est. cost", align: "num", cell: d => <>{usd(d.cost)}{d.row.unpriced > 0 && unpricedChip}</> },
+  { id: "cost", header: "Est. cost", align: "num", cell: d => <>{dollars(d.cost)}{d.row.unpriced > 0 && unpricedChip}</> },
   { id: "calls", header: "Tool calls", align: "num", cell: d => num(d.calls) },
   { id: "commits", header: "Commits", align: "num", cell: d => num(d.row.commits) },
-  { id: "quadrant", header: "Quadrant", cell: d => (d.quadrant ? LABEL[d.quadrant] : null) },
+  { id: "quadrant", header: "Quadrant", cell: d => (d.quadrant ? QUADRANT_LABEL[d.quadrant] : null) },
 ];
 const PICK: RowPick<Dot> = { value: d => d.row.session_id, open: v => openSessionSheet(v), subject: d => ({ kind: "session", value: d.row.session_id }) };
 
