@@ -5,16 +5,6 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [0.6.0] - 2026-11-22
-
-### Added
-
-- Prices for OpenAI `gpt-6.2-sol` and `gpt-6.2-astra`, so Codex sessions on those models show an estimated cost.
-- `--proxy-host HOST[:PORT]` (repeatable) lets every page and route answer the `Host` that a reverse proxy such as `tailscale serve` passes on, so you can open the app from another device. The cross-site check still applies. The pages show full transcripts and the proxy adds no login: use it only on a private network such as your tailnet, never with Tailscale Funnel.
-
-### Fixed
-
-- The wheel scrolls the page again with the pointer over the tabs on Context and Activity. The tab strip scrolled a pixel up and down and held the wheel.
 ### Changed
 
 - Live is easier to read:
@@ -30,6 +20,17 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - Hovering a "?" no longer moves the text around it.
+
+## [0.6.0] - 2026-11-22
+
+### Added
+
+- Prices for OpenAI `gpt-6.2-sol` and `gpt-6.2-astra`, so Codex sessions on those models show an estimated cost.
+- `--proxy-host HOST[:PORT]` (repeatable) lets every page and route answer the `Host` that a reverse proxy such as `tailscale serve` passes on, so you can open the app from another device. The cross-site check still applies. The pages show full transcripts and the proxy adds no login: use it only on a private network such as your tailnet, never with Tailscale Funnel.
+
+### Fixed
+
+- The wheel scrolls the page again with the pointer over the tabs on Context and Activity. The tab strip scrolled a pixel up and down and held the wheel.
 
 ## [0.5.0] - 2026-11-21
 
