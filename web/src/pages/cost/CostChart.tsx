@@ -68,12 +68,13 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScal
   // One function per set of figures: a new one is drawn. Newer data and a hidden kind give one too, in the same view.
   const option = useCallback((env: ChartEnv) => costOption(m, env), [m]);
   const { cost, share, none, kinds, days: pts, totals, showAvg, zoom, avg, live, peak } = m;
-  // The view: what the user chose, and the first day it draws. While it is the same, the reading and the zoom stay on
-  // their days through newer data (a background ingest every minute while a session runs) and through a hidden kind.
-  // The first day is in it because a day keeps its index only while the view starts on the same one. A new day at the
-  // end keeps the view. A first day that moves makes another: later, when a rolling range moves on at midnight, or
-  // earlier, when an all-time view gains older days (older transcripts ingested, a filter that reaches further back).
-  const view = [d.range, pts[0]?.day, d.project, d.source, d.automated, metric, stack, scale].join("|");
+  // The view: what the user chose. While it is the same, the reading and the zoom stay on their days through newer data
+  // (a background ingest every minute while a session runs) and through a hidden kind. The first day is not in it: the
+  // days are the chart's keys, so the reading and the zoom follow their days when the first day moves, later (a rolling
+  // range moving on at midnight) or earlier (an all-time view gaining older days).
+  const view = [d.range, d.project, d.source, d.automated, metric, stack, scale].join("|");
+  // Each day in order, made with the days so that the list keeps its identity while they do.
+  const dayKeys = useMemo(() => pts.map(p => p.day), [pts]);
   // "Show all days", while the wrapper reports a zoom (the range moving on at midnight can end it).
   const { ref: box, onZoom, button: showAll } = useZoomReset();
   const readZoom = (s: Shown | null) => (s
@@ -188,7 +189,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScal
       </div>
       {none && <div className="empty all-hidden" role="status">All token kinds are hidden.{" "}
         <button type="button" className="linkish" onClick={() => onHidden([])}>Show every kind</button></div>}
-      <EChart ref={box} label={label} hidden={none} height={H + (zoom ? SLIDER_ROOM : 0)} option={option} view={view} points={pts.length} tip={tip} read={read}
+      <EChart ref={box} label={label} hidden={none} height={H + (zoom ? SLIDER_ROOM : 0)} option={option} view={view} points={pts.length} pointKeys={dayKeys} tip={tip} read={read}
         onActivate={pick} zoom={zoom} onZoom={onZoom} readZoom={readZoom} />
       {/* The chart's text alternative: a figure per day and series in the current stacking, in the chart's units. */}
       {!none && <ChartTable><Table name={`${what} per day`} region="scroll tall" rows={tableRows} columns={columns} rowId={r => r.p.day} /></ChartTable>}
