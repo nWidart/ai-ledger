@@ -3,6 +3,7 @@ import shutil
 import tempfile
 import unittest
 from datetime import date, datetime, timedelta
+from unittest import mock
 
 from ai_ledger import context, metrics, store
 
@@ -61,11 +62,12 @@ class Builder:
         for i, prompt in enumerate(prompts):
             self.turn(sid, minute + i * step, prompt, **kw)
 
-    def call(self, sid, tool, minute, size=None, mcp=None, subagent=False, summary="", error=False, done=True, tid=None):
+    def call(self, sid, tool, minute, size=None, mcp=None, subagent=False, summary="", error=False, done=True, tid=None, skill=None):
         self.n += 1
-        store.insert(self.c, "tool_calls", ["tool_use_id", "session_id", "tool", "mcp_server", "input_summary", "start_ts", "end_ts",
+        store.insert(self.c, "tool_calls", ["tool_use_id", "session_id", "tool", "mcp_server", "skill", "input_summary", "start_ts", "end_ts",
                                             "is_error", "subagent", "result_bytes"],
-                     [(tid or f"t{self.n:05d}", sid, tool, mcp, summary, at(minute), at(minute + 0.1) if done else None, error, subagent, size)])
+                     [(tid or f"t{self.n:05d}", sid, tool, mcp, skill, summary, at(minute), at(minute + 0.1) if done else None, error, subagent,
+                       size)])
 
     def title(self, sid, title):
         store.insert(self.c, "session_titles", ["session_id", "custom", "agent"], [(sid, title, None)])
@@ -900,6 +902,8 @@ class OverheadTest(unittest.TestCase):
         b = Builder(self)
         b.session("s1")
         b.snapshot("c1")
+        b.session("s2", "bar")
+        b.call("s2", "mcp__github__get_pr", 1, mcp="github")  # calls and no snapshot
         self.assertIsNone(b.payload()["overhead"])
         self.assertIsNone(b.payload(project="bar")["overhead"])
         self.assertIsNone(b.payload(project="foo", source="codex")["overhead"])
@@ -913,11 +917,15 @@ class OverheadTest(unittest.TestCase):
         b.snapshot("c3", ts="2026-03-01 10:00:00", sid="m3", model="m-b", version="2.1.300", window=1_000_000)
         b.snapshot("c2", ts="2026-03-01 10:00:00", model="tie")  # same time: the larger uuid wins
         b.snapshot("c9", ts="2026-06-01 10:00:00", project="bar")
+        b.snapshot("c8", ts=None, project="undated")
         o = b.payload(project="foo", range_days=7)["overhead"]  # every snapshot is months before the range
-        self.assertEqual({k: o[k] for k in ("ts", "session_id", "model", "version", "window")},
-                         dict(ts="2026-03-01T10:00:00.000Z", session_id="m3", model="m-b", version="2.1.300", window=1_000_000))
+        self.assertEqual({k: o[k] for k in ("uuid", "ts", "session_id", "model", "version", "window", "before_view", "items", "calls")},
+                         dict(uuid="c3", ts="2026-03-01T10:00:00.000Z", session_id="m3", model="m-b", version="2.1.300", window=1_000_000,
+                              before_view=True, items=[], calls=dict(mcp=[], skill=[])))
+        self.assertFalse(b.payload(project="foo")["overhead"]["before_view"])  # all time has no first day
+        self.assertFalse(b.payload(project="undated", range_days=7)["overhead"]["before_view"])
 
-    def test_categories_in_order_and_the_largest_parts(self):
+    def test_categories_in_order_and_every_item(self):
         b = Builder(self)
         b.session("s1")
         cats = (("System prompt", 4107, "used"), ("MCP tools (deferred)", 81826, "deferred"), ("Autocompact buffer", 33000, "buffer"),
@@ -926,13 +934,79 @@ class OverheadTest(unittest.TestCase):
         parts += [("memory_file", f"/m/{i}.md", "Project", i) for i in range(6)]
         parts += [("skill", n, "userSettings", t) for n, t in (("b", 5), ("a", 5), ("c", 1), ("d", 9), ("e", 2), ("f", 3))]
         parts += [("agent", "explorer", "plugin", 999)]
+        parts += [("skill", None, "userSettings", 5), ("skill", "neg", None, -7),  # seq 31, 32
+                  ("mcp_tool", "mcp__plugin_gh_github__get_pr", "github", 4), ("mcp_tool", "search", "docs", 3),  # 33, 34
+                  ("memory_file", "/a/CLAUDE.md", "Project", 0), ("memory_file", "/b/CLAUDE.md", "User", 0),  # 35, 36
+                  ("plugin", "unknown kind", None, 50)]
         b.snapshot("c1", categories=cats, parts=parts)
         o = b.payload(project="foo")["overhead"]
         self.assertEqual(o["categories"], [dict(name=n, tokens=t, state=st) for n, t, st in cats])
-        self.assertEqual(o["top"]["mcp_servers"], [dict(name=f"s{i}", tokens=20 * i + 1) for i in (6, 5, 4, 3, 2)])  # tools summed by server
-        self.assertEqual([m["name"] for m in o["top"]["memory_files"]], [f"/m/{i}.md" for i in (5, 4, 3, 2, 1)])
-        self.assertEqual(o["top"]["skills"], [dict(name=n, tokens=t) for n, t in (("d", 9), ("a", 5), ("b", 5), ("f", 3), ("e", 2))])
-        self.assertEqual(sorted(o), ["categories", "model", "session_id", "top", "ts", "version", "window"])
+        items = o["items"]
+        self.assertEqual(len(items), len(parts) - 1)  # every part but the unknown kind's
+        self.assertEqual([(x["kind"], x["name"], x["tokens"]) for x in items[:3]],
+                         [("agent", "explorer", 999), ("mcp_tool", "mcp__s6__t1", 61), ("mcp_tool", "mcp__s6__t0", 60)])
+        self.assertEqual([x["name"] for x in items if x["tokens"] == 5], ["/m/5.md", "a", "b", None])  # by name, none last
+        self.assertEqual(items[-5:], [  # a negative count reads 0; one file name in two folders is two items
+            dict(seq=35, kind="memory_file", name="/a/CLAUDE.md", detail="Project", server=None, tokens=0),
+            dict(seq=36, kind="memory_file", name="/b/CLAUDE.md", detail="User", server=None, tokens=0),
+            dict(seq=18, kind="memory_file", name="/m/0.md", detail="Project", server=None, tokens=0),
+            dict(seq=4, kind="mcp_tool", name="mcp__s0__t0", detail="s0", server="s0", tokens=0),
+            dict(seq=32, kind="skill", name="neg", detail=None, server=None, tokens=0)])
+        server = {x["name"]: (x["detail"], x["server"]) for x in items if x["kind"] == "mcp_tool"}
+        self.assertEqual(server["search"], ("docs", "docs"))  # no prefix: detail
+        self.assertEqual(o["calls"], dict(mcp=[], skill=[]))
+        self.assertEqual(sorted(o), ["before_view", "calls", "categories", "items", "model", "session_id", "ts", "uuid", "version", "window"])
+
+    def test_calls_are_claude_codes_in_the_view(self):
+        b = Builder(self)
+        servers = ["github", "linear-x"] + [f"srv{i}" for i in range(4)]
+        parts = [("mcp_tool", f"mcp__{s}__t{j}", s, 10) for s in servers for j in range(10)]  # 60 tools on 6 servers
+        parts += [("skill", n, "userSettings", 40) for n in ("ship", "constructor", "__proto__", *(f"k{i:03d}" for i in range(297)))]
+        b.snapshot("c1", parts=parts)
+        b.session("c", "foo", 0)
+        for sub in (False, False, True):  # main thread and subagent
+            b.call("c", "mcp__github__get_pr", 1, mcp="github", subagent=sub)
+        b.call("c", "mcp__linear-x__find", 2, mcp="linear-x", subagent=True)
+        b.call("c", "mcp__slack__post", 2, mcp="slack")  # a server the snapshot does not hold
+        for skill in ("ship", "ship", "constructor", "__proto__", "other"):
+            b.call("c", "Skill", 3, skill=skill)
+        b.call("c", "mcp__github__get_pr", -30 * 24 * 60, mcp="github")  # before the 7-day range
+        for sid, source in (("x", "codex"), ("g", "grok")):  # other agents' calls to the same server
+            b.session(sid, "foo", 0, source=source)
+            b.call(sid, "mcp__github__get_pr", 1, mcp="github")
+        b.session("h", "foo", 0, prompts=0)  # a helper session: automated
+        b.call("h", "mcp__github__get_pr", 1, mcp="github")
+        b.session("o", "bar", 0)  # another project
+        b.call("o", "mcp__github__get_pr", 1, mcp="github")
+        o = b.payload(project="foo", range_days=7)["overhead"]
+        self.assertEqual(len(o["items"]), 360)  # never capped
+        self.assertEqual(o["calls"], dict(mcp=[dict(server="github", calls=3), dict(server="linear-x", calls=1)],
+                                          skill=[dict(name="__proto__", calls=1), dict(name="constructor", calls=1), dict(name="ship", calls=2)]))
+        self.assertEqual(b.payload(project="foo", range_days=7, source="claude")["overhead"]["calls"], o["calls"])
+        self.assertEqual(b.payload(project="foo")["overhead"]["calls"]["mcp"][0], dict(server="github", calls=4))  # all time
+        self.assertEqual(b.payload(project="foo", range_days=7, automated=True)["overhead"]["calls"]["mcp"][0], dict(server="github", calls=4))
+
+    def test_one_snapshot_for_the_whole_payload(self):
+        # A call that another cursor commits after the payload's first query is not counted: the snapshot, its counts and
+        # the page's other figures belong to one moment.
+        b = Builder(self)
+        b.snapshot("c1", parts=[("mcp_tool", "mcp__github__get_pr", "github", 10)])
+        b.session("c", "foo", 0)
+        b.call("c", "mcp__github__get_pr", 1, mcp="github")
+        real, done = metrics.rows, []
+
+        def rows(cur, *a, **k):
+            out = real(cur, *a, **k)
+            if not done:
+                done.append(1)
+                store.insert(cur.cursor(), "tool_calls", ["tool_use_id", "session_id", "tool", "mcp_server", "start_ts", "subagent"],
+                             [("late", "c", "mcp__github__get_pr", "github", at(2), False)])
+            return out
+
+        with mock.patch.object(metrics, "rows", rows):
+            o = b.payload(project="foo")["overhead"]
+        self.assertTrue(done)
+        self.assertEqual(o["calls"]["mcp"], [dict(server="github", calls=1)])
 
 
 if __name__ == "__main__":

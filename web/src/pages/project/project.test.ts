@@ -94,9 +94,9 @@ describe("contextGrid", () => {
 describe("contextGrid with a snapshot", () => {
   type Cat = ContextOverhead["categories"][number];
   const snap = (cats: [string, number, Cat["state"]?][], over: Partial<ContextOverhead> = {}): ContextOverhead => ({
-    ts: "2026-11-10T09:30:00Z", session_id: "m1", model: "claude-opus-4-1", version: "2.1.0", window: 200000,
+    uuid: "c1", ts: "2026-11-10T09:30:00Z", session_id: "m1", model: "claude-opus-4-1", version: "2.1.0", window: 200000,
     categories: cats.map(([name, tokens, state]) => ({ name, tokens, state: state ?? "used" })),
-    top: { mcp_servers: [], memory_files: [], skills: [] }, ...over,
+    before_view: false, items: [], calls: { mcp: [], skill: [] }, ...over,
   });
   // S 40,000 tokens at 20% of a 200k window: 40 starting cells.
   const ctx = (overhead: ContextOverhead, median = 40000, startShare = .2) => ({
@@ -114,7 +114,7 @@ describe("contextGrid with a snapshot", () => {
       ["System prompt", 4000, 4], ["System tools", 12000, 12], ["Skills", 4000, 4], [REST_LABEL, 20000, 20]]);
     expect(starts(g.rows).map(r => Math.round(r.share * 1000) / 1000)).toEqual([.02, .06, .02, .1]);
     expect(g.rows.slice(-2).map(r => [r.key, r.cells])).toEqual([["added", 60], ["free", 100]]);
-    expect(g.overhead).toEqual({ ts: scenario.ts, model: "claude-opus-4-1", deferred: 7000, overflow: false, top: scenario.top });
+    expect(g.overhead).toEqual({ ts: scenario.ts, model: "claude-opus-4-1", deferred: 7000, overflow: false });
     // Each category has its own tone, and the rest its own.
     expect(starts(g.rows).map(r => r.tone)).toEqual(["p0", "p1", "p2", "rest"]);
   });

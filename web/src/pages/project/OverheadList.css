@@ -1,0 +1,37 @@
+/* What loads before your first prompt: the context grid's ranked list of a snapshot's overhead. Every bar is on one scale (the
+   largest category's tokens), set inline as --w (0 to 1), at least 1px, its figure beside it in words. Nothing animates. */
+.ol { --ol-bar: var(--series-1); --ol-item: color-mix(in srgb, var(--series-1) 55%, var(--surface-1));
+  container-type: inline-size; margin-top: var(--space-6); font-size: var(--fs-sm); color: var(--text-secondary); }
+.ol summary { cursor: pointer; color: var(--text-primary); overflow-wrap: anywhere; }
+.ol .ol-measured { margin: var(--space-3) 0 var(--space-4); font-size: var(--fs-xs); color: var(--text-muted); overflow-wrap: anywhere; }
+.ol ol { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.ol .ol-items, .ol .ol-tools { margin-top: var(--space-3); padding-inline-start: var(--space-7); }
+
+/* A row: the name, the bar and the figure on one line, the line under them. In the DOM the figure comes before the bar, so
+   a screen reader reads the name, then the figure. Every track has one width at every level, so equal tokens draw equal
+   bars: a fixed column here (the name gives way), and under the name the width of the deepest row. */
+.ol-row { display: grid; grid-template-columns: minmax(0, 1fr) 9rem max-content; column-gap: var(--space-4); align-items: baseline; }
+.ol-name { grid-column: 1; grid-row: 1; min-width: 0; overflow-wrap: anywhere; color: var(--text-primary); }
+.ol-name .linkish { max-width: 100%; text-align: start; overflow-wrap: anywhere; }
+.ol-fig { grid-column: 3; grid-row: 1; font-variant-numeric: tabular-nums; }
+.ol-track { grid-column: 2; grid-row: 1; align-self: center; block-size: .5rem; }
+.ol-bar { display: block; block-size: 100%; inline-size: max(1px, calc(var(--w) * 100%)); background: var(--ol-bar); }
+.ol-items .ol-bar { background: var(--ol-item); }
+.ol-line { grid-column: 1 / -1; min-width: 0; font-size: var(--fs-xs); color: var(--text-muted); overflow-wrap: anywhere; }
+.ol-line summary { color: var(--text-secondary); }
+.ol .ol-fold { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); align-items: baseline; font-size: var(--fs-xs); color: var(--text-muted); }
+
+/* Narrow (in rem, so large text narrows it too): the bar on its own line under the name and the figure, as wide as a server's
+   tool's row, two indents in (cqi: the list's width, the same at every level). */
+@container (max-width: 24rem) {
+  .ol-row { grid-template-columns: minmax(0, 1fr) max-content; }
+  .ol-fig { grid-column: 2; }
+  .ol-track { grid-column: 1 / -1; grid-row: 2; justify-self: start; inline-size: calc(100cqi - 2 * var(--space-6)); }
+  .ol .ol-items, .ol .ol-tools { padding-inline-start: var(--space-6); }
+}
+
+/* Forced colors: a bar is told by its length inside a bordered track, not by a hue. */
+@media (forced-colors: active) {
+  .ol-track { border: 1px solid CanvasText; }
+  .ol-bar, .ol-items .ol-bar { forced-color-adjust: none; background: CanvasText; }
+}

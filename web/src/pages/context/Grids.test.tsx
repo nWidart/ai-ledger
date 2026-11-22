@@ -1,7 +1,9 @@
-import { screen, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import type { ContextPayload } from "../../api";
+import type { ContextOverhead, ContextPayload } from "../../api";
 import context from "../../__fixtures__/context";
+import { big } from "../../format";
 import { renderApp } from "../../testing";
 import { GRID_CELLS } from "../project/project";
 import { GRID_PROJECTS, Grids, projectGrids } from "./Grids";
@@ -53,11 +55,32 @@ describe("window grids", () => {
     expect(img.getAttribute("aria-label")).toMatch(/60% starting context, 0\.0% added by the peak, 40% free$/);
   });
 
-  it("draws the one full grid, with its legend, when a project is selected", () => {
-    renderApp(<Grids d={view(1, { project: "p0", starting: { ...fixture.starting, window: 200_000, window_share: .1, median: 20_000 },
-      growth: { ...fixture.growth, peak: { sessions: 20, median: 80_000, window_share: .4 } } })} />);
+  it("draws the one full grid, with its legend and the list of what loads before the first prompt, when a project is selected", async () => {
+    const overhead: ContextOverhead = { uuid: "c1", ts: "2026-11-10T09:30:00Z", session_id: "m1", model: "claude-opus-4-1", version: "2.1.0", window: 200_000, before_view: false,
+      categories: [{ name: "Skills", tokens: 4000, state: "used" }], calls: { mcp: [], skill: [{ name: "ship", calls: 2 }] },
+      items: [{ seq: 1, kind: "skill", name: "ship", detail: "userSettings", server: null, tokens: 300 }] };
+    const one = (project: string) => view(1, { project, starting: { ...fixture.starting, window: 200_000, window_share: .1, median: 20_000 },
+      growth: { ...fixture.growth, peak: { sessions: 20, median: 80_000, window_share: .4 } }, overhead });
+    history.replaceState(null, "", "/context?project=p0");
+    const { rerender } = renderApp(<Grids d={one("p0")} />);
+    // The list of what loads before the first prompt, closed, in the grid's side column.
+    const title = `What loads before your first prompt · ${big(4000)} tokens`, list = () => screen.getByText(title).closest("details")!;
+    const summary = screen.getByText(title), ship = () => screen.queryByRole("button", { name: "ship" });
+    expect([summary.closest("details")!.open, summary.closest(".cg-side")?.querySelector(".cg-legend") != null]).toEqual([false, true]);
+    await userEvent.click(summary);
+    expect(ship()).not.toBeNull();
+    // Another project selected while its payload loads (or after it failed): the page keeps the last payload, its list closed and
+    // no name a button, since a sheet would open for the selected project.
+    act(() => { history.pushState(null, "", "/context?project=p1"); });
+    expect(list().open).toBe(false);
+    await userEvent.click(screen.getByText(title));
+    expect(ship()).toBeNull();
+    // Its payload in: its own list, closed again, the names buttons.
+    rerender(<Grids d={one("p1")} />);
+    expect([list().open, ship() != null]).toEqual([false, true]);
     const img = screen.getByRole("img", { name: /^Context window of a typical session/ });
-    expect([cellsOf(img, "start"), cellsOf(img, "added"), cellsOf(img, "free")]).toEqual([20, 60, 120]);
+    // The snapshot splits the starting cells (the Skills category's and the rest), so the start is those two.
+    expect([cellsOf(img, "p0") + cellsOf(img, "rest"), cellsOf(img, "added"), cellsOf(img, "free")]).toEqual([20, 60, 120]);
     expect(screen.getByRole("heading", { level: 3, name: "Typical session · 200k window" })).toBeTruthy();
     expect(screen.getByText("Added by the peak")).toBeTruthy();
     expect(screen.queryAllByRole("img")).toHaveLength(1);

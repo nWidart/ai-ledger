@@ -50,7 +50,7 @@ export type GridTone = "start" | `p${number}` | "rest" | "added" | "free";
 export interface GridRow { key: string; tone: GridTone; label: string; tokens: number | null; share: number; cells: number }
 /** What the legend says of the snapshot. deferred: the deferred tools' tokens, not in the context. overflow: the categories
  *  exceed the median start, so the start is split among them alone. */
-export interface GridOverhead { ts: Ts; model: string | null; deferred: number; overflow: boolean; top: ContextOverhead["top"] }
+export interface GridOverhead { ts: Ts; model: string | null; deferred: number; overflow: boolean }
 export interface ContextGridModel {
   start: number; added: number; free: number; rows: GridRow[]; window: number | null; sessions: number;
   /** null without a snapshot: the start is one part. */
@@ -78,7 +78,7 @@ export const overheadParts = (o: ContextOverhead): OverheadPart[] =>
 export function gridOverhead(o: ContextOverhead, start: number | null): GridOverhead {
   const sum = overheadParts(o).reduce((a, x) => a + x.tokens, 0);
   return { ts: o.ts, model: o.model, deferred: o.categories.filter(x => x.state === "deferred").reduce((a, x) => a + x.tokens, 0),
-    overflow: start != null && sum > start, top: o.top };
+    overflow: start != null && sum > start };
 }
 
 /** The grid of a typical session: 200 cells of half a percent of the window each, filled for the median start, then for the

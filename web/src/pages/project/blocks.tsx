@@ -1,6 +1,6 @@
 // The blocks of the Project page. Each reads one payload another page reads, with the project as the filter, and draws, fails and
 // retries on its own (Block). Figures come from the other pages' own components and model functions.
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "../../components/chart";
 import { askedFor } from "../../components/refresh";
@@ -10,7 +10,7 @@ import { DocsLink } from "../../components/DocsLink";
 import { judged } from "../../url";
 import { Ledger, LedgerRow } from "../../components/Ledger";
 import { ChangeDetail, Facts, ModelLedger, TopSessions } from "../../components/sheets/ProjectSheet";
-import { appLink, errorsHref, judgmentsHref, openSessionSheet } from "../../components/sheets/session";
+import { appLink, errorsHref, judgmentsHref, openSessionSheet, openToolSheet } from "../../components/sheets/session";
 import { big, dur, num, pct, plural, usd } from "../../format";
 import type { ApiState } from "../../useApi";
 import { share } from "../context/context";
@@ -217,8 +217,9 @@ export function ContextBlock({ context, usage, scope }: { context: ApiState<Cont
   const claude = !!usage.data?.daily_sources.some(r => r.source === "claude");
   return (
     <Block id="context" title="Context" page="Context" href={"/context" + scope.search} state={context} also={[usage]}>
-      {c => <>
-        <ContextGrid model={contextGrid(c)} snapshot={c.overhead} />
+      {/* Keyed by the project: another project's list and Measure now start afresh, even when its Context comes from the cache. */}
+      {c => <Fragment key={scope.project}>
+        <ContextGrid model={contextGrid(c)} snapshot={c.overhead} onOpen={openToolSheet} />
         <Facts facts={[
         [c.starting.median == null ? "n/a" : big(c.starting.median), "median starting context, tokens"],
         [c.starting.window_share == null ? "n/a" : share(c.starting.window_share), "of the window at the start"],
@@ -226,8 +227,8 @@ export function ContextBlock({ context, usage, scope }: { context: ApiState<Cont
         [c.growth.to_compaction.turns == null ? "n/a" : num(c.growth.to_compaction.turns), "turns to the first compaction"],
         [na(usage.data && num(usage.data.totals.near_limit)), "sessions near the context limit"],
       ]} />
-        {(claude || c.overhead) && <MeasureNow key={scope.project} project={scope.project} />}
-      </>}
+        {(claude || c.overhead) && <MeasureNow project={scope.project} />}
+      </Fragment>}
     </Block>
   );
 }

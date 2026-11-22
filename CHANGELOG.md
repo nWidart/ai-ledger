@@ -5,6 +5,14 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Project and Context (one project): "What loads before your first prompt" ranks the snapshot's categories and every MCP server, memory file, custom agent and skill. It shows how often Claude Code called each server and skill in the view, and a name opens its sheet.
+
+### Changed
+
+- `/api/context` `overhead` has `items`, `calls` and `before_view` in place of `top`.
+
 ## [0.7.0] - 2026-11-22
 
 ### Added
