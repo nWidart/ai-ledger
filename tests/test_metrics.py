@@ -742,6 +742,14 @@ class MetricsTest(unittest.TestCase):
         foo, bar = (metrics.calendar(c, p, today=TODAY) for p in ("foo", "bar"))
         self.assertEqual(([r["day"] for r in foo["days"]], foo["first"], foo["project"]), (["2026-11-04", "2026-11-05"], "2026-11-04", "foo"))
         self.assertEqual(([r["day"] for r in bar["days"]], bar["first"]), (["2026-10-01"], "2026-10-01"))
+        # A day after today (a machine with a fast clock) is no row: the rows are usage()'s up to today, first stays. With
+        # only days after today, there is no row and no first.
+        u = metrics.usage(c, "foo", 0, prices=PRICES, today=date(2026, 11, 4))
+        eve = metrics.calendar(c, "foo", today=date(2026, 11, 4))
+        self.assertEqual((eve["days"], eve["first"]), ([r for r in u["daily_work"] if r["day"] <= "2026-11-04"], "2026-11-04"))
+        self.assertEqual(len(eve["days"]), 1)
+        ahead = metrics.calendar(c, "foo", today=date(2026, 11, 3))
+        self.assertEqual((ahead["days"], ahead["first"]), ([], None))
         # A prompt the day before bar's first request: its day is a row, and so the first day.
         store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [("p7", "s3", "2026-09-30 12:00:00", False)])
         self.addCleanup(c.execute, "DELETE FROM prompts WHERE prompt_id = 'p7'")

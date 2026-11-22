@@ -185,7 +185,7 @@ The calendar's section and heading SHALL show once the page's figures are in, wi
 - **THEN** the button reads "Retrying…" with the focus while it runs, and the new calendar then takes the focus
 
 ### Requirement: Serve the calendar's days
-`/api/calendar` SHALL answer the work per day of the 53 weeks that end with the current week, from a Monday to today on the local clock, for a project, a source and the automated-sessions filter: each day's sessions, prompts, commits, tool calls and failed calls, as `/api/usage` counts them, and the first recorded day under those filters over all time: the first day with a request, or an earlier day with a row. It SHALL take no range. An unknown source SHALL answer 400.
+`/api/calendar` SHALL answer the work per day of the 53 weeks that end with the current week, from a Monday to today on the local clock, for a project, a source and the automated-sessions filter: each day's sessions, prompts, commits, tool calls and failed calls, as `/api/usage` counts them, and `first`: the first day with a request or a row under those filters, over all time up to `end`, or null. It SHALL answer no row after `end`. It SHALL take no range. An unknown source SHALL answer 400.
 
 #### Scenario: Same figures as the work chart
 - **WHEN** a day is inside both the page's range and the calendar's span
@@ -202,6 +202,10 @@ The calendar's section and heading SHALL show once the page's figures are in, wi
 #### Scenario: A prompt before the first request
 - **WHEN** a prompt falls on the day before its project's first request
 - **THEN** that day has a row, and `first` is that day
+
+#### Scenario: A transcript dated tomorrow
+- **WHEN** a machine with a fast clock records a request dated the day after today
+- **THEN** that day has no row and `first` is unchanged; with only such requests, there is no row and `first` is null
 
 #### Scenario: Unknown source
 - **WHEN** a client asks for `/api/calendar?source=gemini`

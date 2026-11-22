@@ -111,6 +111,7 @@ Checked on the tree rebased onto `origin/main` at `05a44407`.
 | The span starts on a Monday | `MetricsTest.test_calendar` (`start` for a Monday, a Thursday, a Sunday and the next Monday as today; the Sunday is Nov 8, 2026, not the scenario's Nov 22). |
 | Recording began before the span | `MetricsTest.test_calendar` ("A year later bar's day is out of the rows, but still the first day"). |
 | A prompt before the first request | `MetricsTest.test_calendar` ("A prompt the day before bar's first request"). |
+| A transcript dated tomorrow | `MetricsTest.test_calendar` ("A day after today … is no row": `foo` on Nov 4 keeps `usage()`'s rows up to that day and its `first`; on Nov 3 it has no row and no `first`). |
 | Unknown source | `tests/test_app.py` (`/api/calendar?source=gemini` in the list that answers 400); `MetricsTest.test_calendar` (`ValueError`). |
 
 ### Order the Activity page
