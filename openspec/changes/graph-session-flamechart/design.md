@@ -272,6 +272,17 @@ Net test lines, estimated: Python 45, layout 160, reading and words 110, option 
 - A new chunk named after its first module, `SessionSpans-*.js` (assumed: Vite names a chunk after its entry module): estimated 6 to 8 kB. `web/scripts/check-bundle.mjs` gains `SessionSpans: <measured + 2>` in `LIMITS`, with a true comment ("the session sheet's tool-call chart, loaded when a sheet opens"), and the name in `SINGLE`: one line and one name, since other teams edit that file. If the build names it otherwise, guard the name it found and say so.
 - `EChart-*.js`: unchanged; the section imports it, as the pages do.
 
+### 14. The demo store: one session for the images and the browser check
+
+Every demo call has a NULL `result_file`, so the demo shows no subagent lane, and its calls run 40 ms to 20 s, so it has no call over 20 minutes (measured). `tools/demo/seed.py` gains one session, `demo-spans` (task 1.8): atlas-api, Claude Code, yesterday from 14:00 to 14:58, with fixed values and no random stream, so every other row the seed writes stays the same (the seed's rule for its later passes, `seed.py:163`, `307`). It holds each case the chart must show: two subagents in parallel and a third later, each with its own result file; three main-thread calls at once; a 6-minute failed test run; a 24.5-minute call with nothing starting for 30 minutes (a squeezed gap); a main-thread call with no result; a subagent call with no result file; the last call ending 3 minutes after the last start. A fixed id lets the browser check and the shot open it by URL.
+
+What else reads the seed's output, and what the new session changes there:
+
+- `tools/demo/chartfit/*.mjs` read the served payloads at run time and name no demo session or count (`grep` for `demo-` ids and `result_file` finds only payload readers): one more atlas-api session is one more row, dot or bar for them, not a broken check.
+- `tools/demo/record.mjs`: its shots crop panels of pages; its GIF scenes open a session sheet from the first Sessions row and from an "Open session" link of the Judgments log (`record.mjs:136`, `199`, `248`). Sessions are sorted newest first and the seed has sessions until 30 minutes ago, so `demo-spans` (yesterday) is not a first row. The new `session-spans` shot (task 1.12) opens it by URL. The README GIFs are not re-recorded in this change: they show the session sheet without the section until the next recording.
+- `tools/demo/firstscreen.mjs`, `typefit.mjs`, `sticky.mjs`, `livefit.mjs`: layout checks of pages and Live; `demo-spans` is not live (it ended yesterday).
+- Errors, Cost and Activity count one more session with two failed calls (the test run and an edit) and its requests' cost. Nothing hard-codes those figures.
+
 ## Corrections to the brief and the recommendation
 
 1. **The axis is not built from call starts only.** `timelineModel` takes main-thread requests with a known context, every call's `start_ts || end_ts`, and compactions (`session.ts:97-103`). The consequence (a call's end can pass the axis's end) holds.
