@@ -31,6 +31,8 @@
 //   the range the URL gets the range, then the day, the status names the range, and Back restores the earlier range;
 // - in a 343px box the tooltip of a busy day outside the range is no wider than the box and inside it, its long sentence
 //   wraps, its figures keep a line each, and the page does not scroll sideways;
+// - overnight, with the calendar answered a day older than the figures, a pick of a day just outside the figures' range
+//   widens it and the tabs list the day's sessions;
 // - a touch tap in a 343px box selects a day;
 // - Escape with the focus on another control closes a tooltip the pointer opened, also an Escape the moment it shows (once
 //   the observer marks that it saw the tooltip open and sent the Escape);
@@ -552,6 +554,27 @@ export async function calendar(h) {
     line("in a 343px box the tooltip of a busy day outside the range is no wider than the box, inside it, its long sentence wrapped, the figures a line each, the page not scrolling sideways",
       found.length === 2 && found.every(ok), found.map(x => `${dayLong(x.day)}: ${x.open ? "" : "NOT OPEN, "}${px(x.w)} wide at ${px(x.l)}..${px(x.r)} of ${px(x.box)}, `
         + `the sentence on ${x.said} lines, ${x.rows.filter(Boolean).length} of ${x.rows.length} figure rows on one line, scroll width ${x.scroll}px in ${x.window}px`).join("; "));
+    await page.done();
+  }
+
+  // Overnight: the calendar, kept through a change of range, answered a day older than the figures. A pick of a busy day
+  // just outside the figures' range, which the calendar's own last days would hold, widens it, and the tabs show the day.
+  {
+    const E1 = plus(END, -1);
+    const r = [7, 14, 30, 90].find(n => own.days.some(x => x.day === plus(END, -n) && x.sessions));
+    if (!r) throw new Error("calendar: the demo store has no day with a session 7, 14, 30 or 90 days back");
+    const K = plus(END, -r), wider = { 7: 14, 14: 30, 30: 90, 90: 0 }[r];
+    const older = j => ({ ...j, start: plus(monday(E1), -7 * 52), end: E1, days: j.days.filter(x => x.day <= E1) });
+    const page = await open({ name: "overnight", path: `/usage?range=${r}`, answer: older });
+    const c = placed(await cells(page), E1).cells.find(x => x.day === K);
+    // The tabs' rows are counted once the sessions of the day picked are in, not the range's still on screen.
+    const listed = page.waitForResponse(res => /\/api\/sessions\?/.test(res.url()) && new URL(res.url()).searchParams.get("day") === K, { timeout: 15000 }).catch(() => null);
+    await page.mouse.click(c.x, c.y);
+    const url = await until(() => new URL(page.url()), u => u.searchParams.get("day") === K && u.searchParams.get("range") === String(wider));
+    await listed;
+    const rows = await until(() => ev(page, () => [...document.querySelectorAll("#wb-panel-sessions tbody tr")].filter(tr => !tr.querySelector("td.empty")).length), n => n > 0);
+    line(`overnight, the calendar a day older than the figures: a click on ${dayLong(K)}, ${r} days back, widens the range to ${wider ? `${wider} days` : "all time"} and the tabs list its sessions`,
+      url.searchParams.get("day") === K && url.searchParams.get("range") === String(wider) && rows > 0, `${url.search}; ${rows} session rows`);
     await page.done();
   }
 
