@@ -103,10 +103,13 @@ export function SessionSpans({ s }: { s: SessionDetail }) {
     tip.style.top = "0px";
     const w = tip.offsetWidth, h = tip.offsetHeight, room = el.clientWidth, b = spanBox(layout!, span);
     let pos = pointer.current && tipAt(el, tip, pointer.current.x, pointer.current.y);
-    // A key's, or the pointer's when beside it would leave the box: above the span's start, below it at the box's top.
-    if (!pos || pos.left < 0 || pos.left + w > room) {
-      const above = b.y - TIP_GAP - h;
-      pos = { left: span.x0 + .5 - w / 2, top: above >= 0 ? above : b.y + b.height + TIP_GAP };
+    // Beside the pointer, unless that leaves the box or covers the span read, its mark (over a long bar's middle, the
+    // session plot's rule): then above the pointer, or for a key above the span's start; below it at the box's top.
+    const covers = (p: { left: number; top: number }) => p.left < b.x + b.width + TIP_GAP && p.left + w > b.x - TIP_GAP
+      && p.top < b.y + b.height + TIP_GAP && p.top + h > b.y - TIP_GAP;
+    if (!pos || pos.left < 0 || pos.left + w > room || covers(pos)) {
+      const above = b.y - TIP_GAP - h, x = pointer.current ? pointer.current.x - el.getBoundingClientRect().left : span.x0 + .5;
+      pos = { left: x - w / 2, top: above >= 0 ? above : b.y + b.height + TIP_GAP };
     }
     // Inside the box at both edges; the tooltip is never wider than the box (spans.css).
     tip.style.left = `${Math.max(0, Math.min(pos.left, room - w))}px`;

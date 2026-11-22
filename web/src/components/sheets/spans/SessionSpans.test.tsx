@@ -145,6 +145,13 @@ describe("tool calls by thread: reading", () => {
     fireEvent.mouseMove(box(), pixel("m2"));
     fireEvent.mouseLeave(box());
     expect([live().textContent, tip(), mark()]).toEqual(["", null, null]);
+    // In a long bar's middle the tooltip beside the pointer would cover the bar: it sits clear of the bar's mark instead.
+    const sizes = [vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(120),
+      vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(60), vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(W)];
+    fireEvent.mouseMove(box(), pixel("m2"));
+    const [x = 0, y = 0, w = 0, h = 0] = markAt(), left = parseFloat(tip()!.style.left), top = parseFloat(tip()!.style.top);
+    expect(left + 120 <= x - 1 || left >= x + w + 1 || top + 60 <= y - 1 || top >= y + h + 1, `tooltip at ${left}, ${top}; mark ${[x, y, w, h]}`).toBe(true);
+    sizes.forEach(s => s.mockRestore());
   });
 
   it("opens the read call's tool on Enter and the clicked one's on a click, and says a call with no tool has no sheet", () => {
