@@ -1,0 +1,39 @@
+/* The session sheet's tool-call chart (SessionSpans.tsx): its box, the box the reading sits on, the mark around the call
+   read, the hand over a call, the tooltip and the key line. The spans, the breaks and the labels are drawn by
+   components/echart from spansOption.ts. Nothing here moves: the chart never animates. */
+
+/* Vertical margins only, as the timeline's box (sheets.css): no horizontal margin, padding or border, so both measure the
+   same width and map time to the same x (design decision 2). */
+.spans { margin: var(--space-2) 0 var(--space-3); }
+
+/* The origin of every pixel of the layout: the wrapper's box sits at its top left, the mark and the tooltip over it. */
+.spans-box { position: relative; }
+
+/* A hand over a call, where a click opens its tool. zrender writes its own cursor inline on the element it draws in, on
+   every pointer move: only an important rule wins over it. */
+.spans-box.hand, .spans-box.hand * { cursor: pointer !important; }
+
+/* The call read: a 2px outline 2px outside its bar, a circle around a ring, in the text color. */
+.spans-mark { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.spans-mark :is(rect, circle) { fill: none; stroke: var(--text-primary); stroke-width: 2; }
+
+/* The tooltip is never wider than 18rem nor than the box, whatever its left; a long tool name or input wraps anywhere. The
+   placement keeps it inside the box at both edges (SessionSpans.tsx). */
+.spans-box .tip { box-sizing: border-box; width: max-content; max-width: min(18rem, 100%); white-space: normal; overflow-wrap: anywhere; }
+
+.spans-note { margin: var(--space-2) 0; }
+
+/* The key line: the shapes drawn with borders, which forced colors turns into the system text color. */
+.spans-key { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); margin: 0 0 var(--space-3); font-size: var(--fs-xs);
+  color: var(--text-muted); }
+.spans-key i { display: inline-block; box-sizing: border-box; vertical-align: middle; margin-right: var(--space-2); }
+.spans-key .k-call { width: 12px; height: 8px; border-top: 8px solid var(--series-1); }
+.spans-key .k-failed { width: 12px; height: 8px; border: 1.5px solid var(--critical); }
+.spans-key .k-open { width: 7px; height: 7px; border: 1.5px solid var(--text-muted); border-radius: 50%; }
+
+/* The input column wraps, as the tooltip does. */
+.spans .spans-input { white-space: normal; overflow-wrap: anywhere; }
+
+@media (forced-colors: active) {
+  .spans-mark :is(rect, circle) { stroke: Highlight; }
+}
