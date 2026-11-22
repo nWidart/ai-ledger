@@ -1,6 +1,6 @@
 # Verification
 
-How each scenario of this change's two spec deltas is proven, as built, on the branch rebased on main `91d644ff`. A test is named by its file and its title; a browser check by its line in `tools/demo/chartfit/quadrant.mjs` (`node tools/demo/chartfit.mjs quadrant`, 80 lines, all "ok" in three runs in a row), numbered in the order the module prints them. Test files are under `web/src/pages/project/` unless the path says otherwise.
+How each scenario of this change's two spec deltas is proven, as built, on the branch rebased on main `3ef57c12`. A test is named by its file and its title; a browser check by its line in `tools/demo/chartfit/quadrant.mjs` (`node tools/demo/chartfit.mjs quadrant`, 80 lines, all "ok" in three runs in a row), numbered in the order the module prints them. Test files are under `web/src/pages/project/` unless the path says otherwise.
 
 ## project-page
 
@@ -55,7 +55,7 @@ Checked against the classes a review of the sibling graphs found. Where the quad
 
 ## Net test lines
 
-Against main `91d644ff`, added minus removed in `*.test.*` and `tests/`: 642 added, 7 removed, **635 net**. By file: `tests/test_metrics.py` 26, `quadrant/quadrant.test.ts` 189, `quadrant/quadrantOption.test.ts` 109, `quadrant/SessionQuadrant.test.tsx` 205, `quadrant/SessionQuadrant.real.test.tsx` 89, `ProjectPage.test.tsx` 17. Not counted: `tools/demo/chartfit/quadrant.mjs` (778 lines, a browser check that runs locally, not in CI) and the regenerated usage fixtures.
+Against main `3ef57c12`, added minus removed in `*.test.*` and `tests/`: 642 added, 7 removed, **635 net**. By file: `tests/test_metrics.py` 26, `quadrant/quadrant.test.ts` 189, `quadrant/quadrantOption.test.ts` 109, `quadrant/SessionQuadrant.test.tsx` 205, `quadrant/SessionQuadrant.real.test.tsx` 89, `ProjectPage.test.tsx` 17. Not counted: `tools/demo/chartfit/quadrant.mjs` (778 lines, a browser check that runs locally, not in CI) and the regenerated usage fixtures.
 
 That is over the repo's advice of 400 (about 360 were planned). Most of the excess is the plot's own reading. The shared chart wrapper's reading does not work on a log axis: its pointer reads the x axis value as a point index, so over a cost it reads "point 1.42", and its key tooltip and band go to the pixel of the index as a cost. No prop changes that, and the wrapper is not this change's to edit, so the plot owns its keys, pointer test, tooltip, mark and live region, and their tests: the pointer and pile cases, Escape from the document, the reading kept or ended on newer figures, the place kept after a sheet. The rest is the model's: the medians and quadrants, the zero lanes (a lane kept to one decade; every figure finite with no dot, equal dots, every session at 0 or a 0 cost), and the sentences, including the cost wordings found while building ("under $0.01", "more than $0", "$0") and a half median ("22.5 tool calls"). The Python test is its own fixture because it needs sessions past the `top_sessions` cut. If the wrapper gains a pointer test and the place of a point (`design.md`, "For the owner of the shared chart component"), a later change can drop `dotAt`, `stepDot`, the tooltip, the mark, the live region and most of the component's tests.
 
@@ -70,14 +70,14 @@ That is over the repo's advice of 400 (about 360 were planned). Most of the exce
 As `node web/scripts/check-bundle.mjs` printed it on the rebased build:
 
 ```
-ok   index-CeY0mOrb.js  109.9 kB gzip  (limit 130 kB)
-ok   CostPage-BLxjSoUq.js  12.1 kB gzip  (limit 20 kB)
-ok   ActivityPage-TWPe0HRt.js  28.3 kB gzip  (limit 31 kB)
-ok   ErrorsPage-DIBi3Nyp.js  21.0 kB gzip  (limit 26 kB)
-ok   ProjectPage-CidL2tGu.js  9.3 kB gzip  (limit 11 kB)
-ok   EChart-C9M_aUYA.js  6.3 kB gzip  (limit 8 kB)
-ok   zoomReset-B2n7bpVN.js  1.2 kB gzip  (limit 3 kB)
+ok   index-DY0VBfZ1.js  109.9 kB gzip  (limit 130 kB)
+ok   CostPage-Dbb2faqW.js  18.6 kB gzip  (limit 20 kB)
+ok   ActivityPage-cvtHpAHr.js  28.3 kB gzip  (limit 31 kB)
+ok   ErrorsPage-DKiFPfyC.js  21.0 kB gzip  (limit 26 kB)
+ok   ProjectPage-76IoGSz7.js  9.3 kB gzip  (limit 11 kB)
+ok   EChart-BiQz9lgS.js  6.3 kB gzip  (limit 8 kB)
+ok   zoomReset-BcajONlb.js  1.2 kB gzip  (limit 3 kB)
 ok   echarts-CZ7cuwNT.js  176.5 kB gzip  (limit 195 kB)
 ```
 
-The ECharts chunk did not grow. After the edge-case fixes the `ProjectPage` limit set to 1 kB failed again, naming the chunk. With the `ProjectPage`, `EChart` and `zoomReset` limits set to 1 kB, the check failed and named each chunk; with the `EChart` chunk moved away, it failed on "expected exactly one EChart-*.js chunk, found 0".
+`CostPage` grew from 12.1 kB with main's cost flow, not with this change. The ECharts chunk did not grow. After the edge-case fixes the `ProjectPage` limit set to 1 kB failed again, naming the chunk. With the `ProjectPage`, `EChart` and `zoomReset` limits set to 1 kB, the check failed and named each chunk; with the `EChart` chunk moved away, it failed on "expected exactly one EChart-*.js chunk, found 0".
