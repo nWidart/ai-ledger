@@ -364,9 +364,9 @@ export function EChart({
   // Where the pointer's reading points, in px from the plot's top left; null for a key's reading, which points at the
   // point itself. Not state: a pointer move inside one point re-renders nothing, the tooltip is only moved.
   const pointer = useRef<{ x: number; y: number } | null>(null);
-  // The option the chart was last drawn from, set by the draw effect: until it is this render's, the chart answers for
-  // the points it drew before.
-  const drawnFrom = useRef<EChartProps["option"] | null>(null);
+  // The point keys the chart was last drawn with, set by the draw effect; null until it draws. While they are not this
+  // render's, the chart still draws the points as they were before the keys moved the reading to its new index.
+  const drawnKeys = useRef<Keys | null>(null);
   /** Puts the tooltip where the reading of point i points: beside the pointer, or over the point as the chart draws it
    *  now. Before the chart is there, the point is at its share of the box's width. */
   const place = useEffectEvent((i: number) => {
@@ -378,10 +378,11 @@ export function EChart({
     placeTip(box.current!, plot.current!, tipEl.current, to);
   });
   // Each key sets a new reading, so its tooltip is placed even when the point is the one the pointer was reading.
-  // Not while the chart is not yet drawn from this render's option (a reading the point keys moved comes with the newer
-  // data): this runs before the draw effect, and the chart, which still draws the old points, would answer for another
-  // point. The band effect, which runs after every drawing, places it then.
-  const placeRead = useEffectEvent((i: number) => { if (!chart || drawnFrom.current === option) place(i); });
+  // Not while the keys changed since the chart last drew (a reading the point keys moved comes with the newer data): this
+  // runs before the draw effect, and the chart, which still draws the old points, would answer for another point. The
+  // band effect, which runs after every drawing, places it then. Newer data under the same keys, or with none, keeps
+  // each point at its index, so its reading is placed here, before the paint, as ever.
+  const placeRead = useEffectEvent((i: number) => { if (!chart || drawnKeys.current === drawing.keys) place(i); });
   useLayoutEffect(() => { if (at != null) placeRead(at); }, [reading, at]);
   /** Enter or a click on point i: the reading ends, unless the chart declines. False in a chart that selects nothing. */
   const activate = (i: number) => {
@@ -574,7 +575,7 @@ export function EChart({
     if (!chart) return;
     const made = option(env), first = drawn.current !== chart;
     drawn.current = chart;
-    drawnFrom.current = option;
+    drawnKeys.current = drawing.keys;
     chart.setOption({
       ...made, ...(env.motion && first ? {} : { animation: false }), ...(zoom ? {} : { dataZoom: [] }),
       axisPointer: { ...made.axisPointer, triggerOn: "none" },
@@ -583,7 +584,7 @@ export function EChart({
     drew.current = shows;
     unsaid.current = false; // a drag still going changed the old view: its release has nothing to say of this one
     unzoom(chart);
-  }, [chart, option, env, shows, zoom]);
+  }, [chart, option, env, shows, zoom, drawing.keys]); // keys come with their option: drawn once
   // After the draw effect, which must still see the status of the commit before.
   useEffect(() => { settled.current = status; }, [status]);
   // A caller's fault in its point keys, met at mount, with a new view or by a change of the keys or of the points: told

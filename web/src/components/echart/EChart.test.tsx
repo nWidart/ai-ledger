@@ -1337,14 +1337,17 @@ describe("EChart zoom", () => {
     });
     vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 800, bottom: 300, width: 800, height: 300, x: 0, y: 0, toJSON() {} } as DOMRect);
     const onZoom = zoomSpy(), option = fresh(EARLY.length);
-    const { rerender } = render(keyed(MONTH, { onZoom }));
+    // The tooltip's place at each commit, as the layout effects leave it: what the next paint shows.
+    const painted: string[] = [];
+    const around = (el: ReactNode) => <Profiler id="chart" onRender={() => painted.push(tooltip()?.style.left ?? "")}>{el}</Profiler>;
+    const { rerender } = render(around(keyed(MONTH, { onZoom })));
     const chart = await drawn();
     chart.zoomTo(15, 29);
     readBack(MONTH, "Oct 23");
     const place = [tooltip()!.style.left, tooltip()!.style.top], said = spoken();
     const asked = (["setOption", "getOption", "dispatchAction", "convertToPixel", "convertFromPixel", "containPixel", "resize", "getZr"] as const)
       .map(name => ({ name, spy: vi.spyOn(chart, name) }));
-    rerender(keyed(EARLY, { onZoom, option }));
+    rerender(around(keyed(EARLY, { onZoom, option })));
     // The chart is asked nothing before it draws the new days: until then, it would answer for another day.
     const calls = asked.flatMap(({ name, spy }) => spy.mock.invocationCallOrder.map(n => ({ name, n }))).sort((a, b) => a.n - b.n);
     expect(calls[0]?.name).toBe("setOption");
@@ -1357,12 +1360,16 @@ describe("EChart zoom", () => {
     expect(readout()).toBe("Oct 23: read");
     expect(said()).toBe(0);
     // Newer words on the same drawing: the wider tooltip is placed again, where a fresh reading of the day puts it.
-    rerender(keyed(EARLY, { onZoom, option, read: i => `${EARLY[i]}: longer words now`, tip: i => <b>{EARLY[i]}, a tip too wide for the right of the day</b> }));
+    rerender(around(keyed(EARLY, { onZoom, option, read: i => `${EARLY[i]}: longer words now`, tip: i => <b>{EARLY[i]}, a tip too wide for the right of the day</b> })));
     const wider = tooltip()!.style.left;
     key("ArrowLeft");
     expect(readout()).toBe("Oct 22: longer words now");
     key("ArrowRight");
     expect(tooltip()!.style.left).toBe(wider);
+    // Newer data under the same keys, words and all: the tooltip is at its new place in the commit itself, before paint.
+    rerender(around(keyed(EARLY, { onZoom, read: i => `${EARLY[i]}: short`, tip: i => <b>{EARLY[i]}</b> })));
+    expect(tooltip()!.style.left).not.toBe(wider);
+    expect(painted.at(-1)).toBe(tooltip()!.style.left);
   });
 
   it("moves the reading and the window by a day that joins before them, and by a day that leaves", async () => {
