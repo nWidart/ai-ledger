@@ -14,7 +14,7 @@ Only the shots a page shows are kept: a shot no page references is deleted, and 
 | `activity-attention` | "Needs attention": the short list of things to look at (error loops, sessions near the window, failing tools, failed tests). | Activity, First tour |
 | `activity-vitals` | The work-health row of tiles. | Activity |
 | `activity-work` | "Work per day": commits per day by project, with errors per 100 calls on a track under the bars and the zoom slider under both. | Activity |
-| `activity-calendar` | "Activity calendar": the last 53 weeks as a grid of day cells, the key with each step's numbers, and the month and weekday labels. The demo store holds 75 days, so the cells fill the newest weeks and the key says where recording starts. | Activity |
+| `activity-calendar` | "Activity calendar": the weeks since recording started, at least 13, as a grid of day cells, the key with each step's numbers, and the month and weekday labels. The demo store holds 75 days over 11 weeks, so the grid shows 13 weeks, the first two with no cells, and the key says where recording starts. | Activity |
 | `cost-overview` | The heading, the filters and the plan gauge. | Cost |
 | `cost-spend` | "Estimated cost per day", stacked by project, with the 7-day average and the zoom slider under the day labels. | Cost |
 | `cost-projects` | "Project spend and change": trend, spend, change, cost per commit and cache hit per project. | Cost |
