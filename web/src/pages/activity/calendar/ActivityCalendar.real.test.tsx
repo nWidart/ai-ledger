@@ -6,7 +6,7 @@ import { ActivityCalendar } from "./ActivityCalendar";
 
 // The calendar's one test on real ECharts (graph-activity-calendar, step 2.4): every other test draws on the fake runtime
 // from test-setup, which draws nothing. It checks that the option is one ECharts 6 accepts and draws: a cell per readable
-// day at the fit's pixels, the selection's frame, a redraw for newer figures that leaves no path behind, a forced-colors
+// day at the fit's pixels, the labels as text, the selection's frame, a redraw for newer figures that leaves no path behind, a forced-colors
 // draw, and an unmount that takes the drawing with it. The shades, the sizes and the labels are calendarDays.test.ts'.
 // test-setup fails a test on any console error or warning, so none is logged.
 vi.unmock("../../../components/echart/load");
@@ -71,6 +71,9 @@ it("draws a cell per readable day and the selection, redraws newer figures with 
   // left and 18px down.
   expect(filled()[0]).toMatchObject({ x: 198, y: 30, w: 10, h: 10 });
   expect(filled().at(-1)).toMatchObject({ x: 330, y: 42, w: 10, h: 10 });
+  // The labels series draws: the weekday and month names are svg text.
+  const texts = [...plot().querySelectorAll("svg text")].map(t => t.textContent);
+  expect(texts).toEqual(expect.arrayContaining(["Mon", "Oct"]));
 
   // Thursday Nov 12 selected: one unfilled frame in the accent, inside its cell at (318, 54).
   const frame = paths().filter(p => p.stroke);
