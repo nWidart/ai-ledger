@@ -51,6 +51,7 @@ describe("cache chart", () => {
     expect(reads().getAttribute("aria-pressed")).toBe("true");
     expect(caption()).not.toContain("Cache reads are left out");
     await userEvent.click(reads());
+    expect(reads().getAttribute("aria-pressed")).toBe("false");
   });
 
   it("reads an empty day as no request, by the keys and by the pointer, and keeps the day read through newer figures", async () => {
