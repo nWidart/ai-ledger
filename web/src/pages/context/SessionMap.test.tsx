@@ -87,7 +87,7 @@ describe("SessionMap", () => {
     expect([live(), tip()]).toEqual(["", null]);
   });
 
-  it("keeps a key's reading on its session through newer data, says it again when its words change, and ends it with its session or the view", () => {
+  it("keeps a reading on its session through newer data, says a key's again when its words change, and ends it with its session or the view", () => {
     const { rerender } = renderApp(<Map map={{ total: 3, points }} />);
     act(() => chartOf().focus());
     press("ArrowRight");
@@ -111,6 +111,14 @@ describe("SessionMap", () => {
     expect(live()).toMatch(/^#old00000/);
     rerender(<Map map={{ total: 4, points: [heavy, over, older, newer] }} view="w" />);
     expect([live(), tip()]).toEqual(["", null]);
+    // A pointer's reading stays too, and when newer data moves its dot from under the pointer, its tooltip goes with the dot
+    // (jsdom's tooltip has no width, so it sits 14px left of the dot and 10px over it).
+    rerender(<Map map={{ total: 3, points }} view="w" />);
+    fireEvent.mouseMove(box(), pixel(points, "calm0000003"));
+    const wide = [...points, pt("wide0000006", { start: 500 })], d = pixel(wide, "calm0000003");
+    rerender(<Map map={{ total: 4, points: wide }} view="w" />);
+    expect(tip()!.textContent).toMatch(/^#calm0000/);
+    expect([tip()!.style.left, tip()!.style.top].map(v => Math.round(parseFloat(v)))).toEqual([Math.round(d.clientX - 14), d.clientY - 10]);
   });
 
   it("reads the dot under the pointer, ends the reading off it, and Escape from elsewhere ends it", () => {

@@ -114,12 +114,17 @@ function Plotted({ map, quad, onQuad, view }: MapProps) {
     setReading(was => ({ id: p.session_id, keyed, text: readPoint(p), n: (was?.n ?? 0) + 1 }));
   };
 
-  // Where the pointer's reading points, in client px; null for a key's, which points at the dot.
+  // Where the pointer's reading points, in client px; null for a key's, which points at the dot. Only the tooltip's place
+  // reads it: the hand and the click read the event's own place.
   const pointer = useRef<{ x: number; y: number } | null>(null);
   const placeTip = () => {
     const el = box.current, tip = tipEl.current;
     if (!el || !tip || at == null) return;
-    const r = el.getBoundingClientRect(), d = fit.dots[at]!, p = pointer.current ?? { x: r.left + d.x, y: r.top + d.y };
+    const r = el.getBoundingClientRect(), d = fit.dots[at]!, saved = pointer.current;
+    // Newer figures can move the dot read from under the pointer, as the wrapper's points: the tooltip then goes with the dot
+    // until the pointer moves again.
+    if (saved && dotAt(fit, saved.x - r.left, saved.y - r.top) !== at) pointer.current = null;
+    const p = pointer.current ?? { x: r.left + d.x, y: r.top + d.y };
     const pos = tipAt(el, tip, p.x, p.y);
     tip.style.left = `${pos.left}px`;
     tip.style.top = `${pos.top}px`;
