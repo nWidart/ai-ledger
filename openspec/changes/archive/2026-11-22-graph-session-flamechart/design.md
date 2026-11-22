@@ -8,7 +8,7 @@ The settled picks (owner, 2026-11-22, from `.claude/plans/recommendation-treemap
 
 "The wrapper" is `<EChart>` in `web/src/components/echart/EChart.tsx`. Every file in `web/src/components/echart/` belongs to another team. **This change edits none of them**, nor `web/src/components/sheets/Timeline.tsx`, nor `web/src/components/sheets/session.ts`, nor the shared `Table` (`web/src/components/table/Table.tsx`). It imports `timelineModel`, `openToolSheet` and the `TimelineModel` type from `session.ts`, read-only. Its new code lives in `web/src/components/sheets/spans/`.
 
-**Facts checked in the code** (base `e88a6005`).
+**Facts checked in the code before this change** (base `e88a6005`). The present tense below describes that base, not the code as built.
 
 - `/api/session` is `metrics.session()` (`src/ai_ledger/app.py:525-527`), which runs `session_detail()` (`src/ai_ledger/metrics.py:1049-1079`): about a dozen statements, with no transaction around them. `session_timeline()` (`metrics.py:1085-1106`) reads `requests` (main and subagent, `LIMIT TIMELINE_CAP`), `calls` (`tool_use_id AS id, tool, start_ts, end_ts, is_error, category, subagent, is_commit`, rows with `coalesce(start_ts, end_ts)` set, ordered by it then id, `LIMIT TIMELINE_CAP`), the compaction times, and sets `truncated` when either list reaches `TIMELINE_CAP = 5000` (`metrics.py:1082`).
 - `calls[].category` is the error category, set only for a failed call (`store.py:728`).
@@ -261,13 +261,13 @@ Enter on the read call, or a click on a span, ends the reading and calls `openTo
 | `spans/SessionSpans.test.tsx`, fake runtime | what a user reaches: the label, hint, key line, notes; Right, Up, Down, Home, End; the sentence in the live region, the tooltip, the mark; pointer read and leave; Enter and a click open the tool sheet; Escape ends a reading and is prevented, and Escape with nothing read is not; newer data keeps the reading, a gone call ends it quietly; the table's first 20 and Show all; the empty lines | Wiring and wording |
 | `sheets.test.tsx`, the existing "shows the session with its timeline, events and error-loop link to Errors" test, and a new one, "says so when the tool-call chart's chunk fails to load, and the rest of the sheet works" (a new branch: the failed import) | the heading "Tool calls by thread" and the chart's group after the timeline; the failure line with the timeline and the error-loop link still shown | The mount and the failed load |
 | `spans/SessionSpans.real.test.tsx`, real ECharts | one path per span at its layout pixel; hollow, ring, tick and point shapes; breaks; labels as text; newer data redraws with no stale path; forced colors | An option ECharts refuses or draws elsewhere |
-| `tools/demo/chartfit/spans.mjs`, Chromium's headless shell (866 lines, 56 check lines) | what jsdom cannot show (step 1.11) | Layout, real text, real events, the dialog's Escape |
+| `tools/demo/chartfit/spans.mjs`, Chromium's headless shell (918 lines, 59 check lines) | what jsdom cannot show (step 1.11) | Layout, real text, real events, the dialog's Escape |
 
 The fake runtime draws nothing, and the reading does not use the chart: a section that draws no bar passes every fake test. The real test and the browser check see the drawing.
 
 Only a browser shows: that the bars sit under the timeline's ticks to the pixel; real label widths at 16px and 32px text in a 343px box; that `mousemove` and `click` reach `div.spans-box` through zrender's svg, and a touch tap; the hand cursor; that Escape with a reading open leaves the sheet open; the tooltip shown and inside the box; forced colors; dark and the OS flip; no sideways scroll at 375px and 32px text. The browser check ran on Chromium's headless shell only: Firefox and WebKit could not be run here.
 
-Net test lines, estimated: Python 45, layout 160, reading and words 110, option 70, component 150, real 70, mount 5: about 610, over the 400-line advice. As built: Python 46, layout 153, reading and words 110, option 121, component 216, real 119, mount and failed load 20: 785 (`verification.md` says why), plus the browser module's 866 lines, which run outside the test suites. Why: the section owns a two-dimensional reading the wrapper cannot give (decision 7), as the calendar (701), the cost flow and the session plot (611 to 654) did.
+Net test lines, estimated: Python 45, layout 160, reading and words 110, option 70, component 150, real 70, mount 5: about 610, over the 400-line advice. As built: Python 46, layout 153, reading and words 110, option 121, component 216, real 119, mount and failed load 20: 785 (`verification.md` says why), plus the browser module's 918 lines, which run outside the test suites. Why: the section owns a two-dimensional reading the wrapper cannot give (decision 7), as the calendar (701), the cost flow and the session plot (611 to 654) did.
 
 ### 13. Bundle
 
