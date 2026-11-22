@@ -200,6 +200,19 @@ it("changes no color of a bar or a mark while a point is read", async () => {
   }
 });
 
+// Under forced colors every segment has an edge in the text ink: a type selected fades the others' fill, never their edge.
+it("keeps a dimmed segment's edge whole under forced colors", async () => {
+  vi.stubGlobal("matchMedia", (q: string) => ({ matches: q === "(forced-colors: active)", media: q, addEventListener() {}, removeEventListener() {} }));
+  try {
+    await page(d20, `range=30&cat=${B}`);
+    await waitFor(() => expect(segments().filter(s => s.o === "0.2")).not.toHaveLength(0));
+    const dimmed = paths().filter(p => p.getAttribute("fill-opacity") === "0.2" && LAYERS.includes(tokenOf(p.getAttribute("fill"))!));
+    expect(new Set(dimmed.map(p => `${tokenOf(p.getAttribute("stroke"))} ${p.getAttribute("stroke-opacity")}`))).toEqual(new Set(["CanvasText null"]));
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
 // A folded stretch is one point: its "//" sits on the frame's bottom line at the middle of its band.
 it("draws a fold's mark on its band", async () => {
   const month = dayRange("2026-10-07", "2026-11-05"), fold = (i: number) => i >= 5 && i <= 14;

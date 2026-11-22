@@ -33,8 +33,8 @@ export function stackRects(values: readonly number[], y0: number, top: number, x
 
 export interface StackSeriesInput {
   /** The stack's kinds, bottom first: `k` names the segment, `c` is its CSS color, such as "var(--proj-2)", and `o`, when
-   *  given, its opacity from 0 to 1 (a fainter segment); left out, the segment is drawn opaque. A hatched day's stripes
-   *  keep their own opacity. */
+   *  given, its fill's opacity from 0 to 1 (a fainter segment, whose forced-colors edge stays whole); left out, the
+   *  segment is drawn opaque. A hatched day's stripes keep their own opacity. */
   kinds: readonly { k: string; c: string; o?: number }[];
   /** Per day, the drawn value of each kind, in `kinds` order. */
   values: readonly (readonly number[])[];
@@ -68,7 +68,8 @@ export function stackSeries({ kinds, values, hatched, env, width = barWidth, id 
     if (!rects.length) return null;
     const shape = ({ x, y, width, height, r }: StackRect) => ({ x, y, width, height, r });
     const edge = env.forced ? { stroke: env.ink.text, lineWidth: .75 } : {};
-    const children = rects.map(s => ({ type: "rect" as const, name: kinds[s.j]!.k, shape: shape(s), style: { fill: colors[s.j], ...edge, ...(kinds[s.j]!.o == null ? {} : { opacity: kinds[s.j]!.o }) } }));
+    // A fainter kind's fill alone is faint: its forced-colors edge stays whole, so the segment keeps its outline.
+    const children = rects.map(s => ({ type: "rect" as const, name: kinds[s.j]!.k, shape: shape(s), style: { fill: colors[s.j], ...edge, ...(kinds[s.j]!.o == null ? {} : { fillOpacity: kinds[s.j]!.o }) } }));
     if (hatched(i)) {
       // `style.decal` takes a decal object here; ECharts turns it into the pattern zrender's type names.
       for (const s of rects) children.push({ type: "rect", name: `${kinds[s.j]!.k}-hatch`, shape: shape(s), style: { fill: "none", opacity: .6, decal } as never });
