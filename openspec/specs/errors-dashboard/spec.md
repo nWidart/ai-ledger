@@ -732,7 +732,7 @@ The Incidents vital SHALL give the errors, the incidents, the share that did not
 - **THEN** the Incidents vital's note ends with the error types, with no "Recovered means" sentence
 
 ### Requirement: Zoom the rate chart
-In a view of 14 chart points or more, by day or by week, the rate chart SHALL show a zoom control under the bucket labels that narrows the points the chart shows, down to 7. A folded stretch is one point. The control SHALL NOT show in a view of fewer points. Both panels SHALL keep the scales of the whole view while zoomed. The zoom SHALL return to every point when the view changes: the range with its first point, the granularity, the project, the source or a toggle.
+In a view of 14 chart points or more, by day or by week, the rate chart SHALL show a zoom control under the bucket labels that narrows the points the chart shows, down to 7. A folded stretch is one point. The control SHALL NOT show in a view of fewer points. Both panels SHALL keep the scales of the whole view while zoomed. The zoom SHALL return to every point when the view changes: the range, the granularity, the project, the source or a toggle.
 
 #### Scenario: Zoom in
 - **WHEN** the user drags the zoom control's handles to Oct 11 and Oct 20 in a 30-day view
@@ -789,7 +789,7 @@ Zooming the rate chart SHALL NOT change the URL, the summary, the type table, th
 - **THEN** the type opens, its rate line is drawn, and the chart shows the same days
 
 ### Requirement: Keep the rate chart's reading and zoom through newer data
-When newer data arrives for the same view, as after an ingest in the background, or a fix marker is saved, the rate chart SHALL draw it and keep the points shown and the point being read. Its polite status SHALL say nothing for such a redraw; only a point the keyboard is reading SHALL be said again, alone, when its words changed. When the newer data moves the chart's first point or a folded stretch, the reading SHALL end and every point SHALL show.
+When newer data arrives for the same view, as after an ingest in the background, or a fix marker is saved, the rate chart SHALL draw it and keep the points shown and the point being read, also when its first point or a folded stretch moves. Its polite status SHALL say nothing for such a redraw; only a point the keyboard is reading SHALL be said again, alone, when its words changed. A reading on a point that is folded away SHALL end.
 
 #### Scenario: Ingest while reading
 - **WHEN** the user reads Nov 4 with the arrow keys and an ingest adds a failed call to today
@@ -800,8 +800,28 @@ When newer data arrives for the same view, as after an ingest in the background,
 - **THEN** the day's tooltip stays open
 
 #### Scenario: The points move
-- **WHEN** the user reads Nov 4 and an ingest adds a tool call on a day before the chart's first day
-- **THEN** the reading ends, every point shows, and a selected Nov 4 is still selected and framed
+- **WHEN** the user reads Nov 4 in a chart zoomed to Oct 28 to Nov 6, and an ingest adds a tool call on a day before the chart's first day
+- **THEN** Nov 4 is still read, with its tooltip over its bar, Oct 28 to Nov 6 still show, nothing new is said (a zoom sentence the status held, now untrue, is dropped), and a selected Nov 4 is still selected and framed
+
+#### Scenario: Space after older calls arrive
+- **WHEN** Nov 4 is selected and still read, an ingest adds a tool call on a day before the chart's first day, and the user presses Space
+- **THEN** the selection is cleared, and the status says so once
+
+#### Scenario: A folded stretch opens
+- **WHEN** the user reads a folded stretch that starts on Oct 10 with the arrow keys, and an ingest adds a tool call on Oct 14
+- **THEN** Oct 10 is read, now a day of its own, and the status says it again with its new words
+
+#### Scenario: The day read is folded away
+- **WHEN** the user reads Nov 3, the third of seven days without a call at the end of the range, and an eighth such day arrives
+- **THEN** the eight days are one folded stretch, the reading ends, and its tooltip closes
+
+#### Scenario: A fold leaves fewer than 14 points
+- **WHEN** a 30-day chart of 14 points is zoomed, and a new folded stretch leaves it 13
+- **THEN** the zoom ends, the slider goes, and the status says "Showing all 30 days." once
+
+#### Scenario: Week after Day
+- **WHEN** the user reads Nov 2 by day and selects Week
+- **THEN** the reading ends and every week shows
 
 ### Requirement: Say once what a selection on the rate chart did
 After a click, Enter or Space on a chart point, the rate chart's polite status SHALL say once what it did: that the bucket is selected and the table and detail show only its errors, that the selection is cleared, or that a stretch without tool calls cannot be selected. The point SHALL stay the point being read, with its tooltip, so the same key clears the selection. The sentence SHALL stay when the reading ends. A selection changed from outside the chart SHALL NOT be said there.
