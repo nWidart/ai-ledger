@@ -6,7 +6,7 @@ import type { CustomSeriesOption, EChartsOption, XAXisComponentOption, YAXisComp
 import { baseOption } from "../../../components/echart/option";
 import type { ChartEnv } from "../../../components/echart/tokens";
 import { num } from "../../../format";
-import type { FitAxis, QuadrantFit } from "./quadrant";
+import { CALLS_NAME, COST_NAME, costLabel, type FitAxis, type QuadrantFit } from "./quadrant";
 
 /** A log axis that is both an x and a y axis: it sets no position. */
 type LogAxis = Extract<XAXisComponentOption, { type?: "log" }> & Extract<YAXisComponentOption, { type?: "log" }>;
@@ -16,12 +16,10 @@ const DOT_R = 4, DOT_FILL = .7, DASH = [5, 4];
 
 /** At the axis's min: ECharts gives a log axis's ends back through pow(), off by a few ulps. */
 const atMin = (v: number, a: FitAxis) => Math.abs(v - a.min) <= a.min * 1e-9;
-/** A cost tick: "$" and the value, with the decimals a 1, 2 or 5 times a power of ten needs ("$0.02", "$0.1", "$10"). */
-const costLabel = (v: number) => "$" + num(v, Math.max(0, Math.ceil(-Math.log10(v) - 1e-9)));
 
 /** A log axis from the fit's min to its max, its ticks at the powers of ten and the ends, thinned when they overlap; with a
  *  lane, the min tick is the lane's and reads zero. */
-function logAxis(env: ChartEnv, a: FitAxis, { name, gap, zero, format }: { name: string; gap: number; zero: string; format: (v: number) => string }): LogAxis {
+function logAxis(env: ChartEnv, a: FitAxis, { name, gap, shift = 0, zero, format }: { name: string; gap: number; shift?: number; zero: string; format: (v: number) => string }): LogAxis {
   const s = env.textScale, fontSize = 11 * s;
   return {
     type: "log",
@@ -32,8 +30,9 @@ function logAxis(env: ChartEnv, a: FitAxis, { name, gap, zero, format }: { name:
     // The gap is from the axis line, where the margins leave the name its room: ECharts 6 would move the name past a
     // label it comes near ("1,000" up), out of the box.
     nameMoveOverlap: false,
-    nameGap: gap * s,
-    nameTextStyle: { color: env.ink.secondary, fontSize },
+    nameGap: gap,
+    // Moved left by shift: zrender moves a centred text by half its right padding.
+    nameTextStyle: { color: env.ink.secondary, fontSize, ...(shift ? { padding: [0, 2 * shift, 0, 0] } : {}) },
     axisLine: { show: false },
     axisTick: { show: false },
     splitLine: { show: true, lineStyle: { color: env.ink.grid } },
@@ -102,8 +101,8 @@ export function quadrantOption(fit: QuadrantFit, env: ChartEnv, hue: string): EC
     // The fit's plot, exactly: with outerBoundsMode "none" ECharts maps a value to the fit's pixel. Top and height, not
     // bottom: the box's height is rounded, the plot's is not.
     grid: { left: fit.plot.x, top: fit.plot.y, width: fit.plot.w, height: fit.plot.h, outerBoundsMode: "none" },
-    xAxis: logAxis(env, fit.x, { name: "Estimated cost (log scale)", gap: 26, zero: "$0", format: costLabel }),
-    yAxis: { ...logAxis(env, fit.y, { name: "Tool calls (log scale)", gap: 42, zero: "0", format: v => num(v) }), nameRotate: 90 },
+    xAxis: logAxis(env, fit.x, { name: COST_NAME, gap: 26 * s, shift: fit.costNameShift, zero: "$0", format: costLabel }),
+    yAxis: { ...logAxis(env, fit.y, { name: CALLS_NAME, gap: fit.nameGap, zero: "0", format: v => num(v) }), nameRotate: 90 },
     series: [guides, dots],
   };
 }

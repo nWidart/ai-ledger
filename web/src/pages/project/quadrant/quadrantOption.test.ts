@@ -18,7 +18,7 @@ const fitOf = (rows: QuadRow[], s = 1) => quadrantFit(quadrantModel(rows, rows.l
 const lanes = fitOf([row(0, 12, 1), row(0.04, 0), row(0.9, 30, 2), row(1.42, 23), row(4.2, 1200)]);
 const plain = fitOf([row(0.04, 2), row(1.42, 23, 1), row(19.5, 140)]);
 
-type Axis = { type: string; min: number; max: number; name: string; nameRotate?: number; axisLabel: { color: string; hideOverlap: boolean; formatter: (v: number) => string };
+type Axis = { type: string; min: number; max: number; name: string; nameRotate?: number; nameGap: number; axisLabel: { color: string; hideOverlap: boolean; formatter: (v: number) => string };
   nameTextStyle: { color: string }; splitLine: { lineStyle: { color: string } } };
 const axes = (o: ReturnType<typeof quadrantOption>) => [o.xAxis, o.yAxis] as Axis[];
 const series = (o: ReturnType<typeof quadrantOption>) => o.series as CustomSeriesOption[];
@@ -40,6 +40,13 @@ describe("quadrantOption", () => {
     expect(o.grid).toEqual({ left: lanes.plot.x, top: lanes.plot.y, width: lanes.plot.w, height: lanes.plot.h, outerBoundsMode: "none" });
     expect([x, y].map(a => [a!.type, a!.min, a!.max])).toEqual([["log", lanes.x.min, lanes.x.max], ["log", lanes.y.min, lanes.y.max]]);
     expect([x!.name, y!.name, y!.nameRotate]).toEqual(["Estimated cost (log scale)", "Tool calls (log scale)", 90]);
+    // The tool-call name sits past the widest label, where the fit's left margin leaves it room.
+    const wide = fitOf([row(0.4, 3), row(9, 120000)], 2);
+    expect(axes(quadrantOption(wide, env({ textScale: 2 }), HUE)).map(a => a.nameGap)).toEqual([52, wide.nameGap]);
+    expect(wide.nameGap).toBeGreaterThan(84);
+    // Moved left inside the box: zrender moves a centred text by half its right padding.
+    const nameStyle = (f: typeof wide, e: ChartEnv) => (quadrantOption(f, e, HUE).xAxis as { nameTextStyle: { padding?: number[] } }).nameTextStyle.padding;
+    expect([wide.costNameShift > 0, nameStyle(wide, env({ textScale: 2 })), nameStyle(lanes, env())]).toEqual([true, [0, 2 * wide.costNameShift, 0, 0], undefined]);
     expect([x!.axisLabel.hideOverlap, y!.axisLabel.hideOverlap]).toEqual([true, true]);
     expect(o.animation).toBe(false); // even with motion on
     expect(series(o).map(s => [s.id, s.silent])).toEqual([["guides", true], ["dots", true]]);

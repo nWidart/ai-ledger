@@ -3,6 +3,7 @@
 // the counts; the fit places them in pixels, as ECharts does with outerBoundsMode "none"; the rest is the graph's own
 // reading (the dot under a pointer, the dot a key reads) and its sentences.
 import type { SessionRow } from "../../../api";
+import { labelWidth, type OptionEnv } from "../../../components/echart/option";
 import { sessName } from "../../../components/sheets/session";
 import { median, num, plural, usd0, when } from "../../../format";
 
@@ -95,6 +96,10 @@ export interface QuadrantFit {
   width: number; height: number;
   /** The plot's rectangle in the box: the ECharts grid, with outerBoundsMode "none". */
   plot: { x: number; y: number; w: number; h: number };
+  /** The tool-call axis name's gap from the axis line, in px: past the widest label. */
+  nameGap: number;
+  /** How far left of the plot's centre the cost axis name sits, in px: 0 unless it would pass the box's right edge. */
+  costNameShift: number;
   x: FitAxis; y: FitAxis;
   /** In the model's order. */
   dots: FitDot[];
@@ -105,8 +110,27 @@ export interface QuadrantFit {
 }
 
 const PLOT_H = 210;
-/** The margins at text scale 1: room for the labels and the axis names. */
+/** The margins at text scale 1: room for the labels and the axis names, the least the left and right ones take. */
 const M = { left: 58, right: 14, top: 10, bottom: 44 };
+/** The tool-call axis name's least gap from the axis line, and how far its centre sits past the widest label (the label's
+ *  6px margin and half the name's line), at text scale 1: a four-digit label keeps the least gap. The left margin ends
+ *  16px past the name's centre. */
+const NAME_GAP = 42, NAME_PAST = 12;
+/** The axes' names. */
+export const COST_NAME = "Estimated cost (log scale)", CALLS_NAME = "Tool calls (log scale)";
+
+/** A cost tick: "$" and the value, with the decimals a 1, 2 or 5 times a power of ten needs ("$0.02", "$0.1", "$10"). */
+export const costLabel = (v: number) => "$" + num(v, Math.max(0, Math.ceil(-Math.log10(v) - 1e-9)));
+/** The room the texts take at text scale s, measured as zrender lays them out: the widest tool-call label (the top end's,
+ *  or the power of ten under it, which has as many digits), the cost axis's last, at the plot's right end, and its name. */
+function textRoom(model: QuadrantModel, s: number) {
+  const env = { textScale: s } as OptionEnv, top = model.y.hi;
+  return {
+    y: Math.max(labelWidth(env, num(top)), labelWidth(env, num(10 ** Math.floor(Math.log10(top) + 1e-9)))),
+    x: labelWidth(env, costLabel(model.x.hi)),
+    name: labelWidth(env, COST_NAME),
+  };
+}
 /** The zero lanes at text scale 1: half a "$0.01" label across, one line up. */
 const LANE_X = 30, LANE_Y = 16;
 
@@ -125,7 +149,13 @@ const frac = (v: number, a: FitAxis) => (Math.log(Math.max(v, a.min)) - Math.log
 
 /** width: the box's width in px; s: the text scale (textScale()). */
 export function quadrantFit(model: QuadrantModel, width: number, s: number): QuadrantFit {
-  const plot = { x: M.left * s, y: M.top * s, w: Math.max(0, width - (M.left + M.right) * s), h: PLOT_H };
+  // A label wider than a four-digit count, or a last cost label wider than "$200", widens its margin: with
+  // outerBoundsMode "none" ECharts would draw it over the axis name, or past the box. A wider left margin moves the
+  // plot's centre right, and the cost axis name with it: past the box's right edge, the name moves back left.
+  const room = textRoom(model, s), nameGap = Math.max(NAME_GAP * s, room.y + NAME_PAST * s);
+  const left = nameGap + (M.left - NAME_GAP) * s, right = Math.max(M.right * s, room.x / 2);
+  const plot = { x: left, y: M.top * s, w: Math.max(0, width - left - right), h: PLOT_H };
+  const costNameShift = Math.max(0, Math.min(plot.x + plot.w / 2 + room.name / 2 - width, plot.x + plot.w / 2 - room.name / 2));
   const x = fitAxis(model.x, plot.w, LANE_X * s), y = fitAxis(model.y, plot.h, LANE_Y * s);
   const at = (cost: number, calls: number) => {
     const vx = Math.max(cost, x.min), vy = Math.max(calls, y.min);
@@ -143,7 +173,7 @@ export function quadrantFit(model: QuadrantModel, width: number, s: number): Qua
     }
   }
   return {
-    width, height: Math.round(PLOT_H + (M.top + M.bottom) * s), plot, x, y,
+    width, height: Math.round(PLOT_H + (M.top + M.bottom) * s), plot, nameGap, costNameShift, x, y,
     dots: model.dots.map(d => ({ ...at(d.cost, d.calls), filled: d.filled })), guides, names,
   };
 }

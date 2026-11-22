@@ -73,6 +73,17 @@ describe("quadrantFit", () => {
   it.each([1, 1.25, 2])("sizes the box at text scale %d", s => {
     expect(quadrantFit(model([]), 343, s).height).toBe({ 1: 264, 1.25: 278, 2: 318 }[s]);
     expect(quadrantFit(model([]), 343, s).plot.w).toBe(343 - 72 * s);
+    expect(quadrantFit(model([]), 343, s).nameGap).toBe(42 * s);
+    // Wider labels widen the margins: the tool-call axis's widest, measured (jsdom: 0.6em a character), and half the cost
+    // axis's last, which is centred on the plot's right edge. "200,000" is 46.2px at 11px, "$2,000" 39.6px.
+    const wide = quadrantFit(model([row(0.4, 3), row(1500, 120000)]), 343, s);
+    expect([wide.nameGap, wide.plot.x, wide.plot.w]).toEqual([46.2 * s + 12 * s, 46.2 * s + 28 * s, 343 - 46.2 * s - 28 * s - 19.8 * s].map(v => expect.closeTo(v, 9)));
+    // The cost axis name is centred on the plot: past the box's right edge, it moves left by as much, never past the left
+    // one ("Estimated cost (log scale)" is 171.6px at 11px; at text scale 2 the name fills the box).
+    const name = 171.6 * s / 2, centre = wide.plot.x + wide.plot.w / 2;
+    expect(wide.costNameShift).toBeCloseTo(Math.max(0, Math.min(centre + name - 343, centre - name)), 9);
+    expect(quadrantFit(model([row(0.4, 3), row(1500, 120000)]), 343, 2).costNameShift).toBeGreaterThan(0);
+    expect(quadrantFit(model([]), 800, s).costNameShift).toBe(0);
   });
 
   it("places a dot by the log formula, ECharts' with outerBoundsMode none", () => {
