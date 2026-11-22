@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import type { CalendarPayload, Day } from "../../../api";
 import { textScale, tipAt, useWidth } from "../../../components/chart";
 import { ChartTable } from "../../../components/DataTable";
@@ -180,10 +180,11 @@ export function ActivityCalendar({ d, metric, range, selected, onPick, onClear, 
   };
 
   // Escape ends a reading wherever the focus is: the pointer can open one while the focus is elsewhere. A key from inside
-  // the box is the box's own. The listener captures, so a control that stops Escape still lets it end the reading.
+  // the box is the box's own. The listener captures, so a control that stops Escape still lets it end the reading. It is
+  // added before the tooltip is painted, so an Escape pressed the moment it shows still ends it.
   const open = reading != null;
   const end = useEffectEvent(() => readAt(null));
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     const escape = (ev: globalThis.KeyboardEvent) => {
       if (ev.key === "Escape" && !modified(ev) && !box.current?.contains(ev.target as Node)) end();
