@@ -4,7 +4,7 @@
 // (`points={0}`); this component reads: one ordered list of dots, cheapest first, by key and by pointer, with its own
 // tooltip, mark and live region. All of them place a dot at the fit's pixel, as the option draws it, so they work before the
 // drawing has loaded and when it fails to.
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useCallback, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { useColors } from "../../../colors";
 import { textScale, tipAt, useWidth } from "../../../components/chart";
 import { ChartTable } from "../../../components/DataTable";
@@ -141,10 +141,11 @@ export function SessionQuadrant({ rows, totalSessions, project, view }: { rows: 
 
   // Escape ends a reading wherever the focus is: the pointer can open one while the focus is elsewhere. A key from inside the
   // box is the box's own. Capturing, as the wrapper's: a control that stops Escape would keep it from a listener on the way up.
-  // The key goes on to that control.
+  // The key goes on to that control. Attached as the tooltip is drawn, before the paint: an Escape pressed as it shows
+  // must find the listener.
   const reads = shown != null;
   const end = useEffectEvent(() => read(null));
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!reads) return;
     const escape = (ev: globalThis.KeyboardEvent) => {
       if (ev.key === "Escape" && !modified(ev) && !box.current?.contains(ev.target as Node)) end();
