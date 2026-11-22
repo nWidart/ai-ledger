@@ -51,6 +51,8 @@ const PICK: RowPick<Span> = {
   value: c => (c.known ? c.tool : null), open: v => openToolSheet("tool", v),
   subject: c => (c.known ? { kind: "tool", value: c.tool } : undefined),
 };
+// A row with no button takes the focus itself when Show all lands on it.
+const ROW = (c: Span) => (c.known ? {} : { tabIndex: -1 });
 
 /** s: the session's payload. The section measures its own box, as the timeline does, so both map time to the same x. */
 export function SessionSpans({ s }: { s: SessionDetail }) {
@@ -182,7 +184,8 @@ export function SessionSpans({ s }: { s: SessionDetail }) {
   useEffect(() => {
     if (!all || !focusMore.current) return;
     focusMore.current = false;
-    body.current?.rows[TOP]?.querySelector("button")?.focus();
+    const row = body.current?.rows[TOP];
+    (row?.querySelector("button") ?? row)?.focus();
   }, [all]);
 
   const none = !s.calls.length || layout?.spans.length === 0 ? "No tool calls in this session."
@@ -220,7 +223,7 @@ export function SessionSpans({ s }: { s: SessionDetail }) {
         </div>
         {/* The graph's text alternative: one row per call drawn. */}
         <ChartTable>
-          <Table name="Calls by duration" region="scroll tall" rows={all ? rows : rows.slice(0, TOP)} columns={columns} rowId={c => c.id} pick={PICK} body={{ ref: body }} />
+          <Table name="Calls by duration" region="scroll tall" rows={all ? rows : rows.slice(0, TOP)} columns={columns} rowId={c => c.id} pick={PICK} rowProps={ROW} body={{ ref: body }} />
           {rows.length > TOP && !all && <button type="button" className="linkish small" onClick={() => { focusMore.current = true; setAll(true); }}>
             Show all {num(rows.length)} calls</button>}
         </ChartTable>

@@ -93,8 +93,8 @@ describe("tool calls by thread: what it shows", () => {
   });
 
   it("lists the 20 longest calls in its data table, then every call with the focus on the 21st, and a row opens its tool", () => {
-    // 25 timed calls of 1 to 25 s, then a call with no result and one with no duration.
-    const calls = [...Array.from({ length: 25 }, (_, k) => call(`b${k + 1}`, k === 24 ? "Grep" : "Read", k + 1, k + 1 + (k + 1) / 60, { input: `f${k + 1}.ts` })),
+    // 25 timed calls of 1 to 25 s, the 5 s one with no tool, then a call with no result and one with no duration.
+    const calls = [...Array.from({ length: 25 }, (_, k) => call(`b${k + 1}`, k === 24 ? "Grep" : k === 4 ? null : "Read", k + 1, k + 1 + (k + 1) / 60, { input: `f${k + 1}.ts` })),
       call("open", "Bash", .5, null), call("still", "Bash", .7, .7)];
     show(detail(calls));
     fireEvent.click(screen.getByText("Show data table"));
@@ -104,7 +104,7 @@ describe("tool calls by thread: what it shows", () => {
     expect(cells(rows()[0]!)).toEqual([clock(25), "Main thread", "Grep", "f25.ts", "25s", "Succeeded"]);
     fireEvent.click(screen.getByRole("button", { name: "Show all 27 calls" }));
     expect(rows()).toHaveLength(27);
-    expect(document.activeElement).toBe(within(rows()[20]!).getByRole("button"));
+    expect(document.activeElement).toBe(rows()[20]); // a call with no tool has no button: its row takes the focus
     expect(rows().slice(25).map(cells)).toEqual([[clock(.5), "Main thread", "Bash", "", "–", "No result"], [clock(.7), "Main thread", "Bash", "", "–", "Succeeded"]]);
     expect(screen.queryByRole("button", { name: /^Show all/ })).toBeNull();
     fireEvent.click(within(rows()[0]!).getByRole("button"));
