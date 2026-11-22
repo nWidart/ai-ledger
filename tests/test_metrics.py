@@ -76,6 +76,32 @@ class FastPricingTest(unittest.TestCase):
         self.assertEqual([r["fast"] for r in self.cost("m-fast", None)["models"]], [False])
 
 
+class SessionTitlesTest(unittest.TestCase):
+    def test_sessions_rows_past_the_top_sessions_cut_take_a_first_prompt_title_only_for_one_project(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        con = store.open_store(os.path.join(tmp, "x.duckdb"))
+        self.addCleanup(con.close)
+        c = con.cursor()
+        ids = [f"s{i:02d}" for i in range(52)]  # s00 and s01 cost least: outside top_sessions
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts"], [(i, "foo", "2026-11-05 09:00:00", "2026-11-05 09:30:00") for i in ids])
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [(f"p{i}", i, "2026-11-05 09:00:00", False) for i in ids])
+        store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking", "cache_read",
+                                     "cache_5m", "cache_1h", "thinking_ms"],
+                     [(f"r{i}", i, "2026-11-05 09:01:00", "m-a", False, n * 1000, 0, 0, 0, 0, 0, 0) for n, i in enumerate(ids)])
+        store.insert(c, "raw_lines", ["key", "file", "line_no", "type", "session_id", "ts", "subagent", "json"],
+                     [(f"x{i}", "f", 1, "user", i, "2026-11-05 09:00:00Z", False, f'{{"type":"user","promptId":"p{i}","message":{{"content":"prompt of {i}"}}}}')
+                      for i in ("s01", "s51")])
+        store.insert(c, "session_titles", ["session_id", "custom", "agent"], [("s00", None, "fix the build")])
+        got = metrics.usage(con.cursor(), prices=PRICES, today=TODAY)
+        self.assertNotIn("s01", [x["session_id"] for x in got["top_sessions"]])
+        named = {x["session_id"]: x["title"] for x in got["sessions"]}
+        # s01's first prompt is stored, so a None title shows its first-prompt lookup never ran.
+        self.assertEqual((named["s00"], named["s01"], named["s51"]), ("fix the build", None, "prompt of s51"))
+        one = {x["session_id"]: x["title"] for x in metrics.usage(con.cursor(), project="foo", prices=PRICES, today=TODAY)["sessions"]}
+        self.assertEqual(one["s01"], "prompt of s01")
+
+
 class UnpricedRatiosTest(unittest.TestCase):
     """Cost per prompt and per commit are unknown (null), not $0, when every request is on an unpriced model."""
 

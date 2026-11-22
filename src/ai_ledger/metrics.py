@@ -468,6 +468,12 @@ def usage_payload(cur, project, range_days, session, prices, today, automated, s
         if lp["session_id"] in sessions_by_id:
             sessions_by_id[lp["session_id"]]["error_loops"] += 1
     by_project = projects(cur, rq, rp, W, fp, loops)
+    recent = sorted(sess, key=lambda x: x["first_ts"] or "", reverse=True)[:300]
+    top = sorted(sess, key=lambda x: -(x["cost"] or 0))[:50]
+    # One lookup over both lists (they share rows). The fallback to the first prompt scans raw lines per session: for one
+    # project (the Project page names each sessions row) every row may take it; over all projects only top_sessions may,
+    # and the other sessions rows take a stored title or None.
+    titles.with_titles(cur, recent + top, prompts=True if project else [x["session_id"] for x in top])
 
     per = lambda a, b: a / b if b else None
     totals = dict(
@@ -491,8 +497,7 @@ def usage_payload(cur, project, range_days, session, prices, today, automated, s
                work_projects=daily_work(cur, rq, rp, W, fp, by, by_project=True), speed_trend=speed_trend(cur, rq, rp, by),
                unpriced=unpriced, models=models, by_project=by_project, **tool_rates(cur, W, fp),
                error_loops=titles.with_titles(cur, loops[:50]), failed_tests=titles.with_titles(cur, failed_tests),
-               sessions=sorted(sess, key=lambda x: x["first_ts"] or "", reverse=True)[:300],
-               top_sessions=titles.with_titles(cur, sorted(sess, key=lambda x: -(x["cost"] or 0))[:50]),
+               sessions=recent, top_sessions=top,
                near_limit=sorted((x for x in sess if x["near_limit"]), key=lambda x: -x["context_share"]),
                previous=previous_period(cur, project, range_days, prices, today, automated, source, af["projects"]))
     out["changes"] = project_changes(by_project, out["previous"])

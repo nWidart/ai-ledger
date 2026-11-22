@@ -43,6 +43,7 @@ Only the shots a page shows are kept: a shot no page references is deleted, and 
 | `project-activity` | "Activity": eight figures of the project's activity. | Project |
 | `project-cost` | "Cost": change, models, and token share beside cost share. | Project |
 | `project-sessions` | "Sessions". | Project |
+| `project-quadrant` | "Sessions by cost and tool calls": a dot per session, filled for a commit, with the dashed median lines, the corner names and the count per quadrant. | Project |
 | `project-errors` | "Errors". | Project |
 | `project-context` | "Context". | Project |
 | `project-insights` | "Session judgments". | Project |

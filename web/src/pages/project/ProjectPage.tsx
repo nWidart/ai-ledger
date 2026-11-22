@@ -7,7 +7,7 @@ import { useLanding } from "../../components/useLanding";
 import { queries } from "../../queries";
 import { formatSearch, judged, useView } from "../../url";
 import { useApi, type ApiState } from "../../useApi";
-import { ActivityBlock, ContextBlock, CostBlock, ErrorsBlock, InsightsBlock, LimitsBlock, SessionsBlock, type Scope } from "./blocks";
+import { ActivityBlock, ContextBlock, CostBlock, ErrorsBlock, InsightsBlock, LimitsBlock, QuadrantBlock, SessionsBlock, type Scope } from "./blocks";
 import "./project.css";
 
 /** The request's state with its last answer kept while a new view of the same project loads or fails, so a filter change keeps the
@@ -22,7 +22,7 @@ function useKept<T>(s: ApiState<T>, project: string): ApiState<T> {
 /** Project (/project?project=<name>): one project across the dashboards. Every block reads the payload of its own page with the
  *  project as the filter (no endpoint of its own), so its figures are that page's and the caches are shared; each loads, fails,
  *  retries and says it is empty on its own, and the heading, the filters and the blocks show at once, without waiting for any request.
- *  Two columns on a wide screen (Activity, Cost and Context; then Errors, Plan limits, Sessions and Session judgments), one on a
+ *  Two columns on a wide screen (Activity, Cost and Context; then Errors, Plan limits, Sessions, Sessions by cost and tool calls and Session judgments), one on a
  *  narrow one. Without a project there is no page: the route sends it to Activity. */
 export function ProjectPage() {
   const [h] = useView();
@@ -66,6 +66,7 @@ export function ProjectPage() {
           <ErrorsBlock errors={errors} scope={scope} />
           <LimitsBlock limits={limits} scope={scope} />
           <SessionsBlock usage={usage} scope={scope} />
+          <QuadrantBlock usage={usage} scope={scope} />
           <InsightsBlock insights={insights} scope={scope} />
         </div>
       </div>

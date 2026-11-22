@@ -91,21 +91,23 @@ def short_title(title, n=TITLE_LEN):
 
 def titles(cur, sids, prompts=True):
     """{session_id: (title, "agent" | "prompt")} for the sessions that have one: the newest custom title, else the newest
-    title the agent wrote (Claude Code's ai-title, Codex's thread name), else prompt_title of the first prompt, unless
-    prompts is False."""
+    title the agent wrote (Claude Code's ai-title, Codex's thread name), else prompt_title of the first prompt for the
+    sessions prompts names: True all of them, False none, or a collection of session ids. The first-prompt lookup reads
+    raw lines and is not saved, so callers keep it to the rows they show."""
     sids = list(dict.fromkeys(sids))
     if not sids:
         return {}
     out = {sid: (short_title(t), "agent") for sid, t in cur.execute(
         "SELECT session_id, coalesce(custom, agent) FROM session_titles WHERE list_contains(?, session_id)", [sids]).fetchall()}
-    texts = first_prompts(cur, [sid for sid in sids if sid not in out]) if prompts else {}
+    pool = sids if prompts is True else set(prompts or ())
+    texts = first_prompts(cur, [sid for sid in sids if sid not in out and sid in pool])
     out |= {sid: (prompt_title(text), "prompt") for sid, text in texts.items()}
     return {sid: t for sid, t in out.items() if t[0]}
 
 
-def with_titles(cur, sess):
-    """Adds title (see titles) to each session row; returns the rows."""
-    found = titles(cur, [x["session_id"] for x in sess])
+def with_titles(cur, sess, prompts=True):
+    """Adds title (see titles, prompts as there) to each session row; returns the rows."""
+    found = titles(cur, [x["session_id"] for x in sess], prompts)
     for x in sess:
         x["title"] = found.get(x["session_id"], (None,))[0]
     return sess

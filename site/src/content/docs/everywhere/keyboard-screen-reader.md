@@ -16,6 +16,9 @@ Every page works from the keyboard and with a screen reader. This page lists the
 | Esc | An open menu, the palette, a sheet, a toggletip, a chart tooltip | Close it. Esc in a menu or on a chart tooltip does not close the sheet or the palette under it. |
 | Left, Right | A focused chart | Read the previous or next point. |
 | Home, End | A focused chart | Read the first or last point. |
+| Left, Right | The focused Project plot "Sessions by cost and tool calls" | Read the previous or next session, from the cheapest to the costliest. With none read, Right reads the cheapest and Left the costliest. After a session sheet opened from the plot closes, they go on from that session. |
+| Home, End | The focused Project plot | Read the cheapest or the costliest session. |
+| Enter | The focused Project plot, with a session read | Open its session sheet. |
 | Esc | The focused Activity work chart, with no bar being read | Clear the selected day or week. |
 | Plus (or `=`) | The focused Cost daily chart, Activity work chart or Errors chart, in a view of 14 or more days or weeks (on Errors, 14 points: a folded stretch is one) | Zoom in: halve the days or weeks shown, around the one you are reading (the newest when you read none), down to 7. |
 | Minus | The focused Cost daily chart, Activity work chart or Errors chart, in a view of 14 or more days or weeks (on Errors, 14 points) | Zoom out: double the days or weeks shown, up to every one. |
@@ -31,7 +34,7 @@ Every page works from the keyboard and with a screen reader. This page lists the
 | Enter | The Cost flow, reading a named project | Open that project's sheet. |
 | Esc | The Cost flow, reading an item | End the reading. |
 
-Charts with this keyboard reading: the Activity work chart, the outcome trend of Activity's Judgments view, the Cost chart, the Errors chart, the Context charts, the Limits chart and Live's 10-minute pulse. A tooltip that a chart opens closes with Esc without changing the selected point.
+Charts with this keyboard reading: the Activity work chart, the outcome trend of Activity's Judgments view, the Cost chart, the Errors chart, the Context charts, the Limits chart, Live's 10-minute pulse and the Project page's [session plot](/ai-ledger/pages/project/#sessions-by-cost-and-tool-calls), which reads sessions and not points. A tooltip that a chart opens closes with Esc without changing the selected point.
 
 Charts and tab lists act on these keys only when you hold no Alt, Ctrl, Meta or Shift, so the browser's own shortcuts still work while they have focus: Alt+Left goes back, Ctrl+Home goes to the top of the page. The zoom keys follow the same rule, except that plus may take Shift, as it does on most keyboard layouts: Ctrl+plus and Ctrl+minus still zoom the page. The session sheet's timeline is the one exception for Shift: Shift+Left and Shift+Right move ten requests.
 

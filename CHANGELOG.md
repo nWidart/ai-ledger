@@ -13,6 +13,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - Errors' rate chart zooms in views of 14 points or more, with a slider or the plus and minus keys.
 - Cost has a "Where the cost goes" flow after the project table: estimated cost from project to model to token kind, each band as wide as its cost. Arrow keys follow the bands, and Enter on a project opens its sheet.
 - `/api/usage` has `cost_flow`: the cost of each project and model pair, and of each model by token kind and its reported cost.
+- Project: "Sessions by cost and tool calls" plots each session as a dot, split at the medians into four named quadrants. Read it with the arrow keys; a dot opens its session. A filled dot made a commit.
+- `/api/usage` `sessions` rows carry a `title`.
 
 ### Changed
 

@@ -42,6 +42,7 @@ const open = (over: Payloads = {}, search = "?project=foo&range=30") => {
 };
 const loaded = () => screen.findByRole("heading", { level: 1, name: "foo" });
 const block = (name: RegExp | string) => screen.getByRole("region", { name });
+const QUAD = "Sessions by cost and tool calls";
 const facts = (el: HTMLElement) => [...el.querySelectorAll(".facts > div")].map(x => x.textContent);
 
 describe("ProjectPage", () => {
@@ -54,7 +55,7 @@ describe("ProjectPage", () => {
     for (const u of ["/api/usage?project=foo&range=30", "/api/context?project=foo&range=30", "/api/insights?project=foo&range=30", "/api/limits?project=foo&range=30"]) expect(urls).toContain(u);
     expect(urls).toContain("/api/errors");
     expect(urls.some(u => u.startsWith("/api/live?project=foo"))).toBe(true);
-    for (const name of ["Activity", "Cost", "Sessions", "Errors", "Context", "Session judgments", "Plan limits"]) expect(block(name)).toBeTruthy();
+    for (const name of ["Activity", "Cost", "Sessions", QUAD, "Errors", "Context", "Session judgments", "Plan limits"]) expect(block(name)).toBeTruthy();
   });
 
   it("links every block to its page with the shared view", async () => {
@@ -63,6 +64,7 @@ describe("ProjectPage", () => {
     await screen.findByRole("region", { name: "Plan limits" });
     const link = (name: string) => within(block(name)).getByRole("link", { name: /^Open in/ }).getAttribute("href");
     expect(link("Activity")).toBe("/usage?project=foo&range=7&source=claude&auto=1");
+    expect(link(QUAD)).toBe("/usage?project=foo&range=7&source=claude&auto=1");
     expect(link("Cost")).toBe("/cost?project=foo&range=7&source=claude&auto=1");
     expect(link("Context")).toBe("/context?project=foo&range=7&source=claude&auto=1");
     expect(link("Session judgments")).toBe("/usage?project=foo&range=7&source=claude&auto=1&view=judgments"); // Activity's Judgments view
@@ -105,14 +107,14 @@ describe("ProjectPage", () => {
   describe("layout", () => {
     const ids = (col: Element) => [...col.querySelectorAll(":scope > section")].map(s => s.id);
 
-    it("puts Activity, Cost and Context in the left column, and Errors, Plan limits, Sessions and Session judgments in the right", async () => {
+    it("puts Activity, Cost and Context in the left column, and Errors, Plan limits, Sessions, Sessions by cost and tool calls and Session judgments in the right", async () => {
       open();
       await loaded();
       await screen.findByRole("region", { name: "Plan limits" });
       const cols = document.querySelectorAll(".pg-project .cols > .col");
       expect(cols).toHaveLength(2);
       expect(ids(cols[0]!)).toEqual(["activity", "cost", "context"]);
-      expect(ids(cols[1]!)).toEqual(["errors", "limits", "sessions", "insights"]);
+      expect(ids(cols[1]!)).toEqual(["errors", "limits", "sessions", "quadrant", "insights"]);
       // The heading and the filters sit above the columns.
       expect(document.querySelector(".pg-project > header")!.contains(screen.getByRole("heading", { level: 1 }))).toBe(true);
     });
@@ -212,6 +214,20 @@ describe("ProjectPage", () => {
       await userEvent.click(table.querySelector<HTMLElement>("tbody .cellbtn")!);
       await waitFor(() => expect(location.search).toContain("session=s1"));
       expect(await screen.findByRole("dialog")).toBeTruthy();
+    });
+
+    it("plots the payload's sessions, not the eight costliest, and opens the one read on Enter", async () => {
+      const q = (id: string, cost: number, tool_calls: number) => ({ ...usage.sessions[1]!, session_id: id, title: "Quad " + id, cost, unpriced: 0, tool_calls });
+      const sessions = [q("q1", 3, 20), q("q2", .5, 4), q("q3", 1, 9), q("q4", 7, 40)];
+      open({ usage: foo({ ...usage, sessions, totals: { ...usage.totals, sessions: 412 } } as UsagePayload) });
+      await loaded();
+      const quad = within(await screen.findByRole("region", { name: QUAD }));
+      // The view's own count, not the rows'.
+      expect(await quad.findByText(/ of 412 sessions /)).toBeTruthy();
+      const plot = quad.getByRole("group", { name: /^Sessions of foo .* 4 sessions, split at the medians/ });
+      act(() => plot.focus());
+      await userEvent.keyboard("{ArrowRight}{Enter}");
+      await waitFor(() => expect(location.search).toContain("session=q2")); // the cheapest
     });
   });
 
@@ -497,6 +513,7 @@ describe("ProjectPage", () => {
       await waitFor(() => expect(within(block("Activity")).getByRole("alert")).toBeTruthy());
       expect(within(block("Cost")).getByRole("alert")).toBeTruthy();
       expect(within(block("Sessions")).getByRole("alert")).toBeTruthy();
+      expect(within(block(QUAD)).getByRole("alert")).toBeTruthy();
       expect(await within(block("Session judgments")).findByText(/1 of 3/)).toBeTruthy();
       await within(block("Context")).findByText("median starting context, tokens");
       expect(within(block("Context")).queryByRole("alert")).toBeNull();
@@ -526,7 +543,7 @@ describe("ProjectPage", () => {
       expect(screen.queryByText(/No use of foo/)).toBeNull();
       // Busy is each block's: the ones that read usage (Context for a line), not the page, and the loading line is no live region.
       const busy = (name: string) => block(name).getAttribute("aria-busy");
-      for (const name of ["Activity", "Cost", "Sessions", "Context"]) expect(busy(name)).toBe("true");
+      for (const name of ["Activity", "Cost", "Sessions", QUAD, "Context"]) expect(busy(name)).toBe("true");
       for (const name of ["Errors", "Session judgments"]) expect(busy(name)).toBeNull();
       expect(document.getElementById("content")!.getAttribute("aria-busy")).toBeNull();
       expect(within(block("Activity")).queryByRole("status")).toBeNull();
@@ -544,7 +561,7 @@ describe("ProjectPage", () => {
       // The earlier figures stay, then dim once the request takes over 150 ms; Context reads usage for a line, so it dims too.
       const dimmed = (name: string) => block(name).classList.contains("loading");
       await waitFor(() => expect(dimmed("Activity")).toBe(true));
-      for (const name of ["Activity", "Cost", "Sessions", "Context"]) expect(dimmed(name)).toBe(true);
+      for (const name of ["Activity", "Cost", "Sessions", QUAD, "Context"]) expect(dimmed(name)).toBe(true);
       expect(within(block("Activity")).getByText("median session")).toBeTruthy();
       expect(within(block("Activity")).queryByText("Loading…")).toBeNull();
       for (const name of ["Errors", "Session judgments"]) expect(dimmed(name)).toBe(false);
@@ -576,7 +593,7 @@ describe("ProjectPage", () => {
       await within(block("Session judgments")).findByText(/1 of 3/);
       refreshed(client);
       await within(block("Activity")).findByText(num(101));
-      for (const name of ["Activity", "Cost", "Sessions"]) expect(block(name).classList.contains("fade-in")).toBe(true);
+      for (const name of ["Activity", "Cost", "Sessions", QUAD]) expect(block(name).classList.contains("fade-in")).toBe(true);
       for (const name of ["Errors", "Session judgments"]) expect(block(name).classList.contains("fade-in")).toBe(false);
       expect(document.getElementById("content")!.classList.contains("grow")).toBe(false);
     });
@@ -590,7 +607,7 @@ describe("ProjectPage", () => {
       await loaded();
       expect(await screen.findByText(/No use of foo in this view/)).toBeTruthy();
       expect(screen.getByRole("group", { name: "Filters" })).toBeTruthy();
-      for (const name of ["Activity", "Cost", "Sessions"]) expect(within(block(name)).getByText("No requests in this view.")).toBeTruthy();
+      for (const name of ["Activity", "Cost", "Sessions", QUAD]) expect(within(block(name)).getByText("No requests in this view.")).toBeTruthy();
       expect(block("Activity").querySelector(".facts")).toBeNull();
     });
 
