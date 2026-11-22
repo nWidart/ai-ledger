@@ -61,7 +61,7 @@ export const weeksLayout = (textScale: number): TrackLayout =>
  *  neighbouring weeks, a span for a lone week) the dashed 30k line when the axis reaches it, the median on its halo, and
  *  the dots: hollow for a week of few sessions, solid for a week no line reaches. */
 export function weeksOption(m: WeeksModel, env: ChartEnv): EChartsOption {
-  const l = weeksLayout(env.textScale), axes = { xAxisIndex: 0, yAxisIndex: 0 };
+  const l = weeksLayout(env.textScale), axes = { xAxisIndex: 0, yAxisIndex: 0 }, x = categoryAxis(env, m.slots, week => dayLabel(week));
   const median = lineSeries(env, { id: "median", data: m.median, color: "var(--text-primary)", ...axes });
   const series: SeriesOption[] = [
     bandSeries(env, { id: "band", lo: m.p25, hi: m.p75, color: env.ink.secondary, opacity: .16, ...axes }),
@@ -73,7 +73,9 @@ export function weeksOption(m: WeeksModel, env: ChartEnv): EChartsOption {
   return {
     ...baseOption(env),
     grid: { left: l.left, right: l.right, ...l.tracks[0]!, outerBoundsMode: "none" },
-    xAxis: categoryAxis(env, m.slots, week => dayLabel(week)),
+    // The newest week is always labelled, right-aligned on its point so it ends inside the plot, as tracksOption does:
+    // ECharts' thinning would drop it (5 weeks at 200% text, 12 in 343px).
+    xAxis: { ...x, axisLabel: { ...x.axisLabel, alignMaxLabel: "right", showMaxLabel: true } },
     yAxis: valueAxis(env, { max: m.max, step: m.step, format: short }),
     series,
   };
