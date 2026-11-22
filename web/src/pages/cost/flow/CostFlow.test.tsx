@@ -136,11 +136,14 @@ describe("cost flow: reading", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
-  it("keeps the item read through newer figures and says its new sentence", () => {
+  it("keeps the item read through newer figures and says its new sentence, and ends quietly on newer figures without it", () => {
     const { rerender } = focused();
     press("ArrowRight");
     rerender(<CostFlow d={view([["atlas-api", "claude-opus-4-5", 34], ...PAIRS.slice(1)])} onProject={() => {}} />);
     expect(live()).toBe("Project atlas-api: $70, 31.8% of $220. To opus-4-5 $34, sonnet-4-5 $18, gpt-5.1-codex $12 and 1 more.");
+    // atlas-api now under 1% of the cost: folded into Other, so no node of its own.
+    rerender(<CostFlow d={view([["atlas-api", "claude-opus-4-5", 1], ...PAIRS.slice(4)])} onProject={() => {}} />);
+    expect([live(), screen.queryByRole("tooltip"), document.querySelector(".flow-mark")]).toEqual(["", null, null]);
   });
 });
 

@@ -42,6 +42,9 @@ const byCost = <T extends { value: number }>(xs: T[]) => [...xs].sort((a, b) => 
 /** A row of the data table: one flow, unfolded. */
 interface FlowRow { id: string; step: string; from: string; to: string; cost: number }
 
+/** An item of the graph, found: its band or its node. */
+type Found = { band: PlacedBand; node?: undefined } | { node: PlacedNode; band?: undefined };
+
 /** The view's graph: places, sentences and tooltips of every node and band. */
 function useFlow(layout: FlowLayout | null) {
   return useMemo(() => {
@@ -51,8 +54,14 @@ function useFlow(layout: FlowLayout | null) {
     const bands = new Map<string, PlacedBand>(layout.bands.map(b => [b.id, b]));
     const into = (id: string) => byCost(layout.bands.filter(b => b.to === id));
     const out = (id: string) => byCost(layout.bands.filter(b => b.from === id));
+    /** The item in this graph, or null when the graph does not hold it. */
+    const find = (at: FlowItem): Found | null => {
+      if ("band" in at) { const band = bands.get(at.band); return band ? { band } : null; }
+      const node = nodes.get(at.node);
+      return node ? { node } : null;
+    };
     return {
-      nodes, bands, into, out,
+      nodes, into, out, find,
       column: (id: string) => layout.columns[column.get(id)!]!,
       reading: { columns: layout.columns.map(c => c.nodes), bands: layout.bands },
       // What is drawn, so a node or band grown to be seen is read where it is seen.
@@ -81,17 +90,14 @@ export function CostFlow({ d, onProject }: CostFlowProps) {
 
   /** The sentence the live region says for an item, or null when the item is not in the graph. */
   const sentence = (at: FlowItem): string | null => {
-    if (!g) return null;
+    const f = g?.find(at);
+    if (!g || !f) return null;
     const of = (v: number) => `${usd(v)}, ${share(v, total)} of ${usd(total)}`;
-    if ("band" in at) {
-      const b = g.bands.get(at.band);
-      if (!b) return null;
-      const from = g.nodes.get(b.from)!, to = g.nodes.get(b.to)!;
+    if (f.band) {
+      const b = f.band, from = g.nodes.get(b.from)!, to = g.nodes.get(b.to)!;
       return `${from.label} to ${to.label}: ${of(b.value)} and ${share(b.value, from.value)} of ${from.label}.`;
     }
-    const n = g.nodes.get(at.node);
-    if (!n) return null;
-    const c = g.column(n.id);
+    const n = f.node, c = g.column(n.id);
     const ends = (bs: PlacedBand[], end: "from" | "to") => bs.map(b => ({ name: g.nodes.get(b[end])!.label, value: b.value }));
     const head = n.members ? `Other, ${plural(n.members.length, WORD[c.key]!)}: ${of(n.value)}; the largest ${list(n.members.map(m => ({ name: m.label, value: m.value })))}`
       : c.key === "kind" ? `${n.id === REPORTED ? "Reported, not split by kind" : n.label}: ${of(n.value)}`
@@ -102,9 +108,12 @@ export function CostFlow({ d, onProject }: CostFlowProps) {
 
   // The reading, held by the item's id. A new view ends it, and so does newer data without its item. A reading a key
   // made is said again when newer data changes its words; the pointer's is not, and its tooltip shows the newer figures.
+  // `shown` is the reading this render shows: none on a new view or when this graph does not hold its item, so no part
+  // of the render looks up an item the graph has lost, even in the render React discards for the state set below.
   const [reading, setReading] = useState<Reading | null>(null);
   const [seen, setSeen] = useState(view);
-  const text = reading && sentence(reading.at);
+  const text = reading && seen === view ? sentence(reading.at) : null;
+  const shown = text == null ? null : reading;
   if (seen !== view) {
     setSeen(view);
     setReading(null);
@@ -122,32 +131,32 @@ export function CostFlow({ d, onProject }: CostFlowProps) {
   // Where the pointer's reading points, in px from the box's top left; null for a key's, which points at the item.
   const pointer = useRef<{ x: number; y: number } | null>(null);
   const placeTip = () => {
-    const el = box.current, tip = tipEl.current, at = reading?.at;
-    if (!el || !tip || !at || !g) return;
+    const el = box.current, tip = tipEl.current, f = shown && g?.find(shown.at);
+    if (!el || !tip || !f) return;
     let to = pointer.current;
     if (!to) {
-      const b = "band" in at ? g.bands.get(at.band) : undefined, n = "node" in at ? g.nodes.get(at.node) : undefined;
-      to = b ? { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 + b.h / 2 } : n ? { x: n.x + n.width, y: n.y + n.height / 2 } : { x: 0, y: 0 };
+      const { band: b, node: n } = f;
+      to = b ? { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 + b.h / 2 } : { x: n.x + n.width, y: n.y + n.height / 2 };
     }
     const r = el.getBoundingClientRect(), p = tipAt(el, tip, r.left + to.x, r.top + to.y);
     tip.style.left = `${p.left}px`;
     tip.style.top = `${p.top}px`;
   };
   const place = useEffectEvent(placeTip);
-  useLayoutEffect(() => place(), [reading, layout]);
+  useLayoutEffect(() => place(), [shown, layout]);
 
-  const named = (at: FlowItem | null) => (at && "node" in at ? g?.nodes.get(at.node)?.project : undefined);
+  const named = (at: FlowItem | null) => (at && g?.find(at)?.node?.project);
   const onKey = (ev: KeyboardEvent) => {
     if (!g || modified(ev)) return;
-    if (ev.key === "Escape") { if (reading) read(null); return; }
+    if (ev.key === "Escape") { if (shown) read(null); return; }
     if (ev.key === "Enter") {
-      if (!reading) return;
+      if (!shown) return;
       ev.preventDefault();
-      const p = named(reading.at);
+      const p = named(shown.at);
       if (p) onProject(p);
       return;
     }
-    const next = moveFlow(reading?.at ?? null, ev.key, g.reading);
+    const next = moveFlow(shown?.at ?? null, ev.key, g.reading);
     if (!next) return;
     ev.preventDefault(); // Up and Down too: the page does not scroll under the focused graph
     pointer.current = null;
@@ -162,13 +171,13 @@ export function CostFlow({ d, onProject }: CostFlowProps) {
     const { x, y, at } = under(ev);
     setHand(!!named(at));
     pointer.current = at && { x, y };
-    if (same(at, reading?.at)) placeTip();
+    if (same(at, shown?.at)) placeTip();
     else read(at);
   };
   const onClick = (ev: MouseEvent) => {
     const { at } = under(ev);
     if (!at) return;
-    if (!same(at, reading?.at)) read(at);
+    if (!same(at, shown?.at)) read(at);
     const p = named(at);
     if (p) onProject(p);
   };
@@ -176,7 +185,7 @@ export function CostFlow({ d, onProject }: CostFlowProps) {
 
   // Escape ends a reading wherever the focus is, since the pointer can open one while the focus is elsewhere. A key from
   // inside the box is the box's own. Capturing, as the wrapper's: a control that stops Escape would keep it from us.
-  const open = !!reading;
+  const open = !!shown;
   const end = useEffectEvent(() => read(null));
   useEffect(() => {
     if (!open) return;
@@ -213,8 +222,7 @@ export function CostFlow({ d, onProject }: CostFlowProps) {
     { id: "share", header: "Share of cost", align: "num", cell: r => share(r.cost, total) },
   ], [total]);
 
-  const at = reading?.at;
-  const band = at && "band" in at ? g?.bands.get(at.band) : undefined, node = at && "node" in at ? g?.nodes.get(at.node) : undefined;
+  const found = shown && g?.find(shown.at), band = found?.band, node = found?.node;
   const mark = band ? <path d={bandPath({ ...band, ...band.drawn })} />
     : node ? <rect x={node.x - 2} y={node.drawn.y - 2} width={node.width + 4} height={node.drawn.h + 4} /> : null;
 
@@ -235,10 +243,10 @@ export function CostFlow({ d, onProject }: CostFlowProps) {
         {layout ? <>
           <EChart id="cost-flow" label={label} height={layout.fit.height} option={option} view={view} points={0} read={() => ""} />
           {mark && <svg className="flow-mark" aria-hidden="true" width={layout.fit.width} height={layout.fit.height}>{mark}</svg>}
-          {reading && g && <div ref={tipEl} className="tip" role="tooltip">{tip(reading.at, g, total)}</div>}
+          {found && g && <div ref={tipEl} className="tip" role="tooltip">{tip(found, g, total)}</div>}
         </> : <p className="empty">{model.empty}</p>}
         {/* The graph's one polite region: the wrapper's stays empty. A new span says a sentence again, even the same words. */}
-        <div className="sr flow-live" aria-live="polite">{reading && <span key={reading.n}>{reading.text}</span>}</div>
+        <div className="sr flow-live" aria-live="polite">{shown && <span key={shown.n}>{shown.text}</span>}</div>
       </div>
       {layout?.keyed.map(ci => {
         const c = layout.columns[ci]!;
@@ -255,19 +263,19 @@ export function CostFlow({ d, onProject }: CostFlowProps) {
 
 /** The tooltip's rows: a node's column, name, cost and share, then its largest bands (or Other's names); a band's ends,
  *  cost, share of the total and share of its source. */
-function tip(at: FlowItem, g: NonNullable<ReturnType<typeof useFlow>>, total: number): ReactNode {
+function tip(f: Found, g: NonNullable<ReturnType<typeof useFlow>>, total: number): ReactNode {
   const row = (k: string, v: ReactNode, sub = false) => <div key={k} className={sub ? "row sub" : "row"}><span>{k}</span><b>{v}</b></div>;
   const top = (title: string, xs: { name: string; value: number }[]) => xs.length ? <>
     <div className="muted">{title}</div>
     {xs.slice(0, 3).map(x => row(x.name, usd(x.value), true))}
     {xs.length > 3 && <div className="row sub"><span>{`+ ${num(xs.length - 3)} more`}</span></div>}
   </> : null;
-  if ("band" in at) {
-    const b = g.bands.get(at.band)!, from = g.nodes.get(b.from)!, to = g.nodes.get(b.to)!;
+  if (f.band) {
+    const b = f.band, from = g.nodes.get(b.from)!, to = g.nodes.get(b.to)!;
     return <>{row("From", from.label)}{row("To", to.label)}{row("Est. cost", usd(b.value))}{row("Share of cost", share(b.value, total))}
       {row(`Share of ${from.label}`, share(b.value, from.value))}</>;
   }
-  const n = g.nodes.get(at.node)!;
+  const n = f.node;
   const ends = (bs: PlacedBand[], end: "from" | "to") => bs.map(b => ({ name: g.nodes.get(b[end])!.label, value: b.value }));
   return <>
     <div className="muted">{g.column(n.id).title}</div>
