@@ -359,7 +359,9 @@ class AppTest(unittest.TestCase):
         status, _, body = self.get("/api/day?day=2026-11-02&days=7&range=0")
         self.assertEqual((status, json.loads(body)["days"]), (200, 7))
         self.assertEqual(self.get("/api/sessions?day=2026-11-02&days=7&range=0")[0], 200)
-        for path in ("/api/day", "/api/day?day=nope", "/api/day?day=2026-11-04&range=-1", "/api/day?day=2026-11-02&days=3",
+        status, _, body = self.get("/api/calendar")
+        self.assertEqual((status, sorted(json.loads(body))), (200, ["automated", "days", "end", "first", "project", "source", "start"]))
+        for path in ("/api/calendar?source=gemini", "/api/day","/api/day?day=nope", "/api/day?day=2026-11-04&range=-1", "/api/day?day=2026-11-02&days=3",
                      "/api/sessions?day=2026-11-02&days=3", "/api/day?day=2026-11-02&days=x", "/api/sessions?days=3",
                      "/api/sessions?days=7", "/api/sessions?day=2026-11-02&days=", "/api/day?day=2026-11-02&days="):
             self.assertEqual(self.get(path)[0], 400, path)

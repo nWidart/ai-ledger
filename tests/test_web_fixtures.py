@@ -138,6 +138,8 @@ class WebFixturesTest(unittest.TestCase):
             # 30 days: previous period and changes are set; all time with a session: they are null and the drill-in is in.
             "usage.ts": ("UsagePayload", metrics.usage(c, "", 30, prices=tm.PRICES, today=tm.TODAY)),
             "usage-all.ts": ("UsagePayload", metrics.usage(c, "", 0, "s1", prices=tm.PRICES, today=tm.TODAY, automated=True)),
+            # The 53 weeks to the usage fixture's end: its work days, and bar's Oct 1 as the first day.
+            "calendar.ts": ("CalendarPayload", metrics.calendar(c, today=tm.TODAY)),
             "palette.ts": ("PalettePayload", metrics.palette(c, "", 30, tm.TODAY)),
             "sessions.ts": ("SessionsPage", metrics.session_list(c, prices=tm.PRICES, today=tm.TODAY)),
             "day.ts": ("DayView", metrics.day_view(c, "", 30, "2026-11-04", tm.TODAY)),

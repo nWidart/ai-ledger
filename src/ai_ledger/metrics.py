@@ -564,6 +564,23 @@ def day_view(cur, project="", range_days=0, day="", today=None, automated=False,
                 failed_tests=titles.with_titles(cur, tests), tests_failed=call_totals(cur, W, fp)["tests_failed"])
 
 
+CALENDAR_WEEKS = 53  # the weeks of the activity calendar, the current one last: a whole year is always there
+
+
+def calendar(cur, project="", today=None, automated=False, source=""):
+    """The work per day (daily_work(), as usage() counts it) from the Monday 52 weeks before this week's to today, whatever
+    the page's range, and first: the first day with a request under the same filters over all time, or None. No prices
+    are read. Raises ValueError for a bad source."""
+    today = today or local_today(cur)
+    start = today - timedelta(days=today.weekday() + 7 * (CALENDAR_WEEKS - 1))  # weekday() is 0 on Monday
+    ap = user_automated()[0]  # read once, so the rows and first leave out the same projects
+    _, _, _, fp, W, rq, rp = view(project, (today - start).days + 1, {}, today, automated, source, ap)
+    _, _, _, _, _, all_rq, all_rp = view(project, 0, {}, today, automated, source, ap)
+    first = cur.execute(f"{all_rq} SELECT min({day('ts')}) FROM rq", all_rp).fetchone()[0]
+    return dict(project=project, automated=bool(automated), source=source, start=start.isoformat(), end=today.isoformat(),
+                first=first, days=daily_work(cur, rq, rp, W, fp))
+
+
 def previous_dates(range_days, today):
     """(first day, last day) of the equal-length period just before a view of range_days ending today; None for all time."""
     if not range_days:

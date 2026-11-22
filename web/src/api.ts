@@ -134,6 +134,11 @@ export interface DayView {
 }
 /** The days a selection of the work chart covers: a day, or a week from its Monday. */
 export type Span = 1 | 7;
+/** /api/calendar: the work per day of the 53 weeks from start (a Monday) to end (today), whatever the page's range; days
+ *  with none left out. first: the first day with a request under the same filters, over all time; null for none. */
+export interface CalendarPayload {
+  project: string; automated: boolean; source: Source | ""; start: Day; end: Day; first: Day | null; days: DailyWorkRow[];
+}
 
 export interface SessionInfo {
   session_id: string; project: string | null; cwd: string | null; git_branch: string | null; first_ts: Ts | null; last_ts: Ts | null;
@@ -606,6 +611,8 @@ const sortQs = (sort: readonly SessionSortKey[] = []) => sort.length === 1 ? { s
 export const sessionsUrl = (v: View, o: { q?: string; near?: boolean; offset?: number; limit?: number; day?: Day; days?: Span; sort?: readonly SessionSortKey[] } = {}) =>
   `/api/sessions?${qs({ ...viewQs(v), q: o.q, near: o.near, offset: o.offset || undefined, limit: o.limit, day: o.day, days: o.day && o.days !== 1 ? o.days : undefined, ...sortQs(o.sort) })}`;
 export const dayUrl = (v: View, day: Day, days: Span = 1) => `/api/day?${qs({ ...viewQs(v), day, days: days === 1 ? undefined : days })}`;
+/** The calendar takes no range. */
+export const calendarUrl = (v: View) => `/api/calendar?${qs({ project: v.project, automated: v.automated, source: v.source })}`;
 export const sessionUrl = (id: string) => `/api/session?${qs({ id })}`;
 export const promptUrl = (session: string) => `/api/prompt?${qs({ session })}`;
 export const toolUrl = (kind: ToolKind, name: string, v: View) => `/api/tool?${qs({ kind, name, ...viewQs(v) })}`;
