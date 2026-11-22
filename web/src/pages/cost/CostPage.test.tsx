@@ -8,11 +8,11 @@ import sources from "../../__fixtures__/usage-sources";
 import sessions from "../../__fixtures__/sessions";
 import session from "../../__fixtures__/session";
 import { openDrawer } from "../../components/Drawer";
-import { drawn } from "../../components/echart/testing";
+import { drawn, fakeECharts } from "../../components/echart/testing";
 import { mockApi } from "../../components/sheets/testing";
 import { dayStamp, download } from "../../components/export";
 import { ingested, renderApp, renderPage } from "../../testing";
-import { num } from "../../format";
+import { num, usd } from "../../format";
 import { compareText, costDays, thinHistory } from "./cost";
 import { CostPage } from "./CostPage";
 
@@ -22,6 +22,8 @@ const at = (hash = "?range=30") => history.replaceState(null, "", "/cost" + hash
 // The day's sessions as the server sends them: costliest on that day first.
 const byDay: SessionsPage = { ...sessions, sessions: ["s1", "s3", "s2"].map(id => sessions.sessions.find(s => s.session_id === id)!) };
 const serve = (d: UsagePayload) => mockApi({ "/api/usage": () => d, "/api/sessions": q => (q.get("day") ? byDay : sessions), "/api/session": () => session });
+/** The daily chart, drawn: the page holds a second chart, the flow, which `drawn()` may return when it is made last. */
+const daily = async () => { await drawn(); return fakeECharts.live.find(c => document.getElementById("spend")!.contains(c.dom))!; };
 const loaded = () => screen.findByRole("heading", { level: 1, name: /estimated cost/ });
 const fetched = () => vi.mocked(fetch).mock.calls.map(c => c[0]);
 /** The page loaded, with these drawers opened in turn: a closed drawer renders no table, and a page opens one drawer at a time,
@@ -418,6 +420,37 @@ describe("CostPage", () => {
     expect(table().querySelector('tbody tr[data-v="foo"] .chg')!.textContent).toBe("–");
   });
 
+  it("follows the cost after the project table to the heading's total, opens a project's sheet from it, and draws two columns for one project", async () => {
+    await show(sources, []);
+    const flow = document.getElementById("flow")!, total = usd(sources.totals.cost!);
+    expect(table().compareDocumentPosition(flow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(flow.compareDocumentPosition(document.querySelector(".split")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1 }).textContent!.startsWith(`${total} estimated cost`)).toBe(true);
+    const graph = within(flow).getByRole("group", { name: /^Estimated cost from project to model to token kind/ });
+    expect(graph.getAttribute("aria-label")).toContain(`, ${total} in all:`);
+    // Enter on a project opens its sheet as the table does: the filter stays.
+    act(() => graph.focus());
+    fireEvent.keyDown(graph, { key: "ArrowRight" });
+    expect(flow.querySelector(".flow-live")!.textContent!.startsWith(`Project foo: ${total}, 100.0% of ${total}`)).toBe(true);
+    fireEvent.keyDown(graph, { key: "Enter" });
+    expect(location.search).toBe("?range=30&inspect=foo");
+    await waitFor(() => expect(document.querySelector("dialog")).toBeTruthy());
+    cleanup();
+    // One project selected: no project column, from the same payload.
+    serve({ ...sources, project: "foo" });
+    at("?range=30&project=foo");
+    renderApp(<CostPage />);
+    await loaded();
+    const one = within(document.getElementById("flow")!).getByRole("group", { name: /^Estimated cost on foo from model to token kind/ });
+    expect(one.getAttribute("aria-label")).toContain(`, ${total} in all:`);
+    expect(one.getAttribute("aria-label")).not.toMatch(/Enter on a project/);
+    act(() => one.focus());
+    fireEvent.keyDown(one, { key: "ArrowRight" });
+    expect(document.querySelector("#flow .flow-live")!.textContent).toMatch(/^Model m-a: /);
+    fireEvent.keyDown(one, { key: "Enter" });
+    expect(location.search).toBe("?range=30&project=foo");
+  });
+
   it("leaves the project table out of a one-project view", async () => {
     serve({ ...usage, project: "foo" });
     at("?range=30&project=foo");
@@ -433,7 +466,7 @@ describe("CostPage", () => {
     at();
     const { client } = renderPage(<CostPage />);
     await loaded();
-    const chart = await drawn();
+    const chart = await daily();
     chart.zoomTo(5, 14);
     act(() => screen.getByRole("button", { name: "Show all days" }).focus());
     const draws = chart.options.length, status = document.querySelector("#spend .sr")!.textContent;
@@ -642,7 +675,7 @@ describe("CostPage", () => {
 describe("daily chart zoom", () => {
   it("leaves the view alone: the heading, the project table and the URL keep 30 days, nothing is fetched, the data table lists them all", async () => {
     await show(usage, []);
-    const chart = await drawn();
+    const chart = await daily();
     const heading = screen.getByRole("heading", { level: 1 }).textContent, projects = table().textContent, requests = fetched().length;
     chart.zoomTo(5, 14);
     expect(await screen.findByRole("button", { name: "Show all days" })).toBeTruthy();
