@@ -165,7 +165,7 @@ const SCENES = {
     await h.wait(1800);
     await h.scrollTo(page.locator("#pressure"), 20);
     await h.click(page.locator("#pressure .band[aria-label*=\"272k\"]").nth(3), { pause: 1500 });
-    const map = page.locator("#pressure rect.hit");
+    const map = page.locator("#pressure .session-map .echart");
     await h.scrollTo(map, 120);
     const box = await map.first().boundingBox();
     for (const [x, y] of [[0.4, 0.6], [0.55, 0.35], [0.65, 0.15]]) { await h.move(box.x + box.width * x, box.y + box.height * y); await h.wait(500); }
