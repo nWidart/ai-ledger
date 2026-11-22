@@ -223,7 +223,7 @@ class SessionsTest(LiveCase):
         got = live.sessions(self.cur(), now=NOW, prices=PRICES)
         self.assertEqual([s["session_id"] for s in got["sessions"]], ["s1", "s2"])
         s1 = got["sessions"][0]
-        self.assertEqual((s1["state"]["kind"], s1["latest"]["tool"], s1["window"], s1["requests"]), ("tool", "Read", 1000000, 1))
+        self.assertEqual((s1["state"]["kind"], s1["window"], s1["requests"]), ("tool", 1000000, 1))
 
     def test_start_time_is_the_first_line(self):
         got = live.sessions(self.cur(), now=NOW, prices=PRICES)
@@ -410,7 +410,6 @@ class SessionTest(LiveCase):
         self.assertEqual(plain["events"][1]["summary"], "find " + "x" * (live.INPUT_CAP - 5) + "…")
         self.assertEqual(max(map(len, strings(plain))), live.INPUT_CAP + 1)
         self.assertLessEqual(max(map(len, strings(wall))), live.INPUT_CAP + 1)
-        self.assertEqual(wall["sessions"][0]["latest"]["summary"], "find " + "x" * 195)
         self.assertEqual(len(self.run_session(text=True)["events"][1]["description"]), 2000)
 
     def test_shell_description_beside_its_command_cut_without_text(self):
@@ -422,20 +421,6 @@ class SessionTest(LiveCase):
         self.assertEqual((run["description"], run["summary"]), ("Run the Python tests", "cd /long/path && uv run pytest"))
         self.assertEqual((wordy["description"], bare["description"]), ("list " + "x" * (live.INPUT_CAP - 5) + "…", None))
         self.assertEqual(len(self.run_session(text=True)["events"][1]["description"]), 400)
-
-    def test_wall_latest_action_is_a_shell_calls_description(self):
-        def latest(text=False, tool="Bash", **inp):
-            return live.latest_action(events(assistant("a1", "m1", at(1), [tool_use("t1", tool, **inp)])), text)
-        self.assertEqual(latest(command="cd /long/path && uv run pytest", description="Run the Python tests"),
-                         dict(kind="tool", tool="Bash", summary="Run the Python tests", lane=None))
-        wordy = dict(command="ls", description="list " + "x" * 395)  # cut as an input is, with text and without
-        self.assertEqual((latest(**wordy)["summary"], latest(text=True, **wordy)["summary"]), ("list " + "x" * 195,) * 2)
-        self.assertEqual(latest(command="git status")["summary"], "git status")  # no description: the command
-        self.assertEqual(latest(tool="Read", file_path="x.py", description="the parser")["summary"], "x.py")  # not a shell call
-        self.write("s1.jsonl", prompt("u1", at(0), "p1", "go") + assistant("a1", "m1", at(1), [
-            tool_use("t1", "Bash", command="uv run pytest", description="Run the Python tests")]))
-        self.ingest()
-        self.assertEqual(live.sessions(self.cur(), now=NOW, prices=PRICES)["sessions"][0]["latest"]["summary"], "Run the Python tests")
 
     def test_text_only_on_request(self):
         self.write("s1.jsonl", prompt("u1", at(0), "p1", "SECRET prompt") + assistant("a1", "m1", at(1), [
@@ -527,7 +512,6 @@ class SessionTest(LiveCase):
         self.assertEqual(got["requests"], 2)
         self.assertEqual(got["pulse"]["context"], [dict(ts=at(30), tokens=160), dict(ts=at(50), tokens=55000)])  # what each read, no output
         self.assertGreater(got["cache_read"], 0.9)
-        self.assertEqual(got["cwd"], S["cwd"])
 
     def test_pulse(self):
         sub = dict(S, isSidechain=True, agentId="a7")
@@ -681,8 +665,6 @@ class CodexSessionTest(CodexCase):
         self.assertEqual(marks(got), [("turn_start", None), ("prompt", None), ("tool", None), ("turn_end", None),
                                       ("turn_start", thread), ("tool", thread)])
         self.assertEqual(live.session(self.con.cursor(), THREAD, after=at(0), now=NOW, prices=PRICES)["events"], got["events"])
-        listed, = live.sessions(self.con.cursor(), now=NOW, prices=PRICES)["sessions"]
-        self.assertEqual((listed["latest"]["lane"], listed["latest"]["summary"]), (thread, json.dumps(dict(cmd="ls"))))
 
     def prompted(self, text=""):
         return codex_line(1, 1, "event_msg", type="item_completed", turn_id="t1", item=dict(type="UserMessage", content=[dict(type="text", text="go")]))
@@ -884,6 +866,36 @@ class CodexSessionTest(CodexCase):
         self.assertEqual(live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)["state"]["kind"], "you")
 
 
+PROMPT_MD = """## Add a fast ingest pass while the Live page is open
+
+Keep the rail readable at a glance:
+
+- keep each **title** whole on two lines
+- never cut a `state` tag
+
+See [the council notes](https://example.com/council) first."""
+REPLY_MD = """### Plan
+
+1. Measure the rail at **1280 px**.
+2. Clamp titles with `line-clamp: 2`.
+
+| Part | Width | Cut |
+| --- | ---: | --- |
+| title | 220 px | no |
+| state tag | 96 px | no |
+
+```css
+.rail .ttl { line-clamp: 2; }
+```
+
+Details in [the design doc](https://example.com/design)."""
+LONG_COMMAND = ("cd /Users/example/Sites/projects/ai-ledger && uv run pytest tests/test_live.py tests/test_web_fixtures.py -q -x "
+                "--no-header -p no:cacheprovider 2>&1 | tee /Users/example/Library/Caches/ai-ledger/pytest-live.log")
+DELEGATE = dict(target=dict(provider="codex", model="gpt-6.2-sol", options=dict(reasoningEffort="high")),
+                isolation="worktree", task=("Review the Live page fixtures in tests/test_live.py against real sessions: titles, "
+                                            "branches, long MCP names and Markdown replies. Report each gap with the file and line."))
+
+
 class PageCase(LiveCase):
     """The store behind the Live page fixtures: one session per state, a lane, a failure, a compaction and a Codex turn.
     All text is made up."""
@@ -896,16 +908,19 @@ class PageCase(LiveCase):
 
     def build(self):
         sub = dict(S, isSidechain=True, agentId="a7")
-        self.write("s1.jsonl", prompt("u1", at(0), "p1", "Add a fast ingest pass while the Live page is open")
-                   + line(type="ai-title", aiTitle="Fast ingest pass while Live is open", sessionId="s1")
-                   + assistant("a1", "m1", at(2), [dict(type="text", text="Reading the ingest loop first."),
-                                                   tool_use("t1", "Read", file_path="store.py")])
+        # Shapes as real sessions have them: a prompt and a reply in Markdown, a shell command at the 200-character mark
+        # with absolute paths and an MCP call with a long JSON input.
+        self.write("s1.jsonl", prompt("u1", at(0), "p1", PROMPT_MD)
+                   + line(type="ai-title", aiTitle="Fast ingest pass while the Live page stays open and polling", sessionId="s1")
+                   + assistant("a1", "m1", at(2), [dict(type="text", text=REPLY_MD), tool_use("t1", "Read", file_path="store.py"),
+                                                   tool_use("t0", "mcp__t3-code__delegate_task", **DELEGATE)])
                    + result("r1", at(3), "t1", "def ingest(con, roots):\n    ...")
+                   + result("r0", at(3), "t0", json.dumps(dict(taskId="task_7f3a", status="queued")))
                    + assistant("a2", "m2", at(4), [tool_use("t2", "Agent", description="find callers of ingest", prompt="look")])
                    + line(type="user", uuid="r2", timestamp=at(12), promptId="p1", toolUseResult=dict(agentId="a7"),
                           message=dict(role="user", content=[dict(type="tool_result", tool_use_id="t2", content="3 callers")]), **S)
                    + line(type="system", subtype="compact_boundary", uuid="c1", timestamp=at(13), compactMetadata=dict(preTokens=180000), **S)
-                   + assistant("a3", "m3", at(14), [tool_use("t3", "Bash", command="uv run python -m unittest", description="Run the Python tests")])
+                   + assistant("a3", "m3", at(14), [tool_use("t3", "Bash", command=LONG_COMMAND, description="Run the Python tests")])
                    + result("r3", at(20), "t3", "FAIL: test_hot_pass\nAssertionError: 3 != 1", error=True)
                    + assistant("a4", "m4", at(22), [tool_use("t4", "Bash", command="git push origin feat/live-page")]))
         self.write("s1/subagents/agent-a7.jsonl", "".join(
@@ -915,33 +930,59 @@ class PageCase(LiveCase):
             + line(type="user", uuid=f"y{i}", timestamp=at(6 + i * 2), message=dict(role="user", content=[
                 dict(type="tool_result", tool_use_id=f"st{i}", content="app.py:45")]), **sub)
             for i, p in enumerate(("store.ingest", "INTERVAL", "def loop"))))
-        other = lambda text, sid, cwd: text.replace('"s1"', f'"{sid}"').replace("/nowhere/foo", cwd)
+        def other(text, sid, cwd, title=None, branch="main"):
+            named = line(type="ai-title", aiTitle=title, sessionId="s1") if title else ""
+            return (text + named).replace('"s1"', f'"{sid}"').replace("/nowhere/foo", cwd).replace('"gitBranch": "main"', f'"gitBranch": "{branch}"')
         self.write("s2.jsonl", other(assistant("b1", "n1", at(30), [dict(type="text", text="The header shows a relative time.")])
-                                     + prompt("v1", at(55), "q2", "Freeze the clock in the snapshot test"), "s2", "/nowhere/jobdesk"))
+                                     + prompt("v1", at(55), "q2", "Freeze the clock in the snapshot test so the header stops drifting"), "s2", "/nowhere/jobdesk"))
         self.write("s3.jsonl", other(prompt("w1", at(10), "q3", "Rename the theme tokens")
                                      + line(type="custom-title", sessionId="s1",
                                             customTitle="Rename the theme tokens across every page, the charts and the print stylesheet")
                                      + assistant("e1", "o1", at(40), [dict(type="text", text="Renamed 14 tokens.")]), "s3", "/nowhere/sketchbook"))
-        # Only command output in its prompt and no title line: no title.
         self.write("s4.jsonl", other(prompt("z1", "2026-11-10T09:53:00.000Z", "q4", "<local-command-stdout>zsh reloaded</local-command-stdout>"),
-                                     "s4", "/nowhere/dotfiles"))
+                                     "s4", "/nowhere/dotfiles", "Reload the zsh config and find what slows every new prompt"))
         self.write("s5.jsonl", other(prompt("h1", at(15), "q5", "Sort the reading list") + assistant("i1", "j1", at(35), [dict(type="text", text="Sorted.")])
-                                     + line(type="cost-state", sessionId="s1", totalCostUSD=0.02), "s5", "/nowhere/notes"))
+                                     + line(type="cost-state", sessionId="s1", totalCostUSD=0.02), "s5", "/nowhere/notes",
+                                     "Sort the reading list by topic and drop the finished books"))
+        # Six more at work, as a busy morning has them: a long MCP call running, a long shell call, a 30-character branch.
+        self.write("s6.jsonl", other(prompt("k1", at(40), "q6", "Delegate the fixture review")
+                                     + assistant("l1", "p1", at(50), [tool_use("lt1", "mcp__t3-code__delegate_task", **DELEGATE)]),
+                                     "s6", "/nowhere/ai-ledger", "Delegate the Live fixture review to a second model and merge it", "feat/live-rail-state-tag-width"))
+        self.write("s7.jsonl", other(prompt("k2", at(45), "q7", "Profile the ingest"), "s7", "/nowhere/ingest-bench",
+                                     "Profile the ingest of a 2 GB transcript folder and find the hot loop", "perf/ingest-profile"))
+        fail = lambda i, secs: (assistant(f"l3{i}", f"p3{i}", at(secs), [tool_use(f"lt3{i}", "Bash", command="uv run pytest -x tests/test_jobs.py")])
+                                + result(f"m3{i}", at(secs + 1), f"lt3{i}", "FAILED tests/test_jobs.py::test_archived - assert 200 == 404", error=True, prompt="q8"))
+        self.write("s8.jsonl", other(prompt("k3", at(5), "q8", "Fix the API") + fail(1, 10) + fail(2, 16) + fail(3, 22)
+                                     + assistant("l3", "p3", at(30), [tool_use("lt3", "Read", file_path="/nowhere/jobdesk-api/app/routes/jobs.py")])
+                                     + result("m3", at(31), "lt3", "def list_jobs(): ...", prompt="q8"),
+                                     "s8", "/nowhere/jobdesk-api", "Return a 404 for archived jobs instead of an empty list", "fix/archived-jobs-404"))
+        self.write("s9.jsonl", other(prompt("k4", at(35), "q9", "Check the docs")
+                                     + assistant("l4", "p4", at(40), [tool_use("lt4", "WebFetch", url="https://example.com/docs/release-notes")]),
+                                     "s9", "/nowhere/infra", "Check the provider release notes before bumping the runner image"))
+        self.write("s10.jsonl", other(prompt("k5", at(15), "q10", "Run the suite")
+                                      + assistant("l5", "p5", at(20), [tool_use("lt5", "Bash", command=LONG_COMMAND, timeout=600000)]),
+                                      "s10", "/nowhere/site", "Run the full docs build and fix every broken link it reports", "docs/broken-links"))
+        self.write("s11.jsonl", other(prompt("k6", at(52), "q11", "Ship it"), "s11", "/nowhere/mobile",
+                                      "Ship the offline mode behind a flag and write its release note"))
         thread = "0a0f7777-0000-7000-8000-000000000007"
         self.codex(f"rollout-2026-11-10T10-00-00-{thread}.jsonl", meta(thread).replace("2026-11-06T10:00:00.000Z", at(0)).replace("/nowhere/foo", "/nowhere/graft")
                    + codex_line(1, 20, "event_msg", type="task_started", turn_id="t1", model_context_window=272000)
-                   + codex_line(2, 21, "event_msg", type="item_completed", turn_id="t1", item=dict(type="UserMessage", content=[dict(type="text", text="Bump the rollout parser")]))
-                   + codex_line(3, 25, "response_item", type="function_call", name="exec_command", call_id="k1", arguments=json.dumps(dict(cmd="rg response_item src/")))
-                   + codex_line(4, 26, "response_item", type="function_call_output", call_id="k1", output="src/rollout.rs:41")
-                   + codex_line(5, 27, "token_usage_record", turn_id="t1", response_id="r1", usage=dict(input_tokens=22000, cached_input_tokens=20000, output_tokens=300)))
+                   + codex_line(2, 20, "turn_context", turn_id="t1", model="gpt-6.2-sol",
+                                collaboration_mode=dict(mode="default", settings=dict(model="gpt-6.2-sol", reasoning_effort="high")))
+                   + codex_line(3, 21, "event_msg", type="item_completed", turn_id="t1", item=dict(type="UserMessage", content=[dict(type="text", text="Bump the rollout parser")]))
+                   + codex_line(4, 25, "response_item", type="function_call", name="exec_command", call_id="k1", arguments=json.dumps(dict(cmd="rg response_item src/")))
+                   + codex_line(5, 26, "response_item", type="function_call_output", call_id="k1", output="src/rollout.rs:41")
+                   + codex_line(6, 27, "token_usage_record", turn_id="t1", response_id="r1", usage=dict(input_tokens=22000, cached_input_tokens=20000, output_tokens=300)))
+        with open(os.path.join(self.roots["codex"], "session_index.jsonl"), "w") as fh:
+            fh.write(line(id=thread, thread_name="Bump the rollout parser to the new response_item shapes", updated_at=at(21)))
         self.ingest()
         return thread
 
 
 def page_fixtures():
     """The Live payloads the page tests render, at NOW: the active list with and without text, a Claude Code session with
-    and without text, and a Codex session. Titles: foo from the agent, sketchbook renamed (too long for a tile), jobdesk and
-    graft from their first prompt, dotfiles none."""
+    and without text, and a Codex session. Titles: sketchbook renamed (too long for a tile), jobdesk from its first prompt,
+    every other one from its agent."""
     case = PageCase()
     case.setUp()
     try:
@@ -960,18 +1001,20 @@ class PageFixtureTest(unittest.TestCase):
         got = page_fixtures()
         states = {s["project"]: s["state"]["kind"] for s in got["list"]["sessions"]}
         self.assertEqual(states, {"foo": "wait", "jobdesk": "thinking", "sketchbook": "you", "dotfiles": "idle", "graft": "thinking",
-                                  "notes": "ended"})
+                                  "notes": "ended", "ai-ledger": "tool", "ingest-bench": "thinking", "jobdesk-api": "thinking",
+                                  "infra": "tool", "site": "tool", "mobile": "thinking"})
+        listed = {s["project"]: s for s in got["list"]["sessions"]}
+        self.assertEqual((listed["ai-ledger"]["state"]["tool"], listed["ai-ledger"]["branch"]), ("mcp__t3-code__delegate_task", "feat/live-rail-state-tag-width"))
+        self.assertEqual((listed["jobdesk-api"]["errors"], listed["graft"]["model"], listed["graft"]["cost"]), (3, "gpt-6.2-sol", None))
         self.assertEqual({k: v["model"] for k, v in got["claude"]["lanes"].items()}, dict(a7="claude-opus-5-5"))
         self.assertAlmostEqual(got["claude"]["lanes"]["a7"]["cost"], 0.0084)
         self.assertEqual({e["lane"] for e in got["claude"]["events"]} - {None}, {"a7"})
         self.assertTrue(any(e.get("failed") for e in got["claude"]["events"]))
         self.assertNotIn("Freeze", json.dumps(got["list"]) + json.dumps(got["claude"]))
         titles = lambda key: {s["project"]: (s["title"], s["title_from"]) for s in got[key]["sessions"]}
-        self.assertEqual(titles("list"), {"foo": ("Fast ingest pass while Live is open", "agent"),
-                                          "sketchbook": ("Rename the theme tokens across every page, the charts and the print stylesheet", "agent"),
-                                          "jobdesk": (None, None), "graft": (None, None), "dotfiles": (None, None), "notes": (None, None)})
-        self.assertEqual(titles("list_text")["jobdesk"], ("Freeze the clock in the snapshot test", "prompt"))
-        self.assertEqual(titles("list_text")["dotfiles"], (None, None))
+        self.assertEqual({p: t for p, t in titles("list").items() if t[1] != "agent"}, {"jobdesk": (None, None)})
+        self.assertTrue(all(40 <= len(t) <= 80 for t, _ in titles("list_text").values()))
+        self.assertEqual(titles("list_text")["jobdesk"], ("Freeze the clock in the snapshot test so the header stops drifting", "prompt"))
 
 
 if __name__ == "__main__":

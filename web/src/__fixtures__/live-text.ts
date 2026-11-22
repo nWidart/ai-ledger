@@ -6,7 +6,7 @@ export default {
  "sessions": [
   {
    "session_id": "s2",
-   "title": "Freeze the clock in the snapshot test",
+   "title": "Freeze the clock in the snapshot test so the header stops drifting",
    "title_from": "prompt",
    "project": "jobdesk",
    "source": "claude",
@@ -20,11 +20,55 @@ export default {
     "inferred": true,
     "long": false
    },
-   "latest": {
-    "kind": "prompt",
+   "window": 1000000,
+   "cost": 0.0008,
+   "requests": 1,
+   "model": "claude-opus-5-5",
+   "context": 160,
+   "cache_read": 0.625,
+   "tools": 0,
+   "errors": 0
+  },
+  {
+   "session_id": "s11",
+   "title": "Ship the offline mode behind a flag and write its release note",
+   "title_from": "agent",
+   "project": "mobile",
+   "source": "claude",
+   "branch": "main",
+   "first_ts": "2026-11-10T10:00:52.000Z",
+   "last_ts": "2026-11-10T10:00:52.000Z",
+   "state": {
+    "kind": "thinking",
     "tool": null,
-    "summary": null,
-    "lane": null
+    "since": "2026-11-10T10:00:52.000Z",
+    "inferred": true,
+    "long": false
+   },
+   "window": null,
+   "cost": null,
+   "requests": 0,
+   "model": null,
+   "context": null,
+   "cache_read": null,
+   "tools": 0,
+   "errors": 0
+  },
+  {
+   "session_id": "s6",
+   "title": "Delegate the Live fixture review to a second model and merge it",
+   "title_from": "agent",
+   "project": "ai-ledger",
+   "source": "claude",
+   "branch": "feat/live-rail-state-tag-width",
+   "first_ts": "2026-11-10T10:00:40.000Z",
+   "last_ts": "2026-11-10T10:00:50.000Z",
+   "state": {
+    "kind": "tool",
+    "tool": "mcp__t3-code__delegate_task",
+    "since": "2026-11-10T10:00:50.000Z",
+    "inferred": false,
+    "long": false
    },
    "window": 1000000,
    "cost": 0.0008,
@@ -32,6 +76,31 @@ export default {
    "model": "claude-opus-5-5",
    "context": 160,
    "cache_read": 0.625,
+   "tools": 1,
+   "errors": 0
+  },
+  {
+   "session_id": "s7",
+   "title": "Profile the ingest of a 2 GB transcript folder and find the hot loop",
+   "title_from": "agent",
+   "project": "ingest-bench",
+   "source": "claude",
+   "branch": "perf/ingest-profile",
+   "first_ts": "2026-11-10T10:00:45.000Z",
+   "last_ts": "2026-11-10T10:00:45.000Z",
+   "state": {
+    "kind": "thinking",
+    "tool": null,
+    "since": "2026-11-10T10:00:45.000Z",
+    "inferred": true,
+    "long": false
+   },
+   "window": null,
+   "cost": null,
+   "requests": 0,
+   "model": null,
+   "context": null,
+   "cache_read": null,
    "tools": 0,
    "errors": 0
   },
@@ -51,12 +120,6 @@ export default {
     "inferred": false,
     "long": false
    },
-   "latest": {
-    "kind": "prompt",
-    "tool": null,
-    "summary": null,
-    "lane": null
-   },
    "window": 1000000,
    "cost": 0.0008,
    "requests": 1,
@@ -67,9 +130,34 @@ export default {
    "errors": 0
   },
   {
+   "session_id": "s9",
+   "title": "Check the provider release notes before bumping the runner image",
+   "title_from": "agent",
+   "project": "infra",
+   "source": "claude",
+   "branch": "main",
+   "first_ts": "2026-11-10T10:00:35.000Z",
+   "last_ts": "2026-11-10T10:00:40.000Z",
+   "state": {
+    "kind": "tool",
+    "tool": "WebFetch",
+    "since": "2026-11-10T10:00:40.000Z",
+    "inferred": false,
+    "long": false
+   },
+   "window": 1000000,
+   "cost": 0.0008,
+   "requests": 1,
+   "model": "claude-opus-5-5",
+   "context": 160,
+   "cache_read": 0.625,
+   "tools": 1,
+   "errors": 0
+  },
+  {
    "session_id": "s5",
-   "title": "Sort the reading list",
-   "title_from": "prompt",
+   "title": "Sort the reading list by topic and drop the finished books",
+   "title_from": "agent",
    "project": "notes",
    "source": "claude",
    "branch": "main",
@@ -82,12 +170,6 @@ export default {
     "inferred": false,
     "long": false
    },
-   "latest": {
-    "kind": "prompt",
-    "tool": null,
-    "summary": null,
-    "lane": null
-   },
    "window": 1000000,
    "cost": 0.0008,
    "requests": 1,
@@ -98,9 +180,34 @@ export default {
    "errors": 0
   },
   {
+   "session_id": "s8",
+   "title": "Return a 404 for archived jobs instead of an empty list",
+   "title_from": "agent",
+   "project": "jobdesk-api",
+   "source": "claude",
+   "branch": "fix/archived-jobs-404",
+   "first_ts": "2026-11-10T10:00:05.000Z",
+   "last_ts": "2026-11-10T10:00:31.000Z",
+   "state": {
+    "kind": "thinking",
+    "tool": null,
+    "since": "2026-11-10T10:00:31.000Z",
+    "inferred": true,
+    "long": false
+   },
+   "window": 1000000,
+   "cost": 0.0032,
+   "requests": 4,
+   "model": "claude-opus-5-5",
+   "context": 160,
+   "cache_read": 0.625,
+   "tools": 4,
+   "errors": 3
+  },
+  {
    "session_id": "0a0f7777-0000-7000-8000-000000000007",
-   "title": "Bump the rollout parser",
-   "title_from": "prompt",
+   "title": "Bump the rollout parser to the new response_item shapes",
+   "title_from": "agent",
    "project": "graft",
    "source": "codex",
    "branch": null,
@@ -113,16 +220,10 @@ export default {
     "inferred": false,
     "long": false
    },
-   "latest": {
-    "kind": "tool",
-    "tool": "exec_command",
-    "summary": "{\"cmd\": \"rg response_item src/\"}",
-    "lane": null
-   },
    "window": 272000,
    "cost": null,
    "requests": 1,
-   "model": null,
+   "model": "gpt-6.2-sol",
    "context": 22000,
    "cache_read": 0.909090909,
    "tools": 0,
@@ -130,7 +231,7 @@ export default {
   },
   {
    "session_id": "s1",
-   "title": "Fast ingest pass while Live is open",
+   "title": "Fast ingest pass while the Live page stays open and polling",
    "title_from": "agent",
    "project": "foo",
    "source": "claude",
@@ -144,25 +245,44 @@ export default {
     "inferred": true,
     "long": false
    },
-   "latest": {
-    "kind": "tool",
-    "tool": "Bash",
-    "summary": "git push origin feat/live-page",
-    "lane": null
-   },
    "window": 1000000,
    "cost": 0.0116,
    "requests": 7,
    "model": "claude-opus-5-5",
    "context": 160,
    "cache_read": 0.217391304,
-   "tools": 7,
+   "tools": 8,
    "errors": 1
   },
   {
+   "session_id": "s10",
+   "title": "Run the full docs build and fix every broken link it reports",
+   "title_from": "agent",
+   "project": "site",
+   "source": "claude",
+   "branch": "docs/broken-links",
+   "first_ts": "2026-11-10T10:00:15.000Z",
+   "last_ts": "2026-11-10T10:00:20.000Z",
+   "state": {
+    "kind": "tool",
+    "tool": "Bash",
+    "since": "2026-11-10T10:00:20.000Z",
+    "inferred": false,
+    "long": true
+   },
+   "window": 1000000,
+   "cost": 0.0008,
+   "requests": 1,
+   "model": "claude-opus-5-5",
+   "context": 160,
+   "cache_read": 0.625,
+   "tools": 1,
+   "errors": 0
+  },
+  {
    "session_id": "s4",
-   "title": null,
-   "title_from": null,
+   "title": "Reload the zsh config and find what slows every new prompt",
+   "title_from": "agent",
    "project": "dotfiles",
    "source": "claude",
    "branch": "main",
@@ -174,12 +294,6 @@ export default {
     "since": "2026-11-10T09:53:00.000Z",
     "inferred": false,
     "long": false
-   },
-   "latest": {
-    "kind": "prompt",
-    "tool": null,
-    "summary": null,
-    "lane": null
    },
    "window": null,
    "cost": null,

@@ -22,6 +22,7 @@ describe("Toggletip", () => {
     expect(screen.queryByRole("link")).toBeNull(); // no docs key, no Learn more
     expect(tt.compareDocumentPosition(tip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(tip.closest(".tt-host")?.parentElement).toBe(tt.parentElement);
+    expect(tt.parentElement?.className).toBe("tt-wrap"); // one wrapper: a flex parent with a gap sees one item
     expect(screen.queryByRole("status")).toBeNull();
     await userEvent.keyboard("{Escape}");
     expect(tt.getAttribute("aria-expanded")).toBe("false");

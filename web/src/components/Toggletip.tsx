@@ -44,7 +44,9 @@ export function Toggletip({ term, label, name, className, docs, children }: { te
     ro.observe(el);
     return () => { ro.disconnect(); setScrolls(false); };
   }, []);
-  return <>
+  // One wrapper span, so a flex or grid parent with a gap sees a single item: the host and the nodes Base UI mounts beside
+  // the button (portal, focus guards) would otherwise be items too and push the text that follows.
+  return <span className="tt-wrap">
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger ref={btn} aria-haspopup={false} openOnHover delay={HOVER_DELAY_MS} className={"tt" + (label == null ? " tt-q" : "") + (className ? " " + className : "")} aria-label={name ?? (label == null ? `About ${term}` : undefined)} onKeyDown={key}>
         {label ?? "?"}</Popover.Trigger>
@@ -57,5 +59,5 @@ export function Toggletip({ term, label, name, className, docs, children }: { te
       </Popover.Portal>}
     </Popover.Root>
     <span className="tt-host" ref={setHost} />
-  </>;
+  </span>;
 }

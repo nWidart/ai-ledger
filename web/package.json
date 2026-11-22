@@ -16,6 +16,7 @@
     "@tanstack/react-router": "1.170.46",
     "@tanstack/react-table": "9.3.1",
     "echarts": "6.1.0",
+    "markdown-to-jsx": "9.10.6",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },

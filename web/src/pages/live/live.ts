@@ -72,11 +72,14 @@ export function elapsed(msec: number | null): string {
   return `${Math.floor(s / 3600)}h ${String(Math.floor(s / 60) % 60).padStart(2, "0")}m`;
 }
 
+/** An MCP tool (mcp__server__tool) by its tool part, where the full name would crowd a row or a tag. */
+export const shortName = (tool: string) => (tool.startsWith("mcp__") && tool.split("__").slice(2).join("__")) || tool;
+
 /** What one state says in words, for the rail, the wall and the panel. Your turn, thinking and idle say for how long. */
 export function stateText(st: LiveState, now: number): { label: string; detail: string } {
   const el = elapsed(since(st.since, now)), timed = (label: string) => (el === "–" ? label : `${label} ${el}`);
   switch (st.kind) {
-    case "tool": return { label: `${st.tool} ${el}`, detail: `${st.tool} running for ${el}` };
+    case "tool": return { label: `${st.tool ? shortName(st.tool) : st.tool} ${el}`, detail: `${st.tool} running for ${el}` };
     case "wait": return { label: STATE_LABEL.wait, detail: `${st.tool} pending ${el}: likely waiting for your approval` };
     case "thinking": return { label: timed(STATE_LABEL.thinking), detail: st.inferred ? "a request is likely in flight" : "the turn is in progress" };
     case "you": return { label: timed(STATE_LABEL.you), detail: "waiting for your prompt" };
@@ -167,11 +170,6 @@ export function streamRows(events: readonly LiveEvent[]): StreamRow[] {
   for (const l of lanes) lane(l); // a tied lane whose parent call fell off the top
   return rows;
 }
-
-/** A session's latest action as a wall tile and a rail entry say it: "▸ prompt", or the tool and its summary, with ⤷
- *  before a subagent's call. */
-export const latestText = (l: LiveListSession["latest"]): string =>
-  !l ? "" : l.kind === "prompt" ? "▸ prompt" : `${l.lane ? "⤷ " : ""}${l.tool} · ${l.summary ?? ""}`;
 
 /** The pulse's minutes: it is read one at a time. */
 export const PULSE_MINUTES = 10;

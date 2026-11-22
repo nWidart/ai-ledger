@@ -258,7 +258,7 @@ const SCENES = {
       await h.wait(1500);
       await start("/live", "load");
       await h.wait(1500);
-      await h.click(sel(page, ".rail li button", "Rate-limit"), { pause: 11500 });
+      await h.click(sel(page, ".rail li button", "atlas-api"), { pause: 11500 });
       await h.click(sel(page, ".stream button", "npm test"), { pause: 3500 });
       await h.click(btn(page, "Wall"), { pause: 4500 });
       await h.click(page.getByRole("button", { name: "Pin Rate-limit the orders endpoint" }), { pause: 7000 }); // pins its stream beside the tiles
@@ -411,7 +411,7 @@ async function liveShots(b) {
   try {
     await at(7); runs.push(replay("atlas-api"));
     await at(9); await each(p => settle(p, "/live", "load"));
-    await each(p => p.locator(".rail li button", { hasText: "Rate-limit" }).first().click());
+    await each(p => p.locator(".rail li button", { hasText: "atlas-api" }).first().click());
     await at(31); // atlas-api's first test run has failed and ledger-web is mid-way
     await each(async (p, s) => {
       await p.mouse.move(0, 0);

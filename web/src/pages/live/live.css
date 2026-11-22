@@ -52,24 +52,29 @@
 /* Rail */
 .pg-live .rail h2 { padding: 12px 14px 4px; margin: 0; }
 .pg-live .rail .group h3 { padding: 5px 14px 1px; }
-/* 4px under each group, with its heading's 5px above the next: 8 sessions in all five groups keep about 20px to spare at 1440 x 900 (livefit.mjs). */
+/* 4px under each group, with its heading's 5px above the next (livefit.mjs checks the fit at 1440 x 900). */
 .pg-live .rail ul { list-style: none; margin: 0; padding: 0 6px 4px; }
+/* An entry is two lines of fixed height, whatever it holds: the name and the errors' ✕N, then the state (without
+   "(inferred)", which only screen readers get here), the project under a title and the context. */
 .pg-live .rail li button { width: 100%; text-align: left; border: 0; background: none; border-radius: 9px; padding: 4px 9px;
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 8px; align-items: center; }
-/* The entry's third line: the context meter and its percent, the latest action, the errors with a ✕. */
-.pg-live .rail .third { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: .6875rem; line-height: 1rem; color: var(--text-muted); }
-.pg-live .rail .third .ctx { display: inline-flex; align-items: center; gap: 4px; flex: none; }
-.pg-live .rail .third .meter { width: 2.5rem; height: 4px; margin: 0; }
-.pg-live .rail .third .act { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .6875rem; color: var(--text-secondary); }
-.pg-live .rail .third .errs { flex: none; font-weight: 600; }
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 1.25rem 1.125rem; gap: 0 8px; align-items: center; }
 .pg-live .rail li button:hover { background: var(--surface-2); }
 .pg-live .rail li button[aria-current=true] { background: var(--accent-soft); }
-.pg-live .rail .pname, .pg-live .rail .ttl { font-weight: 600; }
+.pg-live .rail li button > .ttl, .pg-live .rail li button > .pname { grid-area: 1 / 1; font-weight: 600; line-height: 1.25rem; }
 .pg-live .rail .ttl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pg-live .rail .sub .pname { font-weight: inherit; vertical-align: bottom; }
-.pg-live .rail .cost { font-size: .75rem; color: var(--text-muted); }
-.pg-live .rail .sub code { font-size: .71875rem; }
-.pg-live .rail .sub { grid-column: 1 / -1; font-size: .75rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-live .rail .errs { grid-area: 1 / 2; font-size: .75rem; font-weight: 600; }
+/* The project gives way first, cut with an ellipsis, its dot and separator with it; only once it is gone does the state
+   (which does not shrink, but is capped at the line's width) give way, cut with an ellipsis. The line clips, so neither
+   passes into the context or past the card. */
+.pg-live .rail .sub { grid-area: 2 / 1; display: flex; align-items: center; min-width: 0; overflow: hidden; font-size: .75rem; line-height: 1.125rem;
+  color: var(--text-muted); white-space: nowrap; }
+.pg-live .rail .sub .state { display: block; flex: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.pg-live .rail .sub .state i { margin-right: 5px; vertical-align: 0; }
+.pg-live .rail .sub .proj { display: flex; align-items: center; flex: 0 1 auto; min-width: 0; overflow: hidden; }
+.pg-live .rail .sub .sep { flex: none; margin: 0 4px; }
+.pg-live .rail .sub .pname { flex: 0 1 auto; }
+.pg-live .rail .ctx { grid-area: 2 / 2; font-size: .6875rem; line-height: 1.125rem; color: var(--text-muted); }
+.pg-live .rail .ctx.warn { color: var(--warning-text); }
 .pg-live .rail .foot { margin: 0; padding: 10px 14px 12px; font-size: .75rem; color: var(--text-muted); border-top: 1px solid var(--border); }
 
 /* Stream */
@@ -82,12 +87,10 @@
 .pg-live .stream-head button { font-size: .75rem; padding: 2px 9px; }
 /* No title: the project is the heading, and looks as it does under a title. */
 .pg-live .stream-head .stream-proj { margin: 0; font: inherit; color: inherit; text-transform: none; letter-spacing: normal; }
-/* The stream's filters. A pressed Errors count, here and in the agent panel, is the filter on. */
+/* The stream's filters. */
 .pg-live .stream-filters { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; padding: 6px 14px; border-bottom: 1px solid var(--border); font-size: .78125rem; }
-.pg-live .stream-filters button { font-size: .75rem; padding: 2px 9px; border-radius: 999px; }
 .pg-live .stream-filters label.chk { font-size: .78125rem; }
 .pg-live .stream-filters .hid { margin-left: auto; }
-.pg-live .stream-filters button[aria-pressed=true], .pg-live .strip .fig[aria-pressed=true] { background: var(--critical-soft); border-color: var(--critical-text); color: var(--critical-text); }
 .pg-live .stream { overflow: auto; padding: 8px 0 14px; position: relative; --tw: 4rem; --twl: 3.5rem; }
 /* A dated time ("Nov 10, 17:40:05") needs a wider column: Stream sets .dated on the stream when any event shows one, so the rows stay aligned. */
 .pg-live .stream.dated { --tw: 7rem; --twl: 6.5rem; }
@@ -100,7 +103,25 @@
 .pg-live .reply { border-left: 2px solid var(--border); padding: 4px 12px; }
 .pg-live .lbl { font-size: .6875rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; color: var(--text-secondary); }
 .pg-live .prompt .lbl { color: var(--accent-ink); }
+/* A prompt's or a reply's Markdown: compact, its blocks a short step apart; a line break in a paragraph stays one. Code and
+   tables scroll on their own, so a long line moves no column of the stream. */
 .pg-live .body { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 2px; }
+.pg-live .body > * { margin: 0; }
+.pg-live .body > * + * { margin-top: 6px; }
+.pg-live .body :is(h1, h2, h3, h4, h5, h6) { font-size: .875rem; font-weight: 600; line-height: 1.35; }
+.pg-live .body h3 { font-size: .9375rem; } /* a reply's #: Markdown sets each heading two levels down */
+.pg-live .body :is(ul, ol) { padding-left: var(--space-8); }
+.pg-live .body li + li { margin-top: 2px; }
+.pg-live .body :is(ul, ol) :is(ul, ol) { margin: 2px 0 0; }
+.pg-live .body blockquote { padding-left: 10px; border-left: 2px solid var(--border); color: var(--text-secondary); }
+.pg-live .body code { font: .75rem/1.45 var(--font-mono); background: var(--surface-2); border-radius: 4px; padding: 0 4px; }
+.pg-live .body pre { white-space: pre; overflow-x: auto; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; }
+.pg-live .body pre code { background: none; padding: 0; border-radius: 0; }
+.pg-live .body table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-size: .8125rem; white-space: normal; overflow-wrap: normal; }
+.pg-live .body :is(th, td) { border: 1px solid var(--border); padding: 2px 8px; text-align: left; vertical-align: top; }
+.pg-live .body th { background: var(--surface-2); font-weight: 600; }
+.pg-live .body hr { border: 0; border-top: 1px solid var(--border); }
+.pg-live .body a { overflow-wrap: anywhere; }
 .pg-live .redacted { color: var(--text-muted); font-style: italic; font-size: .8125rem; }
 .pg-live .note { color: var(--text-muted); font-size: .78125rem; padding-top: 2px; }
 .pg-live .tool { width: 100%; text-align: left; border: 1px solid transparent; background: none; border-radius: 8px; padding: 3px 8px;
@@ -137,43 +158,49 @@
 .pg-live .news-n:not(:empty) { margin-top: 8px; padding: 2px 9px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-1);
   color: var(--text-primary); font-size: .75rem; box-shadow: var(--shadow-pop); }
 
-/* Status strip: one wrapping row of small items under the stream's head. */
-.pg-live .strip { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; padding: 6px 14px; border-bottom: 1px solid var(--border);
+/* Status strip under the stream's head: a head row (the state, then the figures), then two equal columns, the context and
+   the pulse. A narrow screen and a pinned stream on the Wall stack the columns. */
+.pg-live .strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px; padding: 8px 14px 10px; border-bottom: 1px solid var(--border);
   font-size: .78125rem; color: var(--text-secondary); }
+.pg-live .strip .head { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 16px; min-width: 0; }
+.pg-live .strip .figs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; }
+.pg-live .strip .col { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pg-live .strip .col > .k { align-self: flex-start; }
+.pg-live .pin .strip { grid-template-columns: minmax(0, 1fr); }
 .pg-live .strip .it { display: inline-flex; align-items: center; gap: 5px; min-width: 0; white-space: nowrap; }
+.pg-live .strip .ctx .it { flex-wrap: wrap; white-space: normal; }
 .pg-live .strip .k { font-size: .6875rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
 .pg-live .strip b { color: var(--text-primary); font-weight: 600; }
+.pg-live .strip b.bad { color: var(--critical-text); }
 .pg-live .strip .now { padding: 1px 8px; border-radius: 999px; background: var(--surface-2); white-space: normal; }
 .pg-live .strip .now.warn { background: var(--warning-soft); }
 .pg-live .strip .now.ended { background: none; outline: 1px dashed var(--text-muted); outline-offset: -1px; }
-.pg-live .strip .now .det { font-size: .75rem; }
+/* A long state wraps its detail under the state, in a box that keeps the pill's look on one line, so a phone's strip stays
+   inside the page and short; the state itself is cut before it passes the strip. */
+.pg-live .strip .now { max-width: 100%; flex-wrap: wrap; row-gap: 1px; border-radius: 10px; }
+.pg-live .strip .now .state { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.pg-live .strip .now .det { min-width: 0; font-size: .75rem; overflow-wrap: anywhere; }
 .pg-live .strip .inf.tt { font-weight: 400; color: var(--text-muted); font-size: inherit; }
-.pg-live .strip .ctx .meter { width: 6rem; height: 6px; margin: 0; flex: none; }
-.pg-live .strip .fig { font-weight: 700; padding: 0 7px; border-radius: 999px; font-size: .78125rem; }
-.pg-live .strip .lim.warn, .pg-live .strip .lim.warn b { color: var(--warning-text); }
-.pg-live .strip .where { flex: 1 1 14rem; justify-content: flex-end; }
-/* The directory, cut from its start so the end of the path shows. */
-.pg-live .strip .cwd { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; font-size: .71875rem; color: var(--text-muted); }
-.pg-live .strip .copy { font-size: .75rem; padding: 2px 9px; border-radius: 999px; flex: none; }
-/* Pulse: the context's step line and the calls' ticks, a ✓ upright, a ✕ crossed. --text-primary, --text-secondary and
-   --critical-text hold at least 3:1 against the surfaces in both themes. */
-.pg-live .pulse { position: relative; display: inline-flex; align-items: center; }
-.pg-live .pulse .chart { display: block; width: 10rem; height: 1.75rem; border-radius: 4px; }
+.pg-live .strip .ctx .meter { width: 100%; height: 8px; margin: 0; }
+/* Pulse: the context's step line and the calls' ticks, a ✓ upright, a ✕ crossed, at its box's full width. --text-primary,
+   --text-secondary and --critical-text hold at least 3:1 against the surfaces in both themes. */
+.pg-live .pulse { position: relative; display: flex; align-items: center; width: 100%; }
+.pg-live .pulse .chart { display: block; width: 100%; height: 40px; border-radius: 4px; }
 .pg-live .pulse svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .pg-live .pulse .l { fill: none; stroke: var(--text-primary); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .pg-live .pulse .ok { stroke: var(--text-secondary); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .pg-live .pulse .bad { fill: none; stroke: var(--critical-text); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
 .pg-live .pulse .base { stroke: var(--border); vector-effect: non-scaling-stroke; }
 .pg-live .pulse .cur { fill: var(--track); }
-/* The readout opens under the pulse, over the page, so the strip does not move. */
-.pg-live .pulse .readout { position: absolute; top: calc(100% + 4px); left: 0; z-index: var(--z-sticky); white-space: nowrap; font-size: .75rem; color: var(--text-primary);
+/* The readout opens under the pulse, over the page, so the strip does not move. It hangs from the pulse's right end: the
+   pulse ends the strip's last column, so a readout wider than the pulse reaches into the strip, never past the page's edge. */
+.pg-live .pulse .readout { position: absolute; top: calc(100% + 4px); right: 0; z-index: var(--z-sticky); white-space: nowrap; font-size: .75rem; color: var(--text-primary);
   background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; box-shadow: var(--shadow-pop); }
 .pg-live .pulse .readout:empty { display: none; }
 .pg-live .meter { display: block; height: 10px; border-radius: 6px; background: var(--track); overflow: hidden; position: relative; margin: 8px 0 4px; }
 .pg-live .meter > i { position: absolute; inset: 0 auto 0 0; background: var(--series-1); border-radius: 6px; }
 .pg-live .meter.warn > i { background: var(--warning); }
 .pg-live .meter .mark { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--warning-text); }
-.pg-live .row { display: flex; justify-content: space-between; gap: 8px; font-size: .78125rem; color: var(--text-secondary); }
 /* Forced colors: a meter's fill and the pulse's marks would take the page's colors and vanish; give them system ones. */
 @media (forced-colors: active) {
   .pg-live .meter { forced-color-adjust: none; background: Canvas; outline: 1px solid CanvasText; }
@@ -190,20 +217,32 @@
 .pg-live .walls .group + .group { margin-top: 16px; }
 .pg-live .walls h2 { margin-bottom: 6px; }
 .pg-live .wall { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(16.25rem, 1fr)); gap: 12px; }
+/* Four lines, each of fixed height, so every tile is as tall as the others: the state with the errors' ✕N and the Pinned
+   mark, the title on up to two lines, the project and model, the context. */
 .pg-live .tile { width: 100%; text-align: left; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; font: inherit; color: inherit; }
 .pg-live .tile:hover { background: var(--surface-2); }
 .pg-live .tile.st-tool { border-color: var(--series-1); }
 .pg-live .tile.st-wait { border-color: var(--warning); }
 .pg-live .tile.st-you { border-color: var(--good); }
 .pg-live .tile.st-ended { border: 1px dashed var(--text-muted); }
-.pg-live .tile .top { display: flex; align-items: center; gap: 8px; margin: 0; justify-content: space-between; font-weight: 600; color: var(--text-primary); }
-.pg-live .tile .ttl { font-size: .8125rem; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pg-live .tile .act { font-size: .75rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.125rem; }
-.pg-live .tile .meter { height: 6px; margin: 2px 0; }
-.pg-live .tile .row { font-size: .75rem; }
+.pg-live .tile .top { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; margin: 0; height: 1.25rem; font-weight: 600; color: var(--text-primary); }
+/* A long state (an MCP tool's name) shrinks with an ellipsis, its dot kept in line; the errors' ✕N and the Pinned mark never
+   shrink, so they stay inside the tile. */
+.pg-live .tile .top .state { display: block; flex: 0 1 auto; min-width: 0; margin-right: auto; overflow: hidden; text-overflow: ellipsis; }
+.pg-live .tile .top .state i { margin-right: 5px; vertical-align: 0; }
+.pg-live .tile .errs, .pg-live .tile .pin-mark { flex: none; }
+.pg-live .tile .errs { font-size: .75rem; }
+.pg-live .tile .ttl { font-size: .8125rem; font-weight: 600; line-height: 1.25rem; height: 2.5rem; color: var(--text-primary); overflow: hidden; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+.pg-live .tile .meta { display: flex; align-items: center; min-width: 0; height: 1.125rem; font-size: .75rem; color: var(--text-muted); white-space: nowrap; }
+.pg-live .tile .meta .pname { flex: 0 1 auto; }
+.pg-live .tile .meta .sep { flex: none; margin: 0 4px; }
+.pg-live .tile .meta .mdl { flex: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.pg-live .tile .ctx { display: flex; align-items: center; gap: 8px; height: 1.125rem; font-size: .75rem; color: var(--text-secondary); }
+.pg-live .tile .meter { flex: 1; height: 6px; margin: 0; }
 /* A pinned tile says so in words, not only by its frame. */
 .pg-live .tile.pinned { outline: 2px solid var(--accent); outline-offset: -2px; }
-.pg-live .tile .pin-mark { align-self: flex-start; font-size: .6875rem; font-weight: 600; color: var(--accent-ink); }
+.pg-live .tile .pin-mark { font-size: .6875rem; font-weight: 600; color: var(--accent-ink); }
 
 /* Wall pins: the tiles in one column, then one column per pinned stream. Below 1100px the streams go under the tiles. */
 .pg-live .wallgrid.pinned { display: grid; grid-template-columns: 17rem; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
@@ -252,10 +291,8 @@
   .pg-live .stream.dated { --tw: 6.5rem; }
   .pg-live .ev { gap: 6px; }
   .pg-live .tool { grid-template-columns: 4rem minmax(0, 1fr) auto 1rem; gap: 6px; }
-  /* The directory stays, cut from its start to the room left beside Copy resume. */
-  .pg-live .strip .where { justify-content: flex-start; flex-basis: 100%; }
-  .pg-live .strip { gap: 3px 12px; padding: 5px 12px; position: relative; }
-  .pg-live .strip .k[aria-hidden] { display: none; }
+  .pg-live .strip { grid-template-columns: minmax(0, 1fr); gap: 6px 12px; padding: 6px 12px 8px; position: relative; }
+  .pg-live .strip .head { justify-content: flex-start; }
   /* The pulse's readout opens under the strip, across its width, and wraps: under the pulse it could pass the screen's edge. */
   .pg-live .strip .pulse { position: static; }
   .pg-live .strip .pulse .readout { left: 12px; right: 12px; white-space: normal; }
