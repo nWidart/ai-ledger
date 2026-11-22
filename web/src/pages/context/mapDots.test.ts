@@ -83,6 +83,8 @@ describe("mapFit", () => {
     const w = fit(wide), n = fit(wide, 343);
     expect(w.nearLabel).toMatchObject({ x: w.x30 - 4, align: "right" });
     expect(n.nearLabel).toMatchObject({ x: n.x30 + 4, align: "left" });
+    // 182px of label at twice the text: 30px of room left of the 30k line in a 343px box, 165px right of it.
+    expect(fit(wide, 343, 2, t => t.length * 14).nearLabel).toBeNull();
   });
 });
 
@@ -150,7 +152,7 @@ describe("mapOption", () => {
     expect(names.map(n => [n.style.text, n.style.fill])).toEqual([["Lean", "ink-muted"], ["Heavy start", "ink-muted"], ["Grew full", "ink-text"], ["Heavy and full", "ink-muted"]]);
     // A name with no line that fits is not drawn: 30px a character leaves no word room in a 343px box at twice the text.
     const tiny = fit(points, 343, 2, t => t.length * 30);
-    expect(draw(tiny, seriesOf(option(tiny, null), "guides"), 0).filter(e => e.type === "text").map(e => e.style.text)).toEqual(["30k start", "80% of window"]);
+    expect(draw(tiny, seriesOf(option(tiny, null), "guides"), 0).filter(e => e.type === "text" && e.style.fontWeight === 600)).toEqual([]);
   });
 
   it("frames the selected quadrant and edges the dots and rings in the text color in forced colors", () => {

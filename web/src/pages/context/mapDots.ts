@@ -100,9 +100,9 @@ export interface MapFit {
   x30: number;
   y80: number;
   /** The "30k start" label, right of its line; the "80% of window" label, under its line, left of the 30k line or right of it
-   *  when the plot left of the line is too narrow for it. */
+   *  when the plot left of the line is too narrow for it, and null when neither side has room. */
   startLabel: TextPlace;
-  nearLabel: TextPlace;
+  nearLabel: TextPlace | null;
   names: Record<Quad, NamePlace>;
   /** The x axis's title, centred under the plot: the long form, or "Starting context" when the box is too narrow for it. */
   xTitle: string;
@@ -134,13 +134,14 @@ export function mapFit(model: MapModel, width: number, textScale: number, measur
     };
     return [q.id, place];
   })) as Record<Quad, NamePlace>;
-  const nearLeft = x30 - 4 - measure(NEAR_TEXT, 400) >= plot.x + 2;
+  // The 80% line's label: left of the 30k line, else right of it, else not drawn; the y axis's "80%" still names the line.
+  const near = measure(NEAR_TEXT, 400), nearLeft = x30 - 4 - near >= plot.x + 2, nearRight = x30 + 4 + near <= right - 2;
   return {
     model, textScale: s, height: PLOT_HEIGHT + (MARGIN.t + MARGIN.b) * s, plot,
     dots: model.points.map(p => ({ x: x(p.start), y: y(drawnShare(p)) })),
     x30, y80,
     startLabel: { x: x30 + 4, y: y(.5), align: "left", verticalAlign: "bottom" },
-    nearLabel: { x: nearLeft ? x30 - 4 : x30 + 4, y: y80 + 4 * s, align: nearLeft ? "right" : "left", verticalAlign: "top" },
+    nearLabel: nearLeft || nearRight ? { x: nearLeft ? x30 - 4 : x30 + 4, y: y80 + 4 * s, align: nearLeft ? "right" : "left", verticalAlign: "top" } : null,
     names,
     // The titles' size over the labels': the measure is at the labels' size. Centred under the plot, half the title on each side.
     xTitle: measure(X_TITLE, 400) * TITLE / LABEL / 2 <= Math.min(plot.x + plot.width / 2, width - plot.x - plot.width / 2) ? X_TITLE : "Starting context",
@@ -208,8 +209,8 @@ function guides(fit: MapFit, env: OptionEnv, quad: Quad | null): CustomSeriesOpt
     z: 1,
     renderItem: () => {
       const children: object[] = [];
-      children.push(line(x30, plot.y, x30, bottom), line(plot.x, y80, right, y80),
-        text("30k start", fit.startLabel, { fill: env.ink.secondary }), text(NEAR_TEXT, fit.nearLabel, { fill: env.ink.secondary }));
+      children.push(line(x30, plot.y, x30, bottom), line(plot.x, y80, right, y80), text("30k start", fit.startLabel, { fill: env.ink.secondary }));
+      if (fit.nearLabel) children.push(text(NEAR_TEXT, fit.nearLabel, { fill: env.ink.secondary }));
       for (const n of QUADS) {
         const at = fit.names[n.id];
         if (!at.lines.length) continue;
