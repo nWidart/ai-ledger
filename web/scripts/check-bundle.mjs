@@ -12,13 +12,16 @@ const LIMITS = {
   CostPage: 20,
   ActivityPage: 31, // 28.3 kB with the activity calendar's section (its loading and failure states), plus 2.7 kB of room
   ErrorsPage: 26,
+  ProjectPage: 12, // 8.8 kB: the page, its blocks and the session quadrant (model, fit, reading, option); catches a static import of ECharts
+  // The `<EChart>` wrapper (6.0 kB): once a third page (Project) imported it, the build moved it out of `zoomReset` into its own shared chunk.
+  EChart: 8,
   // The chart code the charts of Cost, Activity and Errors share. Vite names a shared chunk after its first module, so
   // the name (`zoomReset`) can change when modules move: the check then fails on "found 0" rather than skipping the chunk.
-  zoomReset: 9,
+  zoomReset: 4, // 2.1 kB since the wrapper moved into `EChart`: what is left is the zoom-reset control and its helpers
   echarts: 195, // the lazy ECharts chunk, which the charts of Cost, Activity and Errors load
 };
 // The page chunks and the shared chunk, each of which must match exactly one file.
-const SINGLE = ["index", "CostPage", "ActivityPage", "ErrorsPage", "zoomReset"];
+const SINGLE = ["index", "CostPage", "ActivityPage", "ErrorsPage", "ProjectPage", "EChart", "zoomReset"];
 // How many `echarts-*.js` chunks the build must hold: one, which the charts of Cost, Activity and Errors load.
 const ECHARTS_CHUNKS = 1;
 
