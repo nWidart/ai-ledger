@@ -112,8 +112,8 @@ GET /api/calendar?project=&source=&automated=
 → { project, automated, source, start, end, first, days: DailyWorkRow[] }
 ```
 
-- `start`: the Monday 52 weeks before the Monday of the week of `end`. `end`: the local today. `first`: the first day with a request under the same filters, over all time, or null. `days`: `daily_work()` over `start` to `end`, the same function and the same filter the work chart's rows come from, so a day's figure is the same on both charts (measured equal).
-- `metrics.calendar(cur, project="", today=None, automated=False, source="")`: `view(project, span, {}, today, automated, source)` for the rows, `view(project, 0, …)` for `first`. No prices are read. A bad source raises `ValueError`, which the route answers with 400, as the other routes do.
+- `start`: the Monday 52 weeks before the Monday of the week of `end`. `end`: the local today. `first`: the first day with a request under the same filters, over all time, or null; or the first row's day when that is earlier (a prompt or a tool call can fall on a local day before its session's first request), so no row is dated before `first`. `days`: `daily_work()` over `start` to `end`, the same function and the same filter the work chart's rows come from, so a day's figure is the same on both charts (measured equal).
+- `metrics.calendar(cur, project="", today=None, automated=False, source="")`: `view(project, span, {}, today, automated, source)` for the rows, `view(project, 0, …)` for `first`, both with the automated projects read once, so they leave out the same ones. No prices are read. A bad source raises `ValueError`, which the route answers with 400, as the other routes do.
 - The filters apply as on every Activity figure: the project, the source and the automated-sessions filter, through `scope()`. Nothing is source-specific: Claude Code, Codex and Grok sessions are rows of the same derived tables.
 - It takes no `range`. The query key is `["calendar", { project, automated, source }]`, so a change of range requests nothing. An ingest or Refresh invalidates it with the rest (`isData`).
 - Cost: four aggregate queries (sessions, prompts and tool calls per day over at most 371 days, and one `min`). Measured at 17.8 ms where `usage()` takes 198 to 229 ms. On a large store it scales as the three `daily_work` queries that every `/api/usage` already runs, bounded by 371 days whatever the store's age.
@@ -125,7 +125,7 @@ Alternatives:
 
 ### 4. Measure: the shade follows the work chart's switch
 
-The cell's shade is the measure chosen on the work chart: Commits, Prompts or Sessions. Each is a per-day figure, so none needs a fixed stand-in. The calendar has no switch: one control, one state, in one place. Its heading line and its key name the measure, and its hint says where the switch is. The tooltip and the live sentence always give all three figures.
+The cell's shade is the measure chosen on the work chart: Commits, Prompts or Sessions. Each is a per-day figure, so none needs a fixed stand-in. The calendar has no switch: one control, one state, in one place. Its heading line and its key name the measure, and its hint says where the switch is. The tooltip and the live sentence always give all three figures for a day with activity, and "No activity" for an idle day.
 
 ### 5. Scale: at most four steps, cut by rank, with a text key
 
@@ -150,7 +150,7 @@ The cell's shade is the measure chosen on the work chart: Commits, Prompts or Se
 Why rank cuts: agent work is bursty. With equal-width steps up to the maximum, one day of 80 commits puts every other day in the lightest step, and "when do I work" is lost. With quartiles a quarter of the active days share the darkest step, and "which days stand out" is lost. The median, the 80th and the 95th percentile keep both: the darkest step holds about one active day in twenty.
 
 - The key is HTML, in the legend row: "No commits", then one swatch and its numbers per step ("1–2", "3–8", "9+"; one number when a step holds one value). The key's swatches are hidden from assistive technology with the rest of the legend; the group's label and each reading carry the figures.
-- The shades are four new color tokens in `theme.css`, `--heat-1` to `--heat-4`, each a `light-dark()` pair of plain colors as `--series-1` is, so `resolveColor()` gives an `rgb()`. Starting values: light `#a8c7ec`, `#6a9fe0`, `#2a78d6`, `#153f77`; dark `#26466b`, `#2d5b93`, `#3987e5`, `#8fc0f8`. In dark, more is lighter. An empty day is `ink.grid`. The rule the values must meet, checked in a browser (step 4.1): each shade has a luminance contrast of at least 1.3:1 with the next, and the first with the empty cell, in both themes. The builder changes the values, not the rule.
+- The shades are four new color tokens in `theme.css`, `--heat-1` to `--heat-4`, each a `light-dark()` pair of plain colors as `--series-1` is, so `resolveColor()` gives an `rgb()`. Values, the starting ones, unchanged by step 4.1: light `#a8c7ec`, `#6a9fe0`, `#2a78d6`, `#153f77`; dark `#26466b`, `#2d5b93`, `#3987e5`, `#8fc0f8`. In dark, more is lighter. An empty day is `ink.grid`. The rule the values must meet, checked in a browser (step 4.1): each shade has a luminance contrast of at least 1.3:1 with the next, and the first with the empty cell, in both themes. The builder changes the values, not the rule.
 - A reading in the top step, when three steps or more are in use, ends with "Among the busiest days for commits." A reader who cannot see the shades still learns which days stand out.
 
 ### 6. Reading: the calendar's own, in two directions
@@ -186,23 +186,23 @@ The reading lives in two files of the calendar's folder:
 - Left and Right move a week because a column is a week; Up and Down move a day because a row is a weekday. Down from a Sunday reads the Monday of the next week: the keys never stop inside the span, so every day is reachable by Up and Down alone.
 - Left and Right stop at the first and the last day, also when that day is another weekday. A reader who holds Left always ends on the first day.
 - Up and Down are prevented, so the page does not scroll under the focused calendar. A key with Alt, Ctrl, Meta or Shift is the browser's (`modified()` in `components/keys.ts`).
-- Blur ends the reading. Escape ends it from anywhere when the pointer opened it: a capturing `keydown` listener on the document, added while a reading is open, as the wrapper has it.
+- Blur ends the reading. Escape ends it from anywhere when the pointer opened it: a capturing `keydown` listener on the document, added while a reading is open, as the wrapper has it. It is attached in a layout effect, before the tooltip is painted, so an Escape pressed the moment the tooltip shows still ends it.
 
 **Pointer.** `mousemove`, `mouseleave` and `click` on `div.cal-box`. The position is the event's client position less the box's; `cellAt` gives the cell, and its gap to the right and below counts as the cell, so the tooltip does not flicker between cells. A cell with no readable day, a margin or a label reads nothing. A click reads and then activates. A touch reaches the box as the browser's compatibility `mousemove` and `click`.
 
 - The hand cursor is zrender's: the cells' series sets `silent` only while the calendar takes no pick. Measured: `pointer` over a cell, `default` over the margin. Every cell shows the hand, idle ones included, as on the work chart.
 
-**The tooltip.** A `div.tip` with `role="tooltip"` inside `div.cal-box`, placed with `tipAt()` from `components/chart.ts`: beside the pointer, or, for a key, at the right edge and the middle of the cell. Rows: the weekday and date; Commits, Prompts and Sessions, the chosen one keyed by its shade; "No activity" for an idle day; and for a day outside the page's range, "Outside the last 30 days. Selecting it sets the range to the last 90 days."
+**The tooltip.** A `div.tip` with `role="tooltip"` inside `div.cal-box`, placed with `tipAt()` from `components/chart.ts`: beside the pointer, or, for a key, at the right edge and the middle of the cell. Rows: the weekday and date; for a day with activity, Commits, Prompts and Sessions, the chosen one keyed by its shade's swatch; for an idle day, "No activity" alone; and for a day with activity outside the page's range, "Outside the last 30 days. Selecting it sets the range to the last 90 days." An idle day cannot be selected, so it never says it.
 
 **The live region.** One `div.sr` with `aria-live="polite"` in the component. It holds one of: a reading's sentence, or a status (decision 7). The wrapper's own region stays empty.
 
 | Case | Sentence |
 |---|---|
-| A busy day | "Tuesday, Nov 4, 2026: 12 commits, 40 prompts, 6 sessions." |
-| A day with work and none of the measure | "Friday, Nov 7, 2026: 0 commits, 3 prompts, 1 session." |
-| An idle day | "Sunday, Nov 9, 2026: no activity." |
+| A busy day | "Wednesday, Nov 4, 2026: 12 commits, 40 prompts, 6 sessions." |
+| A day with work and none of the measure | "Saturday, Nov 7, 2026: 0 commits, 3 prompts, 1 session." |
+| An idle day | "Sunday, Nov 8, 2026: no activity." |
 | In the top step, with three steps or more | the day's sentence, then " Among the busiest days for commits." |
-| Outside the page's range | the day's sentence, then " Outside the last 30 days; selecting it sets the range to the last 90 days." |
+| A day with activity outside the page's range | the day's sentence, then " Outside the last 30 days; selecting it sets the range to the last 90 days." |
 
 - "No activity" follows `busy()` in `work.ts`: no session, prompt, commit or failed call.
 - A reading a key made is said again when newer data changes its words. The pointer's is not; its tooltip shows the newer figures. This is the wrapper's rule.
@@ -211,7 +211,7 @@ The reading lives in two files of the calendar's folder:
 **The group's label**, on the wrapper's box:
 
 - With work: "Commits per day as a calendar, 26 weeks from May 25, 2026 to Nov 22, 2026, in columns from Monday to Sunday. 84 days with commits, the most 31 on Tuesday, Oct 6, 2026. Use the arrow keys to read a day: left and right move a week, up and down a day, Home and End go to the first and last day. Enter selects the day and Escape clears the selection."
-- With days and none of the measure: "… from Monday to Sunday. No commits yet. Use the arrow keys …"
+- With days and none of the measure in the weeks shown: "… from Monday to Sunday. No commits yet. Use the arrow keys …" when no day of the payload has any; "… No commits in the last 26 weeks. Use the arrow keys …" when only weeks not shown have some. The key says "No commits yet" in the first case and "No commits" in the second.
 - With no recorded day: "… from Monday to Sunday. No activity yet."
 
 **The visible lines.** Heading: "Activity calendar". Hint: "Commits per day, last 26 weeks. The shade follows the measure chosen on the work chart. Select a day to narrow the tabs." with a "How measured" toggletip (docs `reference/glossary#activity`): weeks start on Monday; how the steps are cut; a day before the first recorded day has no cell; the keys. When the first recorded day is inside the weeks shown, the legend row ends with "Recording starts Sep 8, 2026".
@@ -225,12 +225,12 @@ Enter on the day read, or a click on a cell:
 | Idle (`busy()` is false) | Nothing. The reading stays, as on the work chart. |
 | Busy, inside the page's range | The page writes `day=`, clears `week`, `q` and `near`, and resets the Sessions sort: the work chart's own pick. |
 | Busy, outside the page's range | The page first sets the range to the smallest of 7, 14, 30, 90 days that holds the day, or all time, then writes the day as above. |
-| Any, while a new view or newer calendar figures load | Nothing: the component gets no `onPick`, as the work chart. |
+| Any, while the page's figures are another view's, or the calendar is that of the earlier filters | Nothing: the component gets no `onPick`, as the work chart. A change of range or filters blocks picks until the view's own figures arrive, and a change of filters until the new calendar arrives. A refresh or an ingest refetches the same view and keeps picks on. |
 
 - Why widen the range and not decline: the reader came to ask about that day. Without a range that holds it the tabs would count nothing (`on_day()` clips to the range), and the reader would have to find the range control, guess a range and come back. The tooltip and the reading say what the pick will do before it is made, and the status says what it did.
 - Two URL writes, in this order: `setSearch({ range })`, which pushes a history entry and drops the earlier `day` and `week` (`applyPatch`); then `setSearch({ day, week: null, q: null, near: null }, { push: false })`. Back returns to the earlier range with its earlier selection. One write would lose the day.
 - `rangeFor(day, end, range)` in `calendarDays.ts`: the page's range when it holds the day; else the smallest of 7, 14, 30, 90 whose first day is on or before it; else 0.
-- After a pick the page brings the workbench into view and moves the focus to the selected tab's panel, by the mechanism the vitals use (`goal` in `ActivityPage.tsx`). The tab does not change. The tabs are above the calendar (decision 9): without this a pick would change nothing on screen.
+- After a pick the page scrolls the workbench to the top of the view, so the tab list is in sight, and moves the focus to the selected tab's panel, by the mechanism the vitals use (`goal` in `ActivityPage.tsx`, whose `view` names the element to scroll to in place of the one focused). The tab does not change. The tabs are above the calendar (decision 9): without this a pick would change nothing on screen.
 - The work chart shows the selection as ever: its chip names the day, and a chart by day frames its bar.
 - Escape on the calendar with nothing read clears a selection, as on the work chart.
 
@@ -249,7 +249,7 @@ Selecting the day already selected writes nothing and still brings the tabs into
 
 - **The selected day**: a frame on its cell, a custom series with `id: "selected"` over the cells. Theme: a 1.5px line in `ink.accent`, inset by half the line, no fill, so the shade stays readable. Forced colors: 2px in `ink.accent`, which is `Highlight`. A selected week (`week=`, from a weekly work chart) is one frame around that column's cells. A selection outside the weeks shown draws nothing.
 - **The day being read**: a ring around its cell, 1px off it: an `<i class="cal-cursor" aria-hidden="true">` in `div.cal-box`, placed from the same layout as the cells, with a 2px outline in the text color and `Highlight` in forced colors. It is HTML so that reading redraws nothing and works before the chart has drawn. The two marks differ by place, not by hue alone: the frame is on the cell's edge, the ring is outside it. A day selected and read shows both.
-- **Forced colors.** A shade is not a system color and its steps have no sure contrast on the user's `Canvas`. A cell is then: an empty day, an unfilled square with a 1px edge in `ink.grid` (`GrayText`; the spike drew it in `CanvasText`, which made the empty days louder than the days with work); a step, a centred filled square in `ink.text` (`CanvasText`) whose side is the cell × shade / 4, 3px at least. The key's swatches are the same squares, by a `forced-colors` rule in `calendar.css`. The labels are `CanvasText`.
+- **Forced colors.** A shade is not a system color and its steps have no sure contrast on the user's `Canvas`. A cell is then: an empty day, an unfilled square with a 1px edge in `ink.grid` (`GrayText`; the spike drew it in `CanvasText`, which made the empty days louder than the days with work); a step, a centred filled square in `ink.text` (`CanvasText`) whose side is the cell × shade / 4, rounded, 3px at least: 3, 5, 8 and 10px at a 10px cell, so the side grows with the step. The key's swatches are fixed 10px boxes, by a `forced-colors` rule in `calendar.css`: each step a centred `CanvasText` square of 3, 5, 8 or 10px drawn as a background gradient of that size, the cells' proportions at a 10px cell (a clear border would be rounded to whole device pixels); no work a 1px `GrayText` edge. The labels are `CanvasText`.
 - **Dark.** The four tokens carry both schemes; the wrapper redraws on a theme or scheme change.
 - **Reduced motion.** Nothing animates in either mode (`animation: false`). The page's scroll to the tabs after a pick is `smooth` only with motion on (`motion()`), as the vitals' is.
 
@@ -260,6 +260,13 @@ The section comes after the workbench tabs.
 Why: above the tab list it would add its head and 102 to 157px to a first screen with 30px free, and break "Show the main chart in the first screen". It is a second question, asked after "what got done in this range", and it does not follow the range that every section above it follows. A pick still reaches the tabs (decision 7).
 
 `usage-dashboard`'s "Order the Activity page" names the new last place. The first-screen check needs no new line; step 4.1 runs it to show the first screen did not move.
+
+**Loading and failure.** The calendar has its own request, so the section and its heading are mounted as soon as the usage payload is there, whatever the calendar's request is doing:
+
+- Before the first calendar: "Loading the calendar…" under the heading.
+- A failed request: "Could not load the calendar (<reason>)." in an alert, then a Retry button. Over a calendar kept from the earlier filters it adds " Still showing the calendar of the earlier filters; it cannot be selected."; over the last one loaded for these filters, " Still showing the last one loaded."
+- Retry stays mounted while it runs. Only the user's own Retry reads "Retrying…" with `aria-disabled`, and empties the alert, so another failure is said again. A background refetch (an ingest, Refresh) changes neither and is silent: failing again, it says nothing new; answering, it removes the line.
+- The focus moves to the calendar only when the user's own Retry succeeds for the same filters with the focus still on its button. A change of filters cancels the Retry; then, as after a background answer, the focus is left to the page.
 
 ### 10. The option and the view
 
@@ -278,8 +285,9 @@ Why: above the tab list it would add its head and 102 to 157px to a first screen
 ```
 
 - `baseOption()` is imported from `option.ts` as it is; the labels use its font, at 11px × text scale, in `ink.muted`.
-- `calendarModel(payload, metric, weeks, selection)` holds the weeks shown, the readable days (each with its column, row, figures, step and shade), the steps, the peak, the number of active days, the selection's place and the view key. `calendarOption(model, fit, env)` draws it. Both pure, types only from the runtime.
-- The view key given to the wrapper: the project, the source, the automated filter, the measure, the first shown Monday and the number of weeks. Not the range, the selection or the figures. The wrapper reads nothing, so the key only tells it a new option is the same chart.
+- `calendarModel(payload, metric, weeks, selection)` holds the weeks shown, the readable days (each with its column, row, figures, step and shade), the steps, the peak, the number of active days, the selection's place and the view key. `calendarOption(model, fit, env, pick)` draws it; `pick` says whether a pick is possible, and the cells' series is `silent` without one. Both pure, types only from the runtime.
+- The view key given to the wrapper: the project, the source, the automated filter, the measure, the first shown Monday and the number of weeks. Not the range, the selection or the figures. The model's key holds the measure and the weeks; the component adds the filters. The wrapper reads nothing, so the key only tells it a new option is the same chart.
+- Day arithmetic uses `plus`, now exported from `work.ts` beside `monday`. The month labels' widths use a private copy of the text measure in `calendarDays.ts`, since `option.ts`'s is not exported and the wrapper's files are not edited.
 - The text scale is read once per render in the component and handed to the fit and the option, as `WorkChart.tsx` does.
 
 ### 11. The data table
@@ -294,21 +302,22 @@ Why: above the tab list it would add its head and 102 to 157px to a first screen
 | `calendarDays.test.ts` | `calendarFit`, the steps, `calendarModel`, `calendarOption` with a stubbed `api`, `rangeFor` | Geometry, the scale, forced colors, labels left out |
 | `gridReading.test.ts` | `moveDay`, `cellAt` | The key table and the pointer test |
 | `ActivityCalendar.test.tsx`, on the fake runtime | What a user reaches: the label, a reading by keys and by pointer, the tooltip, Enter, Escape, the statuses, the key, the table | Wiring and wording |
-| `ActivityPage.test.tsx` | One test: a pick inside and outside the range | The two URL writes and the focus |
-| `ActivityCalendar.real.test.tsx`, real ECharts | The cells drawn at the layout's pixels, in the tokens' colors, the frame, the labels | An option ECharts refuses or draws elsewhere |
-| `tools/demo/chartfit/calendar.mjs`, Chromium | What jsdom cannot show (below) | Layout, colors, real events |
+| `ActivityPage.test.tsx` | Two tests: a pick inside and outside the range, and none while the calendar is the earlier filters'; the loading line, the failure line and its Retry | The two URL writes, the focus, the loading and failure states |
+| `ActivityCalendar.real.test.tsx`, real ECharts | Two tests: the cells drawn at the layout's pixels, the labels as text, the selection's frame in the accent, a redraw with no stale path, the unmount; under forced colors, an empty day unfilled and edged in `GrayText` and the darkest step filled in `CanvasText` | An option ECharts refuses or draws elsewhere |
+| `tools/demo/chartfit/calendar.mjs`, Chromium | What jsdom cannot show (below), in 55 lines, some on a page with the store's own payload (13 weeks) | Layout, colors, real events |
 
 The fake runtime draws nothing, and the calendar's reading does not use it: a calendar that draws no cell passes every fake test. The real test and the browser check are the ones that see the drawing.
 
 Only a browser shows these; step 4.1 checks each: the labels' real widths at 16px and 32px (jsdom estimates 0.6em a character); the contrast rule of decision 5; that the ring sits on the drawn cell within 1px; that a `mousemove` and a `click` reach `div.cal-box` through zrender's svg, and a touch tap too; the hand cursor; that Up and Down do not scroll the page; the forced-colors squares; no sideways scroll at 375px and at 32px text.
 
-Net test lines, estimated: Python 45, model and option 170, reading rule 30, component 130, page 40, real 60: about 475. That is over the 400-line advice. The reason: the reading is the calendar's own (decision 6), so its keys, pointer, Escape and statuses are tested here and nowhere else. The work splits into two pull requests if the owner wants each under 400: the endpoint (step 1.1, about 45 lines) and the graph.
+Net test lines, as built against `origin/main`: 710 (728 added, 18 removed): Python 34, model and option 236, reading rule 41, component 152, page 137, real 105, and 5 in five other tests' API mocks. The estimate was about 475. That is over the 400-line advice. The reason: the reading is the calendar's own (decision 6), so its keys, pointer, Escape and statuses are tested here and nowhere else; and the page test of the loading and failure states, not planned, is 80 of the page's lines. `verification.md` maps each scenario to its proof.
 
 ### 13. Bundle
 
 - `echarts-*.js`: unchanged, 176.5 kB against 195 kB. No part is registered.
-- `ActivityPage-*.js`: 23.7 kB against 28 kB at the base. The calendar adds its model, option, reading and component to this chunk, an estimated 3 to 4 kB. If the built chunk is over 28 kB and at most 30 kB, step 3.3 raises the limit to the built size plus 2 kB and says the size in the pull request. A chunk over 30 kB stops the step.
-- `index-*.js`: `api.ts` and `queries.ts` grow by a type and one query: under 0.2 kB.
+- `ActivityPage-*.js`: 23.7 kB against 28 kB at the base. The calendar adds its model, option, reading, component and loading and failure lines to this chunk: built, 28.2 kB. Step 3.3 raised the limit to 31 kB (28.1 kB built then, plus 2.9 kB of room), with the reason in a comment beside it.
+- `index-*.js`: `api.ts` and `queries.ts` grow by a type and one query: under 0.2 kB. Built after the rebase onto `05a44407`: 109.9 kB against 130 kB.
+- The other chunks: `CostPage-*.js` 12.1 kB, `zoomReset-*.js` 7.7 kB, unchanged by the calendar.
 
 ## For the owner of the shared chart component
 
@@ -332,5 +341,5 @@ Also: this change relies on `points={0}` meaning "the wrapper draws and reads no
 ## Open Questions
 
 1. **Place.** Last, as planned, keeps the first-screen rule. The other choice is between the vitals and the tabs, which needs that rule relaxed for the tab list. Only the owner can trade one for the other.
-2. **The `ActivityPage` limit.** May step 3.3 raise it, to at most 32 kB, if the built chunk is over 28 kB, or must the calendar become a lazy chunk of its own?
+2. **The `ActivityPage` limit.** Settled in step 3.3: raised to 31 kB, the chunk at 28.2 kB. The owner may still prefer a lazy chunk of its own for the calendar.
 3. **`points={0}`.** Does the wrapper's team accept a chart that draws through the wrapper and reads by itself until the additions above exist?

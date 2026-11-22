@@ -31,7 +31,7 @@ The calendar SHALL show no more weeks than fit its box, 53 at most, and SHALL NO
 - **THEN** it shows the newest 20 weeks, the labels are twice their default size, and no label overlaps another
 
 ### Requirement: Show the calendar's recorded weeks
-The calendar SHALL show the weeks from the week of the first recorded day under the filters to the current week, at least 13, and no more than fit its box. With no recorded day, it SHALL show the newest weeks that fit. The hint, the calendar's label, the month labels and the table SHALL name only the weeks shown.
+The calendar SHALL show the weeks from the week of the first recorded day under the filters to the current week, at least 13, and no more than fit its box. With no recorded day, it SHALL show the newest weeks that fit. The hint, the calendar's label, the month labels and the table SHALL name only the weeks shown. When no day shown has any of the measure, the label SHALL say "No <measure> yet." if no day served has any, and "No <measure> in the last N weeks." otherwise.
 
 #### Scenario: A short history
 - **WHEN** recording began 11 weeks ago and the calendar's box is 1174px wide at the default text size
@@ -45,8 +45,12 @@ The calendar SHALL show the weeks from the week of the first recorded day under 
 - **WHEN** no day is recorded under the filters and the box is 1174px wide at the default text size
 - **THEN** it shows 53 weeks with no cell, and says "No activity yet."
 
+#### Scenario: The measure only in weeks not shown
+- **WHEN** the box shows 26 weeks and the only commits are older than them
+- **THEN** the label says "No commits in the last 26 weeks."
+
 ### Requirement: Shade the calendar by the work chart's measure
-A cell's shade SHALL show the day's figure for the measure chosen on the work chart: commits, prompts or sessions. The calendar SHALL have no measure switch of its own. Its hint and its key SHALL name the measure. The tooltip and the reading of a day SHALL give all three figures, whatever the measure.
+A cell's shade SHALL show the day's figure for the measure chosen on the work chart: commits, prompts or sessions. The calendar SHALL have no measure switch of its own. Its hint and its key SHALL name the measure. The tooltip and the reading of a day with activity SHALL give all three figures, whatever the measure.
 
 #### Scenario: Follow the switch
 - **WHEN** the user chooses Prompts on the work chart
@@ -106,7 +110,7 @@ On the focused calendar, Left and Right SHALL read the day a week earlier or lat
 - **THEN** the tooltip closes
 
 ### Requirement: Word a calendar day
-The reading of a day SHALL give its weekday, its date and its commits, prompts and sessions, or "no activity" for a day with no session, prompt, commit or failed call. A day in the top step, when three steps or more are in use, SHALL be read as among the busiest days. A reading a key made SHALL be said again when newer data changes its words.
+The reading of a day SHALL give its weekday, its date and its commits, prompts and sessions, or "no activity" for a day with no session, prompt, commit or failed call; the tooltip of such a day SHALL give its date and "No activity". A day in the top step, when three steps or more are in use, SHALL be read as among the busiest days. A reading a key made SHALL be said again when newer data changes its words.
 
 #### Scenario: A busy day
 - **WHEN** the user reads Nov 4, 2026, a Wednesday with 12 commits, 40 prompts and 6 sessions
@@ -121,7 +125,7 @@ The reading of a day SHALL give its weekday, its date and its commits, prompts a
 - **THEN** the sentence ends with "Among the busiest days for commits."
 
 ### Requirement: Select a day on the calendar
-Enter on the day read, or a click on a cell, SHALL select a day with activity as the work chart selects a day: the same `day=` in the URL, written without a history entry, the same narrowed tabs, no search or near-limit filter. The page SHALL then bring the workbench into view and move the focus to the selected tab's panel. An idle day SHALL select nothing and keep its reading. Escape on the calendar, with nothing read, SHALL clear the selection.
+Enter on the day read, or a click on a cell, SHALL select a day with activity as the work chart selects a day: the same `day=` in the URL, written without a history entry, the same narrowed tabs, no search or near-limit filter. The page SHALL then scroll the workbench into view, with its tab list in sight, and move the focus to the selected tab's panel. An idle day SHALL select nothing and keep its reading. Escape on the calendar, with nothing read, SHALL clear the selection.
 
 #### Scenario: Pick a day inside the range
 - **WHEN** the range is 30 days and the user reads a day 10 days ago with 12 commits and presses Enter
@@ -165,8 +169,23 @@ Under the calendar, a "Show data table" button SHALL expose `aria-expanded` and,
 - **WHEN** the page loads
 - **THEN** the table is not in the page
 
+### Requirement: Load the calendar on its own
+The calendar's section and heading SHALL show once the page's figures are in, with "Loading the calendar…" until its own arrive. A failed request SHALL say "Could not load the calendar (<reason>)." with a Retry, over the calendar kept if any, which SHALL say it cannot be selected when it is the earlier filters'. While the user's Retry runs, the button SHALL stay, read "Retrying…" and keep the focus. A background refetch SHALL say nothing new.
+
+#### Scenario: Before the calendar's figures
+- **WHEN** the page's figures are in and the calendar's are not
+- **THEN** the section shows its heading and "Loading the calendar…"
+
+#### Scenario: A failure over the kept calendar
+- **WHEN** the user changes the source and the calendar's request fails
+- **THEN** the section says it could not load the calendar, the earlier calendar stays and cannot be selected, and a Retry is offered
+
+#### Scenario: Retry
+- **WHEN** the user presses Retry and the request succeeds
+- **THEN** the button reads "Retrying…" with the focus while it runs, and the new calendar then takes the focus
+
 ### Requirement: Serve the calendar's days
-`/api/calendar` SHALL answer the work per day of the 53 weeks that end with the current week, from a Monday to today on the local clock, for a project, a source and the automated-sessions filter: each day's sessions, prompts, commits, tool calls and failed calls, as `/api/usage` counts them, and the first recorded day under those filters over all time. It SHALL take no range. An unknown source SHALL answer 400.
+`/api/calendar` SHALL answer the work per day of the 53 weeks that end with the current week, from a Monday to today on the local clock, for a project, a source and the automated-sessions filter: each day's sessions, prompts, commits, tool calls and failed calls, as `/api/usage` counts them, and the first recorded day under those filters over all time: the first day with a request, or an earlier day with a row. It SHALL take no range. An unknown source SHALL answer 400.
 
 #### Scenario: Same figures as the work chart
 - **WHEN** a day is inside both the page's range and the calendar's span
@@ -179,6 +198,10 @@ Under the calendar, a "Show data table" button SHALL expose `aria-expanded` and,
 #### Scenario: Recording began before the span
 - **WHEN** the first session ran two years ago
 - **THEN** `first` is that day, though no row is that old
+
+#### Scenario: A prompt before the first request
+- **WHEN** a prompt falls on the day before its project's first request
+- **THEN** that day has a row, and `first` is that day
 
 #### Scenario: Unknown source
 - **WHEN** a client asks for `/api/calendar?source=gemini`

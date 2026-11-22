@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Show a shade step as a size under forced colors
-A drawn chart that shows a value as one of a few shades of one color SHALL NOT rely on the shade in a forced-colors mode. It SHALL then draw each step as a square in the system text color whose size grows with the step, and a zero as an unfilled square with an edge. Its key SHALL show the same squares. The chart SHALL switch when forced colors turns on or off, without a reload.
+A drawn chart that shows a value as one of a few shades of one color SHALL NOT rely on the shade in a forced-colors mode. It SHALL then draw each step as a square in the system text color whose size grows with the step, and a zero as an unfilled square with an edge. Its key SHALL show squares in the cells' proportions. The chart SHALL switch when forced colors turns on or off, without a reload.
 
 #### Scenario: Activity calendar in high contrast
 - **WHEN** forced colors is on and the activity calendar is drawn with four steps
