@@ -271,9 +271,10 @@ function Overview({ views }: { views: ReactNode }) {
   // A calendar pick (decision 7): a day outside the range first widens it, a write of its own that drops the earlier
   // selection and that Back undoes; then the day, as the work chart's pick writes it. The tabs, above the calendar, come
   // into view from the tab list, under the sticky bars, with the focus on the selected one's panel, through the goal once the
-  // page has drawn the pick.
+  // page has drawn the pick. The range counts back from the figures' last day, as the server clips: the calendar, which a
+  // change of range keeps, can end a day before it after midnight.
   const pickDay = (day: Day) => {
-    const range = rangeFor(day, cal.data!.end, shownRange);
+    const range = rangeFor(day, d!.end, shownRange);
     if (range !== shownRange) setSearch({ range });
     setSearch({ q: null, near: null, day, week: null }, { push: false });
     setSessSort([]);
@@ -329,7 +330,7 @@ function Overview({ views }: { views: ReactNode }) {
             <TestsList tests={(dv ?? d).failed_tests} total={dv ? dv.tests_failed : d.totals.tests_failed} range={d.range} on={on} />
           </div>}
         </Workbench>
-        {cal.data ? <ActivityCalendar d={cal.data} metric={metric} range={shownRange} selected={sel}
+        {cal.data ? <ActivityCalendar d={cal.data} metric={metric} range={shownRange} rangeEnd={d.end} selected={sel}
           onPick={current && calCurrent ? pickDay : undefined} onClear={clear} status={calFailed} />
           : <section className="panel sect cal" id="calendar" aria-labelledby="calendarTitle"><h2 id="calendarTitle">Activity calendar</h2>
             {calFailed || <p className="empty">Loading the calendar…</p>}</section>}

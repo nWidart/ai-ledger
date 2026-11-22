@@ -20,6 +20,9 @@ export interface ActivityCalendarProps {
   metric: WorkMetric;
   /** The page's range: a pick of a day outside it widens it (`rangeFor`), and the reading says so first. */
   range: Range;
+  /** The range's last day, as the page's figures count it (today when they loaded): the calendar's own end can be a day older
+   *  after midnight, and the server clips a day to the range from this one. */
+  rangeEnd: Day;
   /** The page's selection: a day, or a week by its Monday. */
   selected: CalendarSelection | null;
   /** A busy day was picked (Enter on the day read, or a click). None: the calendar takes no pick, as while a view loads. */
@@ -50,7 +53,7 @@ interface WeekRow { monday: Day; days: (CalendarDay | undefined)[] }
  *  measure (graph-activity-calendar, decisions 4 to 8, 10 and 11). The layout, the scale and the drawing are calendarDays.ts';
  *  <EChart> draws them and reads nothing (`points={0}`): the reading is this component's, in two directions (gridReading.ts),
  *  with its own tooltip, ring and live region, on `div.cal-box` around the wrapper's box. */
-export function ActivityCalendar({ d, metric, range, selected, onPick, onClear, status }: ActivityCalendarProps) {
+export function ActivityCalendar({ d, metric, range, rangeEnd, selected, onPick, onClear, status }: ActivityCalendarProps) {
   const box = useRef<HTMLDivElement>(null), tipEl = useRef<HTMLDivElement>(null);
   const width = useWidth(box);
   // Read once per render, as the work chart does: the fit and the drawing are laid out at the same scale.
@@ -68,7 +71,7 @@ export function ActivityCalendar({ d, metric, range, selected, onPick, onClear, 
 
   /** A day the page's range does not hold: the range its pick would set, else null. */
   const widens = (c: CalendarDay) => {
-    const to = rangeFor(c.day, d.end, range);
+    const to = rangeFor(c.day, rangeEnd, range);
     return c.busy && to !== range ? to : null;
   };
   const read = (c: CalendarDay) => {
@@ -210,7 +213,8 @@ export function ActivityCalendar({ d, metric, range, selected, onPick, onClear, 
     for (const c of m.days) out[c.col]!.days[c.row] = c;
     return out;
   }, [m]);
-  const thisWeek = monday(d.end);
+  // The week that holds today, as the work chart's "so far": after midnight the calendar's last week can be over.
+  const thisWeek = monday(rangeEnd);
   const columns = useMemo((): Column<WeekRow>[] => [
     { id: "week", header: "Week", cell: w => `Week of ${dayLabel(w.monday, true)}${w.monday === thisWeek ? ", so far" : ""}` },
     ...WEEKDAYS.map((name, i): Column<WeekRow> => ({ id: `d${i}`, header: name, align: "num", cell: w => num(w.days[i]?.value) })),

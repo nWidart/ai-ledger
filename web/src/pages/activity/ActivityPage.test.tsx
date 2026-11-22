@@ -464,6 +464,22 @@ describe("activity calendar", () => {
     expect(location.search).toBe("?range=7&source=codex");
   });
 
+  it("counts a pick's range back from the figures' last day, not the calendar's", async () => {
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 800, bottom: 116, width: 800, height: 116, x: 0, y: 0, toJSON: () => ({}) });
+    // Overnight: the figures end on Friday, Nov 6, the calendar kept from the day before on Nov 5. Friday, Oct 30 is in the
+    // calendar's last 7 days, not in the figures' range, which the server clips to Oct 31 – Nov 6.
+    const older = { ...calendar, days: [...calendar.days, { day: "2026-10-30", sessions: 1, prompts: 1, commits: 1, calls: 0, failed_calls: 0 }] };
+    mockApi({ "/api/usage": () => ({ ...usage, range: 7, end: "2026-11-06" }), "/api/sessions": () => sessions, "/api/day": q => noDay(q.get("day")!),
+      "/api/calendar": () => older });
+    at("?range=7");
+    renderApp(<ActivityPage />);
+    await loaded();
+    await screen.findByRole("region", { name: "Activity calendar" });
+    click(11, 4);
+    expect(location.search).toBe("?range=14&day=2026-10-30");
+    expect(live()).toBe("Oct 30, 2026 selected; the range is now the last 14 days, and the tabs show its figures.");
+  });
+
   it("shows its heading before its figures, says a failed request with Retry over the kept calendar, and keeps the focus on Retry while it runs", async () => {
     vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 800, bottom: 116, width: 800, height: 116, x: 0, y: 0, toJSON: () => ({}) });
     const first = held<typeof calendar>(), again = held<typeof calendar>();

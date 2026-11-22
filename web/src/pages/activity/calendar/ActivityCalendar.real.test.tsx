@@ -60,7 +60,7 @@ beforeEach(() => {
 });
 
 const calendar = (x: CalendarPayload) =>
-  <ActivityCalendar d={x} metric="commits" range={30} selected={{ day: "2026-11-12", days: 1 }} onPick={() => {}} onClear={() => {}} />;
+  <ActivityCalendar d={x} metric="commits" range={30} rangeEnd={x.end} selected={{ day: "2026-11-12", days: 1 }} onPick={() => {}} onClear={() => {}} />;
 
 it("draws a cell per readable day and the selection, redraws newer figures with no stale path, and unmount removes the svg", async () => {
   const { rerender, unmount } = renderApp(calendar(d));

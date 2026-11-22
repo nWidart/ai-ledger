@@ -144,7 +144,7 @@ Enter on the day read, or a click on a cell, SHALL select a day with activity as
 - **THEN** the URL holds no `day`
 
 ### Requirement: Widen the range for a day outside it
-Selecting a day with activity that the page's range does not hold SHALL first set the range to the smallest of 7, 14, 30 and 90 days that holds it, or to all time, with a history entry, and then select the day. The tooltip and the reading of such a day SHALL say so beforehand, and a status SHALL say the new range afterwards.
+Selecting a day with activity that the page's range does not hold SHALL first set the range to the smallest of 7, 14, 30 and 90 days that holds it, or to all time, with a history entry, and then select the day. The range SHALL count back from the `end` of the page's usage figures, not the calendar's. The tooltip and the reading of such a day SHALL say so beforehand, and a status SHALL say the new range afterwards.
 
 #### Scenario: A day four months back
 - **WHEN** the range is 30 days and the user selects a day 120 days ago
@@ -157,6 +157,10 @@ Selecting a day with activity that the page's range does not hold SHALL first se
 #### Scenario: Said beforehand
 - **WHEN** the range is 30 days and the user reads a day 50 days ago
 - **THEN** the tooltip and the sentence say selecting it sets the range to the last 90 days
+
+#### Scenario: Overnight
+- **WHEN** the page's usage figures end today, the calendar kept from yesterday ends yesterday, the range is 7 days, and the user selects a day with activity 7 days before today
+- **THEN** the range becomes 14 days, the status says so, and the tabs show that day's figures
 
 ### Requirement: Offer the calendar as a table
 Under the calendar, a "Show data table" button SHALL expose `aria-expanded` and, when expanded, show a named table with one row per week shown and a column per weekday from Monday to Sunday, then the week's total. A day with no cell SHALL show a dash. The table SHALL follow the measure, SHALL be closed on every page load and SHALL NOT be rendered while closed.

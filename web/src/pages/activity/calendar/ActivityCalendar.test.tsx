@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { CalendarPayload, DailyWorkRow, Day } from "../../../api";
@@ -19,9 +19,9 @@ const d: CalendarPayload = {
 };
 const TODAY = "Wednesday, Nov 18, 2026: 40 commits, 41 prompts, 2 sessions. Among the busiest days for commits.";
 
-const calendar = (p: Partial<{ d: CalendarPayload; selected: CalendarSelection | null; pickable: boolean }> = {}) => {
+const calendar = (p: Partial<{ d: CalendarPayload; selected: CalendarSelection | null; pickable: boolean; rangeEnd: Day }> = {}) => {
   const onPick = vi.fn<(day: Day) => void>(), onClear = vi.fn<() => void>();
-  const ui = (x: CalendarPayload) => <ActivityCalendar d={x} metric="commits" range={30} selected={p.selected ?? null}
+  const ui = (x: CalendarPayload) => <ActivityCalendar d={x} metric="commits" range={30} rangeEnd={p.rangeEnd ?? x.end} selected={p.selected ?? null}
     onPick={p.pickable === false ? undefined : onPick} onClear={onClear} />;
   const view = renderApp(ui(p.d ?? d));
   return { onPick, onClear, redraw: (x: CalendarPayload) => view.rerender(ui(x)) };
@@ -149,4 +149,9 @@ it("lists each week shown in the data table, with a dash for a day with no cell"
   const cells = (name: string) => [...table.getByRole("rowheader", { name }).parentElement!.querySelectorAll("td")].map(c => c.textContent);
   expect(cells("Week of Aug 31, 2026")).toEqual(["–", "1", "1", "1", "0", "0", "0", "3"]);
   expect(cells("Week of Nov 16, 2026, so far")).toEqual(["13", "0", "40", "–", "–", "–", "–", "53"]);
+  // Overnight into the next Monday, before the calendar is fetched again: its last week is over.
+  cleanup();
+  calendar({ rangeEnd: "2026-11-23" });
+  await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
+  expect(screen.getByRole("rowheader", { name: "Week of Nov 16, 2026" })).toBeTruthy();
 });

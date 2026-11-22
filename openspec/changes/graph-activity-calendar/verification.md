@@ -87,6 +87,7 @@ Checked on the tree rebased onto `origin/main` at `05a44407`.
 | A day four months back | **Partly.** `calendarDays.test.ts` "keeps or widens the range for a day 120 days back" (all time). The status "the range is now all time" has no test: `ActivityCalendar.test.tsx` and `calendar.mjs:513` check the 90-day case. |
 | Back | `ActivityPage.test.tsx` "follows the tabs, selects a day, widens the range…" (`history.back()` restores `?range=7&day=…`); `calendar.mjs:518`. |
 | Said beforehand | `ActivityCalendar.test.tsx` "picks a busy day with Enter…" (Sep 1, outside 30 days: the sentence and the tooltip name the last 90 days); `calendarDays.test.ts` "keeps or widens the range for a day 50 days back". |
+| Overnight | `ActivityPage.test.tsx` "counts a pick's range back from the figures' last day, not the calendar's" (usage ends Nov 6, the calendar Nov 5: Oct 30 sets 14 days, and the status says so). |
 
 ### Offer the calendar as a table
 
