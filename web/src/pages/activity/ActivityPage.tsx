@@ -234,7 +234,8 @@ function Overview({ views }: { views: ReactNode }) {
   // Opening a tab from elsewhere (a vital, an attention action) brings it into view and moves the focus into it: to the
   // element named, or the panel. Done once the tab's panel is drawn, then forgotten, so a later tab change moves nothing.
   // Every such action reports the range, so it clears the selection: the tab then shows the figures it was opened for.
-  const [goal, setGoal] = useState<{ tab: WorkTab; to: string } | null>(null);
+  // `view`, when given, is what comes into view in place of the element focused (the calendar's pick shows the tab list).
+  const [goal, setGoal] = useState<{ tab: WorkTab; to: string; view?: string } | null>(null);
   const go = (t: WorkTab, to = panelId(t), patch: Record<string, string | true | null> = {}) => {
     setSearch({ tab: t === "sessions" ? null : t, day: null, week: null, ...patch }, { push: false });
     setGoal({ tab: t, to });
@@ -242,7 +243,7 @@ function Overview({ views }: { views: ReactNode }) {
   useLayoutEffect(() => {
     if (!goal || goal.tab !== tab) return;
     const el = document.getElementById(goal.to) ?? document.getElementById(panelId(tab));
-    el?.scrollIntoView?.({ behavior: motion() ? "smooth" : "auto", block: "start" });
+    ((goal.view && document.getElementById(goal.view)) || el)?.scrollIntoView?.({ behavior: motion() ? "smooth" : "auto", block: "start" });
     el?.focus({ preventScroll: true });
     setGoal(null);
   }, [goal, tab]);
@@ -269,13 +270,14 @@ function Overview({ views }: { views: ReactNode }) {
   };
   // A calendar pick (decision 7): a day outside the range first widens it, a write of its own that drops the earlier
   // selection and that Back undoes; then the day, as the work chart's pick writes it. The tabs, above the calendar, come
-  // into view with the focus on the selected one's panel, through the goal once the page has drawn the pick.
+  // into view from the tab list, under the sticky bars, with the focus on the selected one's panel, through the goal once the
+  // page has drawn the pick.
   const pickDay = (day: Day) => {
     const range = rangeFor(day, cal.data!.end, shownRange);
     if (range !== shownRange) setSearch({ range });
     setSearch({ q: null, near: null, day, week: null }, { push: false });
     setSessSort([]);
-    setGoal({ tab, to: panelId(tab) });
+    setGoal({ tab, to: panelId(tab), view: "workbench" });
   };
   const clear = () => setSearch({ day: null, week: null }, { push: false });
   // The panel's own clear removes its button: the focus goes to the chart, as the chip's does.
