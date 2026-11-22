@@ -29,17 +29,19 @@
 //     - the pages log no CSP violation, no console error and no page error.
 //   chartfit/<page>.mjs    a page's descriptor, the order of its checks and its own checks: cost (Cost's daily chart),
 //                          activity (Activity's work chart, its two tracks, selection, zoom and weeks), judgments (the
-//                          Judgments view's outcome trend)
+//                          Judgments view's outcome trend), errors (Errors' rate chart, its two tracks, its marks across
+//                          them, selection, zoom, weeks and message)
 // It runs locally, not in CI. It needs the build and the pinned Playwright:
 //   uv sync;  cd web && npm ci && npm run build;  cd tools/demo && npm ci
-//   node chartfit.mjs [cost] [activity] [judgments]   the pages named, every page when none is; SHOTS=<dir> also saves screenshots of the charts
+//   node chartfit.mjs [cost] [activity] [judgments] [errors]   the pages named, every page when none is; SHOTS=<dir> also saves screenshots of the charts
 //                              there; CHROMIUM=<path> uses that Chromium
 import { run } from "./chartfit/harness.mjs";
 import { activity } from "./chartfit/activity.mjs";
 import { cost } from "./chartfit/cost.mjs";
+import { errors } from "./chartfit/errors.mjs";
 import { judgments } from "./chartfit/judgments.mjs";
 
-const PAGES = { cost, activity, judgments };
+const PAGES = { cost, activity, judgments, errors };
 const named = process.argv.slice(2);
 const unknown = named.filter(n => !(n in PAGES));
 if (unknown.length) {
