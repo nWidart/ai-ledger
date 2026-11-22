@@ -600,7 +600,7 @@ Every change of the project table's sort SHALL be announced politely, as "Sorted
 - **THEN** the table is sorted by Spend again, and a screen reader hears "Sorted by spend, highest first"
 
 ### Requirement: Zoom the daily chart
-In a view of 14 days or more, the daily chart SHALL show a zoom control under the plot that narrows the days the chart shows, down to 7 days. The control SHALL NOT show in a shorter view. The value axis SHALL keep the scale of the whole view while zoomed. The zoom SHALL return to every day when the view, the metric, the scale or the stacking changes. A view is a range with its first day, a project, a source and the automated-sessions filter.
+In a view of 14 days or more, the daily chart SHALL show a zoom control under the plot that narrows the days the chart shows, down to 7 days. The control SHALL NOT show in a shorter view. The value axis SHALL keep the scale of the whole view while zoomed. The zoom SHALL return to every day when the view, the metric, the scale or the stacking changes. A view is a range, a project, a source and the automated-sessions filter.
 
 #### Scenario: Zoom in
 - **WHEN** the user drags the zoom control's handles to Oct 11 and Oct 20 in a 30-day view
@@ -615,15 +615,15 @@ In a view of 14 days or more, the daily chart SHALL show a zoom control under th
 - **THEN** the chart shows every day of the new view
 
 #### Scenario: The range moves on a day
-- **WHEN** the chart is zoomed in a 30-day view, and at midnight the view's first day becomes the next one
-- **THEN** the chart shows every day of the new view, and a focus that was on "Show all days" is on the chart
+- **WHEN** the chart shows Oct 11 to Oct 20 of a 30-day view, focus is on "Show all days", and at midnight the view's first day becomes the next one
+- **THEN** the chart still shows Oct 11 to Oct 20, and the button keeps the focus
 
 #### Scenario: Older days arrive
-- **WHEN** the chart is zoomed in an all-time view, and an ingest of older transcripts moves its first day earlier
-- **THEN** the chart shows every day of the new view
+- **WHEN** the chart shows Oct 11 to Oct 20 of an all-time view, and an ingest of older transcripts moves its first day earlier
+- **THEN** the chart still shows Oct 11 to Oct 20, and "Show all days" stays
 
 ### Requirement: Keep the zoom and the reading through newer data
-When newer data arrives for the same view, as after an ingest in the background, the daily chart SHALL draw it and SHALL keep the days shown, the "Show all days" button with any focus on it, and the day being read. Hiding or showing a token kind SHALL keep them too. A view that gains a day at its end SHALL keep the zoom on the same days. The polite status SHALL say nothing for such a redraw. Only a day the keyboard is reading SHALL be said again, alone, when its words changed.
+When newer data arrives for the same view, as after an ingest in the background, the daily chart SHALL draw it and SHALL keep the days shown, the "Show all days" button with any focus on it, and the day being read, also when the view's first day moves. Hiding or showing a token kind SHALL keep them too. The polite status SHALL say nothing for such a redraw. Only a day the keyboard is reading SHALL be said again, alone, when its words changed.
 
 #### Scenario: Ingest while zoomed
 - **WHEN** the chart shows Oct 11 to Oct 20 of a 30-day view, focus is on "Show all days", and an ingest changes today's cost
@@ -648,6 +648,10 @@ When newer data arrives for the same view, as after an ingest in the background,
 #### Scenario: Hidden kind
 - **WHEN** the tokens chart is zoomed and the user hides a kind in the legend
 - **THEN** the chart shows the same days, on the value axis of the whole view without that kind
+
+#### Scenario: Older days arrive while reading
+- **WHEN** the user is reading Oct 13 with the arrow keys in an all-time view, and an ingest of older transcripts moves the view's first day earlier
+- **THEN** Oct 13 is still read, with its tooltip over its bar, and the status says nothing
 
 ### Requirement: Keep the view unchanged while zoomed
 Zooming the daily chart SHALL NOT change the page's time range, the URL, the data requested, the page's totals, the chart's accessible name or the chart's data table. The 7-day average of a day SHALL be the same zoomed or not.
