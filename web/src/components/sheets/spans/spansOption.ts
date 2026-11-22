@@ -4,29 +4,14 @@
 // text are its own shapes: nothing is added to the ECharts chunk.
 import type { CustomSeriesOption, EChartsOption } from "../../echart/echarts";
 import { baseOption, type OptionEnv } from "../../echart/option";
-import { BAR, ROW, type Span, type SpansLayout } from "./spans";
+import { failTick, RING, spanBox, type Span, type SpansLayout } from "./spans";
 
 /** The lane label line's height before the text scale (spans.ts: a lane's top is this much under its label line's). */
 const LABEL = 14;
-/** A failed bar narrower than this is a tick, taller than its row; a clipped bar's last POINT px narrow to its point (the layout makes it
- *  longer than POINT). */
-const HOLLOW = 4, POINT = 4;
-/** The ring's radius, the outlines' width, and the break band's width. */
-const RING = 3, LINE = 1.5, BREAK = 6;
-
-/** A failed call drawn as the timeline's 2px failure tick, taller than its row: narrower than HOLLOW, or with no duration. */
-const failTick = (sp: Span) => sp.failed && (sp.kind === "still" || sp.x1 - sp.x0 < HOLLOW);
-
-/** Where a span is drawn, its outer box in px of the chart's box: the option draws its shape in it, and the component's mark
- *  and a key's tooltip go around it. ring: the span is a ring of RING px radius, centred in the box. */
-export function spanBox(l: SpansLayout, sp: Span): { x: number; y: number; width: number; height: number; ring: boolean } {
-  const y = l.lanes[sp.lane]!.top + sp.row * ROW, cx = sp.x0 + .5;
-  if (sp.kind === "open") return { x: cx - RING, y: y + BAR / 2 - RING, width: 2 * RING, height: 2 * RING, ring: true };
-  // The timeline's 2px failure tick, 2px above its row.
-  if (failTick(sp)) return { x: cx - 1, y: y - 2, width: 2, height: BAR + 2, ring: false };
-  // A clipped bar's edges are the layout's too: its point is in the plot's right margin.
-  return { x: sp.x0, y, width: sp.x1 - sp.x0, height: BAR, ring: false };
-}
+/** A clipped bar's last POINT px narrow to its point (the layout makes it longer than POINT). */
+const POINT = 4;
+/** The outlines' width, and the break band's width. */
+const LINE = 1.5, BREAK = 6;
 
 /** The chart's option. times: the axis's first and last time as the timeline writes them (`tl.fmtT(tl.start)`,
  *  `tl.fmtT(tl.end)`), drawn under the lanes at the plot's ends; the layout holds no times of the axis. */

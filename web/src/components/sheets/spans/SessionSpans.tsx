@@ -2,8 +2,8 @@
 // its start to its result, on one lane per thread, on the session timeline's own time mapping. The layout is spans.ts's, the
 // reading rule and its words spansReading.ts's, the drawing spansOption.ts's. The wrapper draws and reads nothing
 // (`points={0}`); this component reads, in two dimensions: the keys step along a lane and between lanes, the pointer reads
-// the span under it in its row. Its tooltip, mark and live region place a span by the layout's pixels (spanBox, as the option
-// draws it), so they work before the drawing has loaded and when it fails to.
+// the span whose drawn box is under it, else the nearest in its row. Its tooltip, mark and live region place a span by the
+// layout's pixels (spans.ts's spanBox, as the option draws it), so they work before the drawing has loaded and when it fails to.
 import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import type { SessionDetail } from "../../../api";
 import { num } from "../../../format";
@@ -14,8 +14,8 @@ import type { ChartEnv } from "../../echart/tokens";
 import { modified } from "../../keys";
 import { Table, type Column, type RowPick } from "../../table/Table";
 import { openToolSheet, timelineModel } from "../session";
-import { spansLayout, type Span, type SpansLayout } from "./spans";
-import { spanBox, spansOption } from "./spansOption";
+import { spanBox, spansLayout, type Span, type SpansLayout } from "./spans";
+import { spansOption } from "./spansOption";
 // The table's words are the sentence's and the tooltip's.
 import { clock, groupLabel, length, noteLines, readSpan, spanAt, stepSpan, thread, tipRows } from "./spansReading";
 import "./spans.css";

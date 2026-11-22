@@ -6,8 +6,7 @@ import { renderApp } from "../../../testing";
 import { textScale } from "../../chart";
 import { box, probeColors, tokenOf } from "../../echart/realTesting";
 import { timelineModel } from "../session";
-import { spansLayout, type SpansLayout } from "./spans";
-import { spanBox } from "./spansOption";
+import { spanBox, spansLayout, type SpansLayout } from "./spans";
 import { readSpan } from "./spansReading";
 import { SessionSpans } from "./SessionSpans";
 

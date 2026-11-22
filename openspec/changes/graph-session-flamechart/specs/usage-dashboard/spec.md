@@ -93,7 +93,7 @@ Right and Left SHALL read the next and the previous call of the lane by start; U
 - **THEN** the same call is read and said again
 
 ### Requirement: Read the tool-call chart with the pointer and open a tool
-The pointer SHALL read the call under it within its row, or the nearest within 6px, and nothing in empty space. Enter on the call read, or a click on a call, SHALL open the tool's sheet in place of the session sheet, as a row of the sheet's Tools table does; the browser's Back SHALL return to the session sheet. A call with no tool name SHALL open nothing and say "No sheet for an unknown tool."
+The pointer SHALL read the call whose drawn shape is under it, else the nearest in its row within 6px, and nothing in empty space. Enter on the call read, or a click on a call, SHALL open the tool's sheet in place of the session sheet, as a row of the sheet's Tools table does; the browser's Back SHALL return to the session sheet. A call with no tool name SHALL open nothing and say "No sheet for an unknown tool."
 
 #### Scenario: Opening the tool
 - **WHEN** the user reads a Bash call and presses Enter

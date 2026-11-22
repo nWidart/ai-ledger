@@ -3,7 +3,7 @@
 // not hold (a call gone from newer data) reads undefined, never an error.
 import type { SessionInfo } from "../../../api";
 import { dur, ms, num, plural } from "../../../format";
-import { ROW, type Lane, type Span, type SpansLayout } from "./spans";
+import { ROW, spanBox, type Lane, type Span, type SpansLayout } from "./spans";
 
 /** The pointer reads a span within this many px beside it, in its row's band. */
 const NEAR_PX = 6;
@@ -47,16 +47,18 @@ function nearest(l: SpansLayout, lane: Lane, t: number): string {
   return best;
 }
 
-/** The call id under (x, y) in the box's px, or null: in the row band under the pointer (the row's bar and its gap), the span
- *  nearest across within 6px (0 inside it); ties go to the shorter span (drawn on top), then the earlier, then the id. */
+/** The call id under (x, y) in the box's px, or null: a span whose drawn box (spanBox) holds the pointer first, as a failure
+ *  tick drawn 2px above its row; else, in the row band under the pointer (the row's bar and its gap), the span nearest across
+ *  within 6px. Ties go to the shorter span (drawn on top), then the earlier, then the id. */
 export function spanAt(l: SpansLayout, x: number, y: number): string | null {
   const li = l.lanes.findIndex(n => y >= n.top && y < n.top + n.rows * ROW);
-  if (li < 0) return null;
-  const row = Math.floor((y - l.lanes[li]!.top) / ROW);
+  const row = li < 0 ? -1 : Math.floor((y - l.lanes[li]!.top) / ROW);
   let best: Span | null = null, bd = Infinity;
   for (const s of l.spans) {
-    if (s.lane !== li || s.row !== row) continue;
-    const d = x < s.x0 ? s.x0 - x : x > s.x1 ? x - s.x1 : 0;
+    const b = spanBox(l, s);
+    // -1 inside the drawn box, ahead of any span the row band reads.
+    const d = x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height ? -1
+      : s.lane !== li || s.row !== row ? Infinity : x < s.x0 ? s.x0 - x : x > s.x1 ? x - s.x1 : 0;
     if (d > NEAR_PX) continue;
     if (!best || d < bd || (d === bd && (s.x1 - s.x0 - (best.x1 - best.x0) || at(s) - at(best) || cmp(s.id, best.id)) < 0)) { best = s; bd = d; }
   }

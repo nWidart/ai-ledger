@@ -35,14 +35,18 @@ describe("stepSpan", () => {
 });
 
 describe("spanAt", () => {
-  // Four calls at once fill the main thread's rows; a fifth, a tick, is drawn over the last row's bar.
-  const first = call(0, 10), tick = call(5, 5), l = layout([first, ...[1, 2, 3].map(k => call(k, 10)), tick, call(20, 21)]);
-  const x0 = l.spans.find(x => x.id === first.id)!.x0, top = l.lanes[0]!.top;
+  // Four calls at once fill the main thread's rows; a fifth, a tick, is drawn over the last row's bar. A failure tick, drawn
+  // 2px above its row, on the first row (fail1) and on the second over the first row's bar (fail2).
+  const first = call(0, 10), tick = call(5, 5), bar = call(12, 18), fail2 = call(15, 15, { is_error: true }), fail1 = call(25, 25, { is_error: true });
+  const l = layout([first, ...[1, 2, 3].map(k => call(k, 10)), tick, bar, fail2, call(20, 21), fail1]);
+  const x0 = l.spans.find(x => x.id === first.id)!.x0, top = l.lanes[0]!.top, mid = (c: SpanCall) => l.spans.find(x => x.id === c.id)!.x0 + .5;
   it.each([
     ["on a bar", x0 + 20, top + 4, first],
     ["6px beside a bar", x0 - 6, top + 4, first],
     ["7px beside a bar", x0 - 7, top + 4, null],
-    ["over a tick that lies on a bar", l.spans.find(x => x.id === tick.id)!.x0 + .5, top + 3 * ROW + 4, tick],
+    ["over a tick that lies on a bar", mid(tick), top + 3 * ROW + 4, tick],
+    ["on a first-row failure tick's top 2px", mid(fail1), top - 1.5, fail1],
+    ["on a second-row failure tick's top 2px, over a first-row bar", mid(fail2), top + ROW - 1.5, fail2],
     ["in the gap under a row's bar", x0 + 1, top + 9, first],
     ["in the gap after the lane", x0 + 1, top + 4 * ROW + 1, null],
   ])("%s", (_, x, y, want) => expect(spanAt(l, x, y)).toBe(want?.id ?? null));
