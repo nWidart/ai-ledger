@@ -1407,6 +1407,7 @@ describe("EChart zoom", () => {
   // A window over [from, to], then the days `after`: the points shown, what the caller is told, and what is said.
   it.each([
     ["loses its first day and keeps its count", [2, 8], [...MONTH.slice(1), "Oct 31"], { from: 1, to: 7 }, [[{ from: 1, to: 7 }]], []],
+    ["sits at the old end and loses its own first day", [0, 9], [...MONTH.slice(1), "Oct 31"], { from: 0, to: 8 }, [[{ from: 0, to: 8 }]], [""]],
     ["falls under the fewest days: widened from its start", [0, 6], [...MONTH.slice(1), "Oct 31"], { from: 0, to: 6 }, [], [""]],
     ["falls under the fewest days at the axis end: widened back from it", [23, 29], MONTH.slice(0, -1), { from: 22, to: 28 }, [[{ from: 22, to: 28 }]], [""]],
     ["loses every day", [15, 29], MONTH.slice(0, 15), { from: 0, to: 14 }, [[null]], ["Showing all 15 days."]],
