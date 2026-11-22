@@ -1,0 +1,33 @@
+/* The Activity calendar (ActivityCalendar.tsx): the box the reading sits on, the ring around the day read, and the key's
+   swatches. The cells are drawn by components/echart from calendarDays.ts; the heading row, the legend row and the tooltip's
+   rows are chart.css's. */
+
+/* The box is the origin of every pixel of the fit: the wrapper's box sits at its top left, the ring and the tooltip over it. */
+.cal-box { position: relative; }
+
+/* The day read: a ring 1px off its cell, in the text color, so it stands apart from the selection's frame on the cell's edge.
+   It moves at once: nothing animates on the calendar. */
+.cal-cursor { position: absolute; pointer-events: none; outline: 2px solid var(--text-primary); outline-offset: 1px; }
+
+/* A swatch of the key, and of the tooltip's chosen measure: the cell's colors, a 10px square as on a phone. */
+.cal-sw { display: inline-block; flex: none; box-sizing: border-box; width: 10px; height: 10px; border-radius: var(--radius-xs);
+  background: var(--grid); vertical-align: -1px; }
+.cal-sw[data-shade="1"] { background: var(--heat-1); }
+.cal-sw[data-shade="2"] { background: var(--heat-2); }
+.cal-sw[data-shade="3"] { background: var(--heat-3); }
+.cal-sw[data-shade="4"] { background: var(--heat-4); }
+.cal-box .tip .cal-sw { margin-right: var(--space-3); }
+
+/* Forced colors: a shade is no system color, so the swatches are the cells' squares (calendarDays.ts): a step a centred
+   square in the text color, 3, 5, 8 and 10px for steps 1 to 4 of a 10px cell, drawn as the content box inside a clear
+   border; no work an unfilled square edged in GrayText. The ring takes the system highlight. */
+@media (forced-colors: active) {
+  .cal-cursor { outline-color: Highlight; }
+  .cal-sw { forced-color-adjust: none; border-radius: 0; border: 0 solid transparent; }
+  /* As specific as the shade rules above, and after them, so their background (with its clip) gives way. */
+  .cal-sw[data-shade] { background: CanvasText; background-clip: content-box; }
+  .cal-sw[data-shade="0"] { background: none; border: 1px solid GrayText; }
+  .cal-sw[data-shade="1"] { border-width: 3.5px; }
+  .cal-sw[data-shade="2"] { border-width: 2.5px; }
+  .cal-sw[data-shade="3"] { border-width: 1px; }
+}
