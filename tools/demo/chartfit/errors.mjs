@@ -33,7 +33,9 @@
 // - by week in a 343px box: the edges and labels of checks.mjs, a click on the newest week; at 32px text with the web
 //   font held back until the chart has drawn, the default title ends inside the plot once it loads; about 98 weeks: the frame
 //   stays visible and no wider than its band;
-// - newer figures keep the reading, the zoom and the selection, and say nothing; the bars grow once.
+// - newer figures keep the reading, the zoom and the selection, and say nothing; the backfill of checks.mjs; through a
+//   backfill of 2 older days, Space still clears a day Space selected, and a fold that opens under a key's reading leaves
+//   the reading on its first day; the bars grow once.
 import { LOCALE, PHONE, line, sleep, until } from "./harness.mjs";
 import { chart, root32 } from "./checks.mjs";
 
@@ -80,6 +82,13 @@ const quiet = (d, idx) => {
   const out = new Set(idx.map(i => plus(d.today, i - 29)));
   d.calls = d.calls.filter(r => !out.has(r[0]));
   d.error_days = d.error_days.filter(r => !out.has(r[0]));
+  return d;
+};
+/** No call and no error before the nth of the last 30 days: the chart starts on it. */
+const older30 = (d, n) => {
+  const from = plus(d.today, n - 29);
+  d.calls = d.calls.filter(r => r[0] >= from);
+  d.error_days = d.error_days.filter(r => r[0] >= from);
   return d;
 };
 /** The applied fixes, by type id and index of the last 30 days. */
@@ -246,6 +255,7 @@ export async function errors(h) {
     // Today's failed calls up, in its first row, so the bars change and day 10 does not.
     newer: (d, more) => { const i = d.error_days.findIndex(r => r[0] === d.today && r[3] > 0); d.error_days[i] = [...d.error_days[i].slice(0, 3), d.error_days[i][3] + more, ...d.error_days[i].slice(4)]; return d; },
     kept,
+    fewer: (d, n) => older30(d, n),
   });
   const { N, I, named, centre, ev, drawn, away, box, state, onPoint } = c;
   const probe = (page, css) => ev(page, css => window.chartfit.probe(css), css);
@@ -1036,6 +1046,47 @@ export async function errors(h) {
     const s = await sel(page), g = await ev(page, () => window.chartfit.grid()), said = await ev(page, () => window.errfit.heard().map(x => x.text).filter(Boolean));
     line("newer figures keep the selected day, its frame and chip, and say nothing", after !== before && s.url.includes(`at=${DAYS[J]}`) && !!s.frame && Math.abs(mid(s.frame) - centre(g, J)) <= 1.5 && s.chip === day(DAYS[J]) && !said.length,
       `${after !== before ? "redrawn" : "NOT REDRAWN"}; frame ${s.frame ? "drawn" : "gone"}, chip "${s.chip}"; said ${JSON.stringify(said)}`);
+    await page.done();
+  }
+
+  await c.backfill();
+  // Through a backfill of 2 older days: a day selected with Space, then Space again; a fold that opens under a key's reading.
+  const B = 2;
+  {
+    const K = B + I;
+    const { page, fill } = await c.openMoving("backfill, selected with Space", { before: d => older30(d, B), points: N - B });
+    await c.read(page);
+    await until(() => mine(page), r => named(r.readout) === K);
+    await page.keyboard.press("Space");
+    const on = await until(() => sel(page), s => s.url.includes(`at=${DAYS[K]}`) && s.frame);
+    await ev(page, () => window.errfit.listen());
+    const redrawn = await fill();
+    await sleep(500);
+    const kept = await sel(page), g = await ev(page, () => window.chartfit.grid());
+    await page.keyboard.press("Space");
+    const off = await until(() => sel(page), s => !s.url.includes("at="));
+    const said = await heard(page);
+    line(`day ${K + 1} selected with Space, then a backfill of ${B} older days, then Space: the selection is cleared, the URL loses at, and "Selection cleared: …" is said once`,
+      redrawn && !!on.frame && !!kept.frame && Math.abs(mid(kept.frame) - centre(g, K)) <= 1.5 && !off.url.includes("at=") && !off.frame && !off.chip && JSON.stringify(said) === JSON.stringify([CLEARED]),
+      `${redrawn ? "redrawn" : "NOT REDRAWN"}; after the backfill the frame at ${px(mid(kept.frame))}, day ${K + 1} at ${px(centre(g, K))}; after Space ${off.url || "no selection"}, frame ${off.frame ? "drawn" : "gone"}; said ${JSON.stringify(said)}`);
+    await page.done();
+  }
+  {
+    // The fold of days 6 to 14 read by the keys; the backfill brings days 1 and 2 and a call on each folded day.
+    const F = 5, gone = [5, 6, 7, 8, 9, 10, 11, 12, 13];
+    const pts = pointsOf(older30(quiet(full(structuredClone(store)), gone), B), 30);
+    const { page, fill } = await c.openMoving("backfill, a fold opening", { before: d => older30(quiet(d, gone), B), points: pts.length - 1 });
+    await box(page).focus();
+    await page.keyboard.press("Home");
+    for (let k = 0; k < F - B; k++) await page.keyboard.press("ArrowRight");
+    const g0 = await ev(page, () => window.chartfit.grid());
+    const r0 = await until(() => mine(page), r => stays(r, F, centre(g0, F - B, 0, pts.length - 1)).ok);
+    const redrawn = await fill();
+    await sleep(500);
+    const r = await mine(page), cols = await ev(page, () => window.chartfit.columns()), x = centre(r.grid, F), bar = cols.find(b => Math.abs(b.x - mid(r.band)) <= 1);
+    line(`a fold that opens under a key's reading, with ${B} older days: the reading is on the fold's first day, now a day of its own`,
+      redrawn && !!pts[F - B].to && stays(r0, F, centre(g0, F - B, 0, pts.length - 1)).ok && cols.length === N && stays(r, F, x).ok && !!bar && r.tip?.day !== r0.tip?.day && named(r.readout) === F,
+      `${redrawn ? "redrawn" : "NOT REDRAWN"}; read "${r0.tip?.day ?? "none"}" on ${pts.length} points; then ${cols.length} columns, ${stays(r, F, x).at}, bar at ${px(bar?.x)}, readout "${r.readout.split(":")[0]}"`);
     await page.done();
   }
 

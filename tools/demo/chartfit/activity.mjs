@@ -26,8 +26,9 @@
 //   of checks.mjs, a click on the newest week selects it with its frame centred on its bar, and its rate point is under it;
 // - in a 343px box, with the peak two weeks in, then two weeks into the window the plus key zooms to: the labels fit and
 //   the peak label is inside the plot;
-// - newer figures keep the selection, and say nothing; the bars grow once, and not on a theme change, a measure switch, a
-//   zoom out or a refresh.
+// - newer figures keep the selection, and say nothing; the backfill of checks.mjs; zoomed, a rolling range that moves on a
+//   day (the first bar leaves, today's comes) keeps the bars shown on their days and "Show all days", and says nothing;
+// - the bars grow once, and not on a theme change, a measure switch, a zoom out or a refresh.
 import { LOCALE, PHONE, W, line, sleep, until } from "./harness.mjs";
 import { chart, root32 } from "./checks.mjs";
 
@@ -45,6 +46,11 @@ const buckets = d => {
 /** The work rows of a payload, changed by f(row, i of its bucket in ks). */
 const each = (d, ks, f) => {
   for (const list of ["work", "daily_work", "work_projects"]) if (Array.isArray(d[list])) d[list] = d[list].map(r => (ks.includes(r.day) ? f({ ...r }, ks.indexOf(r.day)) : r));
+  return d;
+};
+/** The work rows of a payload on the days keep(day) takes. */
+const keepDays = (d, keep) => {
+  for (const list of ["work", "daily_work", "work_projects"]) if (Array.isArray(d[list])) d[list] = d[list].filter(r => keep(r.day));
   return d;
 };
 /** The Sessions measure, picked as the switch keeps it. */
@@ -79,6 +85,8 @@ export async function activity(h) {
       return d;
     },
     kept: [["heading", "#workTitle"], ["hint", "#work .chart-head .hint"]],
+    // The rows of the first n bars left out: the bars start at the first day with a session.
+    fewer: (d, n) => keepDays(d, k => k >= DAYS[n]),
   });
   const { N, I, named, centre, ev, drawn, away, box, state, onPoint } = c;
   const probe = (page, css) => ev(page, css => window.chartfit.probe(css), css);
@@ -561,6 +569,31 @@ export async function activity(h) {
 
   await c.refresh();
   await c.refreshRead();
+  await c.backfill();
+  // Zoomed, the rolling range moves on a day: the view ends yesterday at first, then the first bar leaves and today's comes.
+  {
+    const { page, fill } = await c.openMoving("a rolling range moving on a day", {
+      before: d => { d.end = DAYS[N - 2]; return keepDays(d, k => k <= DAYS[N - 2]); },
+      after: d => keepDays(d, k => k >= DAYS[1]),
+      points: N - 1,
+    });
+    await c.read(page);
+    await page.keyboard.press("+");
+    let w = null;
+    const s0 = await until(() => state(page), s => { w = c.shownBy(s.readout); return w && s.band && Math.abs(c.mid(s.band) - centre(s.grid, I, w.from, w.to)) <= 1.5; });
+    await c.showAll(page).waitFor({ timeout: 4000 }).catch(() => {});
+    const was = await c.labels(page);
+    const proven = !!w && was.length > 0 && was[0] === day(DAYS[w.from]) && was.at(-1) === day(DAYS[w.to]);
+    await ev(page, () => window.chartfit.listen());
+    const redrawn = await fill();
+    await sleep(400);
+    const s = await state(page), now = await c.labels(page), all = await c.showAll(page).isVisible(), heard = await said(page);
+    const at = c.mid(s.band), bar = (await ev(page, () => window.chartfit.columns())).find(b => Math.abs(b.x - at) <= 1);
+    line(`zoomed by plus around day ${I + 1}, the rolling range moves on a day (the first bar leaves, today's comes): the bars shown keep their days, the band its bar, "Show all days" stays, and nothing is said`,
+      redrawn && proven && now[0] === was[0] && now.at(-1) === was.at(-1) && Math.abs(at - c.mid(s0.band)) <= 1.5 && !!bar && named(s.tip?.day ?? "") === I && all && !heard.length,
+      `${redrawn ? "redrawn" : "NOT REDRAWN"}; labels ${c.ends(now)}, were ${c.ends(was)}${proven ? "" : " (NOT the window said)"}; band at ${c.px(at)}, was ${c.px(c.mid(s0.band))}, bar at ${c.px(bar?.x)}; tooltip "${s.tip?.day ?? "none"}"; "Show all days" ${all ? "shown" : "gone"}; said ${JSON.stringify(heard)}`);
+    await page.done();
+  }
   // Newer figures keep the selection, and say nothing.
   {
     const J = I + 1;
