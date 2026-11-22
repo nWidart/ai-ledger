@@ -17,15 +17,24 @@ export interface StackRect { j: number; x: number; y: number; width: number; hei
  * its left edge `x` and its width `w`. A zero value has no rectangle. A positive segment keeps at least 1px, so a thin share
  * is never drawn zero tall while its tooltip gives it, and every segment but the first has a 2px gap below it: its slot is at
  * least 3px. The others shrink to keep the bar its height, so no segment paints over another. When the minimums add up to
- * more than the bar's height, every segment keeps its minimum and the bar rises above `top`: five segments on a 2px bar
- * make a 13px bar. The top segment gets a 3px top radius when it is taller than 4px.
+ * more than the bar's height, the bar keeps its height, or 1px when it is shorter, so a bar is never taller than one of a
+ * larger total: the gaps shrink first, every segment keeping 1px, and on a bar shorter than 1px per segment there are no
+ * gaps and the segments share it equally. Five segments on an 8px bar are 1px each over .75px gaps. The top segment gets a
+ * 3px top radius when it is taller than 4px.
  */
 export function stackRects(values: readonly number[], y0: number, top: number, x: number, w: number): StackRect[] {
-  const segs = values.flatMap((v, j) => (v > 0 ? [{ v, j }] : []));
-  const slots = stackHeights(segs.map(s => s.v), y0 - top, segs.map((_, n) => (n ? 3 : 1)));
+  const segs = values.flatMap((v, j) => (v > 0 ? [{ v, j }] : [])), count = segs.length, h = y0 - top;
+  let slots: number[], gap = 2;
+  if (3 * count - 2 <= h) slots = stackHeights(segs.map(s => s.v), h, segs.map((_, k) => (k ? 3 : 1)));
+  else {
+    const tall = Math.max(h, 1);
+    gap = count > 1 ? Math.min(2, Math.max(0, (tall - count) / (count - 1))) : 0;
+    const seg = (tall - gap * (count - 1)) / count;
+    slots = segs.map((_, k) => (k ? seg + gap : seg));
+  }
   let base = y0;
   return segs.map((s, n) => {
-    const y = base - slots[n]!, height = slots[n]! - (n ? 2 : 0);
+    const y = base - slots[n]!, height = slots[n]! - (n ? gap : 0);
     base = y;
     return { j: s.j, x, y, width: w, height, r: n === segs.length - 1 && height > 4 ? [3, 3, 0, 0] : 0 };
   });
