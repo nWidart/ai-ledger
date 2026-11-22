@@ -56,7 +56,7 @@ describe("window grids", () => {
   });
 
   it("draws the one full grid, with its legend and the list of what loads before the first prompt, when a project is selected", async () => {
-    const overhead: ContextOverhead = { ts: "2026-11-10T09:30:00Z", session_id: "m1", model: "claude-opus-4-1", version: "2.1.0", window: 200_000, before_view: false,
+    const overhead: ContextOverhead = { uuid: "c1", ts: "2026-11-10T09:30:00Z", session_id: "m1", model: "claude-opus-4-1", version: "2.1.0", window: 200_000, before_view: false,
       categories: [{ name: "Skills", tokens: 4000, state: "used" }], calls: { mcp: [], skill: [{ name: "ship", calls: 2 }] },
       items: [{ seq: 1, kind: "skill", name: "ship", detail: "userSettings", server: null, tokens: 300 }] };
     const one = (project: string) => view(1, { project, starting: { ...fixture.starting, window: 200_000, window_share: .1, median: 20_000 },

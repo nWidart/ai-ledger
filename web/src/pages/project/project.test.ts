@@ -94,7 +94,7 @@ describe("contextGrid", () => {
 describe("contextGrid with a snapshot", () => {
   type Cat = ContextOverhead["categories"][number];
   const snap = (cats: [string, number, Cat["state"]?][], over: Partial<ContextOverhead> = {}): ContextOverhead => ({
-    ts: "2026-11-10T09:30:00Z", session_id: "m1", model: "claude-opus-4-1", version: "2.1.0", window: 200000,
+    uuid: "c1", ts: "2026-11-10T09:30:00Z", session_id: "m1", model: "claude-opus-4-1", version: "2.1.0", window: 200000,
     categories: cats.map(([name, tokens, state]) => ({ name, tokens, state: state ?? "used" })),
     before_view: false, items: [], calls: { mcp: [], skill: [] }, ...over,
   });

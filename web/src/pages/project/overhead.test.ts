@@ -7,7 +7,7 @@ type LoadList = NonNullable<ReturnType<typeof loadList>>;
 type Cat = ContextOverhead["categories"][number];
 type Calls = Partial<ContextOverhead["calls"]>;
 const snap = (cats: [string, number, Cat["state"]?][], items: OverheadItem[] = [], calls: Calls = {}, over: Partial<ContextOverhead> = {}): ContextOverhead => ({
-  ts: "2026-11-15T10:42:41.622Z", session_id: "s1", model: "claude-fable-5-2", version: "2.1.325", window: 1000000, before_view: false,
+  uuid: "u1", ts: "2026-11-15T10:42:41.622Z", session_id: "s1", model: "claude-fable-5-2", version: "2.1.325", window: 1000000, before_view: false,
   categories: cats.map(([name, tokens, state]) => ({ name, tokens, state: state ?? "used" })),
   items, calls: { mcp: [], skill: [], ...calls }, ...over,
 });

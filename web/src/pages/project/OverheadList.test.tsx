@@ -12,7 +12,7 @@ let next = 100;
 const item = (kind: OverheadItem["kind"], name: string | null, tokens: number, o: Partial<OverheadItem> = {}): OverheadItem =>
   ({ seq: next++, kind, name, detail: null, server: null, tokens, ...o });
 const snap = (cats: [string, number][], items: OverheadItem[] = [], o: Partial<ContextOverhead> = {}): ContextOverhead => ({
-  ts: "2026-11-15T10:42:41.622Z", session_id: "s1", model: "claude-fable-5-2", version: "2.1.325", window: 1000000, before_view: false,
+  uuid: "u1", ts: "2026-11-15T10:42:41.622Z", session_id: "s1", model: "claude-fable-5-2", version: "2.1.325", window: 1000000, before_view: false,
   categories: cats.map(([name, tokens]) => ({ name, tokens, state: "used" as const })),
   items, calls: { mcp: [], skill: [] }, ...o,
 });
@@ -74,10 +74,11 @@ describe("OverheadList", () => {
     expect([buttons(), rows(screen.getByRole("list", { name: "MCP tools" }))[0]!.startsWith(
       "caveman, 805 tokens, called 12 times by Claude Code in this view, 3 tools, median 254 tokens")]).toEqual([[], true]);
     // A new measurement of the same project keeps the list open but folds what was opened in it: the server's tools, though its row keeps its key.
+    // It is told by its id: this one has the same session and time.
     const tools = screen.getByText("3 tools, median 254 tokens").closest("details")!, list = screen.getByText(loadList(FIXTURE)!.summary).closest("details")!;
     await user.click(tools.querySelector("summary")!);
     expect(tools.open).toBe(true);
-    rerender(<OverheadList snapshot={{ ...FIXTURE, ts: "2026-11-16T09:00:00.000Z" }} />);
+    rerender(<OverheadList snapshot={{ ...FIXTURE, uuid: "u2" }} />);
     expect([screen.getByText("3 tools, median 254 tokens").closest("details")!.open, list.open]).toEqual([false, true]);
   });
 
@@ -101,7 +102,7 @@ describe("OverheadList", () => {
     expect([rows(list).length, more.textContent, more.getAttribute("aria-expanded"), document.activeElement]).toEqual([6, "Show all 8", "false", more]);
     // A new snapshot without the expanded list draws whole, every fold closed.
     await user.click(more);
-    rerender(<OverheadList snapshot={snap([["Memory files", 900]], files, { ts: "2026-11-16T09:00:00.000Z" })} />);
+    rerender(<OverheadList snapshot={snap([["Memory files", 900]], files, { uuid: "u2" })} />);
     expect([screen.queryByRole("list", { name: "Skills" }), buttons()]).toEqual([null, ["Show all 7"]]);
   });
 

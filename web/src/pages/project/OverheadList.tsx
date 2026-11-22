@@ -53,9 +53,9 @@ function Folded<T extends { key: string; tokens: number }>({ id, className, labe
 /** The list of a snapshot's overhead; nothing when the snapshot has neither an overhead category nor an item. onOpen: without
  *  it, no name is a button. */
 export function OverheadList({ snapshot, onOpen }: { snapshot: ContextOverhead; onOpen?: OverheadOpener }) {
-  // Fold state per list key, for this snapshot: a refetch of it keeps every fold, a new measurement (its keys may name other
-  // lists) starts folded.
-  const uid = useId(), of = `${snapshot.session_id} ${snapshot.ts}`;
+  // Fold state per list key, for this snapshot (by its id): a refetch of it keeps every fold, a new measurement (its keys may
+  // name other lists) starts folded, even one of the same session at the same time.
+  const uid = useId(), of = snapshot.uuid;
   const [folds, setFolds] = useState<{ of: string; open: ReadonlySet<string> }>({ of, open: new Set() });
   const l = loadList(snapshot);
   if (!l) return null;

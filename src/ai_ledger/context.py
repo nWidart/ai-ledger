@@ -610,6 +610,7 @@ def overhead(cur, project, source, W, fp, start):
     configuration's, not a session's. None without a project, for a view of another source than Claude Code (only Claude
     Code records /context) or without a snapshot. W, fp and start are the view's (metrics.view).
 
+    uuid: the snapshot's own id, unique where session_id and ts are not (two snapshots of one session at one time).
     before_view: the snapshot was taken before the view's first day (false for all time or with no ts). categories keep
     the order /context lists them. items: every part of an OVERHEAD_ITEMS kind, largest first, then by name (no name last),
     then by seq, the part's ordinal and the item's identity; a NULL name or detail is kept, a negative token count reads 0.
@@ -624,7 +625,7 @@ def overhead(cur, project, source, W, fp, start):
     if not snap:
         return None
     snap = snap[0]
-    uuid = snap.pop("uuid")
+    uuid = snap["uuid"]
     snap["ts"] = metrics.iso(snap["ts"])
     snap["categories"] = metrics.rows(cur, """SELECT name, coalesce(tokens, 0) AS tokens, state FROM context_parts
         WHERE uuid = ? AND kind = 'category' AND name IS NOT NULL ORDER BY seq""", [uuid])

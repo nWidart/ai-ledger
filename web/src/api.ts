@@ -609,6 +609,8 @@ export interface OverheadItem {
 /** What /context measured in a session of the project: categories in the order /context lists them (state is the category's
  *  kind: used, deferred, buffer or free), and every item the categories hold (items) with how often Claude Code called each. */
 export interface ContextOverhead {
+  /** The snapshot's own id: unique where session_id and ts are not (two snapshots of one session at one time). */
+  uuid: string;
   ts: Ts; session_id: string; model: string | null; version: string | null; window: number | null;
   categories: { name: string; tokens: number; state: "used" | "deferred" | "buffer" | "free" }[];
   /** The snapshot was taken before the view's first day (false for all time). */

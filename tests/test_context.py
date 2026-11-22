@@ -919,8 +919,8 @@ class OverheadTest(unittest.TestCase):
         b.snapshot("c9", ts="2026-06-01 10:00:00", project="bar")
         b.snapshot("c8", ts=None, project="undated")
         o = b.payload(project="foo", range_days=7)["overhead"]  # every snapshot is months before the range
-        self.assertEqual({k: o[k] for k in ("ts", "session_id", "model", "version", "window", "before_view", "items", "calls")},
-                         dict(ts="2026-03-01T10:00:00.000Z", session_id="m3", model="m-b", version="2.1.300", window=1_000_000,
+        self.assertEqual({k: o[k] for k in ("uuid", "ts", "session_id", "model", "version", "window", "before_view", "items", "calls")},
+                         dict(uuid="c3", ts="2026-03-01T10:00:00.000Z", session_id="m3", model="m-b", version="2.1.300", window=1_000_000,
                               before_view=True, items=[], calls=dict(mcp=[], skill=[])))
         self.assertFalse(b.payload(project="foo")["overhead"]["before_view"])  # all time has no first day
         self.assertFalse(b.payload(project="undated", range_days=7)["overhead"]["before_view"])
@@ -955,7 +955,7 @@ class OverheadTest(unittest.TestCase):
         server = {x["name"]: (x["detail"], x["server"]) for x in items if x["kind"] == "mcp_tool"}
         self.assertEqual(server["search"], ("docs", "docs"))  # no prefix: detail
         self.assertEqual(o["calls"], dict(mcp=[], skill=[]))
-        self.assertEqual(sorted(o), ["before_view", "calls", "categories", "items", "model", "session_id", "ts", "version", "window"])
+        self.assertEqual(sorted(o), ["before_view", "calls", "categories", "items", "model", "session_id", "ts", "uuid", "version", "window"])
 
     def test_calls_are_claude_codes_in_the_view(self):
         b = Builder(self)

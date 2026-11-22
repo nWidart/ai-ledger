@@ -313,7 +313,7 @@ describe("ProjectPage", () => {
 
     // A start of 40,000 tokens at 20% of a 200k window: 40 starting cells, split 4 / 12 / 4 / 20.
     const snapshot: ContextOverhead = {
-      ts: "2026-11-10T09:30:00Z", session_id: "m1", model: "claude-opus-4-1", version: "2.1.0", window: 200000,
+      uuid: "c1", ts: "2026-11-10T09:30:00Z", session_id: "m1", model: "claude-opus-4-1", version: "2.1.0", window: 200000,
       categories: [{ name: "System prompt", tokens: 4000, state: "used" }, { name: "System tools", tokens: 12000, state: "used" },
         { name: "Skills", tokens: 4000, state: "used" }, { name: "Messages", tokens: 900, state: "used" }, { name: "MCP tools", tokens: 7000, state: "deferred" },
         { name: "Free space", tokens: 150000, state: "free" }],
