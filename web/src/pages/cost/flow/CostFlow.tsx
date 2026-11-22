@@ -134,8 +134,11 @@ export function CostFlow({ d, onProject }: CostFlowProps) {
       const { band: b, node: n } = f;
       to = b ? { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 + b.h / 2 } : { x: n.x + n.width, y: n.y + n.height / 2 };
     }
+    // Measured at the box's left: a wrapping name makes the tooltip as wide as the room right of where it last stood. Then
+    // inside the box at both edges, by its width.
+    tip.style.left = "0px";
     const r = el.getBoundingClientRect(), p = tipAt(el, tip, r.left + to.x, r.top + to.y);
-    tip.style.left = `${p.left}px`;
+    tip.style.left = `${Math.max(0, Math.min(p.left, el.clientWidth - tip.offsetWidth))}px`;
     tip.style.top = `${p.top}px`;
   };
   const place = useEffectEvent(placeTip);
@@ -256,23 +259,25 @@ export function CostFlow({ d, onProject }: CostFlowProps) {
 /** The tooltip's rows: a node's column, name, cost and share, then its largest bands (or Other's names); a band's ends,
  *  cost, share of the total and share of its source. */
 function tip(f: Found, g: NonNullable<ReturnType<typeof useFlow>>, total: number): ReactNode {
-  const row = (k: string, v: ReactNode, sub = false) => <div key={k} className={sub ? "row sub" : "row"}><span>{k}</span><b>{v}</b></div>;
+  const row = (id: string, k: ReactNode, v: ReactNode, sub = false) => <div key={id} className={sub ? "row sub" : "row"}><span>{k}</span><b>{v}</b></div>;
+  /** A name, which wraps in a tooltip as wide as the box. */
+  const name = (s: string) => <span className="tname">{s}</span>;
   const top = (title: string, xs: { name: string; value: number }[]) => xs.length ? <>
     <div className="muted">{title}</div>
-    {xs.slice(0, 3).map(x => row(x.name, usd(x.value), true))}
+    {xs.slice(0, 3).map((x, i) => row(String(i), name(x.name), usd(x.value), true))}
     {xs.length > 3 && <div className="row sub"><span>{`+ ${num(xs.length - 3)} more`}</span></div>}
   </> : null;
   if (f.band) {
     const b = f.band, from = g.nodes.get(b.from)!, to = g.nodes.get(b.to)!;
-    return <>{row("From", from.label)}{row("To", to.label)}{row("Est. cost", usd(b.value))}{row("Share of cost", share(b.value, total))}
-      {row(`Share of ${from.label}`, share(b.value, from.value))}</>;
+    return <>{row("from", "From", name(from.label))}{row("to", "To", name(to.label))}{row("cost", "Est. cost", usd(b.value))}
+      {row("share", "Share of cost", share(b.value, total))}{row("of", <>Share of {name(from.label)}</>, share(b.value, from.value))}</>;
   }
   const n = f.node;
   const ends = (bs: PlacedBand[], end: "from" | "to") => bs.map(b => ({ name: g.nodes.get(b[end])!.label, value: b.value }));
   return <>
     <div className="muted">{g.column(n.id).title}</div>
-    {row(n.label, usd(n.value))}
-    {row("Share of cost", share(n.value, total))}
+    {row("name", name(n.label), usd(n.value))}
+    {row("share", "Share of cost", share(n.value, total))}
     {n.members ? top("The largest", n.members.map(m => ({ name: m.label, value: m.value }))) : null}
     {top("From", ends(g.into(n.id), "from"))}
     {top("To", ends(g.out(n.id), "to"))}

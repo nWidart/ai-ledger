@@ -5,8 +5,10 @@
 /* A named project's node opens its sheet. zrender writes `cursor: default` inline on an element of the plot on each move,
    which only an important rule outranks. */
 .flow-box.hand, .flow-box.hand .echart-plot * { cursor: pointer !important; }
-/* The tooltip is rendered only while an item is read; the charts' .tip is hidden until shown. */
-.flow-box > .tip { display: block; }
+/* The tooltip is rendered only while an item is read; the charts' .tip is hidden until shown. It is no wider than the box:
+   a long name wraps, and the figures keep the app's nowrap, a line each. */
+.flow-box > .tip { display: block; max-width: 100%; }
+.flow-box > .tip .tname { white-space: normal; overflow-wrap: anywhere; }
 /* The item read, outlined on its own shape: a band's path or a node's bar grown by 2px. */
 .flow-mark { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
 .flow-mark :is(path, rect) { fill: var(--text-primary); fill-opacity: .08; stroke: var(--text-primary); stroke-width: 2; }
