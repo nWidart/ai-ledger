@@ -4,6 +4,10 @@ description: The session, project, tool, MCP server and skill sheets that open o
 spec: [dashboard-app, usage-dashboard, tool-inspector]
 ---
 
+import ThemedImage from "../../../components/ThemedImage.astro";
+import sessionSpans from "../../../assets/shots/session-spans.png";
+import sessionSpansLight from "../../../assets/shots/session-spans-light.png";
+
 A sheet shows one session, project, tool, MCP server or skill beside the page, from the right. It opens from a row, a link, the [command palette](/ai-ledger/everywhere/command-palette/) or a [context menu](/ai-ledger/everywhere/context-menu/). The same sheets open over every page, Limits included, and they do not change the page's filters.
 
 ## How sheets behave
@@ -40,7 +44,9 @@ Shows the whole session, whatever the range filter says.
   - A pointed end is a call that ran past the timeline's last event: it stops at the plot's edge.
   - A call that ran through a squeezed break stops at the break's far side, so its bar is shorter than the call lasted. The sentence, tooltip and table give the true time.
 
-  Click the chart or Tab to it, and read a call with the arrow keys or the pointer. A tooltip and a spoken sentence give the tool, its input (up to 120 characters), the thread, the start and end, the duration, whether it succeeded or failed, and how many other calls ran during it. Enter or a click on a call opens its tool sheet, with **← Back** to the session. Above the chart, notes count the calls with no duration, those clipped at the edge, those through squeezed time, those drawn over a last row, the subagents that share a lane, and a session cut to its first 5,000 calls. **Show data table** lists the calls as "Calls by duration", longest first, 20 at first and **Show all** for the rest. A session with no tool call says so. The chart is its own chunk: if it fails to load, the section says so and the rest of the sheet stays. See [Keyboard and screen reader](/ai-ledger/everywhere/keyboard-screen-reader/).
+  <ThemedImage dark={sessionSpans} light={sessionSpansLight} alt="The Tool calls by thread section of a session sheet: lanes for the main thread, three subagents and subagents not told apart, with filled bars, a hollow red failed test run, a squeezed break, rings for calls with no result, and a pointed end at the right edge." />
+
+  Click the chart or Tab to it, and read a call with the arrow keys or the pointer. A tooltip and a spoken sentence give the tool, its input (up to 120 characters), the thread, the start and end, the duration, whether it succeeded or failed, and how many other calls ran during it. Enter or a click on a call opens its tool sheet, with **← Back** to the session. Above the chart, notes count the calls with no duration, those that ran past the last event (their bar ends in a point), those through squeezed time, those drawn over a last row, the subagents that share a lane, and a session cut to its first 5,000 calls. **Show data table** lists the calls as "Calls by duration", longest first, 20 at first and **Show all** for the rest. A session with no tool call says so. The chart is its own chunk: if it fails to load, the section says so and the rest of the sheet stays. See [Keyboard and screen reader](/ai-ledger/everywhere/keyboard-screen-reader/).
 - **Error loops** in the session, each with "Open in Errors".
 - **Commits**, **Models** (requests, tokens, estimated cost) and **Tools** (calls, failed, p50), each folded. A row of Tools opens the tool sheet.
 - The session id, the working directory when the store has it, and the command that resumes the session, each with **Copy**. The resume command is `claude --resume <id>`, `codex resume <id>` or `grok --resume <id>`, after `cd '<directory>' && ` when the directory is known. A copy says "Copied", or "Copy failed".
