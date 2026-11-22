@@ -1342,11 +1342,13 @@ describe("EChart zoom", () => {
     chart.zoomTo(15, 29);
     readBack(MONTH, "Oct 23");
     const place = [tooltip()!.style.left, tooltip()!.style.top], said = spoken();
-    const set = vi.spyOn(chart, "setOption"), px = vi.spyOn(chart, "convertToPixel");
+    const asked = (["setOption", "getOption", "dispatchAction", "convertToPixel", "convertFromPixel", "containPixel", "resize", "getZr"] as const)
+      .map(name => ({ name, spy: vi.spyOn(chart, name) }));
     rerender(keyed(EARLY, { onZoom, option }));
-    // The chart is asked where the day is once it draws the new days: before, it would answer for another day.
-    expect(px).toHaveBeenCalled();
-    expect(set.mock.invocationCallOrder[0]).toBeLessThan(Math.min(...px.mock.invocationCallOrder));
+    // The chart is asked nothing before it draws the new days: until then, it would answer for another day.
+    const calls = asked.flatMap(({ name, spy }) => spy.mock.invocationCallOrder.map(n => ({ name, n }))).sort((a, b) => a.n - b.n);
+    expect(calls[0]?.name).toBe("setOption");
+    expect(calls.map(c => c.name)).toContain("convertToPixel");
     expect(tooltip()!.textContent).toBe("Oct 23 tip");
     expect([tooltip()!.style.left, tooltip()!.style.top]).toEqual(place); // the window kept its days: the day kept its place
     expect(chart.band).toBe(24);
