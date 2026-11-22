@@ -132,6 +132,10 @@ describe("quadrantFit", () => {
     expect(wide.names.map(n => [n.label, n.px, n.py, n.align, n.verticalAlign])).toEqual([
       ["Cheap, much done", 64, 16, "left", "top"], ["Costly, much done", right - 6, 16, "right", "top"],
       ["Cheap, little done", 64, 214, "left", "bottom"], ["Costly, little done", right - 6, 214, "right", "bottom"]]);
+    // A median on the plot's edge leaves its side's quadrants no room: their names would sit across the guide.
+    const names = (pts: [number, number][]) => quadrantFit(model(pts.map(([c, t]) => row(c, t))), 800, 1).names.map(n => n.quadrant);
+    expect(names([[1, 0], [2, 0], [3, 0]])).toEqual(["cheapMuch", "costlyMuch"]);
+    expect(names([[0, 1], [0, 2], [0, 3]])).toEqual(["costlyMuch", "costlyLittle"]);
   });
 });
 

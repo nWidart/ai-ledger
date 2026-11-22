@@ -164,10 +164,12 @@ export function quadrantFit(model: QuadrantModel, width: number, s: number): Qua
   const guides = model.split && at(model.split.cost, model.split.calls);
   const names: FitName[] = [];
   if (guides) {
-    const pad = 6 * s, right = plot.x + plot.w, bottom = plot.y + plot.h, charW = .6 * 11 * s;
+    const pad = 6 * s, right = plot.x + plot.w, bottom = plot.y + plot.h, fontSize = 11 * s, charW = .6 * fontSize;
     for (const { id, label } of QUADRANTS) {
+      // A name needs its quadrant's room both ways: drawn without it, it would cross a guide into another quadrant.
       const left = id.startsWith("cheap"), top = id.endsWith("Much");
       if (label.length * charW > (left ? guides.px - plot.x : right - guides.px) - 2 * pad) continue;
+      if (fontSize > (top ? guides.py - plot.y : bottom - guides.py) - 2 * pad) continue;
       names.push({ quadrant: id, label, px: left ? plot.x + pad : right - pad, py: top ? plot.y + pad : bottom - pad,
         align: left ? "left" : "right", verticalAlign: top ? "top" : "bottom" });
     }
