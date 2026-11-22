@@ -36,16 +36,16 @@ This section holds only what shapes this change.
 | S2 | A custom series on the frame, one item per fix: a dashed line over the frame's height and a text beside it? | Both drawn, at the point's x on the frame (138.1px for point 3, the same as on a track). `lineDash: [4, 3]` gives `stroke-dasharray`. Zoomed to points 10 to 25, the fix on point 3 is not drawn and the fix on point 20 is, at its new x. |
 | S3 | A run of idle buckets as one item with two x dimensions (`encode: { x: [0, 1] }`), under the slider's default filter? | A run the window cuts is removed whole: with runs 5–7 and 18–22 zoomed to 6–20, neither is drawn, though five of their buckets show. With `filterMode: "weakFilter"` both are drawn, but that changes the slider every chart shares. |
 | S4 | One item per idle bucket instead? | Each is filtered on its own: zoomed to 6–20, buckets 6, 7, 18, 19 and 20 draw, with shared edges (101.2, 691.6, 740.8px) inside the plot. |
-| S5 | A track's title as its value axis's `name` (`nameLocation: "end"`, `nameTextStyle.align: "left"`, `nameGap: 7`)? | Drawn left-aligned at the grid's left (x 52), its text box ending 7px over the track's top (tracks at 22 and 148px: text centres at 9.5 and 135.5px). No component beyond the grid. `nameTruncate: { maxWidth, ellipsis: "…" }` cuts it ("Bash exit code other …" at 120px) and draws nothing at 5px. |
+| S5 | A track's title as its value axis's `name` (`nameLocation: "end"`, `nameTextStyle.align: "left"`, `nameGap: 7`)? | Drawn left-aligned at the grid's left (x 52), its text box ending 7px over the track's top (tracks at 22 and 148px: text centres at 9.5 and 135.5px). No component beyond the grid. `nameTruncate: { maxWidth, ellipsis: "…" }` cuts it ("Bash exit code other …" at 120px) and draws nothing at 5px. Not used as built: it measures once, before the web font loads (decision 4). |
 | S6 | The slider's faint trend when the first track holds the line? | With the rate line alone: the rate. With a hidden totals line on the rate track's axes, listed before the rate line: the totals. Listed after it: the rate. On the bars' track: the rate (the lower axis wins). So `sliderTrend()`'s rule holds as written: first track with a line, before that track's lines. |
-| S7 | A `dataZoom` action narrower than `minValueSpan` (6, on 30 points)? | ECharts widens it and keeps its start: 10–15 and 10–12 give 10–16; 0–2 gives 0–6. At the end it keeps the end: 27–29 gives 23–29. A percent window of 40% to 50% gives 12–18. No window under 7 points can be held. |
+| S7 | A `dataZoom` action narrower than `minValueSpan` (6, on 30 points)? | ECharts widens it and keeps its start: 10–15 and 10–12 give 10–16; 0–2 gives 0–6. At the axis end it still keeps the start, then clamps the window to the last point: 24–26 and 27–29 give 23–29. A percent window of 40% to 50% gives 12–18. No window under 7 points can be held. On an axis of 6 points, 1–3 gives 0–5: every point. |
 | S8 | The bridge: the rate data again with `connectNulls: true`, dotted, under the solid line? | One unbroken dotted path (`stroke-dasharray="1,4"`), and the solid line in four parts. A lone point (no neighbour with a value) is a move with no length in the solid line: it draws nothing, so its dot is `lineDots`'s. Zoomed, the bridge starts at the first point shown that has a value. |
-| S9 | `style.opacity` on one rectangle of a custom series' group? | That rectangle alone is written with `fill-opacity="0.2"`; its neighbours are untouched. |
+| S9 | `style.opacity` on one rectangle of a custom series' group? | That rectangle alone is written with `fill-opacity="0.2"`; its neighbours are untouched. Step 3.4 found that it fades the rectangle's stroke too, so under forced colors a dimmed segment's edge faded with it; the chart uses `style.fillOpacity`, which fades the fill alone (decision 4). |
 | S10 | A custom series with `z: 0` against the grid lines? | The grid lines are painted first, then `z: 0`, then `z: 1`, then a line series. A band on the frame is over the grid lines. |
 | S11 | What would ECharts' own mark components cost? | Base 177.3 kB (the real chunk is 176.5 kB). `MarkLineComponent` +5.6 kB, `MarkAreaComponent` +3.1 kB, both +6.9 kB, `GraphicComponent` +2.2 kB, `TitleComponent` +0.8 kB. |
 | S12 | How big is the Errors page chunk? | `ErrorsPage-*.js` is 20.6 kB gzip -9 at this change's base. The shared chart chunk `zoomReset-*.js` is 7.7 kB, the entry 109.1 kB. |
 
-Not measured in a browser: the text measures (the fix label's side, the "no activity" label's fit, the title's cut). They use the canvas measure `pointLabel` already uses, which the Activity change checked in Chromium. Steps 2.3 and 3.4 check them on this chart.
+Not measured in the spike: the text measures in a browser (the fix label's side, the "no activity" label's fit, the title's cut). They use the canvas measure `pointLabel` already uses, which the Activity change checked in Chromium. Step 3.4 checked them on this chart, and found that `nameTruncate` (S5) cuts a title before the page's web font has loaded, in the fallback font, so a cut title ended 3 to 10px past a 219px plot once IBM Plex Sans drew it. The chart cuts its titles itself (decision 4).
 
 ## Goals / Non-Goals
 
@@ -71,7 +71,7 @@ What a user will see or meet that differs from today. The owner reads this first
 1. A zoom slider shows under the bucket labels in views of 14 points or more, and the box is 28px taller there. Plus and minus zoom; "Show all days" or "Show all weeks" shows while zoomed (decision 7).
 2. The selected bucket is an accent-tinted band in a thin accent frame. Today it is a grey wash in a text-colored frame, with a small triangle under the axis. The triangle is gone (decision 6).
 3. After a selection by key, the tooltip and the band stay on the point. Today both close and only the key cursor stays. The same key still clears the selection (decision 6).
-4. The sentence about a selection ("Selected …", "Selection cleared …", "… cannot be selected") is said by the chart's live region, once. Today the page's status region says it (decision 6).
+4. The sentence about a selection ("Selected …", "Selection cleared …", "… cannot be selected") is said by the chart's live region, once, and stays there when the pointer leaves the chart or the reading ends. Today the page's status region says it (decision 6).
 5. Newer data, a saved fix marker and a resize no longer end the reading (decision 8).
 6. When newer data moves the chart's first point or a folded stretch, the reading ends and the zoom resets. Today the key cursor stays on its bucket. The selection itself is kept in both (decision 8).
 7. No dot is drawn on the rate line at the point being read. The band alone shows the reading, as on Cost and Activity (the Activity design, decision 3).
@@ -80,17 +80,19 @@ What a user will see or meet that differs from today. The owner reads this first
 10. The chart draws a moment after the page on a first visit, in a box already at its height.
 11. The bars grow once, when the chart first draws. Today they grow, and the line draws in, each time the filters change. Layers no longer fade when a type is selected: they dim at once.
 12. ECharts picks which bucket labels fit. The newest bucket's label is always shown, right-aligned on its point.
-13. The plot starts 52px from the left, where it started at 40px, so a count of six digits fits its margin (decision 1).
+13. The plot starts 52px from the left, where it started at 40px, so count labels up to "600,000" fit its margin (decision 1).
 14. At a larger text size the box grows and both panels keep their height. Today the box stays 320px and the bars shrink, to 80px at 200% (decision 1).
 15. A rate point with no neighbour that has calls is a solid dot of 5px. Today it is a 2px round cap. The hollow dot's ring takes the line's color, where it was muted grey, and its legend key follows (decision 10).
 16. A bar's top segment has round corners when it is taller than 4px, and its other segments are square; a thin segment keeps at least 1px and a 2px gap. Today every segment has small round corners. This is the shared stack's rule, as on Cost and Activity.
-17. A fix label stays inside the plot: left of its line near the right edge, left out when neither side has room. Labels of fixes on one bucket sit one under the other; today they are drawn over each other (decision 5).
+17. A fix label stays inside the plot: left of its line near the right edge, left out when neither side has room. Labels of fixes on one bucket sit one under the other, in the order of their type labels; today they are drawn over each other. Each label has a halo in the page's surface color, so the rate line breaks behind its letters (decision 5).
 18. The "no activity" label shows when its measured text fits its band. Today it shows in any band wider than 64px, whatever the text size. The band is over the grid lines, where it was under them (decision 5, S10).
 19. A panel's title is cut with "…" when it is wider than the plot. Today it runs out of the chart (decision 4).
 20. In forced colors: the point being read is a highlight-colored band with no frame, the selected bucket a highlight-colored frame with no tint, the rate line, its dots and the fix markers are in the system text color, and a no-activity band is a dashed frame with no fill.
 21. While zoomed, a fix marker, a no-activity band or the selection's frame outside the points shown is not drawn. A run of idle buckets the zoom cuts is drawn from the plot's edge (decisions 5 and 7).
 22. The tooltip is placed by the shared component, inside the chart's box rules, so it can sit a few pixels from where it sits today.
 23. The rate line is 1.75px wide, where it was 2px. Label positions, dot sizes and the grid's pixels may differ by a pixel or two.
+24. A rate axis in steps of 0.05 is labelled in hundredths ("0.00%", "0.05%", "0.10%"). Today it is labelled in tenths, so two labels read the same ("0.1%" twice) (decision 10).
+25. Under forced colors, a dimmed type's segments keep their whole text-colored edge; today the edge fades with the fill (decision 4).
 
 Not different: the legend and its type buttons, the selection panel under it, the tooltip's rows, every reading's words, the data table, the URL keys, the message shown without calls or errors, and what a bucket or a type selection does to the rest of the page.
 
@@ -102,14 +104,16 @@ Reuse as it is. `trackLayout`, `tracksOption`, `trackAxes` and `FRAME_AXES` take
 
 | Part | Value at the default text size |
 |---|---|
-| Margins | top 18, right 10, bottom 24, left 52. They scale with the text. |
+| Margins | top 20, right 10, bottom 24, left 52. They scale with the text. |
 | Rate track | 100px, fixed |
-| Gap | 26px, scaled: it holds the bars' title |
+| Gap | 24px, scaled: it holds the bars' title |
 | Bars track | 152px, fixed |
 | Box | 320px, as today; 348px with the slider; 388px at 200% text (416px with the slider) |
 
-- The left margin is 52px, as on Cost and Activity, where it is 40px today. Every grid sets `outerBoundsMode: "none"` (`tracksOption` does it), so a value label wider than its margin is clipped, not fitted. 52px holds "999,999" at 11px with its 6px gap (about 49px). A count of a million failed calls in one bucket would be clipped: not handled.
-- Both tracks are fixed, so the box grows with the text and neither panel shrinks. Today the bars give their height to the labels.
+- The top margin is 20px: the rate track's title, as the browser draws it, has a text box 1.3 times the text size tall that ends 2px under the title's place. At 18px it started 1.3px above the box (3px at 200% text). The gap gives up those 2px, so the box keeps 320px.
+- The left margin is 52px, as on Cost and Activity, where it is 40px today. Every grid sets `outerBoundsMode: "none"` (`tracksOption` does it), so a value label wider than its margin is clipped, not fitted. Measured in Chromium (`chartfit`): count labels up to "600,000" fit, the axis of 450,000 failed calls in one bucket. From 571,429 failed calls in one bucket the top label is "1,000,000", which the margin cuts by about 6px. The owner accepts this: such counts do not occur.
+- Both tracks are fixed, so the box grows with the text and neither panel shrinks. Today the bars give their height to the labels, and the count axis has fewer steps at a larger text size; here its step is always worked out for 3 steps.
+- The scales (decision 10): the rate's top is the highest steady rate plus 10%, its step the round step at or above a third of that, so the axis has two or three steps (a highest rate of 0.18% gives 0, 0.1 and 0.2%). The top value is exact, rounded off its float error, so ECharts draws the top grid line once. A scale in tenths keeps the decimal on every label, "0.0%" too; a step under 0.1 shows two decimals ("0.05%").
 - Why not the rate under the bars, as on Activity: the page's subject is the rate, the legend and the data table name it first, and the order is free in the helpers.
 
 ### 2. Wrapper addition: `keys`
@@ -127,6 +131,7 @@ keys?: { space?: boolean };
 - Why a wrapper change at all: the page's spec gives Enter and Space the same act, Space is what a user presses on a control that toggles, and today Space on the focused chart never scrolls the page. The wrapper owns the box's key handler and the reading, so no chart can do this from outside it. The foundation foresaw it.
 - Why opt in, and not Space on every chart: Space on the focused Cost and Activity charts scrolls the page today. Changing that is another change, with its own spec lines.
 - `onActivate`'s comment gains one sentence, with no change of behavior: a chart may return `false` to keep the reading open, so that the same key acts on the same point again (decision 6).
+- As built: the key is matched by `ev.key === " "` alone (not `"Spacebar"` nor `ev.code`). The box's key handler is there from the first render, so Space is prevented, and activates the point read, before the runtime has loaded.
 - The step is the one Fable step of this change.
 
 Alternative: drop Space on Errors, as the other charts have only Enter. Rejected as the default: it removes a key a user has today. It is the cheapest thing to flip (see "Defaults the owner may flip").
@@ -154,7 +159,7 @@ Alternative: drop Space on Errors, as the other charts have only Enter. Rejected
 
 No ECharts component is added. `markLine` and `markArea` would draw the fix lines and the bands, but `MarkLineComponent` and `MarkAreaComponent` would have to be registered, at +6.9 kB for both (S11), and their labels would still need the plot-edge rule written by hand. A custom series on the frame does both with what is registered, and it is the form `selectionMark` already has. The chart needs no `graphic`, no `title` component and no time axis.
 
-What this change uses of ECharts that the earlier charts did not, all inside the registered grid, line series and custom series, each measured: a value axis's `name` with `nameTruncate` (S5), a line with `connectNulls: true` and a dash pattern (S8), `lineDash` and a text in a custom series on the frame (S2), `style.opacity` on one shape of a group (S9), and a track order with the line first (S1, S6).
+What this change uses of ECharts that the earlier charts did not, all inside the registered grid, line series and custom series, each measured: a value axis's `name` (S5), a line with `connectNulls: true` and a dash pattern (S8), `lineDash` and a text in a custom series on the frame (S2), `style.fillOpacity` on one shape of a group (S9), and a track order with the line first (S1, S6).
 
 The chart has no label over a point, so `pointLabel` is not used. Its two labels beside marks are measured with `labelWidth` and kept inside the plot (decision 5).
 
@@ -162,9 +167,11 @@ The chart has no label over a point, so `pointLabel` is not used. Its two labels
 
 All pure, typed from `echarts.ts`, in `web/src/components/echart/`.
 
-- **`axisTitle(env, text, maxWidth)`** in `option.ts`. It returns the part of a value axis that names it as a track's title: `name`, `nameLocation: "end"`, `nameGap: 7 × textScale`, `nameTextStyle` (left-aligned, the secondary ink, the chart's font size, weight 500) and `nameTruncate: { maxWidth, ellipsis: "…" }` (S5). A chart spreads it into the axis `valueAxis()` gives. `maxWidth` is the plot's width: the box's width less the layout's left and right. `OptionEnv.ink` gains `secondary`, which `ChartEnv` already has. Who reuses it: Context's cache chart, the next change, has three titled tracks and today picks a shorter title by a rough character count.
+- **`axisTitle(env, text, maxWidth)`** in `option.ts`. It returns the part of a value axis that names it as a track's title: `name`, `nameLocation: "end"`, `nameGap: 7 × textScale` and `nameTextStyle` (left-aligned, the secondary ink, the chart's font size, weight 500) (S5). A chart spreads it into the axis `valueAxis()` gives. `maxWidth` is the plot's width: the box's width less the layout's left and right. `OptionEnv.ink` gains `secondary`, which `ChartEnv` already has. Who reuses it: Context's cache chart, the next change, has three titled tracks and today picks a shorter title by a rough character count.
+  - The name is cut here, not by ECharts' `nameTruncate`: `text`, or its longest start with "…" whose width at weight 500 (`labelWidth`) is at most `maxWidth`, or "" where not even "…" fits. The cut falls between graphemes (`Intl.Segmenter`, by code point where it is missing), so an emoji or a letter with a combining mark is kept or left out whole. `nameTruncate` measures once, as ECharts first lays the title out, which in Chromium was before IBM Plex Sans had loaded (S5, step 3.4).
+  - The fonts: `useChartEnv` (`tokens.ts`) listens to `document.fonts` `loadingdone` with the media queries it already watches, so every chart gets a new environment, and draws again, when the page's web fonts have loaded. That redraw is of the same view (decision 8): it keeps the reading, the zoom and the focus, and says nothing.
 - **`labelWidth(env, text, weight = 400)`** in `option.ts`. The private `textWidth` made public, with the font built from the environment. `pointLabel` calls it. Who reuses it: Context's cache chart (its rough width), Limits' plan-change label, which changes sides at the plot's middle today.
-- **`kinds[j].o`** in `stack.ts`. `StackSeriesInput.kinds` items may carry `o`, the segment's opacity from 0 to 1; left out, the segment is drawn as now. `stackSeries` writes it as the rectangle's `style.opacity`, and the hatch keeps its own (S9). No later chart is known to need it. It is in `stack.ts` because the segment's style is built there and nowhere else, and a color mixed by hand would not pass through `env.color`, which takes theme tokens only.
+- **`kinds[j].o`** in `stack.ts`. `StackSeriesInput.kinds` items may carry `o`, the opacity of the segment's fill from 0 to 1; left out, the segment is drawn as now. `stackSeries` writes it as the rectangle's `style.fillOpacity`, so its forced-colors edge stays whole, and the hatch keeps its own opacity (S9). No later chart is known to need it. It is in `stack.ts` because the segment's style is built there and nowhere else, and a color mixed by hand would not pass through `env.color`, which takes theme tokens only.
 
 Not added: a shared series for vertical marks or for bands (Non-Goals), and a side-of-the-line anchor, which is four lines in `rateTracks.ts`.
 
@@ -184,10 +191,11 @@ Both are custom series on `FRAME_AXES`, built in `rateTracks.ts`, silent, with `
 **Fix markers** (`id: "fixes"`, `z: 4`: over the line and its dots).
 
 - One item per applied fix whose bucket is a point of the chart and whose type the page knows, as today: its index, its row and its type. The row is its rank among the fixes on the same point, in the order of the type labels.
-- A 1.5px dashed line (`4 3`) in `var(--good)` at the middle of the point's band, over the frame's height.
-- The label "✓ " and the type's short label, in `var(--good-text)`, at the frame's top, 13px lower per row. It sits 4px right of the line. When it would pass the plot's right edge it sits 4px left of the line, right-aligned. When neither side has room it is not drawn.
-- With a type selected, a fix of another type is drawn at 20% (decision 6).
-- Forced colors: the line and the label in the text ink.
+- A 1.5px dashed line (`4 3`) in `var(--good)` at the middle of the point's band, over the frame's height. It is never wider than its band (98 weeks in a 246px plot is a 2.5px band).
+- The label "✓ " and the type's short label, in `var(--good-text)`, 2px under the frame's top and 13px lower per row, both times the text scale. The rows on one point follow the type labels' order. It sits 4px right of the line. When it would pass the plot's right edge it sits 4px left of the line, right-aligned. When neither side has room it is not drawn.
+- The label has a halo in the surface color, 3px wide times the text scale, as `pointLabel`'s, so the rate line breaks behind its letters (found at 32px text, with two labels near the right edge).
+- With a type selected, a fix of another type is drawn at 20%, its label too (decision 6).
+- Forced colors: the line and the label in the text ink, the halo in `Canvas`.
 - A fix outside the points shown is not drawn (S2).
 
 **The bridge** (`id: "bridge"`). `lineSeries` with the rate's data and color, then `connectNulls: true`, a 1.25px dotted line (`[1, 4]`, round caps) at 70%, listed before the rate line so it is under it (S8). With no type selected its color is the muted ink, as today.
@@ -199,7 +207,7 @@ Both are custom series on `FRAME_AXES`, built in `rateTracks.ts`, silent, with `
 - **The mark.** `selectionMark(env, { index })`, as on Activity. The model's `selected` is the index of the point whose key is `v.at` and that can be selected, else `null`.
 - **The toggle.** `onActivate` selects the point, or clears the selection when the point is the selected one, and returns `false` in every case. So the reading stays, and the same key or click acts on the same point again. A folded stretch changes nothing.
 - **Why keep the reading.** The page's spec has "Enter, then Space" select and then clear, and three tests guard it, one of them for a selection that closes the open type. With the reading ended, as on Activity, a second key would do nothing and the next arrow would start again from an end of the chart.
-- **Escape.** It ends the reading and never changes the selection, as today. No `onEscape`.
+- **Escape.** It ends the reading and never changes the selection, as today: a second Escape, with nothing read, does nothing either. No `onEscape`.
 - **Words.** Said through the wrapper's `status`, with today's words:
 
 | What happened | Status |
@@ -211,6 +219,8 @@ Both are custom series on `FRAME_AXES`, built in `rateTracks.ts`, silent, with `
 
 - **How the status is made.** The chart keeps the last sentence and the selection it describes (`of`, a bucket key or none). The `status` prop is that sentence only while `v.at` is `of`, else empty. So the sentence appears in the render that draws the selection it names, whenever the URL lands.
 - **Why that matters.** The reading of a selected point ends "(selected)", so a selection changes the words of the reading that stays open, and the wrapper says a key's reading again when its words change. When the status arrives in that same render, the wrapper says the status alone (`EChart.test.tsx`, "says a status alone when it arrives in the render that changes the words of a key's reading"). A status set in the handler could arrive a render earlier and be replaced by the reading.
+- **The status outlives the reading it came in.** Since the reading stays open after a selection, the status arrives while a reading is open. The end of that reading (the pointer leaving, Escape, blur) drops only the reading's own sentence: the status stays in the region, as does a zoom sentence that took the region while a reading was open. This is a wrapper rule (`readAt` in `EChart.tsx`, with its comment on `status`), found in step 3.4: before it, the pointer leaving the chart right after a click emptied the region.
+- The sentences, as `RateChart.tsx` writes them: `Selected ${pointWhen(v, p)}: the table and detail show only its errors.` ("Selected Nov 4, 2026: …", "Selected Week of Nov 2, 2026: …"), "Selection cleared: the table and detail cover the whole range.", and the two fold sentences of the table above.
 - The page's own sentence when a type is opened over a bucket ("Selection cleared: … has no errors in …") stays in the page's status region.
 
 Alternative: keep `say()` and the page's status region. Rejected: the chart's region would say the reading again ("… (selected)") while the page's region says the sentence, two announcements for one act.
@@ -228,7 +238,7 @@ The chart gains the zoom, by the rules of Cost and Activity (the foundation, dec
 
 | Question | Answer |
 |---|---|
-| When | From `ZOOM_FROM` (14) points, by day and by week, down to `MIN_SHOWN` (7). A folded stretch is one point. |
+| When | From `ZOOM_FROM` (14) points, by day and by week, down to `MIN_SHOWN` (7). A folded stretch is one point. Never while a message replaces the drawing: the model's `zoom` is `!bare && points >= 14`, so the label and the hint name no zoom keys there. |
 | The slider's faint trend | The failed calls per point: `sliderTrend(totals, trackAxes(0))`, listed before the bridge and the rate line (S6). |
 | Scales | Both tracks keep the whole view's scales. |
 | The bucket selection | Kept. Its frame is not drawn while its point is outside the window; the chip and the chart's label still name it. Selecting or clearing keeps the window. |
@@ -261,9 +271,10 @@ Why a zoom here at all: a 90-day view has up to 90 bars in the same box, and the
 
 `testing.ts` does not enforce `minValueSpan`, so a test can hold a window no user can make (`WorkChart.test.tsx` has one of six bars). The fake gains ECharts' rule, from S7:
 
-- A `dataZoom` action narrower than the first slider's `minValueSpan` is widened to it. The start is kept; when that passes the last point, the end is kept.
-- `zoomTo(from, to)`, the test's stand-in for a drag, throws when the window is narrower than `minValueSpan` and the axis has more points than that. A drag cannot make such a window, so a test that asks for one is wrong.
-- A slider with no `minValueSpan`, or an axis with fewer points than it, is as now.
+- A window narrower than the first slider's `minValueSpan`, from a `dataZoom` action or from a `setOption`'s `startValue` and `endValue`, is widened to it. The start is kept; when the end would then pass the last point, the window is clamped to end on it (24–26 gives 23–29 on 30 points). On an axis of `minValueSpan` points or fewer, the window is every point.
+- `zoomTo(from, to)`, the test's stand-in for a drag, throws when the window is narrower than `minValueSpan`, or than every point on an axis of `minValueSpan` points or fewer (`zoomTo(1, 3)` throws on 6 points). A drag cannot make such a window, so a test that asks for one is wrong.
+- A slider with no `minValueSpan` is as now.
+- Not modelled: a reversed window (an end before its start).
 
 The header comment of `testing.ts` gains both lines. The six-bar window in `WorkChart.test.tsx` becomes seven.
 
@@ -275,18 +286,18 @@ The header comment of `testing.ts` gains both lines. The six-bar window in `Work
 |---|---|
 | Points from the first day with a call, long idle stretches folded | `chartData()` in `model.ts`, unchanged; `points` is its count |
 | The rate line, the selected type's rate when one is | `lineSeries` on `trackAxes(0)`; `null` for a bucket without calls; the color is `var(--text-primary)` or the type's |
-| The rate scale: its own, buckets with few calls left out | `rateModel` keeps today's rule (the highest steady rate plus 10%, in three nice steps); `valueAxis` with a percent format |
+| The rate scale: its own, buckets with few calls left out | `rateModel` keeps today's rule (the highest steady rate plus 10%, in round steps of at least a third of it: two or three), with an exact top; `valueAxis` with a percent format, in hundredths for a step under 0.1 (decision 1) |
 | A rate above the scale stops at the top | The model draws `min(rate, top)`; the reading gives the rate itself |
 | Hollow dot for a bucket with few calls | `lineDots` with `hollow` from `lowVolume()` |
 | Dotted bridge over a gap | Decision 5 |
 | Failed calls stacked by type, the biggest on the baseline, Other on top | `stackSeries` on `trackAxes(1)`; kinds in `vt.layers` order, then Other in `var(--type-other)` |
 | Bar width: 72% of the band, 26px at most | Passed as `width` |
-| The count scale, in whole steps | `rateModel` keeps today's rule (the highest count plus 5%, in three nice steps of at least 1) |
+| The count scale, in whole steps | `rateModel` keeps today's rule (the highest count plus 5%, in round steps of at least a third of it and at least 1), at every text size: today a larger text size gave fewer steps |
 | A title on each panel | `axisTitle` (decision 4): "Error rate, % of tool calls" or "… rate, % of tool calls"; "Failed calls per day, by type" |
 | Bucket labels | The frame's `categoryAxis` with `label()` |
 | No-activity bands, their label, `//` on a fold | Decision 5 |
 | Fix markers with their type | Decision 5 |
-| Legend: type buttons, Other, the rate key, "Under 50 calls", "No activity" | Unchanged HTML, with the "Show all" button at the end of its row. The hollow key's ring takes the line's color (decision 15). |
+| Legend: type buttons, Other, the rate key, "Under 50 calls", "No activity" | Unchanged HTML, with the "Show all" button at the end of its row. The hollow key's ring takes the line's color (decision 15). As today, no legend when the range has no errors, with or without calls. |
 | The selection panel under the legend | Unchanged HTML |
 | Selecting a type dims the rest and changes the line | Decision 6 |
 | Hover or keys read a point on both panels | The wrapper, on the frame |
@@ -298,7 +309,7 @@ The header comment of `testing.ts` gains both lines. The six-bar window in `Work
 | The label names the selected bucket | Unchanged, in `label` |
 | Escape ends the reading | The wrapper |
 | The key cursor outlives a redraw | The reading itself outlives it, through `view` (decision 8) |
-| No calls, or no errors: a message, and the keys do nothing | The component renders a plain focusable box with the message in place of `<EChart>`, with the same id, label and hint, and no key handler |
+| No calls, or no errors: a message, and the keys do nothing | The component renders a plain focusable box with the message in place of `<EChart>`, with the same id, class `echart` (its focus ring), label and hint. Its one key handler keeps an unmodified Space from scrolling the page, as on the chart; no other key does anything |
 | `#chart` as a focus target and for the mini chart's observer | `<EChart id="chart">`, and the same id on the message's box. The page observes a new stable element around both (`#chartView`): the two boxes are different elements, and an observer on one would go stale when they swap. |
 | "Show data table" | Unchanged |
 | Day / Week | Unchanged HTML |
@@ -323,7 +334,7 @@ Not `rateChart.ts`: on a case-insensitive file system it clashes with `RateChart
 |---|---|
 | `EChart.test.tsx` | `keys.space`: Space activates the point read; prevented with `onActivate`, read or not; left alone with a modifier, without `onActivate`, and without the prop |
 | `testing.test.ts` | The fake's minimum window (decision 9) |
-| `option.test.ts`, `stack.test.ts` | `axisTitle`'s fields at two text scales and its truncation width; `labelWidth` for a weight; a kind's opacity on its rectangle and on no other |
+| `option.test.ts`, `stack.test.ts`, `tokens.test.ts` | `axisTitle`'s fields at two text scales and its cut by the measured width at weight 500, between graphemes; `labelWidth` for a weight; a kind's fill opacity on its rectangle and on no other; a new environment when web fonts finish loading |
 | `rateTracks.test.ts` | The geometry and option tests, on a fake env: both scales and their ticks, the clamp, nulls, hollow points, the kinds' order, colors and opacities, the bar width's cap, the idle items and what each draws for a window that cuts its run, the label's fit, the fold mark, the fix items with their rows and sides, the selected index, the trend before the lines, the bridge, the titles, the layout at scale 1 and 2, the zoom flag, the zoom words with a fold, the view key, and every color declared in `theme.css` |
 | `ErrorsPage.test.tsx` | What a user reaches, on the fake: selection by pointer and by key, the toggle, the status, the tooltip, the readout, the legend, the message states, the data table, the zoom's button and words |
 | `RateChart.real.test.tsx` | Real ECharts in jsdom, below |
@@ -340,14 +351,19 @@ Not `rateChart.ts`: on a case-insensitive file system it clashes with `RateChart
 | "draws the no-activity band and legend key only for buckets with neither calls nor errors" | Split. The legend key stays here. The band moves to `rateTracks.test.ts`. |
 | "dismisses the tooltip and the reading with Escape, and the keys start over" | Deleted. The wrapper owns it and tests it. |
 | "keeps Space working on the current point after Enter closes the open type" | Kept: a scenario of this change. |
-| "keeps Space working when the closed type was outside the top five" | Kept. `.layer[data-c]` becomes the option's stack kinds. |
+| "keeps Space working when the closed type was outside the top five" | Kept. `.layer[data-c]` becomes the legend's button per layer (`#legend button[data-c]`), which the stack's kinds follow; the option's kinds are tested in `rateTracks.test.ts`. |
 | "keeps the current point when new data shifts the chart's points" | Deleted. `rateTracks.test.ts` proves the two rules that replace it: the selected index follows the bucket key, and the view key changes with the first point. |
 | "shows the fix markers of the payload, with their before and after rate" | Kept. `#chart .fix` becomes the option's `fixes` series and its label. |
 | The others that touch the chart ("tells a screen reader…", "reads a point with errors and no calls…", "reads a quiet day…", "leaves the chart's keys alone once the last visible type is muted out…", "leaves the summary, chart, type table and the chart's point reading as they are under a tool filter", the data table's two) | Kept, with the new selectors: `[role=tooltip]` for `#tip`, the chart's `div.sr[aria-live]` for `#chartLive`. |
 
 In `theme.test.ts`, the assertion on `.pg-errors #chart .layer` goes with its rule.
 
-**The 400-line advisory.** The change adds about 330 lines in `rateTracks.test.ts`, 230 in `RateChart.real.test.tsx`, 110 across the wrapper's, the fake's and the helpers' tests, and 50 for the zoom in `ErrorsPage.test.tsx`. It removes about 90 lines of page tests, and `realTesting.ts` takes about 50 duplicated lines out of `WorkChart.real.test.tsx` and `OutcomeTrend.real.test.tsx`. The net is near 580, over the advisory 400. The pull request says so, with the reason: one chart now has three test layers where it had one, and the fake's and the wrapper's new rules each need their own. The numbers are estimates; step 3.6 gives the real ones.
+**The 400-line advisory.** As built (`git diff --numstat` against `main`, the test files and `realTesting.ts`): 933 lines added and 155 removed, a net of 778. Added: 308 in `rateTracks.test.ts`, 282 in `RateChart.real.test.tsx`, 69 net in `ErrorsPage.test.tsx` (145 added, 76 removed), 53 in `realTesting.ts`, and 115 net across the wrapper's, the fake's, the helpers' and the tokens' tests (`EChart.test.tsx` 24, `option.test.ts` 52, `tokens.test.ts` 19, `testing.test.ts` 16, `stack.test.ts` 4). Removed: `realTesting.ts` takes 45 net duplicated lines out of `WorkChart.real.test.tsx` and `CostChart.real.test.tsx`, and `theme.test.ts` loses 4. The net is over the advisory 400, and the pull request says so, with the reason: one chart now has three test layers where it had one (the pure model and option, the page on the fake runtime, real ECharts in jsdom), and the wrapper's new rules (Space, a status that outlives its reading), the fake's minimum window, the font-load redraw and the title's cut each need a test at the layer that owns them. Not counted: the browser check `tools/demo/chartfit/errors.mjs`, which runs locally, not in CI.
+
+**Guards no test can turn red.**
+
+- The marks' zoom guards: `idleBands` and `fixMarks` draw nothing for a point outside the plot. Under the slider's default filter (`filterMode: "filter"`) ECharts never hands them such an item, so with both guards removed every test of `web/src/pages/errors/` still passes (tried in step 3.6), the real one included; for the same reason `chartfit` cannot tell. They stay for a slider that ever keeps such items (`weakFilter`, S3).
+- `outerBoundsMode: "none"` on Errors' grids: `tracksOption` sets it for every chart, and the fake refuses a grid without it, so Errors cannot drop it without changing the shared helper, whose own tests hold it.
 
 **What this change relies on in ECharts, where it is verified, and what the fake models.**
 
@@ -356,8 +372,8 @@ In `theme.test.ts`, the assertion on `.pg-errors #chart .layer` goes with its ru
 | The frame's points sit over both tracks', with the rate above | The smoke test at 800px, at 343px with 11 weeks and at 200% text; `chartfit` at 343px and at 32px text | Already so: one grid, the frame; it refuses a grid without `outerBoundsMode: "none"` |
 | A mark on the frame is drawn at its point, and not outside the window | The smoke test: one dashed line per fix, none for a fix the zoom leaves out | Not modelled: the fake draws nothing |
 | A run of idle buckets is one rectangle, also when the window cuts it | The smoke test: one band path per run, starting at the plot's left edge when cut; `chartfit` | Not modelled |
-| The value axis's name is the track's title, cut at a width | The smoke test: both titles drawn as text; `chartfit` at 343px with a long type name | Not modelled |
-| `style.opacity` dims one segment | The smoke test: with a type selected, the other layers' paths carry the opacity | Not modelled |
+| The value axis's name is the track's title, cut at a width | The smoke test: both titles drawn as text; `chartfit` at 343px with a long type name, at 32px text, and with the web font arriving after the first drawing | Not modelled |
+| `style.fillOpacity` dims one segment, its edge whole | The smoke test: with a type selected, the other layers' paths carry the opacity, and under forced colors their edge stays whole; `chartfit` under forced colors | Not modelled |
 | The hidden totals line is the slider's trend | `chartfit`, by screenshot review | Already so: `sliderShadowOf` refuses another series than `trend` |
 | The slider holds no window under its minimum | S7; `chartfit`: plus stops at 7 points | New: decision 9 |
 | The bridge is one path under a broken line; a lone point is a dot | The smoke test | Not modelled |
@@ -387,6 +403,29 @@ Its own checks:
 
 Where the demo store lacks a case (a fold, a fix on the newest bucket, two fixes on one bucket, a bucket of few calls), the check answers the request with the store's payload changed, as the other modules do.
 
+As built, the module's header lists what it checks; beyond the list above:
+
+- The slider's faint trend is read, not only looked at: its points follow the bars' totals, not the rate.
+- The value labels fit the 52px margin with counts up to "600,000" and with a rate scale in hundredths (decision 1).
+- The focus ring on the chart's box and on the message's box; Space on the message's box does not scroll the page, Shift+Space is the browser's.
+- A click, then the pointer leaving at once, 400ms or 1.5s later: the selected sentence is said once and the region still holds it (decision 6). The chip and Back clear the selection, and the chart says nothing.
+- The mini chart shows once `#chartView` scrolls out of view.
+- About 98 weeks in a 343px box: the selected week's frame is visible and no wider than its band, and so is the fix line.
+- Under forced colors every stroke the chart draws is a system color, and a dimmed segment keeps its edge.
+- At 32px text in a 343px box, with the web font held back until the chart has drawn, the default title ends inside the plot once the font loads, with no interaction: the font-load redraw (decision 4).
+- Every day of the 30-day views is given a call and an error, so every day draws a bar for the readers.
+
+Not checked by the module: the focus ring under forced colors, the fix markers keeping their color while a point is read (the real test checks it in jsdom), and the bars growing again on a tool or a project filter (`motionOnce` covers a theme change, a type, a zoom out and newer data). Step 3.6 checked the three by hand, in Chromium on the demo store:
+
+- The focus ring under forced colors: Tab to the chart, and to the message's box (a payload without errors): `:focus-visible`, a 2px solid outline in `Highlight`, 4px off the box, on both.
+- The fix markers while a point is read: two fixes; their lines' strokes and their labels' fills are unchanged with the pointer on a fix's day, the pointer on another day, and a key reading a fix's day.
+- With motion on, no bar segment grows on a project filter, back to all projects, a type opened, a tool filter on it (`etool`) or that filter cleared.
+
+Seen in step 3.6, not checked by the module:
+
+- The web font arriving during the first drawing's 500ms growth (held 250ms after the first bar): the bars finish their growth with no drop, while the rate line's draw-in ends at once, its clip snapping to the full width when the font redraw comes. ECharts ends a series' entry animation on a `setOption` with `animationDurationUpdate: 0`; Cost and Activity behave alike. Not changed.
+- The fix label's halo over the selected bucket's tint: the surface-colored halo shows as a light (dark theme: dark) outline around the "✓" where it sits over the tint, and cuts a 3px notch in the selection's frame where the label crosses it; under forced colors a `Canvas` notch in the `Highlight` frame. Not changed: the halo is what keeps the rate line from running through the label (decision 5).
+
 Each new reader is first shown to fail on a chart without the thing it reads. A dimmed segment carries `fill-opacity`, as the selection's frame and the band do: a reader that tells bars from marks by that attribute must be run with a type selected.
 
 `tools/demo/firstscreen.mjs` waits for `.chart-card .bars rect` today. It waits for the chart's first drawn bar instead: a filled path directly under the plot's svg group, as `WORK_BAR` is written for the work chart, under `.chart-card .echart-plot`. `tools/demo/record.mjs` needs no change: its Errors and tour scenes use `#chartTitle`, `#legend button` and `.chart-card`, which stay.
@@ -395,8 +434,9 @@ Each new reader is first shown to fail on a chart without the thing it reads. A 
 
 - **ECharts chunk.** Nothing is added to `echarts.ts`. Expected size: 176.5 kB, as now. The 195 kB limit stays.
 - **Entry.** `ErrorsPage` is a lazy route. The 130 kB limit stays.
-- **`ErrorsPage`.** New limit: **26 kB**. It is 20.6 kB at the base (S12). The SVG chart leaves and the option builder comes; Activity grew by 1.3 kB for two charts. Expected: 21 to 23 kB.
-- **Shared chart chunk.** `zoomReset-*.js` is 7.7 kB of its 9 kB. `keys`, `axisTitle`, `labelWidth` and the opacity add little. A third page importing the chart modules can make Vite name the chunk after another module: the check then fails on "found 0", and the step renames the entry in `check-bundle.mjs`.
+- **`ErrorsPage`.** New limit: **26 kB**. It is 20.6 kB at the base (S12). The SVG chart leaves and the option builder comes; Activity grew by 1.3 kB for two charts. Expected: 21 to 23 kB. As built: 21.0 kB.
+- **As built** (`npm run check` in step 3.6, gzip): `index` 109.1 kB, `CostPage` 12.1 kB, `ActivityPage` 23.7 kB, `ErrorsPage` 21.0 kB, `zoomReset` 7.0 kB, `echarts` 176.5 kB, each within its limit.
+- **Shared chart chunk.** `zoomReset-*.js` is 7.7 kB of its 9 kB at the base (7.0 kB as built). `keys`, `axisTitle`, `labelWidth` and the opacity add little. A third page importing the chart modules can make Vite name the chunk after another module: the check then fails on "found 0", and the step renames the entry in `check-bundle.mjs`.
 - The comment on the ECharts chunk names Errors with Cost and Activity.
 - `ErrorsPage.tsx` calls `preloadECharts()` at module load, as the other two pages do.
 
@@ -413,13 +453,13 @@ Removed:
 Stays:
 
 - In `errors.css`: `.pg-errors #chart .empty`, the heading row, the legend, the swatches, the selection panel, the tooltip rows, `@keyframes err-bar-in` (the share bars), and `.mini` and `.spark` (the hand-written sparklines).
-- In `theme.css`: the forced-colors rules for `.pg-errors .sw.low`, `.pg-errors .sw:not(.line)`, `.pg-errors .bar` and the pressed legend button.
+- In `theme.css`: the forced-colors rules for `.pg-errors .sw:not(.line)`, `.pg-errors .bar` and the pressed legend button, and the one for the "Under 50 calls" key, whose selector becomes `.pg-errors .legend .key .sw.low`: it names the legend and its key to outrank `errors.css`'s `.pg-errors .sw.low`, which the build places after `theme.css` and which now sets the ring's color through `--low-ring`.
 - In `model.ts`: everything, `linePath` included (`Spark.tsx` uses it).
 - In `chart.ts` and `chart.css`: everything. The rate chart used `FEW_CALLS`, `LOW_CALLS`, `lowVolume` and `textScale`, which other charts use, and never used `chart.css`.
 
 ### 16. Docs and images
 
-- `CHANGELOG.md`, `[Unreleased]`, in the short-bullet style the section has. Under Added: "Errors' rate chart zooms in views of 14 bars or more, with a slider or the plus and minus keys.", beside the two like it. Under Changed, in the "Errors:" list: the chart uses the shared chart component, follows theme changes without a reload, frames the selected day or week and keeps it readable by the same key, keeps the point being read when new data lands, and grows with the browser's text size.
+- `CHANGELOG.md`, `[Unreleased]`, in the short-bullet style the section has. Under Added: "Errors' rate chart zooms in views of 14 bars or more, with a slider or the plus and minus keys.", beside the two like it. Under Changed, in the "Errors:" list: the chart uses the shared chart component, frames the selected day or week and keeps the reading on it so the same key clears it, says what a selection did from the chart's own region, keeps the point being read when new data lands, draws its fix labels inside the plot, and keeps both panels' height at larger text sizes. Under Fixed: the rate axis no longer repeats a label at a 0.05 step. Not claimed: following theme changes without a reload, which the old chart did too.
 - `README.md`: one sentence on the zoom in the Errors row.
 - Docs site, written with the `doc-coauthoring` skill: `pages/errors.mdx` ("Errors by type": the zoom, the frame, the reading that stays after a selection, the fix labels); `everywhere/keyboard-screen-reader.md` (the plus and minus rows name the Errors chart; the Enter and Space row is unchanged).
 - `web/src/pages/errors/PARITY.md`: the "Rate chart" entries name the new files, and the entries this change alters say so, as its "Changed since" entries do.
@@ -458,6 +498,11 @@ For the next builders: Context's cache chart needs a reading that skips empty sl
 - **The first screen.** The box is 28px taller with the slider. → The spec asks only that the chart starts in the first 900px; `firstscreen.mjs` checks it in both themes.
 - **More test lines than the advisory.** → Decision 12 says why and what offsets them.
 - **The slider is not keyboard-operable by itself.** → Plus, minus and "Show all" cover it, as on Cost and Activity.
+- **Known limit: a dimmed fix label under forced colors.** With a type selected, another type's fix line and label are drawn at 20% in the system text color, so the label is faint on Canvas, below a readable contrast. The legend and the selection panel name the selected type in full, and the type table lists every fix. Not handled in this change.
+- **Known limit: a fix label over the selected bucket.** Its halo, in the surface color, outlines the "✓" over the tint and notches the selection's frame (decision 13).
+- **Known limit: the font arriving during the first drawing.** The rate line's draw-in snaps to its end; the bars finish growing (decision 13).
+- **Known limit: a count of 571,429 failed calls or more in one bucket.** Its top label, "1,000,000", is cut by the 52px margin by about 6px (decision 1). Accepted by the owner.
+- **Known limit: `shortLabel` in `model.ts` cuts a type's name at 25 UTF-16 units**, so an emoji or a combining mark at the cut is split, as `axisTitle`'s cut was before step 3.6. Its names come from the user's own types. Not changed here.
 
 ## Migration Plan
 

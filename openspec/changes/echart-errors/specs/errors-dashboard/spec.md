@@ -73,7 +73,7 @@ When newer data arrives for the same view, as after an ingest in the background,
 - **THEN** the reading ends, every point shows, and a selected Nov 4 is still selected and framed
 
 ### Requirement: Say once what a selection on the rate chart did
-After a click, Enter or Space on a chart point, the rate chart's polite status SHALL say once what it did: that the bucket is selected and the table and detail show only its errors, that the selection is cleared, or that a stretch without tool calls cannot be selected. The point SHALL stay the point being read, with its tooltip, so the same key clears the selection. A selection changed from outside the chart SHALL NOT be said there.
+After a click, Enter or Space on a chart point, the rate chart's polite status SHALL say once what it did: that the bucket is selected and the table and detail show only its errors, that the selection is cleared, or that a stretch without tool calls cannot be selected. The point SHALL stay the point being read, with its tooltip, so the same key clears the selection. The sentence SHALL stay when the reading ends. A selection changed from outside the chart SHALL NOT be said there.
 
 #### Scenario: Select by key
 - **WHEN** the user reads Nov 4 with the arrow keys and presses Enter
@@ -86,6 +86,10 @@ After a click, Enter or Space on a chart point, the rate chart's polite status S
 #### Scenario: Selecting closes the open type
 - **WHEN** a type with no errors on Nov 4 is open, and the user reads Nov 4 and presses Enter, then Space
 - **THEN** Nov 4 is selected and the type closes, then the selection clears
+
+#### Scenario: The pointer leaves after a click
+- **WHEN** the user clicks Nov 4's bar and at once moves the pointer off the chart
+- **THEN** Nov 4 is selected, and the status says "Selected Nov 4, 2026: the table and detail show only its errors." once and still holds it
 
 #### Scenario: Cleared by the chip
 - **WHEN** Nov 4 is selected and the user clears it with the chip by the type table
@@ -110,6 +114,10 @@ A fix marker's label SHALL sit beside its line inside the plot: right of the lin
 - **WHEN** a type with a long name is selected and the chart box is 343px wide
 - **THEN** the rate panel's title ends with an ellipsis inside the plot
 
+#### Scenario: The page's font arrives after the chart
+- **WHEN** the chart box is 343px wide, the text is at 200%, and the page's web font loads after the chart has drawn
+- **THEN** with no action from the user, the bars panel's title ends inside the plot in that font
+
 ### Requirement: Keep the rate chart's panels at their height at every text size
 The rate chart's box SHALL grow with the browser's text size: the room for its labels and titles grows, and the rate panel and the bars panel keep their heights. Each point SHALL sit at the same place on both panels at every box width and text size.
 
@@ -131,3 +139,7 @@ In a forced-colors mode the rate chart SHALL draw its rate line, the line's dots
 #### Scenario: A fix marker in high contrast
 - **WHEN** forced colors is on and a fix is marked on Nov 4
 - **THEN** its dashed line and its label are in the system text color
+
+#### Scenario: A type selected in high contrast
+- **WHEN** forced colors is on and the user selects a type in the legend
+- **THEN** the other types' bar segments are faint, each inside a whole text-colored edge

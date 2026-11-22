@@ -14,8 +14,8 @@ The owner is moving every chart in the web UI from hand-written SVG to Apache EC
 - **Changed: after a selection the reading stays on the point**, so the same key or click clears it. The chart's own live region says once what the selection did.
 - **Changed: the chart grows with the text size.** Both panels keep their height at 200% text; today the bars shrink.
 - **Changed: marks stay inside the plot.** A fix label moves to the other side of its line near the right edge, labels of fixes on one bucket stack, the "no activity" label shows only where it fits, and a panel title is cut with "…" in a narrow plot.
-- **Wrapper addition**, reserved by `echart-foundation`: `keys={{ space: true }}`, so Space selects on Errors as it does today.
-- **Shared helpers**: a title for a track, the text measure, and an opacity for a stack's segment. The fake chart runtime refuses a zoom window narrower than the slider allows.
+- **Wrapper addition**, reserved by `echart-foundation`: `keys={{ space: true }}`, so Space selects on Errors as it does today. One wrapper rule changes for every chart: the end of a reading drops only its own sentence, so a status that arrived while it was open stays in the live region.
+- **Shared helpers**: a title for a track, cut by its measured width, the text measure, and an opacity for a stack segment's fill. Every chart draws again once the page's web fonts have loaded, so its texts are measured in the font they are drawn in. The fake chart runtime refuses a zoom window narrower than the slider allows.
 - **The browser check gains Errors** (`tools/demo/chartfit/errors.mjs`), and the bundle check gains a budget for the Errors page chunk.
 - **Sparklines stay hand-written SVG**: the type table's trend and the detail's mini rate chart. The data tables stay as they are.
 
@@ -34,10 +34,10 @@ None.
 
 ## Impact
 
-- **Code.** `web/src/pages/errors/RateChart.tsx` is rewritten around `<EChart>`, with its figures and option in the new pure module `rateTracks.ts`. `ErrorsPage.tsx` preloads the chunk and watches a stable box for the mini chart. `web/src/components/echart/`: `EChart.tsx` gains `keys`; `option.ts` gains `axisTitle` and `labelWidth`; `stack.ts` takes an opacity per kind; `testing.ts` enforces the slider's minimum window. `errors.css`, `theme.css` and `theme.test.ts` lose what only the SVG chart used.
+- **Code.** `web/src/pages/errors/RateChart.tsx` is rewritten around `<EChart>`, with its figures and option in the new pure module `rateTracks.ts`. `ErrorsPage.tsx` preloads the chunk and watches a stable box for the mini chart. `web/src/components/echart/`: `EChart.tsx` gains `keys` and keeps a status through the end of a reading; `option.ts` gains `axisTitle` and `labelWidth`; `stack.ts` takes a fill opacity per kind; `tokens.ts` gives a new chart environment when web fonts finish loading; `testing.ts` enforces the slider's minimum window. `errors.css`, `theme.css` and `theme.test.ts` lose what only the SVG chart used.
 - **Dependencies.** None added. No ECharts component is added to `echarts.ts`: the marks are custom series, which are registered.
-- **Tests.** The SVG chart's tests in `ErrorsPage.test.tsx` move to tests of the pure model and option (`rateTracks.test.ts`), run on the fake runtime, or go where the wrapper already tests the rule. One smoke test draws on real ECharts in jsdom.
+- **Tests.** The SVG chart's tests in `ErrorsPage.test.tsx` move to tests of the pure model and option (`rateTracks.test.ts`), run on the fake runtime, or go where the wrapper already tests the rule. `RateChart.real.test.tsx` draws the chart on real ECharts in jsdom, with the path readers it shares with the Cost and Activity real tests in `realTesting.ts`.
 - **Tooling.** `web/scripts/check-bundle.mjs` gains `ErrorsPage`. `tools/demo/chartfit.mjs` gains the `errors` page. `tools/demo/firstscreen.mjs` gets the new selector for the chart's first bar.
 - **Images.** The docs site's `errors-chart` shot, and the README's `errors` and `tour` recordings, are recorded again.
 - **Docs.** `CHANGELOG.md`, the Errors row of `README.md`, the docs site's Errors and keyboard pages, and `web/src/pages/errors/PARITY.md`.
-- **Not changed.** The API, every payload, the page fixtures, stored data, the URL keys, the Content-Security-Policy, the ECharts chunk and its budget, the type table, the detail, and the Cost and Activity charts.
+- **Not changed.** The API, every payload, the page fixtures, stored data, the URL keys, the Content-Security-Policy, the ECharts chunk and its budget, the type table, the detail, and the Cost and Activity charts' options. Those charts share the two wrapper rules above: the redraw when web fonts load, and the status kept through the end of a reading.
