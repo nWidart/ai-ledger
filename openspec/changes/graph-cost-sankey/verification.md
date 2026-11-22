@@ -125,7 +125,7 @@ Step 4.3's record: where each scenario of the two spec deltas is proven, the net
 
 ## Net test lines
 
-Against `origin/main` (`05a44407`), added minus removed in `*.test.*` files and `tests/`: 710 added, 9 removed, **701 net**.
+Against `origin/main` (`036b4131`), added minus removed in `*.test.*` files and `tests/`: 710 added, 9 removed, **701 net**.
 
 | File | Net |
 |---|---|
@@ -145,11 +145,12 @@ That is over the repo's advice of 400 lines. The shared chart wrapper reads alon
 `cd web && npm run build && node scripts/check-bundle.mjs` on the rebased tree, as printed:
 
 ```
-ok   index-BsEL4Upr.js  109.9 kB gzip  (limit 130 kB)
-ok   CostPage-CKV_ltOt.js  18.2 kB gzip  (limit 20 kB)
-ok   ActivityPage-B8eDv0ND.js  23.7 kB gzip  (limit 28 kB)
-ok   zoomReset-BxrIp1k4.js  7.7 kB gzip  (limit 9 kB)
+ok   index-MRI4wFYG.js  109.9 kB gzip  (limit 130 kB)
+ok   CostPage-Dnj0h5Sb.js  18.3 kB gzip  (limit 20 kB)
+ok   ActivityPage-DVMm-51C.js  23.7 kB gzip  (limit 28 kB)
+ok   ErrorsPage-Dy0hThsR.js  21.0 kB gzip  (limit 26 kB)
+ok   zoomReset-C2mHne84.js  7.1 kB gzip  (limit 9 kB)
 ok   echarts-CZ7cuwNT.js  176.5 kB gzip  (limit 195 kB)
 ```
 
-`origin/main` built the same way: `index-*.js` 109.9 kB, `CostPage-*.js` 12.1 kB, `ActivityPage-*.js` 23.7 kB, `zoomReset-*.js` 7.7 kB, `echarts-CZ7cuwNT.js` 176.5 kB (the same file). The flow adds 6.1 kB to the Cost chunk, over the plan's 16 to 17.5 kB and under its 20 kB limit; the ECharts chunk did not grow.
+`origin/main` built the same way: `index-*.js` 109.9 kB, `CostPage-*.js` 12.1 kB, `ActivityPage-*.js` 23.7 kB, `ErrorsPage-*.js` 21.0 kB, `zoomReset-*.js` 7.1 kB, `echarts-CZ7cuwNT.js` 176.5 kB (the same file). The flow adds 6.2 kB to the Cost chunk, over the plan's 16 to 17.5 kB and under its 20 kB limit; the ECharts chunk did not grow.
