@@ -10,9 +10,9 @@ export interface SpanCall {
 }
 
 // The caps: assumed from the demo store (design decision 5).
-export const MAIN_ROWS = 4;
-export const LANE_ROWS = 3;
-export const SUB_LANES = 6;
+const MAIN_ROWS = 4;
+const LANE_ROWS = 3;
+const SUB_LANES = 6;
 
 /** A row's height, the bar's height within it (the rest is the gap under it), in px. */
 export const ROW = 10, BAR = 8;
@@ -22,7 +22,7 @@ const PAD = 4, LABEL = 14, LANE_GAP = 6, AXIS = 16;
 const TIP = 2, CLIPPED = 6;
 
 /** ok and failed: a timed call; open: no result; still: no duration, no start, or a result with no end that can be read. */
-export type SpanKind = "ok" | "failed" | "open" | "still";
+type SpanKind = "ok" | "failed" | "open" | "still";
 
 export interface Span {
   id: string;
@@ -46,7 +46,7 @@ export interface Span {
   start: number | null; end: number | null; ms: number | null;
 }
 
-export type LaneKey = "main" | `sub-${number}` | "other" | "apart";
+type LaneKey = "main" | `sub-${number}` | "other" | "apart";
 
 export interface Lane {
   key: LaneKey; name: string;

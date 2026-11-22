@@ -73,7 +73,7 @@ function overlap(a: Span, b: Span): boolean {
   return b1 > b0 && b0 <= a0 && a0 < b1;
 }
 /** How many other calls, in any lane, ran during the call; undefined for an id the layout does not hold. */
-export function alongside(l: SpansLayout, id: string): number | undefined {
+function alongside(l: SpansLayout, id: string): number | undefined {
   const s = spanOf(l, id);
   return s && l.spans.filter(o => o !== s && overlap(s, o)).length;
 }
@@ -142,9 +142,10 @@ export function groupLabel(l: SpansLayout, info: SessionInfo): string {
     + "Use the left and right arrow keys to step through a thread's calls, up and down to change thread, Home and End for its first and last call, Enter to open the tool.";
 }
 
-/** A lane as the over-the-cap note names it. */
+/** A lane as the over-the-cap note names it: not by the label "Subagents, not told apart", whose comma would split the note. */
 const laneWords = (x: Lane) =>
-  x.key === "main" ? "the main thread" : x.key.startsWith("sub-") ? `subagent ${x.key.slice(4)}` : `the lane ${x.name.replace(/ \(.*\)$/, "")}`;
+  x.key === "main" ? "the main thread" : x.key.startsWith("sub-") ? `subagent ${x.key.slice(4)}`
+    : x.key === "apart" ? "the lane of subagents not told apart" : `the lane ${x.name.replace(/ \(.*\)$/, "")}`;
 /** The folded subagents: "7", "7 to 9", or "7, 9 and 12" when their numbers skip. */
 const ranks = (rs: number[]) => (rs.length > 1 && rs.at(-1)! - rs[0]! === rs.length - 1 ? `${rs[0]} to ${rs.at(-1)}` : list(rs.map(String)));
 

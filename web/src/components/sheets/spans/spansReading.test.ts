@@ -3,7 +3,7 @@ import session from "../../../__fixtures__/session";
 import type { SessionDetail } from "../../../api";
 import { timelineModel } from "../session";
 import { ROW, spansLayout, type SpanCall } from "./spans";
-import { alongside, groupLabel, noteLines, readSpan, spanAt, stepSpan, tipRows } from "./spansReading";
+import { groupLabel, noteLines, readSpan, spanAt, stepSpan, tipRows } from "./spansReading";
 
 const T0 = Date.parse("2026-11-04T10:00:00.000Z");
 const at = (min: number) => new Date(T0 + min * 60e3).toISOString();
@@ -65,7 +65,6 @@ describe("the words", () => {
       `Bash on the main thread, ${clock(30)} to ${clock(50)}, 20m. 1 other call ran during it.`,
       `Bash on subagent 7, ${clock(25)} to ${clock(26)}, 1m. 6 other calls ran during it.`,
     ]);
-    expect([alongside(l, still.id), alongside(l, timed.id)]).toEqual([0, 2]);
     const short = layout([call(0, 0.007), call(30, 31)]);
     expect(readSpan(short, short.spans[0]!.id)).toContain(", 420ms.");
     // The timeline's axis runs over 20 hours by a compaction, though the calls' own times do not.
@@ -88,21 +87,22 @@ describe("the words", () => {
   });
 
   it("says the notes", () => {
-    const over = [0, .5, 1, 1.5].map(k => sub(1, k, 3)), cut = [call(0, 1), call(1, 1), call(2, 30), call(42, 50), call(42, 60), ...over];
+    const over = [1, null].flatMap(r => [0, .5, 1, 1.5].map(k => sub(r, k, 3))), cut = [call(0, 1), call(1, 1), call(2, 30), call(42, 50), call(42, 60), ...over];
     const many = layout([...cut, ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(r => sub(r, 3, 3.1))]);
     expect(noteLines(many, true)).toEqual([
-      "Long session: only its first 18 tool calls are drawn.",
+      "Long session: only its first 22 tool calls are drawn.",
       "1 call has no recorded duration: drawn as a tick.",
       "2 calls ran past the last event: their bars end in a point.",
       "1 call ran through squeezed time; its bar is shorter than its duration.",
       "1 call ran beside 3 others on subagent 1 and is drawn over its last row.",
+      "1 call ran beside 3 others on the lane of subagents not told apart and is drawn over its last row.",
       "Subagents 7 to 9 share the lane Other subagents.",
     ]);
     expect(noteLines(layout([call(0, 1), call(2, 3)]), false)).toEqual(["1 call ran past the last event: its bar ends in a point."]);
   });
 
   it("reads nothing of a gone call, and never says a missing value", () => {
-    expect([readSpan(l, "gone"), tipRows(l, "gone"), alongside(l, "gone")]).toEqual([undefined, undefined, undefined]);
+    expect([readSpan(l, "gone"), tipRows(l, "gone")]).toEqual([undefined, undefined]);
     const texts = l.spans.flatMap(s => { const t = tipRows(l, s.id)!; return [readSpan(l, s.id), t.tool, t.input ?? "", ...t.rows]; }).concat(groupLabel(l, { ...session.info, active_s: null }));
     for (const t of texts) expect(t).not.toMatch(/undefined|NaN|null/);
     expect(readSpan(l, l.spans.at(-1)!.id)).toMatch(/^Unknown tool on the main thread/);
