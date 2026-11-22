@@ -1744,6 +1744,7 @@ describe("ErrorsPage rate chart zoom", () => {
     expect(await days()).toEqual(zoomed);
     expect(chartTip()!.textContent).toMatch(/^Oct 15, 2026/);
     expect(showAll()).toBeTruthy();
+    expect(location.search).toBe("?range=90&at=2026-10-15"); // still selected
     expect(chartSaid()).toBe(""); // nothing new: the zoom sentence, now untrue ("of 30 days"), is dropped
     await userEvent.keyboard(" ");
     expect(location.search).toBe("?range=90");
