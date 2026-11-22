@@ -352,7 +352,7 @@ describe("growth", () => {
     await showIn("growth");
     const g = section("growth");
     expect(g.getByRole("group", { name: /Median context at each turn: 15.5k tokens at turn 1, 60k at turn 4/ })).toBeTruthy();
-    expect(document.querySelectorAll("#growth path.curve.proj")).toHaveLength(fixture.growth.by_project_curves.length);
+    expect(document.querySelectorAll("#growth .legend button.proj")).toHaveLength(fixture.growth.by_project_curves.length);
     expect(g.getByRole("button", { name: "Share of window" })).toBeTruthy();
     expect(await how("growth")).toMatch(/how many sessions each turn rests on/);
     const tile = (l: string) => g.getByText(l, { selector: ".vital .l" }).previousElementSibling!.textContent;
