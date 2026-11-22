@@ -1094,13 +1094,15 @@ def session_timeline(cur, sid, allq, p):
     reqs = rows(cur, f"""{allq} SELECT ts, model, subagent, {context_of()} AS context, output, cost
         FROM rq ORDER BY ts, message_id LIMIT {TIMELINE_CAP}""", p)
     # lane: 0 on the main thread (a NULL subagent counts as it); k for a subagent file of the session, by its first call
-    # among those files, ranked over every call before the cap so a lane keeps its number; null when the call's agent
+    # among those files in the payload's own order (n), ranked over every call before the cap so a lane keeps its number
+    # and the cap keeps lanes 1 to k, never a later lane without an earlier; null when the call's agent
     # cannot be told (no result file, or a main file: an old transcript's sidechain call). The main files are the files
     # of the main-thread calls; the IS NOT NULL keeps a NULL out of them, which would make the NOT IN drop every file.
     # The path never leaves the server: the payload has only the rank.
-    calls = rows(cur, f"""WITH c AS (SELECT * FROM tool_calls WHERE session_id = ? AND coalesce(start_ts, end_ts) IS NOT NULL),
+    calls = rows(cur, f"""WITH c AS (SELECT *, row_number() OVER (ORDER BY coalesce(start_ts, end_ts), tool_use_id) AS n
+                   FROM tool_calls WHERE session_id = ? AND coalesce(start_ts, end_ts) IS NOT NULL),
         main AS (SELECT DISTINCT result_file FROM c WHERE NOT coalesce(subagent, false) AND result_file IS NOT NULL),
-        agents AS (SELECT result_file, row_number() OVER (ORDER BY min(coalesce(start_ts, end_ts)), min(tool_use_id)) AS lane
+        agents AS (SELECT result_file, row_number() OVER (ORDER BY min(n)) AS lane
                    FROM c WHERE coalesce(subagent, false) AND result_file IS NOT NULL AND result_file NOT IN (SELECT result_file FROM main)
                    GROUP BY result_file)
         SELECT c.tool_use_id AS id, c.tool, c.start_ts, c.end_ts, c.is_error, c.category, c.subagent,
