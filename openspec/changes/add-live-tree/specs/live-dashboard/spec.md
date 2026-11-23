@@ -119,7 +119,7 @@ The Tree SHALL offer a toggle between two layouts of the same nodes, folds and o
 - **THEN** the Tree shows the Outline
 
 ### Requirement: Draw the Outline as an indented tree
-The Outline SHALL draw each node as one row, indented one step per level under its parent, with a control that collapses and expands a node that has children. A row SHALL show its figures in columns that line up across rows. A description SHALL be cut with an ellipsis when it does not fit, with the full description on hover.
+The Outline SHALL draw each node as one row, indented one step per level under its parent up to a bound (8 steps, 6 below 721 pixels wide), so a deep row keeps room for its name, with a control that collapses and expands a node that has children. A row SHALL show its figures in columns that line up across rows. A description SHALL be cut with an ellipsis when it does not fit, with the full description on hover.
 
 #### Scenario: Three levels
 - **WHEN** a session has subagent A, and A has subagent B

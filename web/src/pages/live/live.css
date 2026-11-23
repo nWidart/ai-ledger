@@ -301,7 +301,7 @@
 /* Outline */
 /* One tree per state group. Every row shares the tree's columns, through subgrids down to each row: the state, the name
    and description, then the figures. A level indents the name and description 24px (--lvl, set per row, counts the levels
-   under the session); the state and the figures stay in line. */
+   under the session), up to 8 levels, so a deep row keeps room for its name; the state and the figures stay in line. */
 .pg-live .outline { list-style: none; margin: var(--space-2) 0 var(--space-6); padding: 0; display: grid; column-gap: var(--space-6);
   grid-template-columns: [state] auto [name] minmax(0, 1fr) [tools] auto [errs] auto [dur] auto [cost] auto [mdl] auto; font-size: var(--fs-sm); }
 .pg-live .outline ul { list-style: none; margin: 0; padding: 0; }
@@ -317,7 +317,7 @@
 .pg-live .outline .state { grid-column: state; display: block; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; }
 .pg-live .outline .state i { margin-right: var(--space-2); vertical-align: 0; }
 .pg-live .outline .nd { grid-column: name; display: flex; align-items: baseline; gap: var(--space-4); overflow: hidden; }
-.pg-live .outline .nd::before { content: ""; flex: none; width: calc(var(--lvl) * var(--space-9)); }
+.pg-live .outline .nd::before { content: ""; flex: none; width: calc(min(var(--lvl), 8) * var(--space-9)); }
 .pg-live .outline .nm { display: flex; align-items: baseline; gap: var(--space-2); flex: 0 1 auto; min-width: 0; }
 .pg-live .outline .nm b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 .pg-live .outline .tw { flex: none; width: 1em; text-align: center; color: var(--text-muted); }
@@ -331,10 +331,10 @@
 .pg-live .outline :is(.fold, .more) > .row b, .pg-live .outline .more > .row { font-weight: 500; color: var(--text-muted); }
 .pg-live .outline .more > .row { cursor: default; }
 /* A phone: a row is two lines, its state, name and errors, then its figures, with its description under them; the indent
-   is 12px a level, so a third-level row keeps most of the screen. */
+   is 12px a level, up to 6 levels, so a third-level row keeps most of the screen and a deeper one its name. */
 @media (max-width: 45em) {
   .pg-live .outline, .pg-live .outline :is(li, ul) { display: block; }
-  .pg-live .outline .row { display: grid; grid-template-columns: calc(var(--lvl) * var(--space-6)) auto minmax(0, 1fr) auto; column-gap: var(--space-4);
+  .pg-live .outline .row { display: grid; grid-template-columns: calc(min(var(--lvl), 6) * var(--space-6)) auto minmax(0, 1fr) auto; column-gap: var(--space-4);
     grid-template-areas: ". state name errs" ". figs figs figs" ". desc desc desc"; }
   .pg-live .outline .state { grid-area: state; max-width: 9rem; }
   .pg-live .outline .nd { display: contents; }
