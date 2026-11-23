@@ -5,6 +5,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-23
+
 Run `ai-ledger rebuild` once after upgrading, with the app stopped. It gives the sessions stored before the upgrade their agents in Live's Tree, and their subagent lanes in the Stream their cost and model, which they lack until then.
 
 ### Added
@@ -409,6 +411,7 @@ First release on PyPI.
   `$XDG_DATA_HOME/ai-ledger/` (or `~/.local/share/ai-ledger/`) elsewhere. A source checkout's `data/ai-ledger.duckdb`
   moves there on the first start.
 
+[0.9.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.9.0
 [0.8.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.8.0
 [0.7.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.7.0
 [0.6.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.6.0
