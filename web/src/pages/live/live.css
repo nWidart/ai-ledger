@@ -334,6 +334,11 @@
 /* A node's state or status: a dot, ring or square, or a spinner, in a slot of one width, so siblings' names line up. */
 .pg-live .outline .nm > .state { width: .75rem; justify-content: center; }
 .pg-live .outline .nm .meta { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); }
+/* The state chip gives way before the title does: a long MCP tool name is cut, and never pushes the row past the screen. */
+.pg-live .outline .nm > .chip { flex: 0 1 auto; min-width: 0; max-width: 50%; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 45em) {
+  .pg-live .outline .nm > .chip { max-width: 100%; }
+}
 .pg-live .outline .chip.st-wait { border-color: var(--warning-text); }
 .pg-live .outline .chip .inf { font-weight: 400; }
 .pg-live .outline .desc { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); }
@@ -431,3 +436,10 @@
   .pg-live :is(.outline, .org) :is(.st-running, .st-pending) i { animation: live-pulse 1.4s ease-in-out infinite; }
 }
 .pg-live.paused :is(.outline, .org) .state i { animation: none; }
+/* Forced colors: the status fills would take the row's own color and vanish; system colors keep each shape seen, the dot,
+   the ring and the failed square apart. */
+@media (forced-colors: active) {
+  .pg-live :is(.outline, .org) .state i { forced-color-adjust: none; background: CanvasText; }
+  .pg-live :is(.outline, .org) .st-started i { background: Canvas; border-color: CanvasText; }
+  .pg-live :is(.outline, .org) .st-failed i { background: Highlight; }
+}
