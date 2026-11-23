@@ -284,20 +284,22 @@ class ForkedChunkTest(CodexCase):
     def test_chunk_holding_only_the_parents_copy_of_session_meta_is_subagent_work(self):
         parent = "0a0f9999-0000-7000-8000-0000000000aa"
         ts = "2026-11-06T10:00:00.000Z"
-        self.place(NAME, meta_at(0, ts, parent, THREAD, subagent_history_start_ordinal=4))
+        self.place(NAME, meta_at(0, ts, parent, THREAD, subagent_history_start_ordinal=6))
         self.ingest()
-        copied_spawn = line(timestamp=ts, ordinal=2, type="response_item", payload=dict(
+        copied_spawn = line(timestamp=ts, ordinal=3, type="response_item", payload=dict(
             type="function_call", name="spawn_agent", call_id="s0", arguments=json.dumps(dict(task_name="fork"))))
-        copied_delegation = item(3, "t0", dict(type="McpToolCall", id="d0", server="t3-code", tool="delegate_task", status="completed",
+        copied_delegation = item(4, "t0", dict(type="McpToolCall", id="d0", server="t3-code", tool="delegate_task", status="completed",
                                                arguments=dict(title="Earlier task")))
+        own_call = item(7, "t1", dict(type="CommandExecution", id="c1", command="ls", status="completed", exit_code=0))
         self.place(NAME, meta_at(1, ts, parent) + context(2, "t1", "gpt-6-astra") + copied_spawn + copied_delegation
-                   + record(3, "t0", "r0", usage(50, 0, 5)) + record(4, "t1", "r1", usage(100, 0, 10)), mode="a")
+                   + record(5, "t0", "r0", usage(50, 0, 5)) + record(6, "t1", "r1", usage(100, 0, 10)) + own_call, mode="a")
         self.ingest()
         self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines"), [(parent, True)])
         # The parent's request r0, copied below the fork's start, is no request of the thread's lane: only its own r1 is.
         self.assertEqual(self.q("SELECT message_id, session_id, subagent, lane FROM requests"), [("r1", parent, True, THREAD)])
-        # Nor are the parent's spawn and delegation calls the copy repeats: the parent's own file records them, in its lane.
+        # Nor are the parent's spawn, delegation and tool calls the copy repeats: the parent's own file records them, in its lane.
         self.assertEqual(self.q("SELECT count(*) FROM spawns"), [(0,)])
+        self.assertEqual(self.q("SELECT tool_use_id, lane FROM tool_calls"), [("c1", THREAD)])
         self.assertEqual(self.q("SELECT session_id FROM sessions"), [(parent,)])
 
 

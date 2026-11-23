@@ -334,7 +334,7 @@ class CodexDeriver(store.Deriver):
             return
         s = self.session(dict(sessionId=self.sid, timestamp=d.get("timestamp")))
         ts = store.ts_of(d.get("timestamp"))
-        # A line a fork copied from its parent: its requests and spawn calls are the parent's, which its own file records.
+        # A line a fork copied from its parent: its requests, tool and spawn calls are the parent's, which its own file records.
         copied = self.copied = self.fork is not None and isinstance(d.get("ordinal"), int) and d["ordinal"] < self.fork
         if t == "turn_context":
             self.context(p)
@@ -400,14 +400,15 @@ class CodexDeriver(store.Deriver):
                 self.followup(said[:500])
         elif t == "SubAgentActivity" and it.get("kind") == "started":  # names the thread its spawn_agent call (id) started
             self.spawn_result(it.get("id"), self.sid, need_call=False, agent=it.get("agent_thread_id"))
-        elif it.get("id") and it["id"] not in self.uses and tool_of(it):
+        # A tool call a fork copied from its parent is the parent's: its own file records it, in its lane.
+        elif it.get("id") and it["id"] not in self.uses and not self.copied and tool_of(it):
             tid, (name, summary) = it["id"], tool_of(it)
             failed = it.get("status") == "failed"
             shell = name in SHELL_TOOLS
             # A unified exec command's duration is its startup (microseconds), not its run: such a call has no timing.
             took = 0 if it.get("source") == "unified_exec_startup" else seconds_of(it.get("duration"))
             start = before(ts, took)
-            if name == store.DELEGATE and not self.copied:  # the item states no status of the task it started: none is stored
+            if name == store.DELEGATE:  # the item states no status of the task it started: none is stored
                 args = arguments(it.get("arguments"))
                 self.spawn(tid, self.sid, "delegation", name, args.get("title"), start, args.get("target"))
             self.seq += 1

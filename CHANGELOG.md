@@ -22,7 +22,7 @@ Run `ai-ledger rebuild` once after upgrading, with the app stopped. It gives the
 
 ### Fixed
 
-- A forked Codex thread no longer counts the requests it copied from its parent thread; they were counted again in the child before. The cost of such sessions can drop after `ai-ledger rebuild`.
+- A forked Codex thread no longer counts the requests and tool calls it copied from its parent thread; they were counted again in the child before. The cost and tool counts of such sessions can drop after `ai-ledger rebuild`.
 
 ## [0.8.0] - 2026-11-22
 
