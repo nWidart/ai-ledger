@@ -98,8 +98,8 @@ export function LivePage() {
   };
   // A Tree node opens its session in the Stream, in a new history entry, so Back returns to the Tree in its layout: a
   // subagent with its lane unfolded, a delegation with the lane that made it unfolded, either with the Stream's filters
-  // off, then the Stream shows the lane or the
-  // call (revealed), else opens as for a session, on its heading with Follow on. A fold row flips.
+  // off, then the Stream shows the lane or the call (revealed), else opens as for a session, on its heading with Follow on.
+  // A fold row flips.
   const select = (n: TreeNode) => {
     if (n.kind === "fold") { setFolds(f => flip(f, n)); return; }
     if (n.kind === "more") return;
