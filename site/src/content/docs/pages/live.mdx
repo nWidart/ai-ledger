@@ -32,14 +32,15 @@ The bar beside the heading holds, in this order:
 
 | Control | What it does |
 | --- | --- |
-| **Stream** / **Wall** | Switches between one session in detail and every session as a tile. |
+| **Stream** / **Wall** / **Tree** | Switches between one session in detail, every session as a tile, and every session with its agents as a tree. |
+| **Outline** / **Org chart** | Tree view only. Switches the Tree's layout. Outline is the default. |
 | **Follow** | Stream view only. Keeps the newest event in view. On at load. Opening a session turns it on again, and so does scrolling the stream to the bottom yourself. |
-| **Full text** | Stream view only; the Wall never shows full text. Shows transcript text as written, and renders prompts and replies as Markdown (headings sit two levels down, a `#` shows as an h3; links other than http(s) or mailto, and footnotes, show as text). Off on every load. When you turn it on, a warning opens under the bar, over the page: "Full text on. Prompts, replies and tool output show as written, secrets included. The app only listens on 127.0.0.1; turn this off before sharing your screen." **Dismiss** closes it, and it closes itself after 6 seconds; it waits while you hover or focus it. The warning takes no room, so the stream does not move when it opens or closes. While Full text is on, the toggle keeps a warning tint, also after you dismiss the warning. |
+| **Full text** | Stream view only; the Wall and the Tree never show full text. Shows transcript text as written, and renders prompts and replies as Markdown (headings sit two levels down, a `#` shows as an h3; links other than http(s) or mailto, and footnotes, show as text). Off on every load. When you turn it on, a warning opens under the bar, over the page: "Full text on. Prompts, replies and tool output show as written, secrets included. The app only listens on 127.0.0.1; turn this off before sharing your screen." **Dismiss** closes it, and it closes itself after 6 seconds; it waits while you hover or focus it. The warning takes no room, so the stream does not move when it opens or closes. While Full text is on, the toggle keeps a warning tint, also after you dismiss the warning. |
 | **Pause** / **Resume** | Holds new events and states until you resume. |
 
 In the bar, before **Follow**, a status says one of: "Connecting…", "Updating live", "Paused" (with the number of updates held), or "Connection lost · reconnecting…". A paused page shows no live dot, and its state dots do not pulse. After a lost connection the page retries on its own, waiting longer after each failure up to 30 seconds, and fetches what it missed when it is back.
 
-The URL keeps the selected session, the view, the Wall's pins (`pin=`, oldest first), and the project, source and automated filters. Pinning and unpinning replace the current history entry, so Back does not step through pins. Full text, Pause and the stream filters are off on every load. Follow is on on every load.
+The URL keeps the selected session, the view, the Tree's layout (`layout=org` for the Org chart), the Wall's pins (`pin=`, oldest first), and the project, source and automated filters. Pinning and unpinning replace the current history entry, so Back does not step through pins. Full text, Pause and the stream filters are off on every load. Follow is on on every load.
 
 Live keeps one update connection while the tab shows. Pinning, unpinning, switching between Stream and Wall, and opening or closing a sheet do not open another.
 
@@ -103,7 +104,7 @@ Under the status strip, a **Stream filters** bar holds:
 | **Main thread only** | Hides every subagent lane. |
 | **Hide read-only** | Hides calls that only read: `Read`, `Grep`, `Glob`, and shell calls whose every command only reads or searches. A failed call is never hidden. |
 
-The filters combine, stay on when you open another session, and change only what the stream draws, not the status strip's figures or a lane header's counts. The stream says how many rows the filters hide.
+The filters combine, stay on when you open another session (except from a subagent or delegation in the Tree, which turns them off), and change only what the stream draws, not the status strip's figures or a lane header's counts. The stream says how many rows the filters hide.
 
 - Select a tool row to open its detail.
 - Select a lane header to fold or unfold the lane.
@@ -157,6 +158,34 @@ A pinned session stays pinned when it ends or leaves the active list. While a pi
 The URL's `pin=` keeps each well-formed id once, at its first place; of more than two, the last two stay. `pin=a,b,a,c` pins b and c.
 
 From 1100 pixels wide, the tiles stand in one column with the pinned streams beside them, and the page fits the window's height. Below that, the pinned streams go under the tiles.
+
+### Tree
+
+**Shows** every active session with its agents under it: who works for whom, across sessions. Sessions stand in the same state groups as the rail and the Wall, under the same headings, oldest start first. The Tree asks for the agents only while it shows, and it follows Pause as the rest of the page.
+
+**Figures**
+
+- A **session** node shows its state, title (else project), tool calls, time since it started, cost, model and error count. A figure the app does not know is left out.
+- A **subagent** stands under the thread that started it, so a subagent's own subagent is one level deeper. A subagent whose starting call is not known stands under its session. Its node shows running or done, its name, description, tool calls, duration, cost, model and error count.
+- A **delegation** node is a task the thread handed to another agent with T3 Code's `mcp__t3-code__delegate_task`. It shows the task's title, the provider and model it asked for, when it was sent, and a status: "sending", "started", "done" or "failed". It shows no tool calls, cost or errors, and it does not link to the session that did the work: that session is a root of its own. The app matches no session by time or folder.
+- "Started" says no more than that the call returned. The transcript does not tell when a delegated task ends, so the hover text and the accessible name say so. A delegation whose call returned more than 10 minutes ago counts as finished.
+- Descriptions and delegation titles are cut to 300 characters. The Tree shows no prompt or reply text and has no **Full text**.
+- When the page left agents of a session out, its last row says "N older agents not shown", with a **Session sheet** link.
+
+**Folds.** Under each parent, the agents that are over fold into one row after the others, such as "4 finished subagents" or "1 finished subagent, 1 earlier delegation". A subagent is over when it is done and no agent under it shows. Select the row to show them, and again to fold them. A fold you open and a node you collapse stay so, in both layouts, while the page is open. On every load the fold rows are folded and every other node is open.
+
+**Layouts**
+
+| Layout | What it draws |
+| --- | --- |
+| **Outline** | One row per node, indented one step per level up to 8 levels deep (6 below 721 pixels wide), with a ▾ or ▸ control on a node that has agents. Its figures line up in columns. Below 721 pixels wide a row takes two lines and the indent shrinks. |
+| **Org chart** | One top-down diagram per session: the session's card on top, its agents' cards in a row under it, with a connector from each parent to its children. A parent with more than 5 children shown, or any parent below 721 pixels wide, stacks them in a column. A chart wider than the page scrolls sideways inside itself. A node collapsed in the Outline shows a "Show N hidden agents" card that reopens it. |
+
+**Controls**
+
+- Select a node to open its session in the Stream view. A subagent opens it with its lane unfolded and in view, and a delegation with the call's row in view. Both turn the stream filters off, so no filter hides what they open. Back returns to the Tree in the layout it had. The session you came from is marked as the current one.
+- The Outline is one tab stop per state group. Up and Down move between rows, Right expands a row or moves to its first child, Left collapses a row or moves to its parent, Home and End go to the first and last row, and Enter or Space selects it. See [Keyboard and screen reader](/ai-ledger/everywhere/keyboard-screen-reader/#shortcuts).
+- In the Org chart, every card is a button, reached with Tab in the order parent then children.
 
 ## Session states
 

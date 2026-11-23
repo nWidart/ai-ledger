@@ -506,6 +506,47 @@ class SessionTest(LiveCase):
         later = self.run_session(after=first["cursor"], now=NOW + timedelta(minutes=2))
         self.assertEqual([(e["id"], e["agent"]) for e in later["events"] if e["lane"] is None], [("t1", "a7")])
 
+    def test_subagent_status(self):
+        sub = lambda agent: dict(S, isSidechain=True, agentId=agent)
+        call = lambda agent, secs, tid, tool="Grep", **inp: line(type="assistant", uuid=f"{tid}x", timestamp=at(secs), message=dict(
+            id=f"{tid}m", model="claude-opus-5-5", content=[tool_use(tid, tool, **inp or dict(pattern="x"))]), **sub(agent))
+        done = lambda agent, secs, tid: line(type="user", uuid=f"{tid}y", timestamp=at(secs), message=dict(role="user", content=[
+            dict(type="tool_result", tool_use_id=tid, content="ok")]), **sub(agent))
+        self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Agent", description="map", prompt="look")]))
+        # a7 runs b2, which no line names yet: its meta.json names a7's call. c3 has no starting call and its call ended.
+        self.write("s1/subagents/agent-a7.jsonl", call("a7", 2, "a7s", "Agent", description="nested", prompt="look"))
+        self.write("s1/subagents/agent-a7.meta.json", json.dumps(dict(toolUseId="t1")), mode="w")
+        self.write("s1/subagents/agent-b2.jsonl", call("b2", 3, "b2t"))
+        self.write("s1/subagents/agent-b2.meta.json", json.dumps(dict(toolUseId="a7s")), mode="w")
+        self.write("s1/subagents/agent-c3.jsonl", call("c3", 10, "c3t") + done("c3", 11, "c3t"))
+        self.ingest()
+        told = lambda now: {a["id"]: (a["parent"], a["name"], a["status"]) for a in live.sessions(
+            self.cur(), automated=True, now=now, prices=PRICES, with_agents=True)["sessions"][0]["agents"]}
+        self.assertEqual(told(NOW), dict(a7=(None, "Agent", "running"), b2=("a7", "Agent", "running"), c3=(None, "Subagent", "running")))
+        self.assertEqual(told(NOW + timedelta(minutes=6))["c3"], (None, "Subagent", "done"))  # its call ended over 5 minutes before
+
+    def test_delegation_status_and_the_cap(self):
+        ask = lambda i: assistant(f"a{i}", f"m{i}", at(i), [tool_use(f"d{i}", store.DELEGATE, title=f"task {i}", task="do it", role="builder")])
+        answer = lambda i, status=None, error=False: line(
+            type="user", uuid=f"r{i}", timestamp=at(10 + i), promptId="p1", mcpMeta=dict(structuredContent=dict(
+                status=status, taskId=f"task_{i}", childThreadId="CHILD-THREAD", model="gpt-6.1-sol", providerInstanceId="codex")),
+            message=dict(role="user", content=[dict(type="tool_result", tool_use_id=f"d{i}", content="ok", is_error=error)]), **S)
+        self.write("s1.jsonl", ask(1) + ask(2) + ask(3) + ask(4) + answer(2, error=True) + answer(3, "completed") + answer(4, "running"))
+        self.ingest()
+        listed = lambda: live.sessions(self.cur(), automated=True, now=NOW, prices=PRICES, with_agents=True)["sessions"][0]
+        got = listed()
+        self.assertEqual({a["id"]: a["status"] for a in got["agents"]}, dict(d1="pending", d2="failed", d3="done", d4="started"))
+        self.assertNotIn("CHILD-THREAD", json.dumps(got["agents"]))  # the session a delegation started is not named
+        with mock.patch.object(live, "AGENTS_CAP", 3):  # the unfinished first, then the finished, newest start first
+            capped = listed()
+        self.assertEqual(([a["id"] for a in capped["agents"]], capped["agents_more"]), (["d4", "d1", "d3"], 1))
+        # Over 10 minutes after its call returned, the started d4 ranks as finished, as the Tree folds it; its status stays.
+        self.write("s1.jsonl", assistant("a9", "m9", at(700), [dict(type="text", text="still here")]))
+        self.ingest()
+        with mock.patch.object(live, "AGENTS_CAP", 3):
+            aged = live.sessions(self.cur(), automated=True, now=NOW + timedelta(minutes=11), prices=PRICES, with_agents=True)["sessions"][0]
+        self.assertEqual([(a["id"], a["status"]) for a in aged["agents"]], [("d1", "pending"), ("d4", "started"), ("d3", "done")])
+
     def test_long_call_marked_on_its_event(self):
         self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Bash", command="npm run dev", run_in_background=True),
                                                              tool_use("t2", "Bash", command="make", timeout=300000),
@@ -519,12 +560,23 @@ class SessionTest(LiveCase):
         self.assertEqual([(e["tool"], e["quiet"]) for e in self.run_session()["events"]], [("Grep", True), ("Bash", False)])
 
     def test_lane_cost_and_model(self):
-        self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Agent", description="find callers", prompt="look")]))
+        delegate = tool_use("t9", store.DELEGATE, title="Write the tests", task="SECRET task " * 200, role="builder",
+                            target=dict(providerInstanceId="codex", model="gpt-6.1-sol"))
+        self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Agent", description="find callers", prompt="look"), delegate])
+                   + line(type="user", uuid="r1", timestamp=at(9), promptId="p1", toolUseResult=dict(agentId="a7"),
+                          message=dict(role="user", content=[dict(type="tool_result", tool_use_id="t1", content="done")]), **S))
+        sub = lambda agent: dict(S, isSidechain=True, agentId=agent)
         step = lambda agent, i, model, block=0, **usage: line(type="assistant", uuid=f"{agent}x{i}{block}", timestamp=at(2 + i), message=dict(
-            id=f"{agent}m{i}", model=model, usage=usage, content=[tool_use(f"{agent}t{i}{block}", "Grep", pattern="x")]),
-            **dict(S, isSidechain=True, agentId=agent))
+            id=f"{agent}m{i}", model=model, usage=usage, content=[tool_use(f"{agent}t{i}{block}", "Grep", pattern="x")]), **sub(agent))
+        # a7 starts b2 with an Agent call on a line of its request a7m1, and one of its Grep calls fails.
+        spawn = line(type="assistant", uuid="a7x1s", timestamp=at(3), message=dict(id="a7m1", model="claude-opus-5-5", usage=dict(
+            output_tokens=1000000), content=[tool_use("a7s", "Agent", description="d" * 2000, prompt="SECRET brief")]), **sub("a7"))
+        named = line(type="user", uuid="a7y", timestamp=at(5), toolUseResult=dict(agentId="b2"), message=dict(role="user", content=[
+            dict(type="tool_result", tool_use_id="a7s", content="ok")]), **sub("a7"))
+        failed = line(type="user", uuid="a7f", timestamp=at(5), message=dict(role="user", content=[
+            dict(type="tool_result", tool_use_id="a7t00", content="no", is_error=True)]), **sub("a7"))
         self.write("s1/subagents/agent-a7.jsonl", step("a7", 0, "claude-opus-5-5", input_tokens=1000000) + step("a7", 1, "claude-opus-5-5", output_tokens=1000000)
-                   + step("a7", 1, "claude-opus-5-5", block=1, output_tokens=1000000))  # one request on two lines counts once
+                   + step("a7", 1, "claude-opus-5-5", block=1, output_tokens=1000000) + spawn + named + failed)  # one request on several lines counts once
         self.write("s1/subagents/agent-b2.jsonl", step("b2", 0, "claude-opus-5-5", input_tokens=500000) + step("b2", 1, "mystery-1", input_tokens=9))
         self.write("s1/subagents/agent-c3.jsonl", step("c3", 0, "mystery-1", input_tokens=9))  # the lanes' lines share their times
         self.ingest()
@@ -534,6 +586,21 @@ class SessionTest(LiveCase):
         self.assertEqual({e["lane"] for e in got["events"]} - {None}, set(got["lanes"]))
         self.assertAlmostEqual(got["cost"], 26.0008)  # the main thread's request on top of the lanes'
         self.assertEqual(self.run_session(after=got["cursor"])["lanes"], got["lanes"])  # whole on a catch-up too
+        # The active list gives the same lanes as agents only when asked, and is otherwise the same.
+        listed = lambda **kw: live.sessions(self.cur(), automated=True, now=NOW, prices=PRICES, **kw)["sessions"][0]
+        entry, plain = listed(with_agents=True), listed()
+        self.assertEqual(({k: v for k, v in entry.items() if k not in ("agents", "agents_more")}, "agents" in plain), (plain, False))
+        self.assertEqual({a["id"]: (a["kind"], a["parent"], a["name"], a["description"], a["tools"], a["errors"], a["model"], a["provider"])
+                          for a in entry["agents"]},
+                         dict(a7=("agent", None, "Agent", "find callers", 4, 1, "claude-opus-5-5", None),
+                              b2=("agent", "a7", "Agent", "d" * 300, 2, 0, "mystery-1", None),
+                              c3=("agent", None, "Subagent", None, 1, 0, "mystery-1", None),
+                              t9=("delegation", None, store.DELEGATE, "Write the tests", None, None, "gpt-6.1-sol", "codex")))
+        self.assertEqual({a["id"]: dict(cost=a["cost"], model=a["model"]) for a in entry["agents"] if a["kind"] == "agent"}, got["lanes"])
+        self.assertEqual(entry["agents_more"], 0)
+        # With text too, no description is longer than the cap and no task or prompt text is sent.
+        agents = listed(with_agents=True, text=True)["agents"]
+        self.assertEqual((max(len(a["description"] or "") for a in agents), "SECRET" in json.dumps(agents)), (300, False))
 
     def test_figures(self):
         self.write("s1.jsonl", assistant("a1", "m1", at(30), [dict(type="text", text="hi")])
@@ -817,14 +884,23 @@ class CodexSessionTest(CodexCase):
     def test_failed_command_inside_an_exec_script_is_a_row(self):
         thread = "0a0f9999-0000-7000-8000-000000000002"
         exec_call = lambda cid, secs: codex_line(2, secs, "response_item", type="custom_tool_call", name="exec", call_id=cid, input="run it")
+        delegated = lambda ordinal, secs, cid: codex_line(ordinal, secs, "event_msg", type="item_completed", turn_id="t1", item=dict(
+            type="McpToolCall", id=cid, server="t3-code", tool="delegate_task", status="completed", arguments=dict(title="Write the tests"),
+            result=dict(content=[dict(type="text", text="started")])))
         self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted() + exec_call("c1", 2)
                    + self.inner(3, 3, "inner1") + self.inner(4, 4, "inner2", status="completed", cmd="ls")  # a success: nothing
-                   + codex_line(5, 5, "response_item", type="custom_tool_call_output", call_id="c1", output="done"))
+                   + delegated(5, 4, "d1")  # a successful delegation the script ran: a row, which its Tree node opens
+                   + codex_line(6, 5, "response_item", type="custom_tool_call_output", call_id="c1", output="done")
+                   + codex_line(7, 5, "response_item", type="function_call", name=store.DELEGATE, call_id="d2", arguments="{}")
+                   + delegated(8, 5, "d2"))  # one with a call line of its own: that one row
         self.child_of(thread, self.inner(1, 6, "inner3", cmd="rg x"))
         self.ingest()
         got = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)
         self.assertEqual([(e["tool"], e["id"], e["lane"], e["failed"]) for e in got["events"] if e["k"] == "tool"],
-                         [("exec", "c1", None, False), ("exec_command", "inner1", None, True), ("exec_command", "inner3", thread, True)])
+                         [("exec", "c1", None, False), ("exec_command", "inner1", None, True), (store.DELEGATE, "d1", None, False),
+                          (store.DELEGATE, "d2", None, False), ("exec_command", "inner3", thread, True)])
+        self.assertEqual([(e["chars"], e["end"]) for e in got["events"] if e.get("id") in ("d1", "d2")],
+                         [(7, "2026-11-10T10:00:04.000Z"), (7, "2026-11-10T10:00:05.000Z")])
         failed = got["events"][2]
         self.assertEqual((failed["summary"], failed["error"], failed["start"], failed["end"], failed["ts"]),
                          ("ls nowhere", "Exit code 2\nno such file", "2026-11-10T10:00:03.000Z", "2026-11-10T10:00:03.000Z", "2026-11-10T10:00:03.000Z"))
@@ -875,6 +951,19 @@ class CodexSessionTest(CodexCase):
         tools = {e["id"]: e for e in got["events"] if e["k"] == "tool"}
         self.assertEqual((tools["c3"]["agent"], tools["c3"]["end"], tools["c9"]["lane"]), (thread, None, thread))
         self.assertEqual([e["k"] for e in got["events"]], ["prompt", "tool", "tool"])  # the start item shows no event of its own
+
+    def test_thread_agent_status_by_its_turn_mark(self):
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()
+                   + codex_line(2, 3, "response_item", type="function_call", name="spawn_agent", call_id="c3", arguments=json.dumps(dict(task_name="review")))
+                   + self.spawn(3, 4, self.CHILD))
+        self.child_of(self.CHILD, codex_line(1, 5, "event_msg", type="task_started", turn_id="u1"))
+        self.ingest()
+        told = lambda: [(a["id"], a["parent"], a["name"], a["description"], a["status"]) for a in live.sessions(
+            self.con.cursor(), automated=True, now=NOW, prices=PRICES, with_agents=True)["sessions"][0]["agents"]]
+        self.assertEqual(told(), [(self.CHILD, None, "spawn_agent", "review", "running")])
+        self.place(NAME.replace(THREAD, self.CHILD), codex_line(2, 8, "event_msg", type="task_complete", turn_id="u1"), mode="a")
+        self.ingest()
+        self.assertEqual(told()[0][-1], "done")
 
     def test_spawn_call_before_the_rows_is_sent_again_naming_its_lane(self):
         thread = "0a0f9999-0000-7000-8000-000000000002"
@@ -988,9 +1077,26 @@ class PageCase(LiveCase):
                                      + line(type="cost-state", sessionId="s1", totalCostUSD=0.02), "s5", "/nowhere/notes",
                                      "Sort the reading list by topic and drop the finished books"))
         # Six more at work, as a busy morning has them: a long MCP call running, a long shell call, a 30-character branch.
-        self.write("s6.jsonl", other(prompt("k1", at(40), "q6", "Delegate the fixture review")
-                                     + assistant("l1", "p1", at(50), [tool_use("lt1", "mcp__t3-code__delegate_task", **DELEGATE)]),
-                                     "s6", "/nowhere/ai-ledger", "Delegate the Live fixture review to a second model and merge it", "feat/live-rail-state-tag-width"))
+        # ai-ledger's subagent a8 ran a9, both done, before its titled delegation went out.
+        in6 = lambda text, title=None: other(text, "s6", "/nowhere/ai-ledger", title, "feat/live-rail-state-tag-width")
+        step = lambda agent, secs, i, model, block: line(type="assistant", uuid=f"{agent}x{i}", timestamp=at(secs), message=dict(
+            id=f"{agent}m{i}", model=model, usage=dict(input_tokens=300, output_tokens=40), content=[block]), **dict(S, isSidechain=True, agentId=agent))
+        ran = lambda agent, secs, i, call, **extra: line(type="user", uuid=f"{agent}y{i}", timestamp=at(secs), message=dict(role="user", content=[
+            dict(type="tool_result", tool_use_id=call, content="ok")]), **dict(S, isSidechain=True, agentId=agent), **extra)
+        self.write("s6.jsonl", in6(prompt("k1", at(40), "q6", "Delegate the fixture review")
+                                   + assistant("l0", "p0", at(41), [tool_use("lt0", "Agent", description="Survey the fixture builders", prompt="look")])
+                                   + line(type="user", uuid="m0", timestamp=at(48), promptId="q6", toolUseResult=dict(agentId="a8"),
+                                          message=dict(role="user", content=[dict(type="tool_result", tool_use_id="lt0", content="2 builders")]), **S)
+                                   + assistant("l1", "p1", at(50), [tool_use("lt1", "mcp__t3-code__delegate_task", **dict(
+                                       DELEGATE, title="Review the Live fixtures", target=dict(providerInstanceId="codex", model="gpt-6.2-sol")))]),
+                                   "Delegate the Live fixture review to a second model and merge it"))
+        self.write("s6/subagents/agent-a8.jsonl", in6(
+            step("a8", 42, 0, "claude-opus-5-5", tool_use("a8t0", "Grep", pattern="def page_fixtures")) + ran("a8", 43, 0, "a8t0")
+            + step("a8", 43, 1, "claude-opus-5-5", tool_use("a8t1", "Agent", description="Read the page tests", prompt="look"))
+            + ran("a8", 47, 1, "a8t1", toolUseResult=dict(agentId="a9"))))
+        self.write("s6/subagents/agent-a9.jsonl", in6(
+            step("a9", 44, 0, "claude-haiku-5-5", tool_use("a9t0", "Read", file_path="/nowhere/ai-ledger/web/src/pages/live/LivePage.test.tsx"))
+            + ran("a9", 45, 0, "a9t0")))
         self.write("s7.jsonl", other(prompt("k2", at(45), "q7", "Profile the ingest"), "s7", "/nowhere/ingest-bench",
                                      "Profile the ingest of a 2 GB transcript folder and find the hot loop", "perf/ingest-profile"))
         fail = lambda i, secs: (assistant(f"l3{i}", f"p3{i}", at(secs), [tool_use(f"lt3{i}", "Bash", command="uv run pytest -x tests/test_jobs.py")])
@@ -1023,8 +1129,8 @@ class PageCase(LiveCase):
 
 
 def page_fixtures():
-    """The Live payloads the page tests render, at NOW: the active list with and without text, a Claude Code session with
-    and without text, and a Codex session. Titles: sketchbook renamed (too long for a tile), jobdesk from its first prompt,
+    """The Live payloads the page tests render, at NOW: the active list with and without text and with agents, a Claude
+    Code session with and without text, and a Codex session. Titles: sketchbook renamed (too long for a tile), jobdesk from its first prompt,
     every other one from its agent."""
     case = PageCase()
     case.setUp()
@@ -1032,6 +1138,7 @@ def page_fixtures():
         thread = case.build()
         cur = case.con.cursor()
         return dict(list=live.sessions(cur, now=NOW, prices=PRICES), list_text=live.sessions(cur, now=NOW, prices=PRICES, text=True),
+                    agents=live.sessions(cur, now=NOW, prices=PRICES, with_agents=True),
                     claude=live.session(cur, "s1", now=NOW, prices=PRICES),
                     text=live.session(cur, "s1", text=True, now=NOW, prices=PRICES),
                     codex=live.session(cur, thread, now=NOW, prices=PRICES))
@@ -1049,6 +1156,9 @@ class PageFixtureTest(unittest.TestCase):
         listed = {s["project"]: s for s in got["list"]["sessions"]}
         self.assertEqual((listed["ai-ledger"]["state"]["tool"], listed["ai-ledger"]["branch"]), ("mcp__t3-code__delegate_task", "feat/live-rail-state-tag-width"))
         self.assertEqual((listed["jobdesk-api"]["errors"], listed["graft"]["model"], listed["graft"]["cost"]), (3, "gpt-6.2-sol", None))
+        told = {s["project"]: {a["id"]: (a["kind"], a["parent"], a["status"]) for a in s["agents"]} for s in got["agents"]["sessions"] if s["agents"]}
+        self.assertEqual(told, {"foo": dict(a7=("agent", None, "done"), t0=("delegation", None, "started")),
+                                "ai-ledger": dict(a8=("agent", None, "done"), a9=("agent", "a8", "done"), lt1=("delegation", None, "pending"))})
         self.assertEqual({k: v["model"] for k, v in got["claude"]["lanes"].items()}, dict(a7="claude-opus-5-5"))
         self.assertAlmostEqual(got["claude"]["lanes"]["a7"]["cost"], 0.0084)
         self.assertEqual({e["lane"] for e in got["claude"]["events"]} - {None}, {"a7"})

@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import type { LiveEvent, LiveSession, LiveToolEvent, Ts } from "../../api";
 import { big, plural, usd } from "../../format";
 import { sessionLink } from "../../components/sheets/session";
-import { elapsed, isRow, isTool, labelOf, likelyWaiting, passes, shortName, since, streamRows, type LaneChoices, type LiveLane, type StreamFilters } from "./live";
+import { elapsed, isRow, isTool, labelOf, likelyWaiting, passes, shortName, since, streamRows, type LaneChoices, type LiveLane, type Reveal, type StreamFilters } from "./live";
 import { Markdown } from "./Markdown";
 
 const CLOCK = { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false } as const;
@@ -29,7 +29,7 @@ function ToolRow({ e, now, today, text, open, toggle }: { e: LiveToolEvent; now:
   const result = running ? <span className="spin" role="img" aria-label="running" /> : e.failed
     ? <span className="bad" role="img" aria-label="failed">✕</span> : <span className="ok" role="img" aria-label="passed">✓</span>;
   return <>
-    <button type="button" className={cls} aria-expanded={open} onClick={() => toggle(e.key)} title={label ? e.summary : undefined}>
+    <button type="button" className={cls} data-call={e.id} aria-expanded={open} onClick={() => toggle(e.key)} title={label ? e.summary : undefined}>
       <span className="nm" title={e.tool}>{shortName(e.tool)}</span>
       {label ? <span className="sum said">{label}</span> : <span className="sum">{e.summary}</span>}
       <span className="dur">{elapsed(took)}</span><span className="res">{result}</span>
@@ -101,7 +101,7 @@ const Lane = memo(function Lane({ lane, fig, v, now, today, text, open, toggle, 
 }) {
   const took = since(lane.start, lane.done && lane.end ? Date.parse(lane.end) : now!);
   return <div className="lane">
-    <button type="button" className="lane-head" aria-expanded={!v.folded} onClick={() => fold(lane.id, !v.folded)}>
+    <button type="button" className="lane-head" data-lane={lane.id} aria-expanded={!v.folded} onClick={() => fold(lane.id, !v.folded)}>
       <span aria-hidden="true">{v.folded ? "▸" : "▾"}</span> <b>{lane.name}</b>{" "}
       {lane.description && <><span className="desc">{lane.description}</span>{" "}</>}
       <span className="muted">{plural(lane.tools, "tool")}{lane.errors > 0 && <> · <span className="bad">{plural(lane.errors, "error")}</span></>}
@@ -120,11 +120,14 @@ const Lane = memo(function Lane({ lane, fig, v, now, today, text, open, toggle, 
  *  stream's foot, turns it back on. A finished lane is folded and a running one shows its last LAST rows, until the user
  *  chooses otherwise. The filters leave rows out of what is drawn: a lane with no row left is hidden, and Failed calls
  *  only opens the lanes it finds rows in. */
-export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters, choices: c, setChoices, sheet }: {
+export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters, choices: c, setChoices, sheet, reveal, revealed }: {
   s: LiveSession; now: number; text: boolean; follow: boolean; setFollow: (on: boolean) => void;
   filters: StreamFilters; setFilters: (f: StreamFilters) => void; choices: LaneChoices; setChoices: (c: LaneChoices) => void;
   /** The href of a link that opens this session's sheet over Live. */
   sheet: string;
+  /** What a Tree node asked to show, taken once: the lane's header or the call's row is scrolled into view and focused, and
+   *  revealed(true) told; with none among the rows drawn (no lane or call, or one older than the events held), revealed(false). */
+  reveal?: Reveal | null; revealed?: (found: boolean) => void;
 }) {
   const box = useRef<HTMLDivElement>(null), drawn = useRef<HTMLDivElement>(null), newest = useRef<HTMLDivElement>(null);
   // Where the box last stood, and its reach there: where place put it, or where the last scroll event found it.
@@ -215,6 +218,15 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
     ro.observe(drawn.current!);
     return () => ro.disconnect();
   }, [place]);
+  // A Tree node's lane or call, after place has put the box where Follow wants it: the page turns Follow off when found.
+  useLayoutEffect(() => {
+    if (!reveal) return;
+    const el = [...drawn.current!.querySelectorAll<HTMLElement>(reveal.lane ? "[data-lane]" : "[data-call]")]
+      .find(b => (reveal.lane ? b.dataset.lane === reveal.lane : b.dataset.call === reveal.call));
+    el?.scrollIntoView?.({ block: "nearest" });
+    el?.focus({ preventScroll: true });
+    revealed?.(!!el);
+  }, [reveal, revealed]);
   // A scroll is the user's when it moves the box from where it last stood while the box keeps the reach it had there.
   // With another reach, the box or its rows changed size and the browser moved the box, to keep it in bounds or on the
   // row it showed: with Follow on, place sets it right, before the scroll event or after it. The user's scroll turns

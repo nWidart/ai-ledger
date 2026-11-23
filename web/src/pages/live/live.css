@@ -28,7 +28,7 @@
 .pg-live .panel { padding: 0; }
 .pg-live .panel h2 { font-size: .71875rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; color: var(--text-secondary); margin: 0 0 6px; }
 /* A state group's heading, in the rail and on the wall. */
-.pg-live .group h3, .pg-live .walls h2 { font-size: .71875rem; font-weight: 600; color: var(--text-muted); margin: 0; }
+.pg-live .group h3, .pg-live .walls h2, .pg-live .trees h2 { font-size: .71875rem; font-weight: 600; color: var(--text-muted); margin: 0; }
 
 /* States: one color per state; inferred ones say so in words, not only in color. Ended is a square, and dashed where it
    frames a tile or the panel's box: a closed session, apart from the round green of your turn and the round gray of idle. */
@@ -297,3 +297,109 @@
   .pg-live .strip .pulse { position: static; }
   .pg-live .strip .pulse .readout { left: 12px; right: 12px; white-space: normal; }
 }
+
+/* Outline */
+/* One tree per state group. Every row shares the tree's columns, through subgrids down to each row: the state, the name
+   and description, then the figures. A level indents the name and description 24px (--lvl, set per row, counts the levels
+   under the session), up to 8 levels, so a deep row keeps room for its name; the state and the figures stay in line. */
+.pg-live .outline { list-style: none; margin: var(--space-2) 0 var(--space-6); padding: 0; display: grid; column-gap: var(--space-6);
+  grid-template-columns: [state] auto [name] minmax(0, 1fr) [tools] auto [errs] auto [dur] auto [cost] auto [mdl] auto; font-size: var(--fs-sm); }
+.pg-live .outline ul { list-style: none; margin: 0; padding: 0; }
+.pg-live .outline :is(li, ul) { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; }
+.pg-live .outline .row { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: baseline; padding: var(--space-1) var(--space-3); border-radius: var(--radius-md); cursor: pointer; }
+.pg-live .outline .row:hover { background: var(--surface-2); }
+.pg-live .outline li[aria-current=true] > .row { background: var(--accent-soft); }
+/* The focus ring goes on the row, not around the row and its children. */
+.pg-live .outline li:focus { outline: none; }
+.pg-live .outline li:focus-visible > .row { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pg-live .outline .row > *, .pg-live .outline .figs > * { grid-row: 1; min-width: 0; white-space: nowrap; }
+.pg-live .outline .figs { display: contents; }
+.pg-live .outline .state { grid-column: state; display: block; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; }
+.pg-live .outline .state i { margin-right: var(--space-2); vertical-align: 0; }
+.pg-live .outline .nd { grid-column: name; display: flex; align-items: baseline; gap: var(--space-4); overflow: hidden; }
+.pg-live .outline .nd::before { content: ""; flex: none; width: calc(min(var(--lvl), 8) * var(--space-9)); }
+.pg-live .outline .nm { display: flex; align-items: baseline; gap: var(--space-2); flex: 0 1 auto; min-width: 0; }
+.pg-live .outline .nm b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.pg-live .outline .tw { flex: none; width: 1em; text-align: center; color: var(--text-muted); }
+.pg-live .outline .desc { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-secondary); }
+.pg-live .outline :is(.tools, .dur, .cost, .mdl) { font-size: var(--fs-xs); color: var(--text-secondary); }
+.pg-live .outline .tools { grid-column: tools; text-align: right; }
+.pg-live .outline .errs { grid-column: errs; font-size: var(--fs-xs); font-weight: 600; }
+.pg-live .outline .dur { grid-column: dur; text-align: right; font-variant-numeric: tabular-nums; }
+.pg-live .outline .cost { grid-column: cost; text-align: right; }
+.pg-live .outline .mdl { grid-column: mdl; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); }
+.pg-live .outline :is(.fold, .more) > .row b, .pg-live .outline .more > .row { font-weight: 500; color: var(--text-muted); }
+.pg-live .outline .more > .row { cursor: default; }
+/* A phone: a row is two lines, its state, name and errors, then its figures, with its description under them; the indent
+   is 12px a level, up to 6 levels, so a third-level row keeps most of the screen and a deeper one its name. */
+@media (max-width: 45em) {
+  .pg-live .outline, .pg-live .outline :is(li, ul) { display: block; }
+  .pg-live .outline .row { display: grid; grid-template-columns: calc(min(var(--lvl), 6) * var(--space-6)) auto minmax(0, 1fr) auto; column-gap: var(--space-4);
+    grid-template-areas: ". state name errs" ". figs figs figs" ". desc desc desc"; }
+  .pg-live .outline .state { grid-area: state; max-width: 9rem; }
+  .pg-live .outline .nd { display: contents; }
+  .pg-live .outline .nd::before { content: none; }
+  .pg-live .outline .nm { grid-area: name; }
+  .pg-live .outline .errs { grid-area: errs; }
+  .pg-live .outline .desc { grid-area: desc; }
+  .pg-live .outline .figs { grid-area: figs; display: flex; flex-wrap: wrap; gap: 0 var(--space-5); }
+  .pg-live .outline .figs > :empty { display: none; }
+  .pg-live .outline .mdl { max-width: 100%; }
+}
+
+/* Org chart: one diagram per session, top-down, drawn from nested lists. Every card is as wide as the others and stands at
+   the left of its item, so a connector meets a card at its middle with nothing measured: a parent's line down and its
+   children's rail meet half a card from the left. The connectors are borders on pseudo-elements, which no reader meets.
+   A parent's children stand in a column, each joined by a tick to one line down from the parent; from tablet width up, a
+   parent of 5 or fewer (.row) sets them side by side under a rail. Each session's diagram scrolls sideways inside itself. */
+.pg-live .org { --org-card: 15rem; --org-drop: calc(var(--org-card) / 2); --org-tick: calc(var(--space-4) + 1.125rem);
+  --org-line: 1px solid var(--control-border); list-style: none; margin: var(--space-2) 0 var(--space-6); padding: 0; }
+.pg-live .org .org-chart { display: flex; flex-direction: column; align-items: flex-start; overflow-x: auto; overscroll-behavior-x: contain; padding: var(--space-2); }
+.pg-live .org .org-chart + .org-chart { margin-top: var(--space-4); }
+.pg-live .org ul { position: relative; list-style: none; display: flex; flex-direction: column; align-items: flex-start; margin: 0 0 0 var(--space-7); padding: 0 0 0 var(--space-6); }
+.pg-live .org ul > li { position: relative; display: flex; flex-direction: column; align-items: flex-start; padding: var(--space-4) 0 0; }
+.pg-live .org ul > li::before, .pg-live .org ul > li::after { content: ""; position: absolute; box-sizing: border-box; pointer-events: none; }
+.pg-live .org ul > li::before { left: calc(var(--space-6) * -1); top: 0; bottom: 0; right: auto; width: 0; height: auto; border-top: 0; border-left: var(--org-line); }
+.pg-live .org ul > li:last-child::before { bottom: auto; height: var(--org-tick); }
+.pg-live .org ul > li::after { left: calc(var(--space-6) * -1); top: var(--org-tick); right: auto; width: var(--space-6); height: 0; border-top: var(--org-line); border-left: 0; }
+@media (min-width: 45.0625em) {
+  .pg-live .org ul.row { flex-direction: row; margin: 0; padding: var(--space-7) 0 0; }
+  .pg-live .org ul.row::before { content: ""; position: absolute; left: var(--org-drop); top: 0; height: var(--space-7); border-left: var(--org-line); }
+  .pg-live .org ul.row > li { padding: var(--space-7) var(--space-6) 0 0; }
+  .pg-live .org ul.row > li:last-child { padding-right: 0; }
+  .pg-live .org ul.row > li::before { left: 0; top: 0; bottom: auto; right: auto; width: var(--org-drop); height: 0; border-top: var(--org-line); border-left: 0; }
+  .pg-live .org ul.row > li::after { left: var(--org-drop); top: 0; right: 0; width: auto; height: var(--space-7); border-top: var(--org-line); border-left: var(--org-line); }
+  .pg-live .org ul.row > li:first-child::before, .pg-live .org ul.row > li:last-child::after { border-top: 0; }
+}
+/* A card: its state and errors, its name, its description on up to two lines (whole on hover), its figures. */
+.pg-live .org-card { box-sizing: border-box; width: var(--org-card); display: block; padding: var(--space-4) var(--space-5); text-align: left; border-radius: var(--radius-lg); }
+.pg-live .org-card[aria-current=true] { border-color: var(--accent); background: var(--accent-soft); }
+.pg-live .org-card .drawn { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.pg-live .org-card .head { display: flex; align-items: center; gap: var(--space-4); min-width: 0; }
+.pg-live .org-card .head .state { display: block; flex: 0 1 auto; min-width: 0; margin-right: auto; overflow: hidden; text-overflow: ellipsis; }
+.pg-live .org-card .head .state i { margin-right: var(--space-3); }
+.pg-live .org-card .errs { flex: none; font-size: var(--fs-xs); }
+.pg-live .org-card .nm { font-size: var(--fs-sm); font-weight: 600; overflow-wrap: anywhere; }
+.pg-live .org-card .desc { font-size: var(--fs-xs); color: var(--text-secondary); overflow: hidden; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+.pg-live .org-card .figs { font-size: var(--fs-xs); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+/* A fold card and the more card stand for others: dashed, and the fold's mark turns as it opens. */
+.pg-live .org-card.fold, .pg-live .org-card.more { border-style: dashed; color: var(--text-secondary); }
+.pg-live .org-card.fold .nm { font-weight: 500; }
+.pg-live .org-card.fold .nm::before { content: "▸"; display: inline-block; margin-right: var(--space-3); }
+.pg-live .org-card.fold[aria-expanded=true] .nm::before { content: "▾"; }
+.pg-live .org-card.more { border: 1px dashed var(--border); font-size: var(--fs-xs); }
+
+/* An agent's status in both layouts: running and sending as a working session, started as a ring (nothing tells more),
+   done gray, failed a red square. */
+.pg-live :is(.outline, .org) :is(.st-running, .st-pending) { color: var(--series-1-ink); }
+.pg-live :is(.outline, .org) :is(.st-running, .st-pending) i { background: var(--series-1); }
+.pg-live :is(.outline, .org) .st-started { color: var(--text-secondary); }
+.pg-live :is(.outline, .org) .st-started i { box-sizing: border-box; border: 2px solid var(--text-secondary); }
+.pg-live :is(.outline, .org) .st-done { color: var(--text-muted); } .pg-live :is(.outline, .org) .st-done i { background: var(--proj-other); }
+.pg-live :is(.outline, .org) .st-failed { color: var(--critical-text); }
+.pg-live :is(.outline, .org) .st-failed i { background: var(--critical); border-radius: var(--radius-xs); }
+@media (prefers-reduced-motion: no-preference) {
+  .pg-live :is(.outline, .org) :is(.st-running, .st-pending) i { animation: live-pulse 1.4s ease-in-out infinite; }
+}
+.pg-live.paused :is(.outline, .org) .state i { animation: none; }

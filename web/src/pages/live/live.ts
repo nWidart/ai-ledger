@@ -92,6 +92,11 @@ export const INFERRED_WHY: Partial<Record<LiveState["kind"], string>> = {
   wait: "Inferred: transcripts record no permission prompt; a shell call this slow is often waiting on one.",
   thinking: "Inferred: Claude Code records no request in flight; the last line is a prompt or a tool result.",
 };
+/** What a state's hover text says, for where it is no hover: a state's detail, or why it is inferred. */
+export const stateWhy = (st: LiveState, now: number) => (st.inferred ? INFERRED_WHY[st.kind] : undefined) ?? stateText(st, now).detail;
+
+/** A model as a tile or a node names it, as the session sheet does: without the claude- prefix. */
+export const shortModel = (m: string | null) => m?.replace(/^claude-/, "") ?? "";
 
 export const isTool = (e: LiveEvent): e is LiveToolEvent => e.k === "tool";
 /** The label the agent gave a shell call, which is its row text in place of the command; null for any other call. */
@@ -112,6 +117,9 @@ export const passes = (e: LiveEvent, f: StreamFilters): boolean =>
 /** The user's choices per lane, kept while the page is open: folded or not (none: a finished lane is folded), and
  *  every row of a running lane instead of its last few. */
 export interface LaneChoices { folds: ReadonlyMap<string, boolean>; whole: ReadonlySet<string> }
+
+/** What a Tree node opens the Stream on: a subagent's lane, a delegation's call, or neither (a session node). */
+export interface Reveal { lane?: string; call?: string }
 
 /** A subagent's work: when its events start and end, its tool calls and how many failed, and the main-thread call that
  *  started it. */

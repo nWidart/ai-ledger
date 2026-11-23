@@ -5,6 +5,25 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Run `ai-ledger rebuild` once after upgrading, with the app stopped. It gives the sessions stored before the upgrade their agents in Live's Tree, and their subagent lanes in the Stream their cost and model, which they lack until then.
+
+### Added
+
+- Live's Tree view shows each active session with its agents: subagents nested under the thread that started them, and tasks delegated through T3 Code as nodes of their own with their target and status.
+  - Two layouts: **Outline**, an indented tree read with the arrow keys, and **Org chart**, one top-down diagram of cards per session. In the Org chart, a node collapsed in the Outline shows a "Show N hidden agents" card that reopens it.
+  - Finished agents fold under one row per parent, such as "4 finished subagents". A node opens its session in the Stream, a subagent with its lane unfolded.
+  - The Tree shows descriptions and delegation titles, never prompt text, and has no Full text. The URL keeps `view=tree` and `layout=org`.
+- The store keeps `lane` on tool calls and requests, and a `spawns` table with one record per call that starts a subagent or delegates a task.
+
+### Changed
+
+- `/api/live` takes `agents=1`, which adds `agents` and `agents_more` to each session. Without it the answer is as before.
+- A subagent's cost and model in Live's lanes read the request's `lane`.
+
+### Fixed
+
+- A forked Codex thread no longer counts the requests and tool calls it copied from its parent thread; they were counted again in the child before. The cost and tool counts of such sessions can drop after `ai-ledger rebuild`.
+
 ## [0.8.0] - 2026-11-22
 
 ### Added

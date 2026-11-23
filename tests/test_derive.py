@@ -243,7 +243,8 @@ class RebuildTest(StoreCase):
             "compactions": self.q("SELECT sum(compactions) FROM sessions")[0][0],
             "context": self.q("SELECT session_id, context_window, first_compaction_ts FROM sessions ORDER BY ALL"),
             "result_bytes": self.q("SELECT tool_use_id, result_bytes FROM tool_calls ORDER BY ALL"),
-            "titles": self.q("SELECT * FROM session_titles ORDER BY ALL")}
+            "titles": self.q("SELECT * FROM session_titles ORDER BY ALL"),
+            "lanes": self.q("SELECT tool_use_id, lane FROM tool_calls UNION ALL SELECT message_id, lane FROM requests ORDER BY ALL")}
 
     def test_rebuild_matches_incremental(self):
         a = self.write("a.jsonl", prompt("u1", "2026-11-01T10:00:00Z", "p1", "go")
@@ -268,6 +269,46 @@ class RebuildTest(StoreCase):
         self.assertEqual(before["result_bytes"], [("t1", len("Exit code 1")), ("t2", None)])
         self.assertEqual(before["context"], [("s1", None, datetime(2026, 11, 1, 10, 5))])
         self.assertEqual(before["titles"], [("s1", "auth bug", "Fix login redirect"), ("s2", None, "x")])
+        # The subagent's call and request carry its lane (agent-1.jsonl), the main thread's none.
+        self.assertEqual(before["lanes"], [("m1", None), ("m2", None), ("m3", "1"), ("t1", None), ("t2", "1")])
+
+
+class SpawnTest(StoreCase):
+    """A spawn or delegation call is one spawns row, whichever of the call and the line that names its subagent or states its
+    task's status is stored first."""
+
+    def test_spawn_and_delegation_calls(self):
+        def named(uuid, ts, tid, **extra):
+            return line(type="user", uuid=uuid, timestamp=ts, promptId="p1", message=dict(role="user", content=[dict(
+                type="tool_result", tool_use_id=tid, content="started")]), **extra, **S)
+        long = "Map the parsers " + "x" * 400
+        self.write("s1.jsonl", assistant("a1", "m1", "2026-11-01T10:00:00Z", [
+            tool_use("t1", "Agent", description=long, prompt="p" * 4000),
+            tool_use("t2", "Task", description="Still running", prompt="go"),
+            tool_use("d1", store.DELEGATE, title="Write the tests", task="secret task " * 200, role="implementation",
+                     target=dict(providerInstanceId="codex", model="gpt-6.1-sol")),
+            tool_use("d2", store.DELEGATE, title="Review", task="another task", role="review"),
+            tool_use("x1", "Bash", command="ls")])
+            + named("r1", "2026-11-01T10:00:01Z", "d2", toolUseResult="text", mcpMeta=dict(structuredContent=dict(
+                status="running", model="claude-opus-5-5", providerInstanceId="claude", taskId="k1")))
+            + named("r2", "2026-11-01T10:00:01Z", "x1", toolUseResult=dict(agentId="not-a-spawn")))
+        self.write("s1/subagents/agent-a1.jsonl", assistant("b1", "m2", "2026-11-01T10:00:03Z", [
+            tool_use("t3", "Agent", description="Nested", prompt="go")])
+            + named("r3", "2026-11-01T10:00:04Z", "t3", toolUseResult=dict(agentId="b2")))
+        store.ingest(self.con, self.roots)
+        self.write("s1.jsonl", named("r4", "2026-11-01T10:00:05Z", "t1", toolUseResult=dict(agentId="a1")))  # a later ingest
+        store.ingest(self.con, self.roots)
+        rows = lambda: self.q("SELECT call_id, session_id, kind, lane, tool, description, start_ts, agent, provider, model, status "
+                              "FROM spawns ORDER BY call_id")
+        at = lambda s: datetime(2026, 11, 1, 10, 0, s)
+        want = [("d1", "s1", "delegation", None, store.DELEGATE, "Write the tests", at(0), None, "codex", "gpt-6.1-sol", None),
+                ("d2", "s1", "delegation", None, store.DELEGATE, "Review", at(0), None, "claude", "claude-opus-5-5", "running"),
+                ("t1", "s1", "subagent", None, "Agent", long[:300], at(0), "a1", None, None, None),
+                ("t2", "s1", "subagent", None, "Task", "Still running", at(0), None, None, None, None),
+                ("t3", "s1", "subagent", "a1", "Agent", "Nested", at(3), "b2", None, None, None)]
+        self.assertEqual(rows(), want)  # no prompt or task text; a result that names no spawn call adds no row
+        store.rebuild(self.con)
+        self.assertEqual(rows(), want)
 
 
 def cost_state(start, api, tool, added, removed, sid="s1", **kw):

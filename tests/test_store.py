@@ -311,8 +311,8 @@ class MigrationTest(StoreCase):
     # Each column or table open_store adds to an older store; error_marks' columns have their own tests: they carry a backfill.
     COLUMNS = [("files", "source"), ("sessions", "source"), ("requests", "speed"), ("requests", "reported_cost"),
                ("requests", "context_tokens"), ("tool_calls", "result_bytes"), ("sessions", "context_window"),
-               ("sessions", "first_compaction_ts")]
-    TABLES = ["session_runs", "usage_files", "session_facets", "facet_counts", "session_meta"]
+               ("sessions", "first_compaction_ts"), ("requests", "lane"), ("tool_calls", "lane")]
+    TABLES = ["session_runs", "usage_files", "session_facets", "facet_counts", "session_meta", "spawns"]
 
     def test_older_store_gains_every_later_column_and_table(self):
         S = dict(sessionId="s1", cwd="/nowhere/foo")

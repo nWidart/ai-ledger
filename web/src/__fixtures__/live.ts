@@ -71,12 +71,12 @@ export default {
     "long": false
    },
    "window": 1000000,
-   "cost": 0.0008,
-   "requests": 1,
+   "cost": 0.0056,
+   "requests": 5,
    "model": "claude-opus-5-5",
    "context": 160,
-   "cache_read": 0.625,
-   "tools": 1,
+   "cache_read": 0.163934426,
+   "tools": 5,
    "errors": 0
   },
   {

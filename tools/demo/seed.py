@@ -465,7 +465,96 @@ def demo_spans():
                    json.dumps({"promptId": f"{sid}-p0", "message": {"content": "Add rate limiting to the /orders endpoint"}}))])
 
 
+def demo_tree():
+    """One live Claude Code session, `demo-tree`, for the Live page's Tree: fixed rows after every pass above, as
+    demo_spans does, so every other row stays as it is. Its Agent call and the Agent call of its subagent both run (a
+    subagent with a subagent of its own), two Agent calls finished (two done agents), and a delegation call has a task
+    running on another provider. It has a line within the last ACTIVE (10 minutes) of the seed, so the Live page lists it
+    for that long after `seed.py`; run seed.py again to see it later. Each call has its transcript lines too (raw_lines),
+    in the main file or its subagent's agent-<id>.jsonl, as the Stream draws its rows from them: a Tree node opens a lane
+    or a call the Stream holds."""
+    sid, project, model = "demo-tree", "atlas-api", "claude-opus-5-5"
+    t0 = NOW - timedelta(minutes=8)
+    lanes = {"a": "tree-a", "b": "tree-b", "c": "tree-c", "d": "tree-d"}  # the lane ids: Claude Code's agent ids
+    calls, spawns, raw, n = [], [], [], 0
+    base, counts = "/home/demo/.claude/projects/-home-demo-code-atlas-api/", {}  # counts: file -> its lines so far
+    inputs = {"Read": "file_path", "Edit": "file_path", "Grep": "pattern"}  # the input field the demo's text is
+
+    def at(m, s=0):
+        return t0 + timedelta(minutes=m, seconds=s)
+
+    def line(kind, lane, ts, d):
+        path = base + (f"demo-tree/subagents/agent-{lane}.jsonl" if lane else "demo-tree.jsonl")
+        counts[path] = counts.get(path, 0) + 1
+        raw.append((f"{sid}-raw{len(raw)}", path, counts[path], 0, kind, sid, f"{sid}-u{len(raw)}", ts.isoformat(), lane is not None,
+                    True, json.dumps(d | {"type": kind, "sessionId": sid, "timestamp": ts.isoformat() + "Z"})))
+
+    def call(tool, inp, start, end, lane=None, spawn=None, **cols):
+        """spawn: the spawns row of a call that starts an agent (agent) or delegates a task (kind delegation)."""
+        nonlocal n
+        n += 1
+        cid = f"demo-tree-{n}"
+        calls.append((cid, sid, tool, cols.get("mcp_server"), None, inp, at(*start), at(*end) if end else None, False if end else None,
+                      None, None, None, lane is not None, False, False, False, None, None, 2_000 if end else None, lane))
+        if spawn:
+            kind = spawn.get("kind", "subagent")
+            spawns.append((cid, sid, kind, lane, tool, inp, at(*start), spawn.get("agent"), spawn.get("provider"), spawn.get("model"),
+                           spawn.get("status")))
+        args = {inputs[tool]: inp} if tool in inputs else dict(description=inp, prompt=inp) if tool == "Agent" else dict(title=inp, task=inp)
+        line("assistant", lane, at(*start), {"message": {"role": "assistant", "content": [{"type": "tool_use", "id": cid, "name": tool, "input": args}]}})
+        if end:  # a finished Agent call's result names the subagent, which ties its lane to the call
+            agent = (spawn or {}).get("agent")
+            line("user", lane, at(*end), {"toolUseResult": {"agentId": agent} if agent else None, "message": {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": cid, "content": "Task accepted." if spawn and not agent else "Done."}]}})
+
+    call("Read", "src/orders/router.ts", (0, 5), (0, 7))
+    call("Grep", "rateLimit|throttle", (0, 20), (0, 23))
+    call("Agent", "Find how the orders endpoint reads its rate limits and where the limiter belongs", (1, 0), None,
+         spawn=dict(agent=lanes["a"]))
+    call("Agent", "List every caller of the orders router", (1, 10), (3, 0), spawn=dict(agent=lanes["c"]))
+    call("Agent", "Check the limiter config against the staging values", (1, 20), (4, 30), spawn=dict(agent=lanes["d"]))
+    # subagent a, which starts subagent b
+    call("Grep", "rate_limit", (1, 5), (1, 8), lane=lanes["a"])
+    call("Read", "src/limits.py", (1, 30), (1, 33), lane=lanes["a"])
+    call("Agent", "Read the sliding-window helper and say whether it is thread safe", (2, 30), None, lane=lanes["a"],
+         spawn=dict(agent=lanes["b"]))
+    call("Read", "src/window.py", (2, 40), (2, 43), lane=lanes["b"])
+    call("Grep", "Lock|threading", (3, 20), (3, 22), lane=lanes["b"])
+    call("Edit", "src/limits.py", (5, 0), (5, 2), lane=lanes["a"])
+    # the two finished subagents
+    for tool, inp, a, b in [("Grep", "ordersRouter", (1, 15), (1, 17)), ("Grep", "app.use(", (1, 40), (1, 42)), ("Read", "src/server.ts", (2, 20), (2, 23))]:
+        call(tool, inp, a, b, lane=lanes["c"])
+    for tool, inp, a, b in [("Read", "config/staging.json", (1, 25), (1, 27)), ("Grep", "limit", (2, 0), (2, 3)), ("Read", "src/limits.py", (4, 0), (4, 3))]:
+        call(tool, inp, a, b, lane=lanes["d"])
+    # a delegated task on another provider; its result says the task was accepted and is still running
+    call("mcp__t3-code__delegate_task", "Add a Retry-After header test", (6, 0), (6, 1), mcp_server="t3-code",
+         spawn=dict(kind="delegation", provider="codex", model="gpt-6.2-sol", status="running"))
+    call("Edit", "src/orders/router.ts", (6, 30), (6, 31))
+
+    reqs = [(f"demo-tree-r{i}", sid, at(m, s), model, "high", False, 2_000, 900, 300, size - 6_000, 4_000, 0, 1_200, "end_turn", None, None, None)
+            for i, (m, s, size) in enumerate([(0, 5, 52_000), (1, 0, 61_000), (6, 0, 78_000), (7, 0, 84_000)])]
+    for i, (m, s, lane) in enumerate([(1, 6, "a"), (1, 31, "a"), (2, 41, "b"), (3, 21, "b"), (1, 16, "c"), (2, 21, "c"), (1, 26, "d"), (2, 1, "d"), (4, 1, "d")]):
+        reqs.append((f"demo-tree-s{i}", sid, at(m, s), "claude-haiku-5-5", "high", True, 1_500, 600, 200, 12_000, 2_000, 0, 800, "end_turn",
+                     None, None, lanes[lane]))
+    cols = ["message_id", "session_id", "ts", "model", "effort", "subagent", "input", "output", "thinking", "cache_read", "cache_5m",
+            "cache_1h", "thinking_ms", "stop_reason", "reported_cost", "context_tokens", "lane"]
+    store.insert(c, "sessions", ["session_id", "project", "cwd", "git_branch", "first_ts", "last_ts", "entrypoint", "version",
+                                 "compactions", "peak_context", "peak_model", "source", "context_window", "first_compaction_ts"],
+                 [(sid, project, f"/home/demo/code/{project}", "feat/rate-limit", t0, NOW, "cli", "2.4.0", 0, 84_000, model, "claude", None, None)])
+    store.insert(c, "requests", cols, reqs)
+    store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "mcp_server", "skill", "input_summary", "start_ts", "end_ts",
+                                   "is_error", "error", "category", "followup", "subagent", "is_commit", "is_test", "test_passed",
+                                   "result_file", "result_seq", "result_bytes", "lane"], calls)
+    store.insert(c, "spawns", ["call_id", "session_id", "kind", "lane", "tool", "description", "start_ts", "agent", "provider", "model", "status"],
+                 spawns)
+    store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [(f"{sid}-p0", sid, t0, False)])
+    store.insert(c, "session_titles", ["session_id", "custom", "agent"], [(sid, None, "Add sliding-window rate limiting to the orders endpoint")])
+    line("user", None, t0, {"promptId": f"{sid}-p0", "message": {"role": "user", "content": "Add sliding-window rate limiting to the orders endpoint"}})
+    store.insert(c, "raw_lines", ["key", "file", "line_no", "byte_offset", "type", "session_id", "uuid", "ts", "subagent", "parsed", "json"], raw)
+
+
 demo_spans()
+demo_tree()
 insights.rederive(c)
 print(f"{len(sessions)} sessions, {len(reqs)} requests, {len(tools)} tool calls, {len(snaps)} limit snapshots, {len(facet_rows) // 2} facets; "
       f"{len(g_sessions)} Grok sessions, {len(g_reqs)} requests")

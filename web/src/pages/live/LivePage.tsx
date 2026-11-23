@@ -1,21 +1,24 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from "react";
 import { viewOf, type LiveListSession, type LiveState } from "../../api";
 import { SOURCE_LABELS } from "../../components/Filters";
 import { useScopeProjects } from "../../components/ScopeBar";
 import { ProjectName } from "../../components/ProjectDot";
 import { sessionLink, sessionSheetHref } from "../../components/sheets/session";
 import { pct, plural, usd, when } from "../../format";
-import { useSearchOf, useView } from "../../url";
+import { useSearchOf, useView, type SearchPatch } from "../../url";
 import { DocsLink } from "../../components/DocsLink";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { ApiError } from "../../useApi";
 import { NEAR_FULL, Strip } from "./Strip";
-import { groupSessions, needsYou, NO_FILTERS, stateNow, type LaneChoices } from "./live";
+import { groupSessions, needsYou, NO_FILTERS, stateNow, type LaneChoices, type Reveal } from "./live";
 import { Stream } from "./Stream";
 import { useLive, useNow } from "./useLive";
 import { nameOf, Pinned, StateNote, Wall } from "./Wall";
 import { subjectAttrs } from "../../components/menu/subject";
 import { MAX_PINS, pinsOf, validateSearch } from "./search";
+import { flip, holder, treeOf, type Folds, type TreeNode, type TreeViewProps } from "./tree";
+import { Outline } from "./Outline";
+import { OrgChart } from "./OrgChart";
 import "./live.css";
 
 /** The states the rail's footer counts as working, as the rail's working group. approval? and your turn count as waiting
@@ -23,12 +26,19 @@ import "./live.css";
 const WORKING = new Set<LiveState["kind"]>(["tool", "thinking"]);
 /** The tab title's count of sessions that need the user, before the page's own title. */
 const COUNT = /^\(\d+\) /;
+/** The Tree's layouts, by the URL's layout value: each draws one state group of the tree model. */
+const LAYOUTS: Record<"outline" | "org", ComponentType<TreeViewProps>> = { outline: Outline, org: OrgChart };
 
 /** Live (/live): the sessions active in the last 10 minutes, followed from the agent's side as their lines arrive. */
 export function LivePage() {
-  const [h, set] = useView();
+  const [h, setSearch] = useView();
   const search = useSearchOf(validateSearch);
-  const view = viewOf(h), mode = search.view === "wall" ? "wall" : "stream";
+  const view = viewOf(h), mode = search.view ?? "stream", layout = search.layout ?? "outline";
+  // The layout belongs to the Tree: every write of the page outside it drops the key, one the URL holds in vain too.
+  const set = (p: SearchPatch) => {
+    const tree = (p.view === undefined ? search.view : p.view) === "tree";
+    setSearch({ ...p, layout: tree ? (p.layout === undefined ? search.layout : p.layout) ?? null : null });
+  };
   const [text, setText] = useState(false); // off on every load: transcript text can hold secrets
   const [warned, setWarned] = useState(false); // the Full text warning, dismissed since Full text was turned on
   const fullText = useRef<HTMLInputElement>(null);
@@ -36,14 +46,21 @@ export function LivePage() {
   const [follow, setFollow] = useState(true);
   const [filters, setFilters] = useState(NO_FILTERS); // off on every load, and kept from one session to the next
   const [choices, setChoices] = useState<LaneChoices>(() => ({ folds: new Map(), whole: new Set() }));
+  // The Tree's folds, shared by both layouts and kept while the page is open; and what a Tree node opens the Stream on,
+  // for that session, until the Stream takes it from an answer newer than the selection (at): a copy cached from an earlier
+  // visit may not hold the lane or the call yet.
+  const [folds, setFolds] = useState<Folds>(() => new Map());
+  const [reveal, setReveal] = useState<Reveal & { session: string; at: number } | null>(null);
   // With none in the URL, the newest active session, kept while listed so the stream does not jump when another writes.
   const [first, setFirst] = useState("");
   const selected = h.session || first;
   // The Wall's pins, oldest first. The Wall shows no stream session, so none is fetched there.
   const pins = mode === "wall" ? pinsOf(search.pin) : [];
-  // Full text is the Stream view's: the Wall asks for none, though the box stays on for the return to Stream.
+  // Full text is the Stream view's: the Wall and the Tree ask for none, though the box stays on for the return to Stream.
+  // Only the Tree asks for the agents, and it shows no stream session, as the Wall.
   const full = text && mode === "stream";
-  const { list, session, conn, held, listError, sessionError, pinned } = useLive(view, mode === "wall" ? "" : selected, full, paused, pins);
+  const { list, session, sessionAt, conn, held, listError, sessionError, pinned } = useLive(view, mode === "stream" ? selected : "", full, paused, pins, mode === "tree");
+  if (reveal && (mode !== "stream" || reveal.session !== selected)) setReveal(null);
   const now = useNow(paused);
   const sessions = list?.sessions ?? [];
   const newest = sessions[0]?.session_id ?? "", listed = sessions.some(s => s.session_id === first);
@@ -51,7 +68,7 @@ export function LivePage() {
   const pick = (id: string) => { set({ session: id, view: null }); setFollow(true); };
   /** Live as it is, with session id's sheet open over it: the href of a session link. */
   const sheetHref = (id: string) =>
-    sessionSheetHref("/live", { project: view.project, source: view.source, auto: view.automated, view: search.view, pin: search.pin, session: h.session }, id);
+    sessionSheetHref("/live", { project: view.project, source: view.source, auto: view.automated, view: search.view, layout: search.layout, pin: search.pin, session: h.session }, id);
   // Pinning a third drops the oldest, and a polite status names both. Unpinning from a stream's own button hands the
   // focus to the session's tile, which the stream leaves for; with no tile (the session aged out of the list, or is
   // unknown), to the other pin's first control, else the first tile, else the page's heading. Open in Stream hands it
@@ -74,9 +91,31 @@ export function LivePage() {
     set({ pin: next.join(",") });
     setPinNote(out ? `Pinned ${label(id)}. Unpinned ${label(out)}: ${MAX_PINS} pins at most.` : `Pinned ${label(id)}.`);
   };
+  const heading = () => document.querySelector<HTMLElement>(".pg-live .main .stream-head h2");
   const openPin = (id: string) => {
     pick(id);
-    refocus.current = () => document.querySelector<HTMLElement>(".pg-live .main .stream-head h2") ?? document.querySelector<HTMLElement>(".pg-live .main");
+    refocus.current = () => heading() ?? document.querySelector<HTMLElement>(".pg-live .main");
+  };
+  // A Tree node opens its session in the Stream, in a new history entry, so Back returns to the Tree in its layout: a
+  // subagent with its lane unfolded, a delegation with the lane that made it unfolded, either with the Stream's filters
+  // off, then the Stream shows the lane or the call (revealed), else opens as for a session, on its heading with Follow on.
+  // A fold row flips.
+  const select = (n: TreeNode) => {
+    if (n.kind === "fold") { setFolds(f => flip(f, n)); return; }
+    if (n.kind === "more") return;
+    const a = n.kind === "agent" ? n.agent : null, lane = a && (a.kind === "agent" ? a.id : a.parent);
+    // A delegation's lane shows all its rows: a running lane draws only its last few, which may not hold the call.
+    if (lane) setChoices(c => ({ folds: new Map(c.folds).set(lane, false), whole: a.kind === "delegation" ? new Set(c.whole).add(lane) : c.whole }));
+    // Each Stream filter can hide the lane or the call (Main thread only a lane, the other two its rows): an agent's node
+    // turns them all off, so what it opens is drawn. A session's node leaves them as they are.
+    if (a) setFilters(NO_FILTERS);
+    setReveal({ session: n.session, at: Date.now(), ...(a ? (a.kind === "agent" ? { lane: a.id } : { call: a.id }) : {}) });
+    pick(n.session);
+  };
+  const revealed = (found: boolean) => {
+    setReveal(null);
+    if (found) setFollow(false);
+    else refocus.current = heading;
   };
   useEffect(() => {
     const el = refocus.current?.();
@@ -106,6 +145,16 @@ export function LivePage() {
     if (!around?.isConnected || focused!.isConnected) return;
     [...around.querySelectorAll<HTMLElement>("[data-session]")].find(b => b.dataset.session === focused!.dataset.session)?.focus();
   });
+  // The Tree, by state group. A node that moves (to another group, under another parent, into a fold) is drawn anew, and
+  // the element React removes drops the focus: the node's new element takes it, by its key, else the closed node that now
+  // holds it.
+  const tree = mode === "tree" ? treeOf(sessions, now) : [], inTree = focused?.closest(".trees") ? focused.id : "";
+  useLayoutEffect(() => {
+    if (!inTree || focused!.isConnected) return;
+    const at = holder(tree.flatMap(g => g.roots), folds, inTree);
+    if (at) document.getElementById(at)?.focus();
+  });
+  const Layout = LAYOUTS[layout];
   const bare = !list && !listError;
   // A rail entry: two lines of fixed height. Its name (title, else project) and its errors; then its state, the project
   // under a title, which gives way first, and the context. Its accessible name says the same in words, and whether the
@@ -130,7 +179,13 @@ export function LivePage() {
         <div className="seg" role="group" aria-label="View">
           <button type="button" aria-pressed={mode === "stream"} onClick={() => set({ view: null })}>Stream</button>
           <button type="button" aria-pressed={mode === "wall"} onClick={() => set({ view: "wall" })}>Wall</button>
+          <button type="button" aria-pressed={mode === "tree"} onClick={() => set({ view: "tree" })}>Tree</button>
         </div>
+        {/* The layout replaces the history entry, as pinning does: it is not a push key. */}
+        {mode === "tree" && <div className="seg" role="group" aria-label="Layout">
+          <button type="button" aria-pressed={layout === "outline"} onClick={() => set({ layout: null })}>Outline</button>
+          <button type="button" aria-pressed={layout === "org"} onClick={() => set({ layout: "org" })}>Org chart</button>
+        </div>}
         <span className="spacer" />
         <p className={"conn" + (conn === "reconnecting" ? " lost" : "")} role="status" aria-live="polite">{status}</p>
         {mode === "stream" && <label className="chk"><input type="checkbox" checked={follow} onChange={e => setFollow(e.target.checked)} /> Follow</label>}
@@ -142,7 +197,13 @@ export function LivePage() {
       {/* With a session in the URL the stream's own panel says it is loading; the placeholder is for the bare page. */}
       {bare && !h.session && <PageSkeleton />}
       {/* The Wall shows no stream session: one left in the URL from the Stream view does not hide the empty state. */}
-      {list && !sessions.length && (mode === "wall" ? !pins.length : !h.session) && <Empty newest={list.newest} href={sheetHref} />}
+      {list && !sessions.length && (mode === "wall" ? !pins.length : mode === "tree" || !h.session) && <Empty newest={list.newest} href={sheetHref} />}
+      {mode === "tree" && tree.length > 0 && <section className="trees" aria-label="Active sessions">{tree.map(g => <div key={g.id} className="group">
+        <h2 id={`tree-${g.id}`}>{g.label} · {g.roots.length}</h2>
+        {/* Keyed by layout: a switch draws the group anew, with the folds the page keeps. */}
+        <Layout key={layout} roots={g.roots} labelledBy={`tree-${g.id}`} folds={folds} toggle={n => setFolds(f => flip(f, n))} select={select}
+          current={h.session} now={now} sheet={sheetHref} />
+      </div>)}</section>}
       {mode === "wall" && (sessions.length > 0 || pins.length > 0) && <div className={"wallgrid" + (pins.length ? " pinned" : "")}>
         <Wall sessions={sessions} now={now} pins={pins} toggle={togglePin} />
         {pinned.map(p => <Pinned key={p.id} id={p.id} name={label(p.id)} s={p.session} error={p.error} now={now}
@@ -172,7 +233,8 @@ export function LivePage() {
             </div>
             <Strip s={shown} st={stateNow(shown.state, now)} now={now} />
             <Stream key={shown.session_id} s={shown} now={now} text={full} follow={follow} setFollow={setFollow} filters={filters} setFilters={setFilters}
-              choices={choices} setChoices={setChoices} sheet={sheetHref(shown.session_id)} />
+              choices={choices} setChoices={setChoices} sheet={sheetHref(shown.session_id)}
+              reveal={reveal?.session === shown.session_id && sessionAt >= reveal.at ? reveal : null} revealed={revealed} />
           </> : missing ? <p className="muted loading">Session not found. It may be from another store, or its id is mistyped.{" "}
             <a href="/live" onClick={e => { e.preventDefault(); set({ session: null }); }}>Show the active sessions</a></p>
             : sessionError ? <p className="muted loading" role="alert">Could not load this session. {sessionError.message}</p>

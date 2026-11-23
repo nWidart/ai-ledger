@@ -408,10 +408,12 @@ def head_rows(cur, sid, rows, events):
 
 
 def inner_call(r):
-    """The finished, failed tool event of result r: a failed Codex item that no call has the id of, such as a command an
-    exec script ran, with its tool and input. It is no pending call, so it moves no state."""
+    """The finished tool event of result r: a Codex item that no call has the id of, such as a command an exec script
+    ran (failed) or a delegation it ran, with its tool and input. It is no pending call, so it moves no state."""
+    failed = r["error"] is not None
     return dict(key=r["key"], k="tool", ts=r["ts"], lane=r["lane"], id=r["id"], tool=r["tool"], summary=r["summary"], description=None,
-                start=r["ts"], end=r["ts"], failed=True, error=r["error"][:ERROR_CAP], output=None, agent=None, long=False)
+                start=r["ts"], end=r["ts"], failed=failed, error=r["error"][:ERROR_CAP] if failed else None,
+                output=r.get("output") or None, agent=None, long=False)
 
 
 def finish(ev, r):
@@ -545,9 +547,10 @@ def figures(cur, sids, prices):
     return out
 
 
-def sessions(cur, project="", source="", automated=False, now=None, prices=None, text=False, lines=None):
+def sessions(cur, project="", source="", automated=False, now=None, prices=None, text=False, lines=None, with_agents=False):
     """/api/live: sessions with a line in the last ACTIVE, newest first, each with its title, start (first_ts), state,
-    and figures. lines: the Lines that keeps what was read of the lines (a new one by default)."""
+    and figures. lines: the Lines that keeps what was read of the lines (a new one by default). with_agents: each session
+    also holds its agents and agents_more (agents()); without it, nothing of them is read."""
     now = now or now_utc()
     prices = metrics.load_prices() if prices is None else prices
     lines = Lines() if lines is None else lines
@@ -561,15 +564,18 @@ def sessions(cur, project="", source="", automated=False, now=None, prices=None,
     found = titles.titles(cur, sids, prompts=text)
     ended = closed(cur, sids)
     copied = forked(cur, sids, lines)
+    events = {sid: assemble(rows.get(sid, []), copied, lines, cur)[0] for sid in sids}
+    told = agents(cur, {s["session_id"]: s["source"] for s in info}, rows, events, now, prices) if with_agents else {}
     out = []
     for s in info:
         sid = s["session_id"]
-        events, _ = assemble(rows.get(sid, []), copied, lines, cur)
         last = aware(s["last_ts"])
         f = figs[sid]
         out.append(dict(session_id=sid, **title_of(found, sid), project=s["project"], source=s["source"], branch=s["git_branch"],
-                        first_ts=iso(aware(s["first_ts"])), last_ts=iso(last), state=state(events, now, s["source"], last, sid in ended),
-                        window=window_of(f["model"], events, prices), **f))
+                        first_ts=iso(aware(s["first_ts"])), last_ts=iso(last), state=state(events[sid], now, s["source"], last, sid in ended),
+                        window=window_of(f["model"], events[sid], prices), **f))
+        if with_agents:
+            out[-1]["agents"], out[-1]["agents_more"] = told[sid]
     return dict(now=iso(now), sessions=out, newest=None if out else newest_session(cur, where, params))
 
 
@@ -845,34 +851,126 @@ def spawned(cur, sid, rows, events, started):
     return out
 
 
+def lane_requests(cur, prices, where, params):
+    """(session, lane, cost, model, first, last) per subagent lane with a request, of the requests where (over requests r)
+    holds: the cost of its priced requests (None when none is), its newest request's model and its first and newest
+    request's times. A request's lane is the one the store gave it (requests.lane)."""
+    pcte, pparams = metrics.price_cte(prices)
+    return cur.execute(f"""{metrics.requests_cte(pcte, f"{where} AND r.lane IS NOT NULL")}
+        SELECT session_id, lane, sum(cost), last(model ORDER BY ts, message_id), min(ts), max(ts) FROM rq GROUP BY 1, 2""",
+                       pparams + params).fetchall()
+
+
 def lanes(cur, sid, prices):
     """Per subagent lane of the session with a request: its cost (None when no request of its is priced) and its newest
-    request's model, keyed by the events' lane id. requests names no subagent: a request belongs to the lane whose file
-    holds a request line with the request's time (as store.ts_of reads it). No line's text is read for that, except
-    where files of several lanes hold such a line: there the line that names the request decides."""
-    pcte, pparams = metrics.price_cte(prices)
-    held = cur.execute(f"""{metrics.requests_cte(pcte, "r.session_id = ? AND r.subagent")}
-        SELECT rq.message_id, rq.model, rq.cost, l.file, coalesce(f.source, 'claude'), l.key
-        FROM rq JOIN raw_lines l ON try_cast(left(rtrim(replace(l.ts, 'T', ' '), 'Z'), 26) AS TIMESTAMP) = rq.ts
-        LEFT JOIN files f ON f.path = l.file
-        WHERE l.session_id = ? AND l.parsed AND l.subagent AND l.type IN ('assistant', 'token_usage_record')
-        ORDER BY rq.ts, rq.message_id, l.file, l.line_no""", pparams + [sid, sid]).fetchall()
-    files = {}
-    for mid, _, _, path, _, _ in held:
-        files.setdefault(mid, set()).add(path)
-    tied = [key for mid, *_, key in held if len(files[mid]) > 1]
-    named = dict(cur.execute("""SELECT key, coalesce(json_extract_string(json, '$.message.id'), json_extract_string(json, '$.payload.response_id'))
-        FROM raw_lines WHERE session_id = ? AND list_contains(?, key)""", [sid, tied]).fetchall()) if tied else {}
-    out, owned = {}, set()
-    for mid, model, cost, path, source, key in held:
-        if mid in owned or len(files[mid]) > 1 and named[key] != mid:
-            continue
-        owned.add(mid)
-        lane = out.setdefault(lane_of(path, source), dict(cost=None, model=None))
-        lane["model"] = model
-        if cost is not None:
-            lane["cost"] = (lane["cost"] or 0) + cost
+    request's model, keyed by the events' lane id."""
+    return {lane: dict(cost=cost, model=model) for _, lane, cost, model, _, _ in lane_requests(cur, prices, "r.session_id = ?", [sid])}
+
+
+AGENTS_CAP = 200  # the agents one session's entry holds, at most
+DELEGATION_OVER = timedelta(minutes=10)  # a delegation whose call returned this long ago is over (the Tree folds it)
+
+
+def agents(cur, sessions, rows, events, now, prices):
+    """{session: (its agents, how many more were left out)} for /api/live?agents=1. sessions: {id: source}; rows and
+    events: each session's recent rows and their events, as sessions() reads them for the state.
+
+    An agent is a subagent lane (kind agent) or a delegation call (kind delegation), with its parent: the lane that made
+    its starting call, None for the main thread or a lane the entry does not hold. A lane's figures come from its calls
+    and requests, its starting call from spawns, or, for a running Claude Code subagent no line names yet, from its
+    meta.json (started_by). Three grouped queries; no line's text is read. At most AGENTS_CAP per session: the unfinished
+    first, then the finished, newest start first. A delegation whose call returned over DELEGATION_OVER ago ranks as
+    finished, as the Tree folds it, whatever its status."""
+    sids = list(sessions)
+    if not sids:
+        return {}
+    figs = {sid: {} for sid in sids}  # session -> lane -> its figures
+
+    def lane(sid, lid):
+        return figs[sid].setdefault(lid, dict(tools=0, errors=0, cost=None, model=None, first=None, last=None, pending=False))
+
+    for sid, lid, n, err, first, last, pending in cur.execute("""SELECT session_id, lane, count(*), count(*) FILTER (WHERE is_error),
+            min(start_ts), max(coalesce(end_ts, start_ts)), bool_or(end_ts IS NULL) FROM tool_calls
+            WHERE list_contains(?, session_id) AND lane IS NOT NULL GROUP BY 1, 2""", [sids]).fetchall():
+        lane(sid, lid).update(tools=n, errors=err, first=first, last=last, pending=pending)
+    for sid, lid, cost, model, first, last in lane_requests(cur, prices, "list_contains(?, r.session_id)", [sids]):
+        f = lane(sid, lid)
+        f.update(cost=cost, model=model, first=min(filter(None, (f["first"], first)), default=None),
+                 last=max(filter(None, (f["last"], last)), default=None))
+    calls = {sid: {} for sid in sids}  # session -> call id -> its spawns row with its call's end
+    for r in metrics.rows(cur, """SELECT s.session_id, s.call_id, s.kind, s.lane, s.tool, s.description, coalesce(s.start_ts, t.start_ts) AS started,
+            s.agent, s.provider, s.model, s.status, t.end_ts AS ended, coalesce(t.is_error, false) AS failed, t.tool_use_id IS NOT NULL AS called
+            FROM spawns s LEFT JOIN tool_calls t ON t.tool_use_id = s.call_id WHERE list_contains(?, s.session_id)
+            ORDER BY started NULLS FIRST, s.call_id""", [sids]):  # oldest first: a resumed subagent's newest call is its starter
+        calls[r["session_id"]][r["call_id"]] = r
+    out = {}
+    for sid, source in sessions.items():
+        evs = events.get(sid, [])
+        by_lane = {}
+        for e in evs:
+            if e["lane"]:
+                by_lane.setdefault(e["lane"], []).append(e)
+        starter = {r["agent"]: r for r in calls[sid].values() if r["kind"] == "subagent" and r["agent"]}  # lane -> its starting call
+        unnamed = [r for r in rows.get(sid, []) if r[3] and r[4] in store.SOURCES and not store.SOURCES[r[4]].spawn
+                   and lane_of(r[1], r[4]) not in starter]
+        tool_events = {e["id"]: e for e in evs if e["k"] == "tool"}
+        for call, lid in started_by(unnamed, evs).items():
+            r = calls[sid].get(call)
+            starter.setdefault(lid, r or dict(lane=None, tool=None, description=None, call_id=call, called=False))
+        found = []
+        for lid in set(figs[sid]) | set(starter) | set(by_lane):
+            f = figs[sid].get(lid) or lane(sid, lid)
+            r = starter.get(lid)
+            start, end = f["first"], f["last"]
+            found.append(dict(id=lid, kind="agent", parent=r and r["lane"], name=(r and r["tool"]) or "Subagent",
+                              description=r and r["description"],
+                              status=subagent_status(source, by_lane.get(lid, []), r, tool_events, f, now),
+                              start=iso(aware(start)), end=iso(aware(end)), tools=f["tools"], errors=f["errors"], cost=f["cost"],
+                              model=f["model"], provider=None))
+        for r in calls[sid].values():
+            if r["kind"] == "delegation":
+                found.append(dict(id=r["call_id"], kind="delegation", parent=r["lane"], name=r["tool"], description=r["description"],
+                                  status=delegation_status(r), start=iso(aware(r["started"])), end=iso(aware(r["ended"])),
+                                  tools=None, errors=None, cost=None, model=r["model"], provider=r["provider"]))
+        for a in found:
+            if a["description"] is not None:
+                a["description"] = a["description"][:store.SPAWN_TEXT]
+        found.sort(key=lambda a: a["start"] or "", reverse=True)  # ISO times sort as times
+        found.sort(key=lambda a: a["status"] in ("done", "failed") or (  # stable: the unfinished first, each part newest first
+            a["kind"] == "delegation" and a["end"] is not None and now - parse_ts(a["end"]) > DELEGATION_OVER))
+        kept = found[:AGENTS_CAP]
+        ids = {a["id"] for a in kept if a["kind"] == "agent"}
+        for a in kept:
+            if a["parent"] not in ids:
+                a["parent"] = None
+        out[sid] = (kept, len(found) - len(kept))
     return out
+
+
+def subagent_status(source, evs, call, tool_events, f, now):
+    """running or done, for a subagent lane: by its turn marks (evs: its events), else by its starting call (call: its
+    spawns row, or None), else done once none of its calls is pending and its newest call or request (f: its figures) or
+    event is older than IDLE."""
+    if source_of(source).turns:
+        marks = [e["k"] for e in evs if e["k"] in ("turn_start", "turn_end")]
+        if marks:
+            return "done" if marks[-1] == "turn_end" else "running"
+    if call is not None:
+        if call["called"]:
+            return "running" if call["ended"] is None else "done"
+        ev = tool_events.get(call["call_id"])
+        if ev is not None:
+            return "running" if ev["end"] is None else "done"
+    last = max(filter(None, (aware(f["last"]), newest(evs))), default=None)
+    return "running" if f["pending"] or (last is not None and now - last <= IDLE) else "done"
+
+
+def delegation_status(r):
+    """pending, failed, done or started, for a delegation's spawns row with its call's end: done only when its result
+    stated the task completed; started otherwise, as nothing later says when the task ends."""
+    if r["ended"] is None:
+        return "pending"
+    return "failed" if r["failed"] else "done" if r["status"] == "completed" else "started"
 
 
 def compactions(cur, sid):

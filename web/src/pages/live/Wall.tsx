@@ -7,10 +7,7 @@ import { sessionLink } from "../../components/sheets/session";
 import { ApiError } from "../../useApi";
 import { NEAR_FULL, StateTag, Strip } from "./Strip";
 import { Stream } from "./Stream";
-import { groupSessions, INFERRED_WHY, NO_FILTERS, stateNow, stateText, type LaneChoices } from "./live";
-
-/** What a state's hover text says, for where it is no hover: a state's detail, or why it is inferred. */
-const stateWhy = (st: LiveState, now: number) => (st.inferred ? INFERRED_WHY[st.kind] : undefined) ?? stateText(st, now).detail;
+import { groupSessions, NO_FILTERS, shortModel, stateNow, stateText, stateWhy, type LaneChoices } from "./live";
 
 /** A state's tag with its detail as text a screen reader gets, in place of the hover-only title: where the page shows no
  *  detail. A rail entry has no room for "(inferred)": it too is for screen readers only. */
@@ -20,9 +17,6 @@ export function StateNote({ st, now }: { st: LiveState; now: number }) {
 
 /** A session as the page names it: its title, else its project. */
 export const nameOf = (s: Pick<LiveListSession, "title" | "project"> | undefined) => s?.title ?? s?.project ?? "session";
-
-/** A model as a tile names it, as the session sheet does: without the claude- prefix. */
-const shortModel = (m: string | null) => m?.replace(/^claude-/, "") ?? "";
 
 /** What a tile shows, in words and in its order, after "Pin" and the session's name in the tile's accessible name: the
  *  state and its detail, the errors, the project (with a title, which names the tile), the model and the context. */

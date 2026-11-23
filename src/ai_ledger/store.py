@@ -68,7 +68,9 @@ CREATE TABLE IF NOT EXISTS error_marks (category VARCHAR PRIMARY KEY, fixed_on D
 """
 
 DERIVED = ["sessions", "requests", "tool_calls", "prompts", "hooks", "limit_snapshots", "session_facets", "facet_counts", "session_meta",
-           "session_titles", "context_snapshots", "context_parts", "session_runs"]
+           "session_titles", "context_snapshots", "context_parts", "session_runs", "spawns"]
+# lane (requests, tool_calls, spawns): the subagent thread that made the row, as Source.lane names it from its file; NULL for
+# the main thread. A Claude Code main-file line with isSidechain is subagent work with no lane: it has no file of its own.
 DERIVED_SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
   session_id VARCHAR PRIMARY KEY, project VARCHAR, cwd VARCHAR, git_branch VARCHAR,
@@ -79,12 +81,18 @@ CREATE TABLE IF NOT EXISTS requests (
   message_id VARCHAR PRIMARY KEY, session_id VARCHAR, ts TIMESTAMP, model VARCHAR, effort VARCHAR,
   subagent BOOLEAN, input BIGINT, output BIGINT, thinking BIGINT, cache_read BIGINT,
   cache_5m BIGINT, cache_1h BIGINT, thinking_ms BIGINT, stop_reason VARCHAR, speed VARCHAR, reported_cost DOUBLE,
-  context_tokens BIGINT);
+  context_tokens BIGINT, lane VARCHAR);
 CREATE TABLE IF NOT EXISTS tool_calls (
   tool_use_id VARCHAR PRIMARY KEY, session_id VARCHAR, tool VARCHAR, mcp_server VARCHAR,
   skill VARCHAR, input_summary VARCHAR, start_ts TIMESTAMP, end_ts TIMESTAMP, is_error BOOLEAN,
   error VARCHAR, category VARCHAR, followup VARCHAR, subagent BOOLEAN, is_commit BOOLEAN,
-  is_test BOOLEAN, test_passed BOOLEAN, result_file VARCHAR, result_seq BIGINT, result_bytes BIGINT);
+  is_test BOOLEAN, test_passed BOOLEAN, result_file VARCHAR, result_seq BIGINT, result_bytes BIGINT, lane VARCHAR);
+-- One row per call that starts a subagent (kind 'subagent') or delegates a task (kind 'delegation'). description is the
+-- label the agent gave the call, cut to SPAWN_TEXT characters; no prompt or task text. agent: the lane the call started, once
+-- a line names it. provider, model and status: a delegation's, as its input or its result states them.
+CREATE TABLE IF NOT EXISTS spawns (
+  call_id VARCHAR PRIMARY KEY, session_id VARCHAR, kind VARCHAR, lane VARCHAR, tool VARCHAR, description VARCHAR,
+  start_ts TIMESTAMP, agent VARCHAR, provider VARCHAR, model VARCHAR, status VARCHAR);
 CREATE TABLE IF NOT EXISTS prompts (
   prompt_id VARCHAR PRIMARY KEY, session_id VARCHAR, ts TIMESTAMP, interrupted BOOLEAN);
 CREATE TABLE IF NOT EXISTS hooks (
@@ -197,6 +205,8 @@ def open_store(path=None):
     con.execute("ALTER TABLE tool_calls ADD COLUMN IF NOT EXISTS result_bytes BIGINT")  # stores from before the Context page; NULL until rebuild
     con.execute("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS context_window BIGINT")
     con.execute("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS first_compaction_ts TIMESTAMP")
+    for table in ("requests", "tool_calls"):  # stores from before the Live tree; NULL until rebuild
+        con.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS lane VARCHAR")
     for old, new in PROJECT_ALIASES.items():  # names stored before the alias existed
         for table in ("projects_by_cwd", "sessions"):
             con.execute(f"UPDATE {table} SET project = ? WHERE project = ?", [new, old])
@@ -478,10 +488,35 @@ class Deriver:
         self.titles = {}  # session_id -> {"custom" | "agent": newest title of that kind}; no sessions row of its own
         self.contexts = []  # (context_snapshots row, its context_parts rows); only Claude Code's /context lines fill it
         self.runs = {}  # (session_id, start_ms) -> its figures in RUN_FIGURES order; only cost-state lines fill it
+        self.spawns = {}  # call id -> its spawns columns, from a spawn or delegation call
+        self.named = {}  # call id -> (the columns a later line states of the call, whether they need the call stored)
         # Errors from earlier ingests of this file still waiting for Claude's next words.
         self.pending = dict(cur.execute(
             "SELECT tool_use_id, result_seq FROM tool_calls WHERE result_file = ? AND is_error AND followup IS NULL "
             "AND result_seq >= ?", [path, seq - 5]).fetchall())
+
+    @property
+    def lane(self):
+        """The subagent thread this file's lines are (Source.lane), or None for the main thread. A property: Codex learns
+        whether its file is a subagent's from the file's session_meta."""
+        return SOURCES[self.source].lane(self.path) if self.sub else None
+
+    def spawn(self, call_id, sid, kind, tool, description, ts, target=None):
+        """A call that starts a subagent (kind subagent) or delegates a task (kind delegation, with its input's target)."""
+        target = target if isinstance(target, dict) else {}
+        if call_id and call_id not in self.spawns:
+            self.spawns[call_id] = dict(session_id=sid, kind=kind, lane=self.lane, tool=tool, description=spawn_text(description),
+                                        start_ts=ts, provider=text_or_none(target.get("providerInstanceId")),
+                                        model=text_or_none(target.get("model")))
+
+    def spawn_result(self, call_id, sid, need_call=True, **cols):
+        """What a later line states of call call_id: the subagent it started (agent), or a delegation's provider, model and
+        status. need_call: the line can follow any call (Claude Code's result lines), so it counts only for a call recorded
+        in spawns, in this pass or stored."""
+        cols = {k: v for k, v in cols.items() if isinstance(v, str) and v}
+        if call_id and cols:
+            old, need = self.named.get(call_id, ({}, need_call))
+            self.named[call_id] = (old | cols | dict(session_id=sid), need and need_call)
 
     def session(self, d):
         sid = d.get("sessionId")
@@ -584,7 +619,7 @@ class Deriver:
             sub = self.sub or bool(d.get("isSidechain"))
             self.requests[mid] = (mid, sid, ts, model, d.get("effort"), sub, inp, u.get("output_tokens") or 0,
                                   (u.get("output_tokens_details") or {}).get("thinking_tokens") or 0, cr, c5m or 0, c1h,
-                                  d.get("thinkingDurationMs"), msg.get("stop_reason"), u.get("speed"), None, None)
+                                  d.get("thinkingDurationMs"), msg.get("stop_reason"), u.get("speed"), None, None, self.lane)
             if s and not sub and inp + cr + cw > s["peak"]:
                 s["peak"], s["peak_model"] = inp + cr + cw, model
         if not isinstance(content, list):
@@ -602,6 +637,11 @@ class Deriver:
                     input_summary=summary, start_ts=ts, subagent=self.sub or bool(d.get("isSidechain")),
                     is_commit=shell and GIT_COMMIT.search(summary) is not None,
                     is_test=shell and runs_tests(summary))
+                inp = inp if isinstance(inp, dict) else {}
+                if name in SPAWN_TOOLS:
+                    self.spawn(x["id"], sid, "subagent", name, inp.get("description"), ts)
+                elif name == DELEGATE:
+                    self.spawn(x["id"], sid, "delegation", name, inp.get("title"), ts, inp.get("target"))
             elif x.get("type") in ("text", "thinking"):
                 said = ((x.get("text") if x.get("type") == "text" else x.get("thinking")) or "").strip()
                 if said:
@@ -631,6 +671,12 @@ class Deriver:
                                                          sub=self.sub or bool(d.get("isSidechain")))
                     if err:
                         self.pending[x["tool_use_id"]] = self.seq
+                    # An Agent or Task result names the subagent; a delegation's result states its task's status and target.
+                    done = d.get("toolUseResult") if isinstance(d.get("toolUseResult"), dict) else {}
+                    meta = d.get("mcpMeta") if isinstance(d.get("mcpMeta"), dict) else {}
+                    task = meta.get("structuredContent") if isinstance(meta.get("structuredContent"), dict) else {}
+                    self.spawn_result(x["tool_use_id"], sid, agent=done.get("agentId"), status=task.get("status"),
+                                      model=task.get("model"), provider=task.get("providerInstanceId"))
         origin = (d.get("origin") or {}).get("kind") if isinstance(d.get("origin"), dict) else None
         human = (pid and not d.get("isMeta") and not d.get("isSidechain") and origin in (None, "human")
                  and text.strip() and not text.lstrip().startswith((INTERRUPT, CONTEXT_COMMAND))
@@ -660,9 +706,10 @@ class Deriver:
                     "ELSE least(sessions.first_compaction_ts, excluded.first_compaction_ts) END")
         insert(cur, "requests", ["message_id", "session_id", "ts", "model", "effort", "subagent", "input", "output",
                                  "thinking", "cache_read", "cache_5m", "cache_1h", "thinking_ms", "stop_reason", "speed",
-                                 "reported_cost", "context_tokens"],
+                                 "reported_cost", "context_tokens", "lane"],
                list(self.requests.values()))
         self.flush_tools()
+        self.flush_spawns()
         insert(cur, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], list(self.prompts.values()))
         if self.interrupted:
             update_from(cur, "prompts", "prompt_id", ["interrupted"], [(p, True) for p in self.interrupted])
@@ -703,7 +750,7 @@ class Deriver:
                 f"SELECT tool_use_id, tool, input_summary, end_ts IS NOT NULL FROM tool_calls WHERE tool_use_id IN ({','.join('?' * len(ids))})", ids).fetchall()})
         cols = ["tool_use_id", "session_id", "tool", "mcp_server", "skill", "input_summary", "start_ts", "end_ts", "is_error",
                 "error", "category", "followup", "subagent", "is_commit", "is_test", "test_passed", "result_file", "result_seq",
-                "result_bytes"]
+                "result_bytes", "lane"]
         new, done = [], []
         denied = set()
         for tid, u in self.uses.items():
@@ -715,14 +762,32 @@ class Deriver:
                 tool, summary, has_result = earlier[tid]
                 if not has_result:
                     row = self.tool_row(tid, None, r, tool, summary, denied)
-                    done.append((tid,) + row[7:12] + row[15:])
+                    done.append((tid,) + row[7:12] + row[15:19])  # the result's columns: the call keeps its lane
             else:
                 new.append(self.tool_row(tid, dict(session_id=r["session_id"], tool="?", mcp_server=None, skill=None,
                                                    input_summary="", start_ts=None, subagent=r["sub"], is_commit=False,
                                                    is_test=False), r, "?", "", denied))
         insert(cur, "tool_calls", cols, new)
-        update_from(cur, "tool_calls", "tool_use_id", cols[7:12] + cols[15:], done, where="AND tool_calls.end_ts IS NULL")
+        update_from(cur, "tool_calls", "tool_use_id", cols[7:12] + cols[15:19], done, where="AND tool_calls.end_ts IS NULL")
         self.interrupted |= denied
+
+    def flush_spawns(self):
+        """One upsert of the spawn calls and of what later lines state of them, so the call and such a line can come in either
+        order and in different ingests. A value a line states replaces none; a delegation's provider and model from its
+        input (a call's row, kind set) stand over those its result states."""
+        waiting = [c for c, (_, need) in self.named.items() if need and c not in self.spawns]
+        stored = {r[0] for r in self.cur.execute("SELECT call_id FROM spawns WHERE list_contains(?, call_id)",
+                                                 [waiting]).fetchall()} if waiting else set()
+        rows = {c: cols for c, (cols, need) in self.named.items() if not need or c in self.spawns or c in stored}
+        for c, cols in self.spawns.items():
+            rows[c] = rows.get(c, {}) | {k: v for k, v in cols.items() if v is not None}
+        names = ["session_id", "kind", "lane", "tool", "description", "start_ts", "agent", "provider", "model", "status"]
+        first = ("provider", "model")
+        sets = [f"{k} = coalesce(excluded.{k}, spawns.{k})" for k in names if k not in first] + [
+            f"{k} = CASE WHEN excluded.kind IS NULL THEN coalesce(spawns.{k}, excluded.{k}) ELSE coalesce(excluded.{k}, spawns.{k}) END"
+            for k in first]
+        insert(self.cur, "spawns", ["call_id", *names], [(c, *(cols.get(k) for k in names)) for c, cols in rows.items()],
+               tail="ON CONFLICT (call_id) DO UPDATE SET " + ", ".join(sets))
 
     def tool_row(self, tid, u, r, tool, summary, denied):
         u = u or {}
@@ -733,7 +798,7 @@ class Deriver:
                 u.get("start_ts"), r and r["end_ts"], r and r["is_error"], r and r["error"] and r["error"][:700], cat,
                 None, u.get("subagent"), u.get("is_commit"), u.get("is_test"),
                 None if not r else not r["is_error"], self.path if r else None,
-                r and r["seq"], r and r["bytes"])
+                r and r["seq"], r and r["bytes"], self.lane)
 
 
 # The lists of a contextUsage object that become context_parts: (kind, list, the field of its name, the field of its detail).
@@ -749,6 +814,16 @@ RUN_FIGURES = {"api_ms": "totalAPIDuration", "tool_ms": "totalToolDuration", "li
 
 def text_or_none(v):
     return v if isinstance(v, str) else None
+
+
+SPAWN_TOOLS = ("Agent", "Task")  # Claude Code's tools that start a subagent
+DELEGATE = "mcp__t3-code__delegate_task"  # the tool that delegates a task to another agent, in any source
+SPAWN_TEXT = 300  # the longest description spawns keeps: the Live tree never shows more
+
+
+def spawn_text(v):
+    """A spawn call's description as spawns keeps it: its first SPAWN_TEXT characters, or None for no text."""
+    return v[:SPAWN_TEXT] if isinstance(v, str) and v else None
 
 
 def mcp_server_of(tool):

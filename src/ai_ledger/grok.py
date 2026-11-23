@@ -404,8 +404,8 @@ class GrokDeriver(store.Deriver):
 
     def adopt(self, child):
         """Make spawned session child this session's subagent work when its lines were stored as a session of their own,
-        as happens when its log was read before this one: its lines move here as a rebuild places them, its tool calls
-        and hooks move here as subagent work, and its session, requests, runs, prompts and titles go (this session's
+        as happens when its log was read before this one: its lines move here as a rebuild places them, its tool calls,
+        spawn calls and hooks move here as subagent work (the calls of its own thread in the child's lane), and its session, requests, runs, prompts and titles go (this session's
         turns already hold its usage). Nothing to do for a child placed already or not read yet.
 
         The id comes from a transcript line, so only a Grok session is adopted: its session row's source is grok and its
@@ -428,7 +428,10 @@ class GrokDeriver(store.Deriver):
                     [self.sid, child, files])
         for table in ("sessions", "requests", "session_runs", "prompts", "session_titles"):
             cur.execute(f"DELETE FROM {table} WHERE session_id = ?", [child])
-        cur.execute("UPDATE tool_calls SET session_id = ?, subagent = true WHERE session_id = ?", [self.sid, child])
+        # The child's own calls were main-thread work of its session: they become its lane. Its subagents' keep theirs.
+        cur.execute("UPDATE tool_calls SET session_id = ?, subagent = true, lane = coalesce(lane, ?) WHERE session_id = ?",
+                    [self.sid, child, child])
+        cur.execute("UPDATE spawns SET session_id = ?, lane = coalesce(lane, ?) WHERE session_id = ?", [self.sid, child, child])
         cur.execute("UPDATE hooks SET session_id = ? WHERE session_id = ?", [self.sid, child])
 
     def ancestors(self):
@@ -445,6 +448,12 @@ class GrokDeriver(store.Deriver):
         self.uses[tid] = dict(session_id=self.sid, tool=name, mcp_server=server, skill=None, input_summary=summary,
                               start_ts=ts, subagent=self.sub, is_commit=shell and GIT_COMMIT.search(summary) is not None,
                               is_test=shell and runs_tests(summary))
+        raw = u.get("rawInput") if isinstance(u.get("rawInput"), dict) else {}
+        if name == "spawn_subagent":
+            self.spawn(tid, self.sid, "subagent", name, raw.get("description"), ts)
+        elif name == store.DELEGATE:  # its result is the tool's text: it states no status of the task
+            args = raw.get("tool_input") if isinstance(raw.get("tool_input"), dict) else {}
+            self.spawn(tid, self.sid, "delegation", name, args.get("title"), ts, args.get("target"))
 
     def tool_result(self, u, m, ts):
         """The final tool_call_update of a call: the one that states a status. The tool's name is on its tool_call line."""
@@ -459,6 +468,9 @@ class GrokDeriver(store.Deriver):
                                  session_id=self.sid, seq=self.seq, sub=self.sub, bytes=len(text.encode("utf-8")))
         if err is not None:
             self.pending[tid] = self.seq
+        out = u.get("rawOutput") if isinstance(u.get("rawOutput"), dict) else {}
+        if out.get("type") == "SubagentCompleted":  # the spawn_subagent call's result names the child session
+            self.spawn_result(tid, self.sid, need_call=False, agent=out.get("subagent_id"))
 
     def stored_tool(self, tid):
         """The tool of a call whose tool_call line came in an earlier ingest: from tool_calls."""
@@ -574,4 +586,5 @@ class GrokDeriver(store.Deriver):
         if mid in self.requests:
             return
         inp, out, thinking, cr, cw = kinds
-        self.requests[mid] = (mid, self.sid, ts, model, None, False, inp, out, thinking, cr, cw, 0, None, stop, None, cost, context)
+        self.requests[mid] = (mid, self.sid, ts, model, None, False, inp, out, thinking, cr, cw, 0, None, stop, None, cost, context,
+                              self.lane)
