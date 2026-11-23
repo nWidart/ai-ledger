@@ -540,6 +540,12 @@ class SessionTest(LiveCase):
         with mock.patch.object(live, "AGENTS_CAP", 3):  # the unfinished first, then the finished, newest start first
             capped = listed()
         self.assertEqual(([a["id"] for a in capped["agents"]], capped["agents_more"]), (["d4", "d1", "d3"], 1))
+        # Over 10 minutes after its call returned, the started d4 ranks as finished, as the Tree folds it; its status stays.
+        self.write("s1.jsonl", assistant("a9", "m9", at(700), [dict(type="text", text="still here")]))
+        self.ingest()
+        with mock.patch.object(live, "AGENTS_CAP", 3):
+            aged = live.sessions(self.cur(), automated=True, now=NOW + timedelta(minutes=11), prices=PRICES, with_agents=True)["sessions"][0]
+        self.assertEqual([(a["id"], a["status"]) for a in aged["agents"]], [("d1", "pending"), ("d4", "started"), ("d3", "done")])
 
     def test_long_call_marked_on_its_event(self):
         self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Bash", command="npm run dev", run_in_background=True),

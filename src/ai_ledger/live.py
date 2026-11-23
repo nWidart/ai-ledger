@@ -866,6 +866,7 @@ def lanes(cur, sid, prices):
 
 
 AGENTS_CAP = 200  # the agents one session's entry holds, at most
+DELEGATION_OVER = timedelta(minutes=10)  # a delegation whose call returned this long ago is over (the Tree folds it)
 
 
 def agents(cur, sessions, rows, events, now, prices):
@@ -876,7 +877,8 @@ def agents(cur, sessions, rows, events, now, prices):
     its starting call, None for the main thread or a lane the entry does not hold. A lane's figures come from its calls
     and requests, its starting call from spawns, or, for a running Claude Code subagent no line names yet, from its
     meta.json (started_by). Three grouped queries; no line's text is read. At most AGENTS_CAP per session: the unfinished
-    first, then the finished, newest start first."""
+    first, then the finished, newest start first. A delegation whose call returned over DELEGATION_OVER ago ranks as
+    finished, as the Tree folds it, whatever its status."""
     sids = list(sessions)
     if not sids:
         return {}
@@ -932,7 +934,8 @@ def agents(cur, sessions, rows, events, now, prices):
             if a["description"] is not None:
                 a["description"] = a["description"][:store.SPAWN_TEXT]
         found.sort(key=lambda a: a["start"] or "", reverse=True)  # ISO times sort as times
-        found.sort(key=lambda a: a["status"] in ("done", "failed"))  # stable: the unfinished first, each part newest first
+        found.sort(key=lambda a: a["status"] in ("done", "failed") or (  # stable: the unfinished first, each part newest first
+            a["kind"] == "delegation" and a["end"] is not None and now - parse_ts(a["end"]) > DELEGATION_OVER))
         kept = found[:AGENTS_CAP]
         ids = {a["id"] for a in kept if a["kind"] == "agent"}
         for a in kept:

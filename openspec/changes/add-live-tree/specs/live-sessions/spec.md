@@ -113,7 +113,7 @@ A delegation's status SHALL be `pending` while its call has no result, `failed` 
 - **THEN** its status is `failed`
 
 ### Requirement: Cap the agents of one session
-A session's entry SHALL hold at most 200 agents: first those not finished, then the finished ones, newest start first. A subagent is finished when `done`, a delegation when `done` or `failed`. The entry SHALL say how many agents it left out (`agents_more`), 0 when none.
+A session's entry SHALL hold at most 200 agents: first those not finished, then the finished ones, newest start first. A subagent is finished when `done`, a delegation when `done` or `failed` or when its call returned more than 10 minutes ago, as the Tree folds it; the delegation's `status` stays as it is. The entry SHALL say how many agents it left out (`agents_more`), 0 when none.
 
 #### Scenario: Session with 260 agents
 - **WHEN** a session has 10 running subagents and 250 finished ones
