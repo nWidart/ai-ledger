@@ -421,6 +421,27 @@ export interface LiveListSession extends LiveFigures, LiveTitle {
   session_id: string; project: string | null; source: Source; branch: string | null;
   /** Its first line's time (the session's start) and its newest line's. */
   first_ts: Ts | null; last_ts: Ts | null; state: LiveState;
+  /** Only when asked for (agents=1): the session's subagents and delegation calls, at most 200, and how many more were left out. */
+  agents?: LiveAgent[]; agents_more?: number;
+}
+/** A subagent or a delegation call of a session, flat: parent names the subagent lane that started it. */
+export interface LiveAgent {
+  /** A lane id, or a delegation's call id. */
+  id: string;
+  kind: "agent" | "delegation";
+  /** A lane id; null: the main thread. */
+  parent: string | null;
+  /** The starting call's tool, else "Subagent"; a delegation's tool. */
+  name: string;
+  /** At most 300 characters. */
+  description: string | null;
+  /** running or done for a subagent; pending (no result yet), started, done or failed for a delegation. */
+  status: "running" | "done" | "pending" | "started" | "failed";
+  start: Ts | null; end: Ts | null;
+  /** null for a delegation. */
+  tools: number | null; errors: number | null; cost: number | null;
+  /** provider: a delegation's target provider. */
+  model: string | null; provider: string | null;
 }
 /** The user automated projects file next to the store, why it was ignored, and the projects it adds. */
 export interface AutomatedFile { path: string; error: string | null; projects: string[] }
@@ -653,8 +674,9 @@ export const limitWindowUrl = (h: Pick<LimitHistoryRow, "provider" | "limit_id" 
   `/api/limits/window?${qs({ provider: h.provider, limit_id: h.limit_id, scope: h.scope, start: h.start, resets_at: h.resets_at })}`;
 export const contextUrl = (v: View) => `/api/context?${qs(viewQs(v))}`;
 export const insightsUrl = (v: View) => `/api/insights?${qs(viewQs(v))}`;
-export const liveUrl = (v: View, text = false) => {
-  const q = qs({ project: v.project, automated: v.automated, source: v.source, text });
+/** agents: each session's agents too, for the Tree. */
+export const liveUrl = (v: View, text = false, agents = false) => {
+  const q = qs({ project: v.project, automated: v.automated, source: v.source, text, agents });
   return q ? `/api/live?${q}` : "/api/live";
 };
 export const liveSessionUrl = (id: string, o: { after?: string | null; text?: boolean } = {}) =>

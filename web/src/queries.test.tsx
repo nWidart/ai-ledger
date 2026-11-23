@@ -96,8 +96,9 @@ describe("live", () => {
     return async () => { await client.fetchQuery(o); return client.getQueryData(o.queryKey)!; };
   };
 
-  it("key the list by project, automated, source and text, and the session by id and text", () => {
-    expect(queries.liveList(v, true).queryKey).toEqual(["live", "list", { project: "p", automated: false, source: "" }, true]);
+  it("key the list by project, automated, source, text and agents, and the session by id and text", () => {
+    expect(queries.liveList(v, true).queryKey).toEqual(["live", "list", { project: "p", automated: false, source: "" }, true, false]);
+    expect(queries.liveList(v, false, true).queryKey).toEqual(["live", "list", { project: "p", automated: false, source: "" }, false, true]);
     expect(hashKey(queries.liveList({ ...v, range: 7 }).queryKey)).toBe(hashKey(queries.liveList(v).queryKey)); // Live has no range
     expect(hashKey(queries.liveList({ ...v, automated: true }).queryKey)).not.toBe(hashKey(queries.liveList(v).queryKey));
     expect(queries.liveSession("s1").queryKey).toEqual(["live", "session", "s1", false]);
@@ -140,7 +141,7 @@ describe("live", () => {
     const client = makeTestClient(), low: RequestInit = { priority: "low" };
     await client.fetchQuery(queries.liveSession("s1"));
     await client.fetchQuery(queries.liveSession("s1", false, low));
-    await client.fetchQuery(queries.liveList(v, false, low));
+    await client.fetchQuery(queries.liveList(v, false, false, low));
     expect(f.mock.calls.map(c => c[1])).toEqual([{ signal: expect.any(AbortSignal) }, ...[1, 2].map(() => ({ priority: "low", signal: expect.any(AbortSignal) }))]);
   });
 });

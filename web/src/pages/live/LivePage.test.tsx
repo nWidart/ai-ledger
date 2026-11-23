@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { LiveEvent, LivePayload, LiveSession, LiveState, LiveToolEvent } from "../../api";
+import type { LiveAgent, LiveEvent, LivePayload, LiveSession, LiveState, LiveToolEvent } from "../../api";
 import live from "../../__fixtures__/live";
 import liveListText from "../../__fixtures__/live-text";
 import liveSession from "../../__fixtures__/live-session";
@@ -16,6 +16,18 @@ import { queries } from "../../queries";
 import { renderPage, renderRouter } from "../../testing";
 
 const list = live as LivePayload, listText = liveListText as LivePayload, s1 = liveSession as LiveSession, s1text = liveText as LiveSession, codex = liveCodex as LiveSession;
+/** The list as the Tree asks for it (agents=1): s1 with its done lane a7 and its delegation call t0, both from its events,
+ *  two running subagents, one under the other, and 60 agents left out. */
+const agentOf = (id: string, o: Partial<LiveAgent>): LiveAgent => ({ id, kind: "agent", parent: null, name: "Agent", description: null, status: "running",
+  start: null, end: null, tools: 0, errors: 0, cost: null, model: null, provider: null, ...o });
+const treeList: LivePayload = { ...list, sessions: list.sessions.map(s => (s.session_id !== "s1" ? { ...s, agents: [] } : { ...s, agents_more: 60, agents: [
+  agentOf("a7", { description: "find callers of ingest", status: "done", start: "2026-11-10T10:00:04.000Z", end: "2026-11-10T10:00:10.000Z", tools: 3, cost: 0.0084, model: "claude-opus-5-5" }),
+  agentOf("t0", { kind: "delegation", name: "mcp__t3-code__delegate_task", description: "Review the fixture", status: "started", start: "2026-11-10T10:00:02.000Z",
+    end: "2026-11-10T10:00:03.000Z", tools: null, errors: null }),
+  agentOf("a8", { description: "Map the parsers", start: "2026-11-10T10:00:30.000Z", tools: 2 }),
+  agentOf("a9", { parent: "a8", description: "Read the specs", start: "2026-11-10T10:00:40.000Z" }),
+] })) };
+const S1_TITLE = "Fast ingest pass while the Live page stays open and polling", FOLD = "1 finished subagent, 1 earlier delegation";
 
 /** The text the page's failure banner ends with: its Troubleshooting link, with the link's hidden suffix. */
 const TROUBLESHOOTING = " Troubleshooting, Troubleshooting and FAQ documentation, opens in a new tab";
@@ -1678,6 +1690,88 @@ describe("LivePage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Wall" }));
     await wall();
     expect([FakeSource.made, FakeSource.last, source.closed]).toEqual([made, source, false]);
+  });
+
+  it("shows the Tree by state group with each session's agents, a fold shared by both layouts and the agents left out", async () => {
+    show("?view=tree", { list: treeList });
+    const el = await rail(), node = (name: string | RegExp) => within(el).getByRole("button", { name });
+    await within(el).findByRole("button", { name: /^Agent: Map the parsers\./ });
+    expect([...el.querySelectorAll("h2")].map(h => h.textContent)).toEqual(groupSessions(list.sessions, Date.now()).map(g => `${g.label} · ${g.sessions.length}`));
+    const s1Item = document.getElementById("node:s1")!.closest("li")!;
+    const names = () => [...s1Item.querySelectorAll("button")].map(b => b.querySelector(".sr")!.textContent!.split(". ")[0]);
+    expect(names()).toEqual([S1_TITLE, "Agent: Map the parsers", "Agent: Read the specs", FOLD]);
+    expect(document.getElementById("node:s1/a8")!.closest("li")!.contains(document.getElementById("node:s1/a9"))).toBe(true);
+    expect(document.getElementById("more:s1")!.textContent).toBe("60 older agents not shown · Session sheet");
+    expect(within(document.getElementById("more:s1")!).getByRole("link", { name: "Session sheet" }).getAttribute("href")).toBe("/live?view=tree&sheet=s1");
+    expect([screen.queryByRole("checkbox", { name: "Follow" }), screen.queryByRole("checkbox", { name: "Full text" })]).toEqual([null, null]);
+    // The fold opens, and stays open in the Org chart, which replaces the history entry and keeps the focus on the toggle.
+    await userEvent.click(node(FOLD));
+    expect([node(FOLD).getAttribute("aria-expanded"), names().slice(-2)]).toEqual(["true", ["Delegated task: Review the fixture", "Agent: find callers of ingest"]]);
+    const entries = history.length, org = screen.getByRole("button", { name: "Org chart" });
+    await userEvent.click(org);
+    expect([location.search, history.length, org.getAttribute("aria-pressed"), document.activeElement]).toEqual(["?view=tree&layout=org", entries, "true", org]);
+    expect([node(FOLD).getAttribute("aria-expanded"), names().length]).toEqual(["true", 6]);
+    await userEvent.click(screen.getByRole("button", { name: "Outline" }));
+    expect([location.search, screen.getByRole("button", { name: "Outline" }).getAttribute("aria-pressed")]).toEqual(["?view=tree", "true"]);
+  });
+
+  it("asks for the agents in the Tree only, with no text, over the one connection of Stream, Wall, Tree and a layout switch", async () => {
+    const { calls } = show("?session=s1", { list: treeList });
+    await stream();
+    const source = FakeSource.last!, made = FakeSource.made;
+    source.open();
+    await userEvent.click(check("Full text"));
+    await waitFor(() => expect(calls()).toContain("/api/live?text=1"));
+    await userEvent.click(screen.getByRole("button", { name: "Wall" }));
+    await wall();
+    const n = calls().length;
+    expect(calls().filter(u => u.includes("agents="))).toEqual([]);
+    await userEvent.click(screen.getByRole("button", { name: "Tree" }));
+    expect(location.search).toBe("?view=tree&session=s1");
+    await within(await rail()).findByRole("button", { name: /^Agent: Map the parsers\./ });
+    await userEvent.click(screen.getByRole("button", { name: "Org chart" }));
+    source.notify(null);
+    await settle();
+    expect([...new Set(calls().slice(n).filter(u => u.startsWith("/api/live?") || u === "/api/live"))]).toEqual(["/api/live?agents=1"]);
+    await userEvent.click(screen.getByRole("button", { name: "Stream" }));
+    expect(location.search).toBe("?session=s1"); // the layout leaves with the Tree
+    expect([FakeSource.made, FakeSource.last, source.closed]).toEqual([made, source, false]);
+  });
+
+  it("opens a Tree node in the Stream: a session on its heading, a done subagent's lane and a delegation's row in view, and Back to the Tree", async () => {
+    show("?view=tree&layout=org&session=s1", { list: treeList });
+    const node = async (name: string | RegExp) => within(await rail()).findByRole("button", { name }); // the Tree is drawn anew on each return
+    const back = async () => {
+      act(() => history.back());
+      await waitFor(() => expect(location.search).toBe("?view=tree&layout=org&session=s1"));
+      return node(new RegExp(`^${S1_TITLE}`));
+    };
+    const session = await node(new RegExp(`^${S1_TITLE}`));
+    expect(session.getAttribute("aria-current")).toBe("true");
+    await userEvent.click(session);
+    expect(location.search).toBe("?session=s1");
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("region", { name: "Session" }).querySelector(".stream-head h2")));
+    expect(check("Follow").checked).toBe(true);
+    expect((await back()).getAttribute("aria-current")).toBe("true");
+    expect(screen.getByRole("button", { name: "Org chart" }).getAttribute("aria-pressed")).toBe("true");
+    // A done subagent: its lane, which the stream folds, opens, takes the focus, and Follow turns off.
+    await userEvent.click(await node(FOLD));
+    await userEvent.click(await node(/^Agent: find callers of ingest\./));
+    await stream();
+    await waitFor(() => expect(document.activeElement).toBe(laneHead()));
+    expect([laneHead().getAttribute("aria-expanded"), check("Follow").checked]).toEqual(["true", false]);
+    await back();
+    // A delegation: its call's row.
+    await userEvent.click(await node(/^Delegated task: Review the fixture\./));
+    await stream();
+    await waitFor(() => expect((document.activeElement as HTMLElement).dataset.call).toBe("t0"));
+    expect(check("Follow").checked).toBe(false);
+    await back();
+    // A subagent none of whose calls the stream holds: the stream opens as for its session.
+    await userEvent.click(await node(/^Agent: Map the parsers\./));
+    await stream();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("region", { name: "Session" }).querySelector(".stream-head h2")));
+    expect(check("Follow").checked).toBe(true);
   });
 
   it("shows each rail entry's errors only when there are any, and its context as text, and names it with both", async () => {

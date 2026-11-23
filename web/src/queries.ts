@@ -66,11 +66,11 @@ export const queries = {
   errorDetail: (id: string) => queryOptions({ queryKey: ["errors", "detail", id], queryFn: get<ErrorDetail>(errorUrl(id)), staleTime: Infinity }),
   // Live. Always stale: no notice reaches a key the page does not show, so a key shown again (a session opened again, Live
   // opened again) draws what is cached and asks again. No focus refetch: the page's return to the tab is useLive's, which
-  // knows about Pause. init: the fetch priority of useLive's recheck.
-  liveList: (v: View, text = false, init?: RequestInit) =>
+  // knows about Pause. agents: with each session's agents, the Tree's. init: the fetch priority of useLive's recheck.
+  liveList: (v: View, text = false, agents = false, init?: RequestInit) =>
     queryOptions({
-      queryKey: ["live", "list", { project: v.project, automated: v.automated, source: v.source }, text],
-      queryFn: get<LivePayload>(liveUrl(v, text), init),
+      queryKey: ["live", "list", { project: v.project, automated: v.automated, source: v.source }, text, agents],
+      queryFn: get<LivePayload>(liveUrl(v, text, agents), init),
       staleTime: 0,
       refetchOnWindowFocus: false,
     }),

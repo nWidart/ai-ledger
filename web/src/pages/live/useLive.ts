@@ -58,9 +58,10 @@ function useLastError(q: UseQueryResult<unknown, Error>, of = ""): Error | undef
 type Asked = "list" | "session" | `pin:${string}`;
 const NO_PINS: readonly string[] = [];
 
-export function useLive(view: View, selected: string, text: boolean, paused: boolean, pins: readonly string[] = NO_PINS): LiveData {
+/** agents: the list with each session's agents, which the Tree alone asks for. */
+export function useLive(view: View, selected: string, text: boolean, paused: boolean, pins: readonly string[] = NO_PINS, agents = false): LiveData {
   const client = useQueryClient(), visible = usePageVisible();
-  const listQ = useQuery(queries.liveList(view, text)), sessionQ = useQuery({ ...queries.liveSession(selected, text), enabled: !!selected });
+  const listQ = useQuery(queries.liveList(view, text, agents)), sessionQ = useQuery({ ...queries.liveSession(selected, text), enabled: !!selected });
   // The pins, one query each, never with Full text: that is the Stream view's.
   const pinQs = useQueries({ queries: pins.map(id => queries.liveSession(id, false)) });
   // Each pin's failure, held while it is asked again, as useLastError holds the session's. Kept in a Map: a pin is any id
@@ -89,8 +90,8 @@ export function useLive(view: View, selected: string, text: boolean, paused: boo
   const listError = useLastError(listQ), sessionError = useLastError(sessionQ, selected);
   const [conn, setConn] = useState<Conn>("connecting");
   const [held, setHeld] = useState(0);
-  const cur = useRef({ view, selected, text, paused, visible, pins });
-  cur.current = { view, selected, text, paused, visible, pins };
+  const cur = useRef({ view, selected, text, paused, visible, pins, agents });
+  cur.current = { view, selected, text, paused, visible, pins, agents };
 
   // A notice's fetch of the list or of the selected session: one request at a time, and one more after it for the
   // notices that came meanwhile, as the status below. No request is cancelled: with a notice a second and answers slower
@@ -192,7 +193,7 @@ export function useLive(view: View, selected: string, text: boolean, paused: boo
     if (paused || !visible) return;
     const t = window.setInterval(() => {
       const c = cur.current;
-      client.fetchQuery(queries.liveList(c.view, c.text, LOW)).catch(() => {});
+      client.fetchQuery(queries.liveList(c.view, c.text, c.agents, LOW)).catch(() => {});
       if (c.selected) client.fetchQuery(queries.liveSession(c.selected, c.text, LOW)).catch(() => {});
       for (const id of c.pins) client.fetchQuery(queries.liveSession(id, false, LOW)).catch(() => {});
     }, RECHECK_MS);

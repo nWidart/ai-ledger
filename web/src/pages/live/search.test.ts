@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 import { pinsOf, validateSearch } from "./search";
 
 describe("Live search", () => {
-  it("keeps the wall view and drops any other", () => {
+  it("keeps the wall and tree views and drops any other, and the Org chart layout only in the tree", () => {
     expect(validateSearch({ view: "wall" })).toEqual({ view: "wall" });
+    expect(validateSearch({ view: "tree" })).toEqual({ view: "tree" });
+    expect(validateSearch({ view: "tree", layout: "org" })).toEqual({ view: "tree", layout: "org" });
+    expect(validateSearch({ view: "tree", layout: "cards" })).toEqual({ view: "tree" });
+    expect(validateSearch({ layout: "org" })).toEqual({});
+    expect(validateSearch({ view: "wall", layout: "org" })).toEqual({ view: "wall" });
     expect(validateSearch({ view: "stream" })).toEqual({});
     expect(validateSearch({ view: "" })).toEqual({});
     expect(validateSearch({ view: true })).toEqual({});
