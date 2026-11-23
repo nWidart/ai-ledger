@@ -67,7 +67,7 @@ const cells = (n: Exclude<TreeNode, { kind: "fold" | "more" }>, now: number, lea
   const f = faceOf(n, now), session = n.kind === "session";
   const meta = session ? [f.description, f.model].filter(Boolean).join(" · ") : "", model = session ? "" : [f.provider, f.model].filter(Boolean).join(" ");
   const icon = !session && (f.tone === "running" || f.tone === "pending") ? <span className="spin" title={f.state} />
-    : <span className={"state st-" + f.tone} title={session ? undefined : f.why ?? f.state}><i /></span>;
+    : <span className={`st-${f.tone} state`} title={session ? undefined : f.why ?? f.state}><i /></span>;
   return <>
     <span className="nd">
       {lead}
