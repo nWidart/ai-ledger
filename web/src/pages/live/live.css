@@ -299,50 +299,78 @@
 }
 
 /* Outline */
-/* One tree per state group. Every row shares the tree's columns, through subgrids down to each row: the state, the name
-   and description, then the figures. A level indents the name and description 24px (--lvl, set per row, counts the levels
-   under the session), up to 8 levels, so a deep row keeps room for its name; the state and the figures stay in line. */
-.pg-live .outline { list-style: none; margin: var(--space-2) 0 var(--space-6); padding: 0; display: grid; column-gap: var(--space-6);
-  grid-template-columns: [state] auto [name] minmax(0, 1fr) [tools] auto [errs] auto [dur] auto [cost] auto [mdl] auto; font-size: var(--fs-sm); }
+/* The groups sit in one card, its headings as the panels' headings on this page. The card stops at 76rem, room for a name
+   and most of a description: wider, the name column would only push the figures away from the names they belong to. */
+.pg-live .trees.panel { max-width: 76rem; padding: var(--space-5) var(--space-6) var(--space-4); }
+.pg-live .trees.panel h2 { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .06em; margin: var(--space-6) var(--space-3) var(--space-2); }
+.pg-live .trees.panel .group:first-child h2 { margin-top: var(--space-1); }
+/* One tree per state group. Every row shares the tree's columns, through subgrids down to each row: the connectors, name
+   and description, then the figures and the errors. */
+.pg-live .outline { list-style: none; margin: 0; padding: 0; display: grid; column-gap: var(--space-3);
+  grid-template-columns: [name] minmax(0, 1fr) [tools] auto [dur] auto [cost] auto [mdl] auto [errs] auto; font-size: var(--fs-sm); }
 .pg-live .outline ul { list-style: none; margin: 0; padding: 0; }
 .pg-live .outline :is(li, ul) { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; }
-.pg-live .outline .row { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: baseline; padding: var(--space-1) var(--space-3); border-radius: var(--radius-md); cursor: pointer; }
+.pg-live .outline .row { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm); cursor: pointer; }
 .pg-live .outline .row:hover { background: var(--surface-2); }
-.pg-live .outline li[aria-current=true] > .row { background: var(--accent-soft); }
+.pg-live .outline li[aria-current=true] > .row { background: var(--accent-soft); outline: 1px solid var(--accent); outline-offset: -1px; }
 /* The focus ring goes on the row, not around the row and its children. */
 .pg-live .outline li:focus { outline: none; }
 .pg-live .outline li:focus-visible > .row { outline: 2px solid var(--accent); outline-offset: -2px; }
 .pg-live .outline .row > *, .pg-live .outline .figs > * { grid-row: 1; min-width: 0; white-space: nowrap; }
 .pg-live .outline .figs { display: contents; }
-.pg-live .outline .state { grid-column: state; display: block; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; }
-.pg-live .outline .state i { margin-right: var(--space-2); vertical-align: 0; }
-.pg-live .outline .nd { grid-column: name; display: flex; align-items: baseline; gap: var(--space-4); overflow: hidden; }
-.pg-live .outline .nd::before { content: ""; flex: none; width: calc(min(var(--lvl), 8) * var(--space-9)); }
-.pg-live .outline .nm { display: flex; align-items: baseline; gap: var(--space-2); flex: 0 1 auto; min-width: 0; }
-.pg-live .outline .nm b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
-.pg-live .outline .tw { flex: none; width: 1em; text-align: center; color: var(--text-muted); }
-.pg-live .outline .desc { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-secondary); }
-.pg-live .outline :is(.tools, .dur, .cost, .mdl) { font-size: var(--fs-xs); color: var(--text-secondary); }
-.pg-live .outline .tools { grid-column: tools; text-align: right; }
-.pg-live .outline .errs { grid-column: errs; font-size: var(--fs-xs); font-weight: 600; }
-.pg-live .outline .dur { grid-column: dur; text-align: right; font-variant-numeric: tabular-nums; }
-.pg-live .outline .cost { grid-column: cost; text-align: right; }
-.pg-live .outline .mdl { grid-column: mdl; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); }
+.pg-live .outline .nd { grid-column: name; display: flex; align-items: center; gap: var(--space-3); overflow: hidden; }
+/* The connectors: a glyph a level, each a step wide, in muted monospace. Past 8 levels the outer ones drop out at the left,
+   so a deep row keeps room for its name. */
+.pg-live .outline .lead { flex: none; display: flex; justify-content: flex-end; max-width: calc(8 * 1.375rem); overflow: hidden;
+  font: var(--fs-xs)/1.4 var(--font-mono); color: var(--text-muted); white-space: pre; }
+.pg-live .outline .lead > span { flex: none; width: 1.375rem; padding-left: var(--space-1); box-sizing: border-box; }
+.pg-live .outline .lead > span::before { content: attr(data-g); }
+.pg-live .outline .nm { display: flex; align-items: center; gap: var(--space-3); flex: 0 1 auto; min-width: 0; }
+.pg-live .outline .nm > * { flex: none; }
+.pg-live .outline .nm b { flex: 0 1 auto; min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+.pg-live .outline .session > .row .nm b { font-weight: 650; }
+.pg-live .outline .tw { width: 1em; text-align: center; color: var(--text-muted); }
+/* A node's state or status: a dot, ring or square, or a spinner, in a slot of one width, so siblings' names line up. */
+.pg-live .outline .nm > .state { width: .75rem; justify-content: center; }
+.pg-live .outline .nm .meta { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); }
+.pg-live .outline .chip.st-wait { border-color: var(--warning-text); }
+.pg-live .outline .chip .inf { font-weight: 400; }
+.pg-live .outline .desc { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); }
+/* The figures: one muted monospace line, its parts apart by a dot, in columns. A part with none before it keeps its dot's
+   room, so the columns stay in line. */
+.pg-live .outline :is(.tools, .dur, .cost, .mdl, .errs, .ctx) { font: var(--fs-xs)/1.4 var(--font-mono); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.pg-live .outline .figs > :not(:empty)::before { content: "·"; margin-right: var(--space-3); visibility: hidden; }
+.pg-live .outline .figs > :not(:empty) ~ :not(:empty)::before { visibility: visible; }
+.pg-live .outline .figs > .tools::before { content: none; }
+.pg-live .outline .tools { grid-column: tools; }
+.pg-live .outline .dur { grid-column: dur; }
+.pg-live .outline .cost { grid-column: cost; }
+.pg-live .outline .mdl { grid-column: mdl; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; }
+.pg-live .outline .errs { grid-column: errs; color: var(--critical-text); font-weight: 600; }
+/* A session's context takes the model's column, which its row leaves empty: its model is by its name. */
+.pg-live .outline .ctx { grid-column: mdl; display: flex; align-items: center; gap: var(--space-2); }
+.pg-live .outline .ctx .meter { width: 3rem; height: 5px; margin: 0; }
 .pg-live .outline :is(.fold, .more) > .row b, .pg-live .outline .more > .row { font-weight: 500; color: var(--text-muted); }
 .pg-live .outline .more > .row { cursor: default; }
-/* A phone: a row is two lines, its state, name and errors, then its figures, with its description under them; the indent
-   is 12px a level, up to 6 levels, so a third-level row keeps most of the screen and a deeper one its name. */
+/* A phone: a row is two lines, its connectors, state, name and errors, then its figures and context, with its description
+   under them. A connector is 12px wide, up to 6 levels, so a third-level row keeps most of the screen and a deeper one its
+   name; the name's line wraps the project, model and state under the name. */
 @media (max-width: 45em) {
+  .pg-live .trees.panel { padding: var(--space-3) var(--space-2); }
   .pg-live .outline, .pg-live .outline :is(li, ul) { display: block; }
-  .pg-live .outline .row { display: grid; grid-template-columns: calc(min(var(--lvl), 6) * var(--space-6)) auto minmax(0, 1fr) auto; column-gap: var(--space-4);
-    grid-template-areas: ". state name errs" ". figs figs figs" ". desc desc desc"; }
-  .pg-live .outline .state { grid-area: state; max-width: 9rem; }
+  .pg-live .outline .row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: var(--space-3);
+    grid-template-areas: "lead nm errs" ". figs ctx" ". desc desc"; }
   .pg-live .outline .nd { display: contents; }
-  .pg-live .outline .nd::before { content: none; }
-  .pg-live .outline .nm { grid-area: name; }
-  .pg-live .outline .errs { grid-area: errs; }
+  .pg-live .outline .lead { grid-area: lead; align-self: start; max-width: calc(6 * .75rem); }
+  .pg-live .outline .lead > span { width: .75rem; padding-left: 0; }
+  .pg-live .outline .nm { grid-area: nm; flex-wrap: wrap; row-gap: 0; }
+  /* The name fills the line beside the twisty and the state, so a session's project, model and state wrap under it. */
+  .pg-live .outline .nm b { flex: 1 1 calc(100% - 2.5rem); }
+  .pg-live .outline .errs { grid-area: errs; align-self: start; }
+  .pg-live .outline .ctx { grid-area: ctx; }
   .pg-live .outline .desc { grid-area: desc; }
-  .pg-live .outline .figs { grid-area: figs; display: flex; flex-wrap: wrap; gap: 0 var(--space-5); }
+  .pg-live .outline .figs { grid-area: figs; display: flex; flex-wrap: wrap; column-gap: var(--space-3); min-width: 0; }
   .pg-live .outline .figs > :empty { display: none; }
   .pg-live .outline .mdl { max-width: 100%; }
 }
