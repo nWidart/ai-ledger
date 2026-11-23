@@ -20,7 +20,8 @@ export function OrgChart({ roots, labelledBy, folds, toggle, select, current, no
         </button>}
       {open && <ul role="list" className={arrangementOf(n)}>{n.children.map(item)}</ul>}
       {shut && <ul role="list" className="column"><li>
-        <button type="button" className="org-card fold" aria-expanded="false" onClick={() => toggle(n)}><span className="nm">{hiddenLabel(n)}</span></button>
+        <button type="button" className="org-card fold" aria-expanded="false" onClick={() => { toggle(n); document.getElementById(n.key)?.focus(); }}>
+          <span className="nm">{hiddenLabel(n)}</span></button>
       </li></ul>}
     </li>;
   };

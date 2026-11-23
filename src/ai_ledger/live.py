@@ -896,7 +896,8 @@ def agents(cur, sessions, rows, events, now, prices):
     calls = {sid: {} for sid in sids}  # session -> call id -> its spawns row with its call's end
     for r in metrics.rows(cur, """SELECT s.session_id, s.call_id, s.kind, s.lane, s.tool, s.description, coalesce(s.start_ts, t.start_ts) AS started,
             s.agent, s.provider, s.model, s.status, t.end_ts AS ended, coalesce(t.is_error, false) AS failed, t.tool_use_id IS NOT NULL AS called
-            FROM spawns s LEFT JOIN tool_calls t ON t.tool_use_id = s.call_id WHERE list_contains(?, s.session_id)""", [sids]):
+            FROM spawns s LEFT JOIN tool_calls t ON t.tool_use_id = s.call_id WHERE list_contains(?, s.session_id)
+            ORDER BY started NULLS FIRST, s.call_id""", [sids]):  # oldest first: a resumed subagent's newest call is its starter
         calls[r["session_id"]][r["call_id"]] = r
     out = {}
     for sid, source in sessions.items():

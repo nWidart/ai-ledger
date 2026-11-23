@@ -40,7 +40,8 @@ describe("OrgChart", () => {
     rerender(chartOf(new Map([["node:s/a", false]])));
     expect(document.getElementById("node:s/b")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Show 1 hidden agent" }));
-    expect(toggle.mock.calls.map(([n]) => n.key)).toEqual(["node:s/a"]);
+    // The card goes as the node opens: the focus moves to the node's own card.
+    expect([toggle.mock.calls.map(([n]) => n.key), document.activeElement!.id]).toEqual([["node:s/a"], "node:s/a"]);
   });
 });
 

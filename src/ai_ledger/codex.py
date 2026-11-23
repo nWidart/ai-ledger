@@ -269,6 +269,7 @@ class CodexDeriver(store.Deriver):
         self.turns, self.turn, self.turns_loaded = {}, None, False  # turn_id -> (model, effort); the latest turn
         self.records = None  # whether the thread has token_usage_record lines; None until asked
         self.fork = None  # the first ordinal of a forked thread's own lines
+        self.copied = False  # the line being read is one a forked thread copied from its parent
 
     def thread_lines(self, t, limit=None):
         return thread_lines(self.cur, self.thread, t, limit)
@@ -327,7 +328,8 @@ class CodexDeriver(store.Deriver):
             return
         s = self.session(dict(sessionId=self.sid, timestamp=d.get("timestamp")))
         ts = store.ts_of(d.get("timestamp"))
-        copied = self.fork is not None and isinstance(d.get("ordinal"), int) and d["ordinal"] < self.fork
+        # A line a fork copied from its parent: its requests and spawn calls are the parent's, which its own file records.
+        copied = self.copied = self.fork is not None and isinstance(d.get("ordinal"), int) and d["ordinal"] < self.fork
         if t == "turn_context":
             self.context(p)
         elif t == "token_usage_record":
@@ -335,6 +337,8 @@ class CodexDeriver(store.Deriver):
             if not copied:
                 self.request(p.get("response_id"), p.get("turn_id"), p.get("usage"), s, ts)
         elif t == "response_item" and p.get("type") == "function_call" and p.get("name") == "spawn_agent" and p.get("call_id"):
+            if copied:
+                return
             args = arguments(p.get("arguments"))
             self.spawn(p["call_id"], self.sid, "subagent", "spawn_agent", args.get("task_name"), ts)
         elif t == "compacted" and s and not self.sub:  # a subagent compacts its own context, not the session's
@@ -397,7 +401,7 @@ class CodexDeriver(store.Deriver):
             # A unified exec command's duration is its startup (microseconds), not its run: such a call has no timing.
             took = 0 if it.get("source") == "unified_exec_startup" else seconds_of(it.get("duration"))
             start = before(ts, took)
-            if name == store.DELEGATE:  # the item states no status of the task it started: none is stored
+            if name == store.DELEGATE and not self.copied:  # the item states no status of the task it started: none is stored
                 args = arguments(it.get("arguments"))
                 self.spawn(tid, self.sid, "delegation", name, args.get("title"), start, args.get("target"))
             self.seq += 1

@@ -35,6 +35,8 @@ export type Conn = "connecting" | "live" | "reconnecting";
 export interface LiveData {
   list: LivePayload | undefined;
   session: LiveSession | undefined;
+  /** When the session's newest answer arrived (ms), 0 before any: a Tree node's reveal waits for an answer newer than it. */
+  sessionAt: number;
   conn: Conn;
   /** Updates held while paused: the notices, and one for a request that was owed to a notice when the user paused. */
   held: number;
@@ -200,7 +202,7 @@ export function useLive(view: View, selected: string, text: boolean, paused: boo
     return () => clearInterval(t);
   }, [paused, visible, client]);
 
-  return { list, session, conn, held, listError, sessionError, pinned };
+  return { list, session, sessionAt: sessionQ.dataUpdatedAt, conn, held, listError, sessionError, pinned };
 }
 
 /** A clock that ticks every second while not paused and the tab is showing, shared by every running timer on the page.

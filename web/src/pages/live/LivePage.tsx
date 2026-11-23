@@ -47,9 +47,10 @@ export function LivePage() {
   const [filters, setFilters] = useState(NO_FILTERS); // off on every load, and kept from one session to the next
   const [choices, setChoices] = useState<LaneChoices>(() => ({ folds: new Map(), whole: new Set() }));
   // The Tree's folds, shared by both layouts and kept while the page is open; and what a Tree node opens the Stream on,
-  // for that session, until the Stream takes it.
+  // for that session, until the Stream takes it from an answer newer than the selection (at): a copy cached from an earlier
+  // visit may not hold the lane or the call yet.
   const [folds, setFolds] = useState<Folds>(() => new Map());
-  const [reveal, setReveal] = useState<Reveal & { session: string } | null>(null);
+  const [reveal, setReveal] = useState<Reveal & { session: string; at: number } | null>(null);
   // With none in the URL, the newest active session, kept while listed so the stream does not jump when another writes.
   const [first, setFirst] = useState("");
   const selected = h.session || first;
@@ -58,7 +59,7 @@ export function LivePage() {
   // Full text is the Stream view's: the Wall and the Tree ask for none, though the box stays on for the return to Stream.
   // Only the Tree asks for the agents, and it shows no stream session, as the Wall.
   const full = text && mode === "stream";
-  const { list, session, conn, held, listError, sessionError, pinned } = useLive(view, mode === "stream" ? selected : "", full, paused, pins, mode === "tree");
+  const { list, session, sessionAt, conn, held, listError, sessionError, pinned } = useLive(view, mode === "stream" ? selected : "", full, paused, pins, mode === "tree");
   if (reveal && (mode !== "stream" || reveal.session !== selected)) setReveal(null);
   const now = useNow(paused);
   const sessions = list?.sessions ?? [];
@@ -102,8 +103,9 @@ export function LivePage() {
     if (n.kind === "fold") { setFolds(f => flip(f, n)); return; }
     if (n.kind === "more") return;
     const a = n.kind === "agent" ? n.agent : null, lane = a && (a.kind === "agent" ? a.id : a.parent);
-    if (lane) setChoices(c => ({ ...c, folds: new Map(c.folds).set(lane, false) }));
-    setReveal({ session: n.session, ...(a ? (a.kind === "agent" ? { lane: a.id } : { call: a.id }) : {}) });
+    // A delegation's lane shows all its rows: a running lane draws only its last few, which may not hold the call.
+    if (lane) setChoices(c => ({ folds: new Map(c.folds).set(lane, false), whole: a.kind === "delegation" ? new Set(c.whole).add(lane) : c.whole }));
+    setReveal({ session: n.session, at: Date.now(), ...(a ? (a.kind === "agent" ? { lane: a.id } : { call: a.id }) : {}) });
     pick(n.session);
   };
   const revealed = (found: boolean) => {
@@ -228,7 +230,7 @@ export function LivePage() {
             <Strip s={shown} st={stateNow(shown.state, now)} now={now} />
             <Stream key={shown.session_id} s={shown} now={now} text={full} follow={follow} setFollow={setFollow} filters={filters} setFilters={setFilters}
               choices={choices} setChoices={setChoices} sheet={sheetHref(shown.session_id)}
-              reveal={reveal?.session === shown.session_id ? reveal : null} revealed={revealed} />
+              reveal={reveal?.session === shown.session_id && sessionAt >= reveal.at ? reveal : null} revealed={revealed} />
           </> : missing ? <p className="muted loading">Session not found. It may be from another store, or its id is mistyped.{" "}
             <a href="/live" onClick={e => { e.preventDefault(); set({ session: null }); }}>Show the active sessions</a></p>
             : sessionError ? <p className="muted loading" role="alert">Could not load this session. {sessionError.message}</p>

@@ -5,7 +5,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Run `ai-ledger rebuild` once after upgrading, with the app stopped, so sessions that span the upgrade get their agents.
+Run `ai-ledger rebuild` once after upgrading, with the app stopped. It gives the sessions stored before the upgrade their agents in Live's Tree, and their subagent lanes in the Stream their cost and model, which they lack until then.
 
 ### Added
 
