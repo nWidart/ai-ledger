@@ -35,9 +35,9 @@ Test rules (`AGENTS.md`): add an assertion to the test that already builds the f
 
 ## 4. Outline layout
 
-- [ ] 4.1 Write `Outline.tsx`: one `role="tree"` per group named by its heading, rows with level, place and expanded state, children in `role="group"`, the columns on a shared grid, the description cut with an ellipsis and whole on hover. Verify: one render test asserts the roles, levels and the accessible name of a session row, a subagent row and a delegation row.
-- [ ] 4.2 Add the keys: Up, Down, Left, Right, Home, End, Enter and Space, with a roving `tabindex` that starts on the URL's session. Verify: one test walks a session with a nested subagent and a fold row by keyboard, and selects with Enter.
-- [ ] 4.3 Keep the focus on a node that moves group or goes into a fold (to the fold row when the fold is closed). Verify: one test where a focused running subagent finishes.
+- [x] 4.1 Write `Outline.tsx`: one `role="tree"` per group named by its heading, rows with level, place and expanded state, children in `role="group"`, the columns on a shared grid, the description cut with an ellipsis and whole on hover. Verify: one render test asserts the roles, levels and the accessible name of a session row, a subagent row and a delegation row.
+- [x] 4.2 Add the keys: Up, Down, Left, Right, Home, End, Enter and Space, with a roving `tabindex` that starts on the URL's session. Verify: one test walks a session with a nested subagent and a fold row by keyboard, and selects with Enter.
+- [x] 4.3 Keep the focus on a node that moves group or goes into a fold (to the fold row when the fold is closed). Verify: one test where a focused running subagent finishes.
 - [ ] 4.4 Style the Outline in `live.css`, with the two-line row and the smaller indent below 721 pixels. Verify in the running app at 1440x900 and 390x844 (`uv run ai-ledger --db <copy> --port <free port>`): columns line up, no sideways scroll, a third-level row is at least 195 pixels wide on the phone. Run `cd web && npm run check`.
 
 ## 5. Org chart layout

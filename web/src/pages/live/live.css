@@ -302,3 +302,61 @@
   .pg-live .strip .pulse { position: static; }
   .pg-live .strip .pulse .readout { left: 12px; right: 12px; white-space: normal; }
 }
+
+/* Outline */
+/* One tree per state group. Every row shares the tree's columns, through subgrids down to each row: the state, the name
+   and description, then the figures. A level indents the name and description 24px (--lvl, set per row, counts the levels
+   under the session); the state and the figures stay in line. */
+.pg-live .outline { list-style: none; margin: var(--space-2) 0 var(--space-6); padding: 0; display: grid; column-gap: var(--space-6);
+  grid-template-columns: [state] auto [name] minmax(0, 1fr) [tools] auto [errs] auto [dur] auto [cost] auto [mdl] auto; font-size: var(--fs-sm); }
+.pg-live .outline ul { list-style: none; margin: 0; padding: 0; }
+.pg-live .outline :is(li, ul) { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; }
+.pg-live .outline .row { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: baseline; padding: var(--space-1) var(--space-3); border-radius: var(--radius-md); cursor: pointer; }
+.pg-live .outline .row:hover { background: var(--surface-2); }
+.pg-live .outline li[aria-current=true] > .row { background: var(--accent-soft); }
+/* The focus ring goes on the row, not around the row and its children. */
+.pg-live .outline li:focus { outline: none; }
+.pg-live .outline li:focus-visible > .row { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pg-live .outline .row > *, .pg-live .outline .figs > * { grid-row: 1; min-width: 0; white-space: nowrap; }
+.pg-live .outline .figs { display: contents; }
+.pg-live .outline .state { grid-column: state; display: block; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; }
+.pg-live .outline .state i { margin-right: var(--space-2); vertical-align: 0; }
+.pg-live .outline .nd { grid-column: name; display: flex; align-items: baseline; gap: var(--space-4); overflow: hidden; }
+.pg-live .outline .nd::before { content: ""; flex: none; width: calc(var(--lvl) * var(--space-9)); }
+.pg-live .outline .nm { display: flex; align-items: baseline; gap: var(--space-2); flex: 0 1 auto; min-width: 0; }
+.pg-live .outline .nm b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.pg-live .outline .tw { flex: none; width: 1em; text-align: center; color: var(--text-muted); }
+.pg-live .outline .desc { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-secondary); }
+.pg-live .outline :is(.tools, .dur, .cost, .mdl) { font-size: var(--fs-xs); color: var(--text-secondary); }
+.pg-live .outline .tools { grid-column: tools; text-align: right; }
+.pg-live .outline .errs { grid-column: errs; font-size: var(--fs-xs); font-weight: 600; }
+.pg-live .outline .dur { grid-column: dur; text-align: right; font-variant-numeric: tabular-nums; }
+.pg-live .outline .cost { grid-column: cost; text-align: right; }
+.pg-live .outline .mdl { grid-column: mdl; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); }
+.pg-live .outline :is(.fold, .more) > .row b, .pg-live .outline .more > .row { font-weight: 500; color: var(--text-muted); }
+.pg-live .outline .more > .row { cursor: default; }
+/* An agent's status, as the session states' colors: running as a tool runs, sent and started as thinking, done quiet. */
+.pg-live .outline .st-running { color: var(--series-1-ink); } .pg-live .outline .st-running i { background: var(--series-1); }
+.pg-live .outline :is(.st-pending, .st-started) { color: var(--accent-ink); } .pg-live .outline :is(.st-pending, .st-started) i { background: var(--accent); }
+.pg-live .outline .st-done { color: var(--text-muted); } .pg-live .outline .st-done i { background: var(--text-muted); }
+.pg-live .outline .st-failed { color: var(--critical-text); } .pg-live .outline .st-failed i { background: var(--critical-text); }
+@media (prefers-reduced-motion: no-preference) {
+  .pg-live .outline .st-running i { animation: live-pulse 1.4s ease-in-out infinite; }
+}
+.pg-live.paused .outline .state i { animation: none; }
+/* A phone: a row is two lines, its state, name and errors, then its figures, with its description under them; the indent
+   is 12px a level, so a third-level row keeps most of the screen. */
+@media (max-width: 45em) {
+  .pg-live .outline, .pg-live .outline :is(li, ul) { display: block; }
+  .pg-live .outline .row { display: grid; grid-template-columns: calc(var(--lvl) * var(--space-6)) auto minmax(0, 1fr) auto; column-gap: var(--space-4);
+    grid-template-areas: ". state name errs" ". figs figs figs" ". desc desc desc"; }
+  .pg-live .outline .state { grid-area: state; max-width: 9rem; }
+  .pg-live .outline .nd { display: contents; }
+  .pg-live .outline .nd::before { content: none; }
+  .pg-live .outline .nm { grid-area: name; }
+  .pg-live .outline .errs { grid-area: errs; }
+  .pg-live .outline .desc { grid-area: desc; }
+  .pg-live .outline .figs { grid-area: figs; display: flex; flex-wrap: wrap; gap: 0 var(--space-5); }
+  .pg-live .outline .figs > :empty { display: none; }
+  .pg-live .outline .mdl { max-width: 100%; }
+}

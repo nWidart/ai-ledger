@@ -1694,11 +1694,12 @@ describe("LivePage", () => {
 
   it("shows the Tree by state group with each session's agents, a fold shared by both layouts and the agents left out", async () => {
     show("?view=tree", { list: treeList });
-    const el = await rail(), node = (name: string | RegExp) => within(el).getByRole("button", { name });
-    await within(el).findByRole("button", { name: /^Agent: Map the parsers\./ });
+    // A node is a row of the Outline's tree, a button of the Org chart.
+    const el = await rail(), node = (name: string | RegExp) => within(el).queryByRole("treeitem", { name }) ?? within(el).getByRole("button", { name });
+    await within(el).findByRole("treeitem", { name: /^Agent: Map the parsers\./ });
     expect([...el.querySelectorAll("h2")].map(h => h.textContent)).toEqual(groupSessions(list.sessions, Date.now()).map(g => `${g.label} · ${g.sessions.length}`));
-    const s1Item = document.getElementById("node:s1")!.closest("li")!;
-    const names = () => [...s1Item.querySelectorAll("button")].map(b => b.querySelector(".sr")!.textContent!.split(". ")[0]);
+    const names = () => [...document.querySelectorAll("[id='node:s1'], [id^='node:s1/']:not(.sr), [id^='fold:s1/']:not(.sr)")]
+      .map(b => b.querySelector(".sr")!.textContent!.split(". ")[0]);
     expect(names()).toEqual([S1_TITLE, "Agent: Map the parsers", "Agent: Read the specs", FOLD]);
     expect(document.getElementById("node:s1/a8")!.closest("li")!.contains(document.getElementById("node:s1/a9"))).toBe(true);
     expect(document.getElementById("more:s1")!.textContent).toBe("60 older agents not shown · Session sheet");
@@ -1715,6 +1716,20 @@ describe("LivePage", () => {
     expect([location.search, screen.getByRole("button", { name: "Outline" }).getAttribute("aria-pressed")]).toEqual(["?view=tree", "true"]);
   });
 
+  it("keeps the focus on a Tree node that moves: a focused running subagent that finishes gives it to its parent's closed fold", async () => {
+    const o = { list: treeList };
+    show("?view=tree", o);
+    const row = await within(await rail()).findByRole("treeitem", { name: /^Agent: Read the specs\./ });
+    act(() => row.focus());
+    o.list = { ...treeList, sessions: treeList.sessions.map(s => (s.session_id !== "s1" ? s
+      : { ...s, agents: s.agents!.map(a => (a.id === "a9" ? { ...a, status: "done" as const, end: "2026-11-10T10:00:50.000Z" } : a)) })) };
+    FakeSource.last!.notify(null);
+    await waitFor(() => expect(document.getElementById("node:s1/a9")).toBeNull());
+    expect([document.activeElement!.id, document.activeElement!.getAttribute("aria-expanded"), document.activeElement!.getAttribute("tabindex")])
+      .toEqual(["fold:s1/a8", "false", "0"]);
+    expect(document.activeElement).toBe(screen.getByRole("treeitem", { name: "1 finished subagent" }));
+  });
+
   it("asks for the agents in the Tree only, with no text, over the one connection of Stream, Wall, Tree and a layout switch", async () => {
     const { calls } = show("?session=s1", { list: treeList });
     await stream();
@@ -1728,7 +1743,7 @@ describe("LivePage", () => {
     expect(calls().filter(u => u.includes("agents="))).toEqual([]);
     await userEvent.click(screen.getByRole("button", { name: "Tree" }));
     expect(location.search).toBe("?view=tree&session=s1");
-    await within(await rail()).findByRole("button", { name: /^Agent: Map the parsers\./ });
+    await within(await rail()).findByRole("treeitem", { name: /^Agent: Map the parsers\./ });
     await userEvent.click(screen.getByRole("button", { name: "Org chart" }));
     source.notify(null);
     await settle();

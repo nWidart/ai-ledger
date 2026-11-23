@@ -18,6 +18,7 @@ import { subjectAttrs } from "../../components/menu/subject";
 import { MAX_PINS, pinsOf, validateSearch } from "./search";
 import { flip, holder, treeOf, type Folds, type TreeNode, type TreeViewProps } from "./tree";
 import { PlainTree } from "./PlainTree";
+import { Outline } from "./Outline";
 import "./live.css";
 
 /** The states the rail's footer counts as working, as the rail's working group. approval? and your turn count as waiting
@@ -26,7 +27,7 @@ const WORKING = new Set<LiveState["kind"]>(["tool", "thinking"]);
 /** The tab title's count of sessions that need the user, before the page's own title. */
 const COUNT = /^\(\d+\) /;
 /** The Tree's layouts, by the URL's layout value: each draws one state group of the tree model. */
-const LAYOUTS: Record<"outline" | "org", ComponentType<TreeViewProps>> = { outline: PlainTree, org: PlainTree };
+const LAYOUTS: Record<"outline" | "org", ComponentType<TreeViewProps>> = { outline: Outline, org: PlainTree };
 
 /** Live (/live): the sessions active in the last 10 minutes, followed from the agent's side as their lines arrive. */
 export function LivePage() {
