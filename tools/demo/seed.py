@@ -511,7 +511,7 @@ def demo_tree():
     for tool, inp, a, b in [("Read", "config/staging.json", (1, 25), (1, 27)), ("Grep", "limit", (2, 0), (2, 3)), ("Read", "src/limits.py", (4, 0), (4, 3))]:
         call(tool, inp, a, b, lane=lanes["d"])
     # a delegated task on another provider; its result says the task was accepted and is still running
-    call("mcp__t3-code__delegate_task", "Add a Retry-After header test", (6, 0), None, mcp_server="t3-code",
+    call("mcp__t3-code__delegate_task", "Add a Retry-After header test", (6, 0), (6, 1), mcp_server="t3-code",
          spawn=dict(kind="delegation", provider="codex", model="gpt-6.2-sol", status="running"))
     call("Edit", "src/orders/router.ts", (6, 30), (6, 31))
 

@@ -38,12 +38,12 @@ Test rules (`AGENTS.md`): add an assertion to the test that already builds the f
 - [x] 4.1 Write `Outline.tsx`: one `role="tree"` per group named by its heading, rows with level, place and expanded state, children in `role="group"`, the columns on a shared grid, the description cut with an ellipsis and whole on hover. Verify: one render test asserts the roles, levels and the accessible name of a session row, a subagent row and a delegation row.
 - [x] 4.2 Add the keys: Up, Down, Left, Right, Home, End, Enter and Space, with a roving `tabindex` that starts on the URL's session. Verify: one test walks a session with a nested subagent and a fold row by keyboard, and selects with Enter.
 - [x] 4.3 Keep the focus on a node that moves group or goes into a fold (to the fold row when the fold is closed). Verify: one test where a focused running subagent finishes.
-- [ ] 4.4 Style the Outline in `live.css`, with the two-line row and the smaller indent below 721 pixels. Verify in the running app at 1440x900 and 390x844 (`uv run ai-ledger --db <copy> --port <free port>`): columns line up, no sideways scroll, a third-level row is at least 195 pixels wide on the phone. Run `cd web && npm run check`.
+- [x] 4.4 Style the Outline in `live.css`, with the two-line row and the smaller indent below 721 pixels. Verify in the running app at 1440x900 and 390x844 (`uv run ai-ledger --db <copy> --port <free port>`): columns line up, no sideways scroll, a third-level row is at least 195 pixels wide on the phone. Run `cd web && npm run check`.
 
 ## 5. Org chart layout
 
 - [x] 5.1 Write `OrgChart.tsx`: nested lists per session under the group's `h2`, each card a button named from the node's text, the fold a button with its expanded state, connectors in CSS only. Verify: one render test asserts the list nesting, the tab order parent then children, and a card's accessible name.
-- [ ] 5.2 Arrange children in a row for 5 or fewer and in a column for 6 or more, and in a column for every parent below 721 pixels; let a wide chart scroll inside its box. Verify: one test asserts the class for 5 and for 6 children; in the running app at 1440x900, 1280x800 and 390x844, check the connectors, 8 children in a column, and no sideways scroll of the page.
+- [x] 5.2 Arrange children in a row for 5 or fewer and in a column for 6 or more, and in a column for every parent below 721 pixels; let a wide chart scroll inside its box. Verify: one test asserts the class for 5 and for 6 children; in the running app at 1440x900, 1280x800 and 390x844, check the connectors, 8 children in a column, and no sideways scroll of the page.
 - [x] 5.3 Keep the focus on a card that moves, as 4.3, through the shared key lookup of 3. Verify: an assertion added to the 4.3 test for the Org chart layout, or the same test run for both layouts. Run `cd web && npm run check`.
 
 ## 6. Fixtures
@@ -64,7 +64,7 @@ Test rules (`AGENTS.md`): add an assertion to the test that already builds the f
 
 ## 9. Integration check
 
-- [ ] 9.1 On a copy of the live store, with a real session that runs subagents: compare the Tree's nodes with the lanes of the same session's stream (same subagents, same tool counts, cost and model), in both layouts, with a screen reader on one group. Run `uv run ruff check`, `uv run pytest`, `cd web && npm run check`, `cd site && npm run check` and `openspec validate add-live-tree --strict`.
+- [x] 9.1 On a copy of the live store, with a real session that runs subagents: compare the Tree's nodes with the lanes of the same session's stream (same subagents, same tool counts, cost and model), in both layouts, with a screen reader on one group. Run `uv run ruff check`, `uv run pytest`, `cd web && npm run check`, `cd site && npm run check` and `openspec validate add-live-tree --strict`.
 
 ## Workflow follow-up
 
