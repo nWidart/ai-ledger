@@ -123,7 +123,8 @@ def live_items(d):
 
     Tools come from response_item calls and their *_output lines, keyed by call_id: item_completed arrives only once a
     tool ends, and many calls never get one. A failed item_completed with the same id marks its call failed; one that
-    no call has the id of (a command an exec script ran) carries its tool and input, to stand as a call of its own. No shell
+    no call has the id of (a command an exec script ran) carries its tool and input, to stand as a call of its own. So
+    does a completed delegation, which may have no call line either (one an exec script ran). No shell
     tool's input has a timeout (exec_command's yield_time_ms is how long the call waits for output), and no line says
     the session closed."""
     t, p = d.get("type"), d.get("payload")
@@ -167,9 +168,14 @@ def live_items(d):
     if it.get("type") == "AgentMessage":
         said = text_of(it.get("content")).strip()
         return [dict(k="reply", text=said)] if said else []
-    if it.get("status") == "failed" and it.get("id") and tool_of(it):
-        name, summary = tool_of(it)  # the call these name is not always a line: one an exec script ran has no tool_use
+    tool = it.get("id") and tool_of(it)
+    if tool and it.get("status") == "failed":
+        name, summary = tool  # the call these name is not always a line: one an exec script ran has no tool_use
         return [dict(k="tool_result", id=it["id"], error=error_of(it), output="", agent=None, tool=name, summary=summary[:300])]
+    if tool and tool[0] == store.DELEGATE:  # a delegation an exec script ran: its row, which the Tree's node opens
+        result = it.get("result") if isinstance(it.get("result"), dict) else {}
+        return [dict(k="tool_result", id=it["id"], error=None, output=text_of(result.get("content")), agent=None,
+                     tool=tool[0], summary=tool[1][:300])]
     return []
 
 

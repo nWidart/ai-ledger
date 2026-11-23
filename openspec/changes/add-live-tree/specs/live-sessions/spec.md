@@ -133,3 +133,20 @@ An agent SHALL carry no prompt, reply, task or tool-result text. Its description
 #### Scenario: Delegated task text
 - **WHEN** a delegation call's `task` holds 2,000 characters
 - **THEN** the answer holds none of it
+
+## MODIFIED Requirements
+
+### Requirement: Show a failed call made inside a Codex script
+A failed Codex item that no tool call of the session has the id of, such as a command an `exec` script ran, SHALL be one finished, failed tool event on its file's lane, with its tool, input summary and error text, starting and ending at its line's time. It SHALL NOT change the state. A failed item with a matching call marks that call failed; a successful inner call shows nothing, except a delegation: a completed delegation item SHALL end the call with its id, or, when no call has that id, be one finished tool event of its own, so the Tree's node for it opens a row.
+
+#### Scenario: Failed command inside a script
+- **WHEN** an `exec` call's script runs a command that fails and the line has an id no call has
+- **THEN** the stream holds a failed `exec_command` event with the command and its error text
+
+#### Scenario: Matching call
+- **WHEN** a failed item has the id of a tool call
+- **THEN** that call is marked failed and no second event is shown
+
+#### Scenario: Delegation inside a script
+- **WHEN** an `exec` call's script delegates a task and the completed delegation item has an id no call has
+- **THEN** the stream holds one finished, not failed, delegation event with that id

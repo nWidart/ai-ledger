@@ -884,14 +884,23 @@ class CodexSessionTest(CodexCase):
     def test_failed_command_inside_an_exec_script_is_a_row(self):
         thread = "0a0f9999-0000-7000-8000-000000000002"
         exec_call = lambda cid, secs: codex_line(2, secs, "response_item", type="custom_tool_call", name="exec", call_id=cid, input="run it")
+        delegated = lambda ordinal, secs, cid: codex_line(ordinal, secs, "event_msg", type="item_completed", turn_id="t1", item=dict(
+            type="McpToolCall", id=cid, server="t3-code", tool="delegate_task", status="completed", arguments=dict(title="Write the tests"),
+            result=dict(content=[dict(type="text", text="started")])))
         self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted() + exec_call("c1", 2)
                    + self.inner(3, 3, "inner1") + self.inner(4, 4, "inner2", status="completed", cmd="ls")  # a success: nothing
-                   + codex_line(5, 5, "response_item", type="custom_tool_call_output", call_id="c1", output="done"))
+                   + delegated(5, 4, "d1")  # a successful delegation the script ran: a row, which its Tree node opens
+                   + codex_line(6, 5, "response_item", type="custom_tool_call_output", call_id="c1", output="done")
+                   + codex_line(7, 5, "response_item", type="function_call", name=store.DELEGATE, call_id="d2", arguments="{}")
+                   + delegated(8, 5, "d2"))  # one with a call line of its own: that one row
         self.child_of(thread, self.inner(1, 6, "inner3", cmd="rg x"))
         self.ingest()
         got = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)
         self.assertEqual([(e["tool"], e["id"], e["lane"], e["failed"]) for e in got["events"] if e["k"] == "tool"],
-                         [("exec", "c1", None, False), ("exec_command", "inner1", None, True), ("exec_command", "inner3", thread, True)])
+                         [("exec", "c1", None, False), ("exec_command", "inner1", None, True), (store.DELEGATE, "d1", None, False),
+                          (store.DELEGATE, "d2", None, False), ("exec_command", "inner3", thread, True)])
+        self.assertEqual([(e["chars"], e["end"]) for e in got["events"] if e.get("id") in ("d1", "d2")],
+                         [(7, "2026-11-10T10:00:04.000Z"), (7, "2026-11-10T10:00:05.000Z")])
         failed = got["events"][2]
         self.assertEqual((failed["summary"], failed["error"], failed["start"], failed["end"], failed["ts"]),
                          ("ls nowhere", "Exit code 2\nno such file", "2026-11-10T10:00:03.000Z", "2026-11-10T10:00:03.000Z", "2026-11-10T10:00:03.000Z"))

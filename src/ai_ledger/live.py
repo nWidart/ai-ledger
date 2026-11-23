@@ -408,10 +408,12 @@ def head_rows(cur, sid, rows, events):
 
 
 def inner_call(r):
-    """The finished, failed tool event of result r: a failed Codex item that no call has the id of, such as a command an
-    exec script ran, with its tool and input. It is no pending call, so it moves no state."""
+    """The finished tool event of result r: a Codex item that no call has the id of, such as a command an exec script
+    ran (failed) or a delegation it ran, with its tool and input. It is no pending call, so it moves no state."""
+    failed = r["error"] is not None
     return dict(key=r["key"], k="tool", ts=r["ts"], lane=r["lane"], id=r["id"], tool=r["tool"], summary=r["summary"], description=None,
-                start=r["ts"], end=r["ts"], failed=True, error=r["error"][:ERROR_CAP], output=None, agent=None, long=False)
+                start=r["ts"], end=r["ts"], failed=failed, error=r["error"][:ERROR_CAP] if failed else None,
+                output=r.get("output") or None, agent=None, long=False)
 
 
 def finish(ev, r):
