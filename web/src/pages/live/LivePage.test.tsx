@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LiveAgent, LiveEvent, LivePayload, LiveSession, LiveState, LiveToolEvent } from "../../api";
 import live from "../../__fixtures__/live";
+import listAgents from "../../__fixtures__/live-agents";
 import liveListText from "../../__fixtures__/live-text";
 import liveSession from "../../__fixtures__/live-session";
 import liveText from "../../__fixtures__/live-session-text";
@@ -15,15 +16,13 @@ import { FakeSource } from "./testing";
 import { queries } from "../../queries";
 import { renderPage, renderRouter } from "../../testing";
 
-const list = live as LivePayload, listText = liveListText as LivePayload, s1 = liveSession as LiveSession, s1text = liveText as LiveSession, codex = liveCodex as LiveSession;
-/** The list as the Tree asks for it (agents=1): s1 with its done lane a7 and its delegation call t0, both from its events,
- *  two running subagents, one under the other, and 60 agents left out. */
+const list = live as LivePayload, liveAgents = listAgents as LivePayload, listText = liveListText as LivePayload, s1 = liveSession as LiveSession, s1text = liveText as LiveSession, codex = liveCodex as LiveSession;
+/** The list as the Tree asks for it (agents=1): s1 with its done lane a7 and its untitled delegation call t0, as the
+ *  fixture has them, and, written here, two running subagents none of whose calls its events hold, one under the other,
+ *  and 60 agents left out. */
 const agentOf = (id: string, o: Partial<LiveAgent>): LiveAgent => ({ id, kind: "agent", parent: null, name: "Agent", description: null, status: "running",
   start: null, end: null, tools: 0, errors: 0, cost: null, model: null, provider: null, ...o });
-const treeList: LivePayload = { ...list, sessions: list.sessions.map(s => (s.session_id !== "s1" ? { ...s, agents: [] } : { ...s, agents_more: 60, agents: [
-  agentOf("a7", { description: "find callers of ingest", status: "done", start: "2026-11-10T10:00:04.000Z", end: "2026-11-10T10:00:10.000Z", tools: 3, cost: 0.0084, model: "claude-opus-5-5" }),
-  agentOf("t0", { kind: "delegation", name: "mcp__t3-code__delegate_task", description: "Review the fixture", status: "started", start: "2026-11-10T10:00:02.000Z",
-    end: "2026-11-10T10:00:03.000Z", tools: null, errors: null }),
+const treeList: LivePayload = { ...liveAgents, sessions: liveAgents.sessions.map(s => (s.session_id !== "s1" ? s : { ...s, agents_more: 60, agents: [...s.agents!,
   agentOf("a8", { description: "Map the parsers", start: "2026-11-10T10:00:30.000Z", tools: 2 }),
   agentOf("a9", { parent: "a8", description: "Read the specs", start: "2026-11-10T10:00:40.000Z" }),
 ] })) };
@@ -1707,7 +1706,7 @@ describe("LivePage", () => {
     expect([screen.queryByRole("checkbox", { name: "Follow" }), screen.queryByRole("checkbox", { name: "Full text" })]).toEqual([null, null]);
     // The fold opens, and stays open in the Org chart, which replaces the history entry and keeps the focus on the toggle.
     await userEvent.click(node(FOLD));
-    expect([node(FOLD).getAttribute("aria-expanded"), names().slice(-2)]).toEqual(["true", ["Delegated task: Review the fixture", "Agent: find callers of ingest"]]);
+    expect([node(FOLD).getAttribute("aria-expanded"), names().slice(-2)]).toEqual(["true", ["Delegated task", "Agent: find callers of ingest"]]);
     const entries = history.length, org = screen.getByRole("button", { name: "Org chart" });
     await userEvent.click(org);
     expect([location.search, history.length, org.getAttribute("aria-pressed"), document.activeElement]).toEqual(["?view=tree&layout=org", entries, "true", org]);
@@ -1730,7 +1729,7 @@ describe("LivePage", () => {
       await waitFor(() => expect(document.getElementById("node:s1/a9")).toBeNull());
       expect([document.activeElement!.id, document.activeElement!.getAttribute("aria-expanded"), document.activeElement!.getAttribute("tabindex")])
         .toEqual(["fold:s1/a8", "false", tab]);
-      expect(document.activeElement).toBe(screen.getByRole(role, { name: "1 finished subagent" }));
+      expect(screen.getAllByRole(role, { name: "1 finished subagent" })).toContain(document.activeElement); // ai-ledger's fold shares the name
     });
 
   it("asks for the agents in the Tree only, with no text, over the one connection of Stream, Wall, Tree and a layout switch", async () => {
@@ -1780,7 +1779,7 @@ describe("LivePage", () => {
     expect([laneHead().getAttribute("aria-expanded"), check("Follow").checked]).toEqual(["true", false]);
     await back();
     // A delegation: its call's row.
-    await userEvent.click(await node(/^Delegated task: Review the fixture\./));
+    await userEvent.click(await node(/^Delegated task\. /));
     await stream();
     await waitFor(() => expect((document.activeElement as HTMLElement).dataset.call).toBe("t0"));
     expect(check("Follow").checked).toBe(false);

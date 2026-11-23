@@ -48,8 +48,8 @@ Test rules (`AGENTS.md`): add an assertion to the test that already builds the f
 
 ## 6. Fixtures
 
-- [ ] 6.1 Extend the store that `tests/test_web_fixtures.py` builds with a nested subagent and a delegation call, and add one fixture, `web/src/__fixtures__/live-agents.ts`, for the list with `agents=1`. Regenerate with `uv run python -m unittest tests.test_web_fixtures`. Verify: the regenerated `live.ts` has no `agents` key, `live-agents.ts` has a nested agent and a delegation, and `cd web && npm run check` passes.
-- [ ] 6.2 Point the Tree tests of groups 3 to 5 at `live-agents.ts` where they used a hand-written list. Verify: `cd web && npm run check`.
+- [x] 6.1 Extend the store that `tests/test_web_fixtures.py` builds with a nested subagent and a delegation call, and add one fixture, `web/src/__fixtures__/live-agents.ts`, for the list with `agents=1`. Regenerate with `uv run python -m unittest tests.test_web_fixtures`. Verify: the regenerated `live.ts` has no `agents` key, `live-agents.ts` has a nested agent and a delegation, and `cd web && npm run check` passes.
+- [x] 6.2 Point the Tree tests of groups 3 to 5 at `live-agents.ts` where they used a hand-written list. Verify: `cd web && npm run check`.
 
 ## 7. README, changelog and docs site
 

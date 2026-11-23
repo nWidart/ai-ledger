@@ -164,10 +164,11 @@ class WebFixturesTest(unittest.TestCase):
         lv = tlv.page_fixtures()
         got["live.ts"] = ("LivePayload", lv["list"])
         got["live-text.ts"] = ("LivePayload", lv["list_text"])
+        got["live-agents.ts"] = ("LivePayload", lv["agents"])  # as the Tree asks for it (agents=1): a nested subagent and delegations
         got["live-session.ts"] = ("LiveSession", lv["claude"])
         got["live-session-text.ts"] = ("LiveSession", lv["text"])
         got["live-session-codex.ts"] = ("LiveSession", lv["codex"])
-        for name in ("live.ts", "live-text.ts"):  # what app adds to /api/live
+        for name in ("live.ts", "live-text.ts", "live-agents.ts"):  # what app adds to /api/live
             got[name][1]["automated_file"] = dict(path="/Users/example/Library/Application Support/ai-ledger/automated.json", error=None, projects=[])
         for name in ("usage.ts", "usage-all.ts", "usage-codex.ts", "usage-sources.ts"):  # not the machine's own data folder
             got[name][1]["prices_file"] = dict(path="/Users/example/Library/Application Support/ai-ledger/prices.json", error=None)

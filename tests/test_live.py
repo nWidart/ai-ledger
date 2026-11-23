@@ -1062,9 +1062,26 @@ class PageCase(LiveCase):
                                      + line(type="cost-state", sessionId="s1", totalCostUSD=0.02), "s5", "/nowhere/notes",
                                      "Sort the reading list by topic and drop the finished books"))
         # Six more at work, as a busy morning has them: a long MCP call running, a long shell call, a 30-character branch.
-        self.write("s6.jsonl", other(prompt("k1", at(40), "q6", "Delegate the fixture review")
-                                     + assistant("l1", "p1", at(50), [tool_use("lt1", "mcp__t3-code__delegate_task", **DELEGATE)]),
-                                     "s6", "/nowhere/ai-ledger", "Delegate the Live fixture review to a second model and merge it", "feat/live-rail-state-tag-width"))
+        # ai-ledger's subagent a8 ran a9, both done, before its titled delegation went out.
+        in6 = lambda text, title=None: other(text, "s6", "/nowhere/ai-ledger", title, "feat/live-rail-state-tag-width")
+        step = lambda agent, secs, i, model, block: line(type="assistant", uuid=f"{agent}x{i}", timestamp=at(secs), message=dict(
+            id=f"{agent}m{i}", model=model, usage=dict(input_tokens=300, output_tokens=40), content=[block]), **dict(S, isSidechain=True, agentId=agent))
+        ran = lambda agent, secs, i, call, **extra: line(type="user", uuid=f"{agent}y{i}", timestamp=at(secs), message=dict(role="user", content=[
+            dict(type="tool_result", tool_use_id=call, content="ok")]), **dict(S, isSidechain=True, agentId=agent), **extra)
+        self.write("s6.jsonl", in6(prompt("k1", at(40), "q6", "Delegate the fixture review")
+                                   + assistant("l0", "p0", at(41), [tool_use("lt0", "Agent", description="Survey the fixture builders", prompt="look")])
+                                   + line(type="user", uuid="m0", timestamp=at(48), promptId="q6", toolUseResult=dict(agentId="a8"),
+                                          message=dict(role="user", content=[dict(type="tool_result", tool_use_id="lt0", content="2 builders")]), **S)
+                                   + assistant("l1", "p1", at(50), [tool_use("lt1", "mcp__t3-code__delegate_task", **dict(
+                                       DELEGATE, title="Review the Live fixtures", target=dict(providerInstanceId="codex", model="gpt-6.2-sol")))]),
+                                   "Delegate the Live fixture review to a second model and merge it"))
+        self.write("s6/subagents/agent-a8.jsonl", in6(
+            step("a8", 42, 0, "claude-opus-5-5", tool_use("a8t0", "Grep", pattern="def page_fixtures")) + ran("a8", 43, 0, "a8t0")
+            + step("a8", 43, 1, "claude-opus-5-5", tool_use("a8t1", "Agent", description="Read the page tests", prompt="look"))
+            + ran("a8", 47, 1, "a8t1", toolUseResult=dict(agentId="a9"))))
+        self.write("s6/subagents/agent-a9.jsonl", in6(
+            step("a9", 44, 0, "claude-haiku-5-5", tool_use("a9t0", "Read", file_path="/nowhere/ai-ledger/web/src/pages/live/LivePage.test.tsx"))
+            + ran("a9", 45, 0, "a9t0")))
         self.write("s7.jsonl", other(prompt("k2", at(45), "q7", "Profile the ingest"), "s7", "/nowhere/ingest-bench",
                                      "Profile the ingest of a 2 GB transcript folder and find the hot loop", "perf/ingest-profile"))
         fail = lambda i, secs: (assistant(f"l3{i}", f"p3{i}", at(secs), [tool_use(f"lt3{i}", "Bash", command="uv run pytest -x tests/test_jobs.py")])
@@ -1097,8 +1114,8 @@ class PageCase(LiveCase):
 
 
 def page_fixtures():
-    """The Live payloads the page tests render, at NOW: the active list with and without text, a Claude Code session with
-    and without text, and a Codex session. Titles: sketchbook renamed (too long for a tile), jobdesk from its first prompt,
+    """The Live payloads the page tests render, at NOW: the active list with and without text and with agents, a Claude
+    Code session with and without text, and a Codex session. Titles: sketchbook renamed (too long for a tile), jobdesk from its first prompt,
     every other one from its agent."""
     case = PageCase()
     case.setUp()
@@ -1106,6 +1123,7 @@ def page_fixtures():
         thread = case.build()
         cur = case.con.cursor()
         return dict(list=live.sessions(cur, now=NOW, prices=PRICES), list_text=live.sessions(cur, now=NOW, prices=PRICES, text=True),
+                    agents=live.sessions(cur, now=NOW, prices=PRICES, with_agents=True),
                     claude=live.session(cur, "s1", now=NOW, prices=PRICES),
                     text=live.session(cur, "s1", text=True, now=NOW, prices=PRICES),
                     codex=live.session(cur, thread, now=NOW, prices=PRICES))
@@ -1123,6 +1141,9 @@ class PageFixtureTest(unittest.TestCase):
         listed = {s["project"]: s for s in got["list"]["sessions"]}
         self.assertEqual((listed["ai-ledger"]["state"]["tool"], listed["ai-ledger"]["branch"]), ("mcp__t3-code__delegate_task", "feat/live-rail-state-tag-width"))
         self.assertEqual((listed["jobdesk-api"]["errors"], listed["graft"]["model"], listed["graft"]["cost"]), (3, "gpt-6.2-sol", None))
+        told = {s["project"]: {a["id"]: (a["kind"], a["parent"], a["status"]) for a in s["agents"]} for s in got["agents"]["sessions"] if s["agents"]}
+        self.assertEqual(told, {"foo": dict(a7=("agent", None, "done"), t0=("delegation", None, "started")),
+                                "ai-ledger": dict(a8=("agent", None, "done"), a9=("agent", "a8", "done"), lt1=("delegation", None, "pending"))})
         self.assertEqual({k: v["model"] for k, v in got["claude"]["lanes"].items()}, dict(a7="claude-opus-5-5"))
         self.assertAlmostEqual(got["claude"]["lanes"]["a7"]["cost"], 0.0084)
         self.assertEqual({e["lane"] for e in got["claude"]["events"]} - {None}, {"a7"})
