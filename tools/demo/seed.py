@@ -470,14 +470,24 @@ def demo_tree():
     demo_spans does, so every other row stays as it is. Its Agent call and the Agent call of its subagent both run (a
     subagent with a subagent of its own), two Agent calls finished (two done agents), and a delegation call has a task
     running on another provider. It has a line within the last ACTIVE (10 minutes) of the seed, so the Live page lists it
-    for that long after `seed.py`; run seed.py again to see it later."""
+    for that long after `seed.py`; run seed.py again to see it later. Each call has its transcript lines too (raw_lines),
+    in the main file or its subagent's agent-<id>.jsonl, as the Stream draws its rows from them: a Tree node opens a lane
+    or a call the Stream holds."""
     sid, project, model = "demo-tree", "atlas-api", "claude-opus-5-5"
     t0 = NOW - timedelta(minutes=8)
     lanes = {"a": "tree-a", "b": "tree-b", "c": "tree-c", "d": "tree-d"}  # the lane ids: Claude Code's agent ids
-    calls, spawns, n = [], [], 0
+    calls, spawns, raw, n = [], [], [], 0
+    base, counts = "/home/demo/.claude/projects/-home-demo-code-atlas-api/", {}  # counts: file -> its lines so far
+    inputs = {"Read": "file_path", "Edit": "file_path", "Grep": "pattern"}  # the input field the demo's text is
 
     def at(m, s=0):
         return t0 + timedelta(minutes=m, seconds=s)
+
+    def line(kind, lane, ts, d):
+        path = base + (f"demo-tree/subagents/agent-{lane}.jsonl" if lane else "demo-tree.jsonl")
+        counts[path] = counts.get(path, 0) + 1
+        raw.append((f"{sid}-raw{len(raw)}", path, counts[path], 0, kind, sid, f"{sid}-u{len(raw)}", ts.isoformat(), lane is not None,
+                    True, json.dumps(d | {"type": kind, "sessionId": sid, "timestamp": ts.isoformat() + "Z"})))
 
     def call(tool, inp, start, end, lane=None, spawn=None, **cols):
         """spawn: the spawns row of a call that starts an agent (agent) or delegates a task (kind delegation)."""
@@ -490,6 +500,12 @@ def demo_tree():
             kind = spawn.get("kind", "subagent")
             spawns.append((cid, sid, kind, lane, tool, inp, at(*start), spawn.get("agent"), spawn.get("provider"), spawn.get("model"),
                            spawn.get("status")))
+        args = {inputs[tool]: inp} if tool in inputs else dict(description=inp, prompt=inp) if tool == "Agent" else dict(title=inp, task=inp)
+        line("assistant", lane, at(*start), {"message": {"role": "assistant", "content": [{"type": "tool_use", "id": cid, "name": tool, "input": args}]}})
+        if end:  # a finished Agent call's result names the subagent, which ties its lane to the call
+            agent = (spawn or {}).get("agent")
+            line("user", lane, at(*end), {"toolUseResult": {"agentId": agent} if agent else None, "message": {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": cid, "content": "Task accepted." if spawn and not agent else "Done."}]}})
 
     call("Read", "src/orders/router.ts", (0, 5), (0, 7))
     call("Grep", "rateLimit|throttle", (0, 20), (0, 23))
@@ -533,6 +549,8 @@ def demo_tree():
                  spawns)
     store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [(f"{sid}-p0", sid, t0, False)])
     store.insert(c, "session_titles", ["session_id", "custom", "agent"], [(sid, None, "Add sliding-window rate limiting to the orders endpoint")])
+    line("user", None, t0, {"promptId": f"{sid}-p0", "message": {"role": "user", "content": "Add sliding-window rate limiting to the orders endpoint"}})
+    store.insert(c, "raw_lines", ["key", "file", "line_no", "byte_offset", "type", "session_id", "uuid", "ts", "subagent", "parsed", "json"], raw)
 
 
 demo_spans()
