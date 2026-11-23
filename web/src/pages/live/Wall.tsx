@@ -15,6 +15,11 @@ export function StateNote({ st, now }: { st: LiveState; now: number }) {
   return <><StateTag st={st} now={now} plain quiet /><span className="sr">: {stateWhy(st, now)}</span></>;
 }
 
+/** A session's context as a tile and an Outline row draw it: a small meter, in the warning color past NEAR_FULL, then its
+ *  percent. Drawn only: its place says it in words. */
+export const ContextMeter = ({ share }: { share: number }) => <>
+  <span className={"meter" + (share > NEAR_FULL ? " warn" : "")}><i style={{ width: `${Math.min(100, share * 100)}%` }} /></span>{pct(share)}</>;
+
 /** A session as the page names it: its title, else its project. */
 export const nameOf = (s: Pick<LiveListSession, "title" | "project"> | undefined) => s?.title ?? s?.project ?? "session";
 
@@ -46,8 +51,7 @@ export function Wall({ sessions, now, pins, toggle }: { sessions: LiveListSessio
           <span className="ttl" title={s.title ?? undefined} aria-hidden="true">{s.title ?? <ProjectName project={s.project} />}</span>
           <span className="meta" aria-hidden="true">{s.title && <ProjectName project={s.project} />}{s.title && s.model && <span className="sep">·</span>}
             <span className="mdl">{shortModel(s.model)}</span></span>
-          <span className="ctx" aria-hidden="true">{share != null && <>
-            <span className={"meter" + (share > NEAR_FULL ? " warn" : "")}><i style={{ width: `${Math.min(100, share * 100)}%` }} /></span>{pct(share)}</>}</span>
+          <span className="ctx" aria-hidden="true">{share != null && <ContextMeter share={share} />}</span>
         </button>
       </li>;
     })}</ul>

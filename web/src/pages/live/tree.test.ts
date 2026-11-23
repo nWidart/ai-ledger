@@ -68,6 +68,8 @@ describe("tree.ts", () => {
     expect(holder([root], new Map(), "node:s/d")).toBe("fold:s/");
     const opened = flip(new Map(), fold);
     expect(rows(opened).at(-1)).toEqual(["node:s/d", 3, 1, 1, undefined]);
+    // The connectors: a line down past a parent with a sibling after it, none past the last; the row's own branch.
+    expect(rowsOf([root], opened).map(r => r.guides)).toEqual([[], ["├─"], ["│", "└─"], ["└─"], ["", "└─"]]);
     expect(holder([root], opened, "node:s/d")).toBe("node:s/d");
     const collapsed = flip(opened, root);
     expect([rows(collapsed), holder([root], collapsed, "node:s/b"), holder([root], collapsed, "node:s/gone")]).toEqual([[["node:s", 1, 1, 1, false]], "node:s", null]);
@@ -78,11 +80,11 @@ describe("tree.ts", () => {
       agent("a", { description: "Map the parsers", start: new Date(NOW - 90_000).toISOString(), tools: 8, errors: 2, cost: 0.05, model: "claude-haiku-5-5" }),
       delegation("t", { description: "Write the tests", start: ago(20), end: ago(20), model: "gpt-6.1-sol", provider: "codex" }),
       agent("q", { start: ago(1) }),
-    ], 60), title: "Add the Tree", project: "ai-ledger", first_ts: ago(12), tools: 40, errors: 2, cost: 1.2, model: "claude-opus-5-5",
+    ], 60), title: "Add the Tree", project: "ai-ledger", first_ts: ago(12), tools: 40, errors: 2, cost: 1.2, model: "claude-opus-5-5", context: 780_000, window: 1_000_000,
       state: { kind: "tool", tool: "Bash", since: new Date(NOW - 12_000).toISOString(), inferred: false, long: false } };
     const [group] = treeOf([s], NOW), root = group!.roots[0]!, [a, q, fold, more] = root.children;
     expect(group!.label).toBe("working");
-    expect(textOf(root, NOW)).toBe("Add the Tree. Bash 12s: Bash running for 12s. 2 errors. Project ai-ledger. 40 tool calls. Started 12m 00s ago. Cost $1.20. Model opus-5-5.");
+    expect(textOf(root, NOW)).toBe("Add the Tree. Bash 12s: Bash running for 12s. 2 errors. Project ai-ledger. 40 tool calls. Started 12m 00s ago. Cost $1.20. Model opus-5-5. Context 78%.");
     expect(textOf(a!, NOW)).toBe("Agent: Map the parsers. running. 8 tool calls. 2 errors. Duration 1m 30s. Cost $0.05. Model haiku-5-5.");
     expect(textOf(q!, NOW)).toBe("Agent. running. 0 tool calls. Duration 1m 00s."); // no cost, no model
     expect(textOf(fold!.children[0]!, NOW)).toBe("Delegated task: Write the tests. To codex gpt-6.1-sol. started, the transcript does not tell when the delegated task ends. Sent 20m 00s ago.");

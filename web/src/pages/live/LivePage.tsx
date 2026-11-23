@@ -198,7 +198,8 @@ export function LivePage() {
       {bare && !h.session && <PageSkeleton />}
       {/* The Wall shows no stream session: one left in the URL from the Stream view does not hide the empty state. */}
       {list && !sessions.length && (mode === "wall" ? !pins.length : mode === "tree" || !h.session) && <Empty newest={list.newest} href={sheetHref} />}
-      {mode === "tree" && tree.length > 0 && <section className="trees" aria-label="Active sessions">{tree.map(g => <div key={g.id} className="group">
+      {/* The Outline's groups sit in one card; the Org chart's are cards of their own. */}
+      {mode === "tree" && tree.length > 0 && <section className={"trees" + (layout === "outline" ? " panel" : "")} aria-label="Active sessions">{tree.map(g => <div key={g.id} className="group">
         <h2 id={`tree-${g.id}`}>{g.label} · {g.roots.length}</h2>
         {/* Keyed by layout: a switch draws the group anew, with the folds the page keeps. */}
         <Layout key={layout} roots={g.roots} labelledBy={`tree-${g.id}`} folds={folds} toggle={n => setFolds(f => flip(f, n))} select={select}

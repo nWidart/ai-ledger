@@ -2,7 +2,7 @@
 // parents, the finished ones folded, the rows that show given the folds, and what each node shows and says. Both layouts
 // (the Outline and the Org chart) draw this model: neither computes order, folds, labels or text.
 import type { LiveAgent, LiveListSession } from "../../api";
-import { plural, usd } from "../../format";
+import { pct, plural, usd } from "../../format";
 import { elapsed, groupSessions, shortModel, shortName, since, stateNow, stateText, stateWhy, type LiveGroup } from "./live";
 
 /** A delegation whose call returned longer ago than this is over, whatever its status says: nothing in the transcript
@@ -93,8 +93,12 @@ export const isOpen = (n: TreeNode, folds: Folds): boolean => folds.get(n.key) ?
 export const flip = (folds: Folds, n: TreeNode): Folds => new Map(folds).set(n.key, !isOpen(n, folds));
 
 /** A row that shows: its node, its level (1 for a session), its place among its siblings (from 1) and their count, its
- *  parent's key, and, when it has children, whether it shows them. */
-export interface Row { node: TreeNode; level: number; pos: number; size: number; parent: string | null; expanded: boolean | undefined }
+ *  parent's key, when it has children whether it shows them, and its guides. */
+export interface Row { node: TreeNode; level: number; pos: number; size: number; parent: string | null; expanded: boolean | undefined; guides: Guide[] }
+/** The connectors the Outline draws before a row, one per level under the session, outermost first: for each of its
+ *  ancestors under the session, a line down ("│") when that ancestor has a sibling after it, else nothing (""); then the
+ *  row's own branch, "└─" when it is the last of its siblings, else "├─". A session's row has none. */
+export type Guide = "│" | "" | "├─" | "└─";
 
 /** The most children the Org chart sets side by side under their parent; more stand in a column. */
 export const ROW_MAX = 5;
@@ -111,12 +115,12 @@ export function hiddenLabel(n: TreeNode): string {
 /** The rows that show, parent before children, under the folds: a closed node's descendants do not show. */
 export function rowsOf(roots: readonly TreeNode[], folds: Folds): Row[] {
   const out: Row[] = [];
-  const walk = (nodes: readonly TreeNode[], level: number, parent: string | null) => nodes.forEach((node, i) => {
-    const has = node.children.length > 0, open = has && isOpen(node, folds);
-    out.push({ node, level, pos: i + 1, size: nodes.length, parent, expanded: has ? open : undefined });
-    if (open) walk(node.children, level + 1, node.key);
+  const walk = (nodes: readonly TreeNode[], level: number, parent: string | null, above: Guide[]) => nodes.forEach((node, i) => {
+    const has = node.children.length > 0, open = has && isOpen(node, folds), last = i === nodes.length - 1;
+    out.push({ node, level, pos: i + 1, size: nodes.length, parent, expanded: has ? open : undefined, guides: level > 1 ? [...above, last ? "└─" : "├─"] : [] });
+    if (open) walk(node.children, level + 1, node.key, level > 1 ? [...above, last ? "" : "│"] : []);
   });
-  walk(roots, 1, null);
+  walk(roots, 1, null, []);
   return out;
 }
 
@@ -143,6 +147,8 @@ export interface Face {
   state: string; tone: string; inferred: boolean; name: string; description: string | null;
   tools: number | null; errors: number; duration: string | null; cost: string | null; model: string | null; provider: string | null;
   why: string | null;
+  /** A session's context over its window, from 0; null for an agent, or when the app does not give both. */
+  context: number | null;
 }
 /** A delegation's status in words. */
 const STATUS_WORD: Record<LiveAgent["status"], string> = { running: "running", done: "done", pending: "sending", started: "started", failed: "failed" };
@@ -152,14 +158,14 @@ export function faceOf(n: SessionNode | AgentNode, now: number): Face {
     const s = n.s, st = stateNow(s.state, now), took = since(s.first_ts, now);
     return { state: stateText(st, now).label, tone: st.kind, inferred: st.inferred, name: s.title ?? s.project ?? "session", description: s.title ? s.project : null,
       tools: s.tools, errors: s.errors, duration: took == null ? null : elapsed(took), cost: s.cost == null ? null : usd(s.cost),
-      model: shortModel(s.model) || null, provider: null, why: stateWhy(st, now) };
+      model: shortModel(s.model) || null, provider: null, why: stateWhy(st, now), context: s.context != null && s.window ? s.context / s.window : null };
   }
   const a = n.agent, delegation = a.kind === "delegation";
   const took = delegation || a.status === "running" ? since(a.start, now) : a.end ? since(a.start, ms(a.end)) : null;
   return { state: STATUS_WORD[a.status], tone: a.status, inferred: false, name: delegation ? "Delegated task" : shortName(a.name), description: a.description,
     tools: a.tools, errors: a.errors ?? 0, duration: took == null ? null : delegation ? `${elapsed(took)} ago` : elapsed(took),
     cost: a.cost == null ? null : usd(a.cost), model: shortModel(a.model) || null, provider: a.provider,
-    why: delegation && a.status === "started" ? `Started: ${STARTED_WHY}.` : null };
+    why: delegation && a.status === "started" ? `Started: ${STARTED_WHY}.` : null, context: null };
 }
 
 /** A node in words, for assistive technology: what it shows, in its order, as sentences. The layouts give it as the
@@ -170,7 +176,7 @@ export function textOf(n: TreeNode, now: number): string {
   const f = faceOf(n, now), errors = f.errors > 0 ? plural(f.errors, "error") : "", cost = f.cost ? `Cost ${f.cost}` : "", model = f.model ? `Model ${f.model}` : "";
   const parts = n.kind === "session"
     ? [f.name, `${f.state}${f.inferred ? " (inferred)" : ""}: ${f.why}`, errors, f.description ? `Project ${f.description}` : "",
-      plural(f.tools ?? 0, "tool call"), f.duration ? `Started ${f.duration} ago` : "", cost, model]
+      plural(f.tools ?? 0, "tool call"), f.duration ? `Started ${f.duration} ago` : "", cost, model, f.context == null ? "" : `Context ${pct(f.context)}`]
     : n.agent.kind === "delegation"
       ? [`${f.name}${f.description ? `: ${f.description}` : ""}`, f.provider || f.model ? `To ${[f.provider, f.model].filter(Boolean).join(" ")}` : "",
         n.agent.status === "started" ? `started, ${STARTED_WHY}` : f.state, f.duration ? `Sent ${f.duration}` : ""]

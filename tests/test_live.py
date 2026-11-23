@@ -522,7 +522,8 @@ class SessionTest(LiveCase):
         self.ingest()
         told = lambda now: {a["id"]: (a["parent"], a["name"], a["status"]) for a in live.sessions(
             self.cur(), automated=True, now=now, prices=PRICES, with_agents=True)["sessions"][0]["agents"]}
-        self.assertEqual(told(NOW), dict(a7=(None, "Agent", "running"), b2=("a7", "Agent", "running"), c3=(None, "Subagent", "running")))
+        with mock.patch.object(live, "STATE_LINES", 2):  # c3's lines push a7's and b2's out of the recent ones
+            self.assertEqual(told(NOW), dict(a7=(None, "Agent", "running"), b2=("a7", "Agent", "running"), c3=(None, "Subagent", "running")))
         self.assertEqual(told(NOW + timedelta(minutes=6))["c3"], (None, "Subagent", "done"))  # its call ended over 5 minutes before
 
     def test_delegation_status_and_the_cap(self):

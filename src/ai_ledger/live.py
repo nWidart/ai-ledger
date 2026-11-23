@@ -867,6 +867,28 @@ def lanes(cur, sid, prices):
     return {lane: dict(cost=cost, model=model) for _, lane, cost, model, _, _ in lane_requests(cur, prices, "r.session_id = ?", [sid])}
 
 
+def unheld_files(cur, sessions, rows, figs, starters):
+    """{session: rows} of the subagent files started_by must read that the recent rows do not hold, in recent's row
+    shape without text: those of the lanes with figures (figs) and no starting call in spawns (starters), for a source
+    with no spawn lines (as Claude Code). The recent rows share STATE_LINES among a session's subagents, so a busier
+    subagent's lines push out those of one that waits on a long call. One query, run only when such a lane exists."""
+    lost = {}  # session -> its lanes to find
+    for sid, source in sessions.items():
+        src = store.SOURCES.get(source)
+        if src is None or src.spawn:
+            continue
+        lanes = set(figs[sid]) - set(starters[sid]) - {lane_of(r[1], r[4]) for r in rows.get(sid, []) if r[3]}
+        if lanes:
+            lost[sid] = lanes
+    out = {}
+    if lost:
+        for sid, path, source in cur.execute(f"""SELECT DISTINCT r.session_id, r.file, coalesce(f.source, 'claude') FROM {ROW_FROM}
+                WHERE list_contains(?, r.session_id) AND r.subagent""", [list(lost)]).fetchall():
+            if lane_of(path, source) in lost[sid]:
+                out.setdefault(sid, []).append((None, path, None, True, source, None))
+    return out
+
+
 AGENTS_CAP = 200  # the agents one session's entry holds, at most
 DELEGATION_OVER = timedelta(minutes=10)  # a delegation whose call returned this long ago is over (the Tree folds it)
 
@@ -878,7 +900,8 @@ def agents(cur, sessions, rows, events, now, prices):
     An agent is a subagent lane (kind agent) or a delegation call (kind delegation), with its parent: the lane that made
     its starting call, None for the main thread or a lane the entry does not hold. A lane's figures come from its calls
     and requests, its starting call from spawns, or, for a running Claude Code subagent no line names yet, from its
-    meta.json (started_by). Three grouped queries; no line's text is read. At most AGENTS_CAP per session: the unfinished
+    meta.json (started_by), whether or not its lines are among the recent rows (unheld_files). Three grouped queries, and
+    a fourth when a lane's file is not among the rows; no line's text is read. At most AGENTS_CAP per session: the unfinished
     first, then the finished, newest start first. A delegation whose call returned over DELEGATION_OVER ago ranks as
     finished, as the Tree folds it, whatever its status."""
     sids = list(sessions)
@@ -903,6 +926,8 @@ def agents(cur, sessions, rows, events, now, prices):
             FROM spawns s LEFT JOIN tool_calls t ON t.tool_use_id = s.call_id WHERE list_contains(?, s.session_id)
             ORDER BY started NULLS FIRST, s.call_id""", [sids]):  # oldest first: a resumed subagent's newest call is its starter
         calls[r["session_id"]][r["call_id"]] = r
+    starters = {sid: {r["agent"]: r for r in calls[sid].values() if r["kind"] == "subagent" and r["agent"]} for sid in sids}  # lane -> its starting call
+    files = unheld_files(cur, sessions, rows, figs, starters)
     out = {}
     for sid, source in sessions.items():
         evs = events.get(sid, [])
@@ -910,8 +935,8 @@ def agents(cur, sessions, rows, events, now, prices):
         for e in evs:
             if e["lane"]:
                 by_lane.setdefault(e["lane"], []).append(e)
-        starter = {r["agent"]: r for r in calls[sid].values() if r["kind"] == "subagent" and r["agent"]}  # lane -> its starting call
-        unnamed = [r for r in rows.get(sid, []) if r[3] and r[4] in store.SOURCES and not store.SOURCES[r[4]].spawn
+        starter = starters[sid]
+        unnamed = [r for r in rows.get(sid, []) + files.get(sid, []) if r[3] and r[4] in store.SOURCES and not store.SOURCES[r[4]].spawn
                    and lane_of(r[1], r[4]) not in starter]
         tool_events = {e["id"]: e for e in evs if e["k"] == "tool"}
         for call, lid in started_by(unnamed, evs).items():

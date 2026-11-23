@@ -33,7 +33,7 @@ function Drawn({ n, now }: { n: SessionNode | AgentNode; now: number }) {
   const f = faceOf(n, now), to = [f.provider, f.model].filter(Boolean).join(" ");
   const figures = [f.tools == null ? null : `${f.tools} tools`, f.duration, f.cost, to || null].filter(Boolean);
   return <span className="drawn" aria-hidden="true">
-    <span className="head"><span className={"state st-" + f.tone}><i />{f.state}{f.inferred && <span className="inf"> (inferred)</span>}</span>
+    <span className="head"><span className={`st-${f.tone} state`}><i />{f.state}{f.inferred && <span className="inf"> (inferred)</span>}</span>
       {f.errors > 0 && <span className="errs bad">✕{f.errors}</span>}</span>
     <span className="nm">{f.name}</span>
     {f.description && <span className="desc" title={f.description}>{f.description}</span>}
