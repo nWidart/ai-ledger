@@ -96,6 +96,18 @@ export const flip = (folds: Folds, n: TreeNode): Folds => new Map(folds).set(n.k
  *  parent's key, and, when it has children, whether it shows them. */
 export interface Row { node: TreeNode; level: number; pos: number; size: number; parent: string | null; expanded: boolean | undefined }
 
+/** The most children the Org chart sets side by side under their parent; more stand in a column. */
+export const ROW_MAX = 5;
+/** How the Org chart arranges a node's children that show: in a row under it, or, past ROW_MAX, in a column. Below 721
+ *  pixels every parent's children stand in a column, which is the stylesheet's to say. */
+export const arrangementOf = (n: TreeNode): "row" | "column" => (n.children.length > ROW_MAX ? "column" : "row");
+/** The card the Org chart draws under a session or an agent collapsed in the Outline, to open it again: its cards have no
+ *  toggle of their own. It counts the agents under the node, folded ones included. */
+export function hiddenLabel(n: TreeNode): string {
+  const count = (m: TreeNode): number => m.children.reduce((k, c) => k + (c.kind === "agent" ? 1 : 0) + count(c), 0);
+  return `Show ${plural(count(n), "hidden agent")}`;
+}
+
 /** The rows that show, parent before children, under the folds: a closed node's descendants do not show. */
 export function rowsOf(roots: readonly TreeNode[], folds: Folds): Row[] {
   const out: Row[] = [];

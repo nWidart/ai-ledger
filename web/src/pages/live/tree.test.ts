@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LiveAgent, LiveListSession, LivePayload } from "../../api";
 import live from "../../__fixtures__/live";
-import { faceOf, flip, holder, isOpen, rowsOf, sessionTree, textOf, treeOf, type AgentNode, type Folds, type TreeNode } from "./tree";
+import { arrangementOf, faceOf, flip, hiddenLabel, holder, isOpen, rowsOf, sessionTree, textOf, treeOf, type AgentNode, type Folds, type TreeNode } from "./tree";
 
 const NOW = Date.parse("2026-11-10T11:00:00.000Z");
 /** The time `min` minutes before NOW. */
@@ -36,6 +36,15 @@ describe("tree.ts", () => {
     expect(tree([agent("A", { status: "done", end: ago(1) }), agent("B", { parent: "A", status: "done", end: ago(2) })]))
       .toEqual(["s", "  [1 finished subagent]", "    A", "      [1 finished subagent]", "        B"]);
     expect(tree([agent("r")])).toEqual(["s", "  r"]); // nothing over: no fold
+  });
+
+  it("sets up to 5 children that show in a row in the Org chart, and more in a column", () => {
+    const of = (n: number, done = 0) => arrangementOf(sessionTree(session([
+      ...Array.from({ length: n }, (_, i) => agent(`r${i}`)), ...Array.from({ length: done }, (_, i) => agent(`d${i}`, { status: "done", end: ago(1) }))]), NOW));
+    expect([of(5), of(6), of(4, 3)]).toEqual(["row", "column", "row"]); // a fold is one child, whatever it holds
+    // A collapsed node's card counts every agent under it, folded ones too.
+    expect(hiddenLabel(sessionTree(session([agent("A"), agent("B", { parent: "A" }), agent("d", { status: "done", end: ago(1) })]), NOW)))
+      .toBe("Show 3 hidden agents");
   });
 
   it("folds a delegation once done or failed, or 10 minutes after its call returned whatever it says", () => {

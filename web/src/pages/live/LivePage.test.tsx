@@ -1716,19 +1716,22 @@ describe("LivePage", () => {
     expect([location.search, screen.getByRole("button", { name: "Outline" }).getAttribute("aria-pressed")]).toEqual(["?view=tree", "true"]);
   });
 
-  it("keeps the focus on a Tree node that moves: a focused running subagent that finishes gives it to its parent's closed fold", async () => {
-    const o = { list: treeList };
-    show("?view=tree", o);
-    const row = await within(await rail()).findByRole("treeitem", { name: /^Agent: Read the specs\./ });
-    act(() => row.focus());
-    o.list = { ...treeList, sessions: treeList.sessions.map(s => (s.session_id !== "s1" ? s
-      : { ...s, agents: s.agents!.map(a => (a.id === "a9" ? { ...a, status: "done" as const, end: "2026-11-10T10:00:50.000Z" } : a)) })) };
-    FakeSource.last!.notify(null);
-    await waitFor(() => expect(document.getElementById("node:s1/a9")).toBeNull());
-    expect([document.activeElement!.id, document.activeElement!.getAttribute("aria-expanded"), document.activeElement!.getAttribute("tabindex")])
-      .toEqual(["fold:s1/a8", "false", "0"]);
-    expect(document.activeElement).toBe(screen.getByRole("treeitem", { name: "1 finished subagent" }));
-  });
+  // The Outline's row is its group's one tab stop (tabindex 0); an Org chart card is a button with no tabindex of its own.
+  it.each([["the Outline", "", "treeitem", "0"], ["the Org chart", "&layout=org", "button", null]] as const)(
+    "keeps the focus on a Tree node that moves: a focused running subagent that finishes gives it to its parent's closed fold, in %s",
+    async (_where, layout, role, tab) => {
+      const o = { list: treeList };
+      show(`?view=tree${layout}`, o);
+      const row = await within(await rail()).findByRole(role, { name: /^Agent: Read the specs\./ });
+      act(() => row.focus());
+      o.list = { ...treeList, sessions: treeList.sessions.map(s => (s.session_id !== "s1" ? s
+        : { ...s, agents: s.agents!.map(a => (a.id === "a9" ? { ...a, status: "done" as const, end: "2026-11-10T10:00:50.000Z" } : a)) })) };
+      FakeSource.last!.notify(null);
+      await waitFor(() => expect(document.getElementById("node:s1/a9")).toBeNull());
+      expect([document.activeElement!.id, document.activeElement!.getAttribute("aria-expanded"), document.activeElement!.getAttribute("tabindex")])
+        .toEqual(["fold:s1/a8", "false", tab]);
+      expect(document.activeElement).toBe(screen.getByRole(role, { name: "1 finished subagent" }));
+    });
 
   it("asks for the agents in the Tree only, with no text, over the one connection of Stream, Wall, Tree and a layout switch", async () => {
     const { calls } = show("?session=s1", { list: treeList });

@@ -42,9 +42,9 @@ Test rules (`AGENTS.md`): add an assertion to the test that already builds the f
 
 ## 5. Org chart layout
 
-- [ ] 5.1 Write `OrgChart.tsx`: nested lists per session under the group's `h2`, each card a button named from the node's text, the fold a button with its expanded state, connectors in CSS only. Verify: one render test asserts the list nesting, the tab order parent then children, and a card's accessible name.
+- [x] 5.1 Write `OrgChart.tsx`: nested lists per session under the group's `h2`, each card a button named from the node's text, the fold a button with its expanded state, connectors in CSS only. Verify: one render test asserts the list nesting, the tab order parent then children, and a card's accessible name.
 - [ ] 5.2 Arrange children in a row for 5 or fewer and in a column for 6 or more, and in a column for every parent below 721 pixels; let a wide chart scroll inside its box. Verify: one test asserts the class for 5 and for 6 children; in the running app at 1440x900, 1280x800 and 390x844, check the connectors, 8 children in a column, and no sideways scroll of the page.
-- [ ] 5.3 Keep the focus on a card that moves, as 4.3, through the shared key lookup of 3. Verify: an assertion added to the 4.3 test for the Org chart layout, or the same test run for both layouts. Run `cd web && npm run check`.
+- [x] 5.3 Keep the focus on a card that moves, as 4.3, through the shared key lookup of 3. Verify: an assertion added to the 4.3 test for the Org chart layout, or the same test run for both layouts. Run `cd web && npm run check`.
 
 ## 6. Fixtures
 
