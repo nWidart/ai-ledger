@@ -59,7 +59,7 @@ Test rules (`AGENTS.md`): add an assertion to the test that already builds the f
 
 ## 8. Demo store (optional)
 
-- [ ] 8.1 In `tools/demo/seed.py`, give one live session a subagent with a subagent of its own, two finished subagents and a delegation call. Verify: `tools/demo/serve.py` shows them in the Tree, in both layouts, with one fold row.
+- [x] 8.1 In `tools/demo/seed.py`, give one live session a subagent with a subagent of its own, two finished subagents and a delegation call. Verify: `tools/demo/serve.py` shows them in the Tree, in both layouts, with one fold row.
 - [ ] 8.2 If the Live GIF in the README should show the Tree, add the step to `tools/demo/record.mjs` and record it again. Verify: the GIF plays the Tree in light and dark.
 
 ## 9. Integration check
