@@ -16,12 +16,12 @@ Test rules (`AGENTS.md`): add an assertion to the test that already builds the f
 
 ## 2. `live.py`: agents in the list payload
 
-- [ ] 2.1 Add `agents` to `live.sessions()` behind a parameter, and `agents=1` to `/api/live` in `app.py`: the three grouped queries of `design.md` decision 2, the flat `LiveAgent` list with `parent`, and nothing added when not asked. Verify: `tests/test_live.py` asserts, on the fixture that already has subagent lanes, each agent's parent, name, description, tools, errors, cost and model, and that the answer without the parameter has no `agents` key and is otherwise equal.
-- [ ] 2.2 Tell a subagent's status by the three rules of decision 3, reusing `started_by()` over the session's recent rows for a running Claude Code subagent, and the recent rows' turn marks for Codex and Grok. Verify: `tests/test_live.py` covers a nested running Claude Code subagent named by its `meta.json`, a Codex thread by its turn mark, and a subagent with no starting call before and after 5 minutes.
-- [ ] 2.3 Add delegations as agents with their status (`pending`, `started`, `done`, `failed`), and no session id or thread id of the child. Verify: one test in `tests/test_live.py` with the four statuses.
-- [ ] 2.4 Cap a session's agents at 200, unfinished first, then newest start first, with `agents_more`. Verify: one test with more agents than the cap.
-- [ ] 2.5 Make `live.lanes()` read `requests.lane`. Verify: its existing tests in `tests/test_live.py` pass unchanged, and 2.1 asserts that a lane's cost and model equal its agent's.
-- [ ] 2.6 Verify the text rule: an assertion in 2.1 that `agents=1&text=1` sends no description above 300 characters and no `task` text. Run `uv run ruff check` and `uv run pytest`.
+- [x] 2.1 Add `agents` to `live.sessions()` behind a parameter, and `agents=1` to `/api/live` in `app.py`: the three grouped queries of `design.md` decision 2, the flat `LiveAgent` list with `parent`, and nothing added when not asked. Verify: `tests/test_live.py` asserts, on the fixture that already has subagent lanes, each agent's parent, name, description, tools, errors, cost and model, and that the answer without the parameter has no `agents` key and is otherwise equal.
+- [x] 2.2 Tell a subagent's status by the three rules of decision 3, reusing `started_by()` over the session's recent rows for a running Claude Code subagent, and the recent rows' turn marks for Codex and Grok. Verify: `tests/test_live.py` covers a nested running Claude Code subagent named by its `meta.json`, a Codex thread by its turn mark, and a subagent with no starting call before and after 5 minutes.
+- [x] 2.3 Add delegations as agents with their status (`pending`, `started`, `done`, `failed`), and no session id or thread id of the child. Verify: one test in `tests/test_live.py` with the four statuses.
+- [x] 2.4 Cap a session's agents at 200, unfinished first, then newest start first, with `agents_more`. Verify: one test with more agents than the cap.
+- [x] 2.5 Make `live.lanes()` read `requests.lane`. Verify: its existing tests in `tests/test_live.py` pass unchanged, and 2.1 asserts that a lane's cost and model equal its agent's.
+- [x] 2.6 Verify the text rule: an assertion in 2.1 that `agents=1&text=1` sends no description above 300 characters and no `task` text. Run `uv run ruff check` and `uv run pytest`.
 
 ## 3. Tree view shell
 

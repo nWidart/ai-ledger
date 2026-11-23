@@ -506,6 +506,41 @@ class SessionTest(LiveCase):
         later = self.run_session(after=first["cursor"], now=NOW + timedelta(minutes=2))
         self.assertEqual([(e["id"], e["agent"]) for e in later["events"] if e["lane"] is None], [("t1", "a7")])
 
+    def test_subagent_status(self):
+        sub = lambda agent: dict(S, isSidechain=True, agentId=agent)
+        call = lambda agent, secs, tid, tool="Grep", **inp: line(type="assistant", uuid=f"{tid}x", timestamp=at(secs), message=dict(
+            id=f"{tid}m", model="claude-opus-5-5", content=[tool_use(tid, tool, **inp or dict(pattern="x"))]), **sub(agent))
+        done = lambda agent, secs, tid: line(type="user", uuid=f"{tid}y", timestamp=at(secs), message=dict(role="user", content=[
+            dict(type="tool_result", tool_use_id=tid, content="ok")]), **sub(agent))
+        self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Agent", description="map", prompt="look")]))
+        # a7 runs b2, which no line names yet: its meta.json names a7's call. c3 has no starting call and its call ended.
+        self.write("s1/subagents/agent-a7.jsonl", call("a7", 2, "a7s", "Agent", description="nested", prompt="look"))
+        self.write("s1/subagents/agent-a7.meta.json", json.dumps(dict(toolUseId="t1")), mode="w")
+        self.write("s1/subagents/agent-b2.jsonl", call("b2", 3, "b2t"))
+        self.write("s1/subagents/agent-b2.meta.json", json.dumps(dict(toolUseId="a7s")), mode="w")
+        self.write("s1/subagents/agent-c3.jsonl", call("c3", 10, "c3t") + done("c3", 11, "c3t"))
+        self.ingest()
+        told = lambda now: {a["id"]: (a["parent"], a["name"], a["status"]) for a in live.sessions(
+            self.cur(), automated=True, now=now, prices=PRICES, with_agents=True)["sessions"][0]["agents"]}
+        self.assertEqual(told(NOW), dict(a7=(None, "Agent", "running"), b2=("a7", "Agent", "running"), c3=(None, "Subagent", "running")))
+        self.assertEqual(told(NOW + timedelta(minutes=6))["c3"], (None, "Subagent", "done"))  # its call ended over 5 minutes before
+
+    def test_delegation_status_and_the_cap(self):
+        ask = lambda i: assistant(f"a{i}", f"m{i}", at(i), [tool_use(f"d{i}", store.DELEGATE, title=f"task {i}", task="do it", role="builder")])
+        answer = lambda i, status=None, error=False: line(
+            type="user", uuid=f"r{i}", timestamp=at(10 + i), promptId="p1", mcpMeta=dict(structuredContent=dict(
+                status=status, taskId=f"task_{i}", childThreadId="CHILD-THREAD", model="gpt-6.1-sol", providerInstanceId="codex")),
+            message=dict(role="user", content=[dict(type="tool_result", tool_use_id=f"d{i}", content="ok", is_error=error)]), **S)
+        self.write("s1.jsonl", ask(1) + ask(2) + ask(3) + ask(4) + answer(2, error=True) + answer(3, "completed") + answer(4, "running"))
+        self.ingest()
+        listed = lambda: live.sessions(self.cur(), automated=True, now=NOW, prices=PRICES, with_agents=True)["sessions"][0]
+        got = listed()
+        self.assertEqual({a["id"]: a["status"] for a in got["agents"]}, dict(d1="pending", d2="failed", d3="done", d4="started"))
+        self.assertNotIn("CHILD-THREAD", json.dumps(got["agents"]))  # the session a delegation started is not named
+        with mock.patch.object(live, "AGENTS_CAP", 3):  # the unfinished first, then the finished, newest start first
+            capped = listed()
+        self.assertEqual(([a["id"] for a in capped["agents"]], capped["agents_more"]), (["d4", "d1", "d3"], 1))
+
     def test_long_call_marked_on_its_event(self):
         self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Bash", command="npm run dev", run_in_background=True),
                                                              tool_use("t2", "Bash", command="make", timeout=300000),
@@ -519,12 +554,23 @@ class SessionTest(LiveCase):
         self.assertEqual([(e["tool"], e["quiet"]) for e in self.run_session()["events"]], [("Grep", True), ("Bash", False)])
 
     def test_lane_cost_and_model(self):
-        self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Agent", description="find callers", prompt="look")]))
+        delegate = tool_use("t9", store.DELEGATE, title="Write the tests", task="SECRET task " * 200, role="builder",
+                            target=dict(providerInstanceId="codex", model="gpt-6.1-sol"))
+        self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Agent", description="find callers", prompt="look"), delegate])
+                   + line(type="user", uuid="r1", timestamp=at(9), promptId="p1", toolUseResult=dict(agentId="a7"),
+                          message=dict(role="user", content=[dict(type="tool_result", tool_use_id="t1", content="done")]), **S))
+        sub = lambda agent: dict(S, isSidechain=True, agentId=agent)
         step = lambda agent, i, model, block=0, **usage: line(type="assistant", uuid=f"{agent}x{i}{block}", timestamp=at(2 + i), message=dict(
-            id=f"{agent}m{i}", model=model, usage=usage, content=[tool_use(f"{agent}t{i}{block}", "Grep", pattern="x")]),
-            **dict(S, isSidechain=True, agentId=agent))
+            id=f"{agent}m{i}", model=model, usage=usage, content=[tool_use(f"{agent}t{i}{block}", "Grep", pattern="x")]), **sub(agent))
+        # a7 starts b2 with an Agent call on a line of its request a7m1, and one of its Grep calls fails.
+        spawn = line(type="assistant", uuid="a7x1s", timestamp=at(3), message=dict(id="a7m1", model="claude-opus-5-5", usage=dict(
+            output_tokens=1000000), content=[tool_use("a7s", "Agent", description="d" * 2000, prompt="SECRET brief")]), **sub("a7"))
+        named = line(type="user", uuid="a7y", timestamp=at(5), toolUseResult=dict(agentId="b2"), message=dict(role="user", content=[
+            dict(type="tool_result", tool_use_id="a7s", content="ok")]), **sub("a7"))
+        failed = line(type="user", uuid="a7f", timestamp=at(5), message=dict(role="user", content=[
+            dict(type="tool_result", tool_use_id="a7t00", content="no", is_error=True)]), **sub("a7"))
         self.write("s1/subagents/agent-a7.jsonl", step("a7", 0, "claude-opus-5-5", input_tokens=1000000) + step("a7", 1, "claude-opus-5-5", output_tokens=1000000)
-                   + step("a7", 1, "claude-opus-5-5", block=1, output_tokens=1000000))  # one request on two lines counts once
+                   + step("a7", 1, "claude-opus-5-5", block=1, output_tokens=1000000) + spawn + named + failed)  # one request on several lines counts once
         self.write("s1/subagents/agent-b2.jsonl", step("b2", 0, "claude-opus-5-5", input_tokens=500000) + step("b2", 1, "mystery-1", input_tokens=9))
         self.write("s1/subagents/agent-c3.jsonl", step("c3", 0, "mystery-1", input_tokens=9))  # the lanes' lines share their times
         self.ingest()
@@ -534,6 +580,21 @@ class SessionTest(LiveCase):
         self.assertEqual({e["lane"] for e in got["events"]} - {None}, set(got["lanes"]))
         self.assertAlmostEqual(got["cost"], 26.0008)  # the main thread's request on top of the lanes'
         self.assertEqual(self.run_session(after=got["cursor"])["lanes"], got["lanes"])  # whole on a catch-up too
+        # The active list gives the same lanes as agents only when asked, and is otherwise the same.
+        listed = lambda **kw: live.sessions(self.cur(), automated=True, now=NOW, prices=PRICES, **kw)["sessions"][0]
+        entry, plain = listed(with_agents=True), listed()
+        self.assertEqual(({k: v for k, v in entry.items() if k not in ("agents", "agents_more")}, "agents" in plain), (plain, False))
+        self.assertEqual({a["id"]: (a["kind"], a["parent"], a["name"], a["description"], a["tools"], a["errors"], a["model"], a["provider"])
+                          for a in entry["agents"]},
+                         dict(a7=("agent", None, "Agent", "find callers", 4, 1, "claude-opus-5-5", None),
+                              b2=("agent", "a7", "Agent", "d" * 300, 2, 0, "mystery-1", None),
+                              c3=("agent", None, "Subagent", None, 1, 0, "mystery-1", None),
+                              t9=("delegation", None, store.DELEGATE, "Write the tests", None, None, "gpt-6.1-sol", "codex")))
+        self.assertEqual({a["id"]: dict(cost=a["cost"], model=a["model"]) for a in entry["agents"] if a["kind"] == "agent"}, got["lanes"])
+        self.assertEqual(entry["agents_more"], 0)
+        # With text too, no description is longer than the cap and no task or prompt text is sent.
+        agents = listed(with_agents=True, text=True)["agents"]
+        self.assertEqual((max(len(a["description"] or "") for a in agents), "SECRET" in json.dumps(agents)), (300, False))
 
     def test_figures(self):
         self.write("s1.jsonl", assistant("a1", "m1", at(30), [dict(type="text", text="hi")])
@@ -875,6 +936,19 @@ class CodexSessionTest(CodexCase):
         tools = {e["id"]: e for e in got["events"] if e["k"] == "tool"}
         self.assertEqual((tools["c3"]["agent"], tools["c3"]["end"], tools["c9"]["lane"]), (thread, None, thread))
         self.assertEqual([e["k"] for e in got["events"]], ["prompt", "tool", "tool"])  # the start item shows no event of its own
+
+    def test_thread_agent_status_by_its_turn_mark(self):
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()
+                   + codex_line(2, 3, "response_item", type="function_call", name="spawn_agent", call_id="c3", arguments=json.dumps(dict(task_name="review")))
+                   + self.spawn(3, 4, self.CHILD))
+        self.child_of(self.CHILD, codex_line(1, 5, "event_msg", type="task_started", turn_id="u1"))
+        self.ingest()
+        told = lambda: [(a["id"], a["parent"], a["name"], a["description"], a["status"]) for a in live.sessions(
+            self.con.cursor(), automated=True, now=NOW, prices=PRICES, with_agents=True)["sessions"][0]["agents"]]
+        self.assertEqual(told(), [(self.CHILD, None, "spawn_agent", "review", "running")])
+        self.place(NAME.replace(THREAD, self.CHILD), codex_line(2, 8, "event_msg", type="task_complete", turn_id="u1"), mode="a")
+        self.ingest()
+        self.assertEqual(told()[0][-1], "done")
 
     def test_spawn_call_before_the_rows_is_sent_again_naming_its_lane(self):
         thread = "0a0f9999-0000-7000-8000-000000000002"
