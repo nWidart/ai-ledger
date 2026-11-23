@@ -104,7 +104,7 @@ Under the status strip, a **Stream filters** bar holds:
 | **Main thread only** | Hides every subagent lane. |
 | **Hide read-only** | Hides calls that only read: `Read`, `Grep`, `Glob`, and shell calls whose every command only reads or searches. A failed call is never hidden. |
 
-The filters combine, stay on when you open another session, and change only what the stream draws, not the status strip's figures or a lane header's counts. The stream says how many rows the filters hide.
+The filters combine, stay on when you open another session (except from a subagent or delegation in the Tree, which turns them off), and change only what the stream draws, not the status strip's figures or a lane header's counts. The stream says how many rows the filters hide.
 
 - Select a tool row to open its detail.
 - Select a lane header to fold or unfold the lane.
@@ -183,7 +183,7 @@ From 1100 pixels wide, the tiles stand in one column with the pinned streams bes
 
 **Controls**
 
-- Select a node to open its session in the Stream view. A subagent opens it with its lane unfolded and in view, and a delegation with the call's row in view. Back returns to the Tree in the layout it had. The session you came from is marked as the current one.
+- Select a node to open its session in the Stream view. A subagent opens it with its lane unfolded and in view, and a delegation with the call's row in view. Both turn the stream filters off, so no filter hides what they open. Back returns to the Tree in the layout it had. The session you came from is marked as the current one.
 - The Outline is one tab stop per state group. Up and Down move between rows, Right expands a row or moves to its first child, Left collapses a row or moves to its parent, Home and End go to the first and last row, and Enter or Space selects it. See [Keyboard and screen reader](/ai-ledger/everywhere/keyboard-screen-reader/#shortcuts).
 - In the Org chart, every card is a button, reached with Tab in the order parent then children.
 

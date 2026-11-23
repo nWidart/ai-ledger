@@ -97,7 +97,8 @@ export function LivePage() {
     refocus.current = () => heading() ?? document.querySelector<HTMLElement>(".pg-live .main");
   };
   // A Tree node opens its session in the Stream, in a new history entry, so Back returns to the Tree in its layout: a
-  // subagent with its lane unfolded, a delegation with the lane that made it unfolded, then the Stream shows the lane or the
+  // subagent with its lane unfolded, a delegation with the lane that made it unfolded, either with the Stream's filters
+  // off, then the Stream shows the lane or the
   // call (revealed), else opens as for a session, on its heading with Follow on. A fold row flips.
   const select = (n: TreeNode) => {
     if (n.kind === "fold") { setFolds(f => flip(f, n)); return; }
@@ -105,6 +106,9 @@ export function LivePage() {
     const a = n.kind === "agent" ? n.agent : null, lane = a && (a.kind === "agent" ? a.id : a.parent);
     // A delegation's lane shows all its rows: a running lane draws only its last few, which may not hold the call.
     if (lane) setChoices(c => ({ folds: new Map(c.folds).set(lane, false), whole: a.kind === "delegation" ? new Set(c.whole).add(lane) : c.whole }));
+    // Each Stream filter can hide the lane or the call (Main thread only a lane, the other two its rows): an agent's node
+    // turns them all off, so what it opens is drawn. A session's node leaves them as they are.
+    if (a) setFilters(NO_FILTERS);
     setReveal({ session: n.session, at: Date.now(), ...(a ? (a.kind === "agent" ? { lane: a.id } : { call: a.id }) : {}) });
     pick(n.session);
   };

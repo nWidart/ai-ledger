@@ -1769,14 +1769,17 @@ describe("LivePage", () => {
     expect(location.search).toBe("?session=s1");
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("region", { name: "Session" }).querySelector(".stream-head h2")));
     expect(check("Follow").checked).toBe(true);
+    const filters = () => [/^Failed calls only/, "Main thread only", "Hide read-only"].map(name => screen.getByRole("checkbox", { name }) as HTMLInputElement);
+    for (const box of filters()) await userEvent.click(box); // each would hide the lane
     expect((await back()).getAttribute("aria-current")).toBe("true");
     expect(screen.getByRole("button", { name: "Org chart" }).getAttribute("aria-pressed")).toBe("true");
-    // A done subagent: its lane, which the stream folds, opens, takes the focus, and Follow turns off.
+    // A done subagent: its lane, which the stream folds, opens with the filters off, takes the focus, and Follow turns off.
     await userEvent.click(await node(FOLD));
     await userEvent.click(await node(/^Agent: find callers of ingest\./));
     await stream();
     await waitFor(() => expect(document.activeElement).toBe(laneHead()));
     expect([laneHead().getAttribute("aria-expanded"), check("Follow").checked]).toEqual(["true", false]);
+    expect(filters().map(box => box.checked)).toEqual([false, false, false]);
     await back();
     // A delegation: its call's row.
     await userEvent.click(await node(/^Delegated task\. /));

@@ -212,6 +212,13 @@ Selecting a session node SHALL open that session in the Stream view. Selecting a
 - **WHEN** the user selects a node and then goes back
 - **THEN** the Tree shows, in the layout it had
 
+### Requirement: Turn the Stream's filters off for an agent's node
+Selecting a subagent or delegation node SHALL turn the Stream's filters off (Failed calls only, Main thread only, Hide read-only), as each can hide the lane or the call it opens. Selecting a session node SHALL leave them as they are.
+
+#### Scenario: Filters on
+- **WHEN** Main thread only is on and the user selects a subagent's node
+- **THEN** the Stream's filters are off and the subagent's lane is in view
+
 ### Requirement: Mark the selected session in the Tree
 The node of the session the URL names SHALL be marked as the current one, and SHALL be the row or the card the keyboard reaches first in its group. A node that moves, to another group or into a fold, while it holds the keyboard focus SHALL keep the focus where it lands; one that goes into a closed fold SHALL give the focus to the fold row.
 
