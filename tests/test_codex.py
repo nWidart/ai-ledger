@@ -206,17 +206,33 @@ class ArchiveTest(CodexCase):
     def test_spawned_thread_is_subagent_work(self):
         parent = "0a0f9999-0000-7000-8000-000000000002"
         self.place(NAME, meta(parent, THREAD) + context(1, "t1", "gpt-6-astra", "medium")
-                   + record(2, "t1", "r1", usage(100, 0, 10)))
+                   + record(2, "t1", "r1", usage(100, 0, 10)) + item(5, "t1", dict(
+                       type="CommandExecution", id="c1", command="ls", status="completed", exit_code=0, aggregated_output="")))
+        # The parent's file: the start item that names the thread, stored an ingest before the spawn_agent call it names.
+        parent_name = NAME.replace(THREAD, parent)
+        self.place(parent_name, meta(parent) + item(1, "p1", dict(type="SubAgentActivity", id="s1", kind="started",
+                                                                   agent_thread_id=THREAD, agent_path="/root/a")))
         self.ingest()
         self.assertEqual(self.q("SELECT session_id, subagent FROM requests"), [(parent, True)])
         self.assertEqual(self.q("SELECT session_id, peak_context FROM sessions"), [(parent, 0)])
         self.place(NAME, line(timestamp="2026-11-06T09:00:00.000Z", ordinal=3, type="event_msg",
                               payload=dict(type="task_started", turn_id="t2", model_context_window=400000))
                    + line(timestamp="2026-11-06T09:10:00.000Z", ordinal=4, type="compacted", payload=dict(message="")), mode="a")
+        self.place(parent_name, line(timestamp="2026-11-06T10:00:00.000Z", ordinal=2, type="response_item", payload=dict(
+            type="function_call", name="spawn_agent", call_id="s1", arguments=json.dumps(dict(task_name="review", message="look"))))
+            + item(3, "p1", dict(type="McpToolCall", id="d1", server="t3-code", tool="delegate_task", status="completed",
+                                 arguments=dict(title="Write the tests", task="a task", target=dict(providerInstanceId="claude", model="claude-opus-5-5")))),
+            mode="a")
         self.ingest()  # the subagent's own window and compaction are not the session's
         self.assertEqual(self.q("SELECT compactions, first_compaction_ts, context_window FROM sessions"), [(0, None, None)])
         # A file named by its own thread only: its lines belong to the parent session, not to a session of their own.
-        self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines"), [(parent, True)])
+        self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines WHERE file LIKE ?", f"%{THREAD}%"), [(parent, True)])
+        # The thread's call and request carry its lane; the spawn_agent call adds no tool call, the delegation its MCP call.
+        self.assertEqual(self.q("SELECT tool_use_id, lane FROM tool_calls UNION ALL SELECT message_id, lane FROM requests ORDER BY ALL"),
+                         [("c1", THREAD), ("d1", None), ("r1", THREAD)])
+        self.assertEqual(self.q("SELECT call_id, session_id, kind, lane, tool, description, agent, provider, model, status FROM spawns ORDER BY 1"),
+                         [("d1", parent, "delegation", None, store.DELEGATE, "Write the tests", None, "claude", "claude-opus-5-5", None),
+                          ("s1", parent, "subagent", None, "spawn_agent", "review", THREAD, None, None, None)])
 
     def test_chunk_without_session_meta_keeps_the_threads_owner(self):
         parent = "0a0f9999-0000-7000-8000-000000000002"
@@ -268,12 +284,14 @@ class ForkedChunkTest(CodexCase):
     def test_chunk_holding_only_the_parents_copy_of_session_meta_is_subagent_work(self):
         parent = "0a0f9999-0000-7000-8000-0000000000aa"
         ts = "2026-11-06T10:00:00.000Z"
-        self.place(NAME, meta_at(0, ts, parent, THREAD, subagent_history_start_ordinal=3))
+        self.place(NAME, meta_at(0, ts, parent, THREAD, subagent_history_start_ordinal=4))
         self.ingest()
-        self.place(NAME, meta_at(1, ts, parent) + context(2, "t1", "gpt-6-astra") + record(3, "t1", "r1", usage(100, 0, 10)), mode="a")
+        self.place(NAME, meta_at(1, ts, parent) + context(2, "t1", "gpt-6-astra") + record(3, "t0", "r0", usage(50, 0, 5))
+                   + record(4, "t1", "r1", usage(100, 0, 10)), mode="a")
         self.ingest()
         self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines"), [(parent, True)])
-        self.assertEqual(self.q("SELECT session_id, subagent FROM requests"), [(parent, True)])
+        # The parent's request r0, copied below the fork's start, is no request of the thread's lane: only its own r1 is.
+        self.assertEqual(self.q("SELECT message_id, session_id, subagent, lane FROM requests"), [("r1", parent, True, THREAD)])
         self.assertEqual(self.q("SELECT session_id FROM sessions"), [(parent,)])
 
 

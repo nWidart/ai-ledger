@@ -479,7 +479,11 @@ class SubagentTest(GrokCase):
         self.assertEqual(got[:5], want[:5])
         self.assertAlmostEqual(got[5], want[5], places=9)
         self.assertEqual(self.q("SELECT DISTINCT session_id FROM tool_calls"), [(sid,)])
-        self.assertEqual(self.q("SELECT session_id, tool FROM tool_calls WHERE subagent"), [(sid, "read_file")])
+        # The child's call carries its lane, whether it was placed under its parent or moved there later.
+        self.assertEqual(self.q("SELECT session_id, tool, lane FROM tool_calls WHERE subagent OR lane IS NOT NULL"),
+                         [(sid, "read_file", CHILD)])
+        self.assertEqual(self.q("SELECT session_id, kind, lane, tool, description, agent FROM spawns"),
+                         [(sid, "subagent", None, "spawn_subagent", "text 10", CHILD)])  # the call's result names the child
         self.assertEqual(self.q("SELECT DISTINCT session_id FROM hooks"), [(sid,)])
         self.assertEqual(self.q("SELECT count(*) FROM prompts"), [(2,)])
         self.assertEqual(self.q("SELECT count(*) FROM session_runs"), [(1,)])
@@ -643,12 +647,22 @@ class ToolTest(GrokCase):
                          [("run_terminal_command", None, "sleep 60", True, False, None, None, None, False)])
 
     def test_mcp_calls(self):
-        self.put("tools")
+        log, = self.put("tools")
+        sid = SESSION["tools"]
+        delegate = dict(sessionUpdate="tool_call", toolCallId="c0de-delegate", rawInput=dict(tool_name="t3-code__delegate_task", tool_input=dict(
+            title="Write the tests", task="a task", target=dict(providerInstanceId="codex", model="gpt-6.1-sol"))),
+                        _meta={"x.ai/tool": dict(name="use_tool", kind="use_tool")})
+        with open(log, "a") as fh:
+            fh.write(line(method="session/update", params=dict(sessionId=sid, update=delegate,
+                                                               _meta=dict(eventId=f"{sid}-999999", agentTimestampMs=1794444999000))))
         self.ingest()
-        self.assertEqual([r[:3] + r[5:8] for r in self.calls("mcp_server IS NOT NULL")], [
+        self.assertEqual([r[:3] + r[5:8] for r in self.calls("starts_with(mcp_server, 'srv')")], [
             ("mcp__srv_a__tool_a", "srv_a", "text 62", False, None, None),
             ("mcp__srv_a__tool_b", "srv_a", '{"tabId": "text 76", "includeImage": true}', True, "text 91", "mcp"),
             ("mcp__srv_b__tool_c", "srv_b", "{}", True, "text 116", "mcp")])
+        # A delegation is an MCP call too, and a spawns row with its title and target; its result states no status.
+        self.assertEqual(self.q("SELECT call_id, session_id, kind, description, provider, model, status FROM spawns"),
+                         [("c0de-delegate", sid, "delegation", "Write the tests", "codex", "gpt-6.1-sol", None)])
 
     def test_other_failure_and_summaries(self):
         self.put("tools")
