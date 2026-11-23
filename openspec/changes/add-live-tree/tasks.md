@@ -53,9 +53,9 @@ Test rules (`AGENTS.md`): add an assertion to the test that already builds the f
 
 ## 7. README, changelog and docs site
 
-- [ ] 7.1 Update the Live row of `README.md` and its Privacy note on Live (the Tree shows descriptions and delegation titles, never prompt text). Verify: the row names the Tree and both layouts.
-- [ ] 7.2 Add to `[Unreleased]` in `CHANGELOG.md`: the Tree view, `/api/live`'s `agents=1` with `agents` and `agents_more`, the new store fields, and the note to run `ai-ledger rebuild` once for sessions that span the upgrade. Verify: the entries are under Added and Changed.
-- [ ] 7.3 With the `doc-coauthoring` skill, update `site/src/content/docs/pages/live.mdx` (the Tree, its layouts, folds, what a delegation node says and why "started" says no more), `everywhere/keyboard-screen-reader.md` (the Outline's keys), `start/upgrade.md` (the rebuild note) and `reference/storage.md` if it lists the derived tables. Verify: `cd site && npm run check`.
+- [x] 7.1 Update the Live row of `README.md` and its Privacy note on Live (the Tree shows descriptions and delegation titles, never prompt text). Verify: the row names the Tree and both layouts.
+- [x] 7.2 Add to `[Unreleased]` in `CHANGELOG.md`: the Tree view, `/api/live`'s `agents=1` with `agents` and `agents_more`, the new store fields, and the note to run `ai-ledger rebuild` once for sessions that span the upgrade. Verify: the entries are under Added and Changed.
+- [x] 7.3 With the `doc-coauthoring` skill, update `site/src/content/docs/pages/live.mdx` (the Tree, its layouts, folds, what a delegation node says and why "started" says no more), `everywhere/keyboard-screen-reader.md` (the Outline's keys), `start/upgrade.md` (the rebuild note) and `reference/storage.md` if it lists the derived tables. Verify: `cd site && npm run check`.
 
 ## 8. Demo store (optional)
 

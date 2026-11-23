@@ -25,6 +25,11 @@ Every page works from the keyboard and with a screen reader. This page lists the
 | Enter, and Space on Errors | A focused chart that selects a bucket | Select or clear the point you are reading. On Errors the reading stays, so the same key clears it. |
 | Left, Right, Home, End | A focused tab on Activity's workbench or on Context | Move to the previous, next, first or last tab, wrapping. Context selects it at once; on Activity, Enter or Space selects it. |
 | Tab | A focused tab | Move to the selected tab's panel. |
+| Up, Down | The focused row of Live's Tree, in the Outline layout | Move to the previous or next row that shows. Each state group is one tab stop. |
+| Right | The Outline | Expand a collapsed row, else move to its first child. |
+| Left | The Outline | Collapse an expanded row, else move to its parent. |
+| Home, End | The Outline | Go to the first or the last row of the group. |
+| Enter, Space | The Outline | Select the row: a session or agent opens in the Stream view, a fold row such as "4 finished subagents" shows or hides its agents. |
 | Left, Right | The focused Activity calendar | Read the day a week earlier or later; stop at the first and last day. |
 | Up, Down | The focused Activity calendar | Read the day before or after, so Down from a Sunday reads the next Monday; stop at the first and last day. They do not scroll the page. |
 | Home, End | The focused Activity calendar | Read the first or last day. |
@@ -70,6 +75,7 @@ Charts and tab lists act on these keys only when you hold no Alt, Ctrl, Meta or 
 | Page chooser | Its name adds "Limits alert" and the pill's percent while a window is in alert, and the sessions that wait for you: "Cost, Limits alert, highest open window at 100%, 2 sessions waiting for you". |
 | Judgments button | With Codex or Grok as the only source it is unavailable (`aria-disabled`), stays focusable, and is described by the reason shown beside it. |
 | Theme button | Its name is "Theme: system", "Theme: light" or "Theme: dark". Each press steps System, Light, Dark, then System again. |
+| Live's Tree | Each Outline group is a `tree` named by its state heading. A row reads its node in words (name, description, state, figures), its level, its place among its siblings and whether it is expanded. In the Org chart, each session is a list of nested lists with a button per card, in the order parent then children; the connectors are hidden. |
 | Chart | A `group` with a label that says what the chart shows and how to read it, with a live region that reads the point you move to. |
 | Toggletip | A button named for the term it explains. It exposes `aria-expanded`, opens on activation (and on hover), and closes on Esc, on a second activation and on a click outside it. When its text ends with a **Learn more** link, Tab from the open button reaches the link, and Esc on the link closes the toggletip and returns focus to the button. |
 | A link to these docs | Its visible text, then where it goes and that it opens a new tab: "Docs, Cost page documentation, opens in a new tab", "Learn more, How cost is estimated documentation, opens in a new tab". |

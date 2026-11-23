@@ -47,7 +47,7 @@ Open the [Changelog](/ai-ledger/changelog/) and read the sections of every versi
 
 > Run `ai-ledger rebuild` once after upgrading, with the app stopped.
 
-If none of those sections asks for it, skip the next step. A rebuild that was not needed does no harm; it only takes time.
+The version that added Live's Tree asks for it so that sessions that span the upgrade get their agents; a session that started after the upgrade needs no rebuild. If none of those sections asks for it, skip the next step. A rebuild that was not needed does no harm; it only takes time.
 
 ## Rebuild the derived tables
 
